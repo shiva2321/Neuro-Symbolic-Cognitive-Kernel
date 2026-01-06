@@ -1,0 +1,212 @@
+{
+  "metrics": [
+    {
+      "operation": "initialization",
+      "duration": 0.0,
+      "memory_delta": 0.00390625,
+      "cpu_percent": 0.0,
+      "metadata": {}
+    },
+    {
+      "operation": "data_loading",
+      "duration": 0.023035287857055664,
+      "memory_delta": 0.01953125,
+      "cpu_percent": 52.1,
+      "metadata": {}
+    },
+    {
+      "operation": "training",
+      "duration": 0.30977606773376465,
+      "memory_delta": 1.52734375,
+      "cpu_percent": 49.9,
+      "metadata": {}
+    },
+    {
+      "operation": "query_1",
+      "duration": 0.00846099853515625,
+      "memory_delta": 0.31640625,
+      "cpu_percent": 0.0,
+      "metadata": {
+        "query": "Write a short story about a robot"
+      }
+    },
+    {
+      "operation": "query_2",
+      "duration": 0.0010008811950683594,
+      "memory_delta": 0.0,
+      "cpu_percent": 0.0,
+      "metadata": {
+        "query": "Calculate 15 + 27"
+      }
+    },
+    {
+      "operation": "query_3",
+      "duration": 0.0,
+      "memory_delta": 0.0,
+      "cpu_percent": 0.0,
+      "metadata": {
+        "query": "Create a Python function to sort a list"
+      }
+    },
+    {
+      "operation": "query_4",
+      "duration": 0.00099945068359375,
+      "memory_delta": 0.0078125,
+      "cpu_percent": 0.0,
+      "metadata": {
+        "query": "What is the derivative of x^2?"
+      }
+    },
+    {
+      "operation": "query_5",
+      "duration": 0.000997304916381836,
+      "memory_delta": 0.0,
+      "cpu_percent": 0.0,
+      "metadata": {
+        "query": "Write code to read a file"
+      }
+    }
+  ],
+  "summary": {
+    "total_operations": 8,
+    "total_time": 0.3442699909210205,
+    "total_memory_delta": 1.875,
+    "average_cpu": 12.75,
+    "current_memory": 79.66796875,
+    "operations": {
+      "initialization": {
+        "count": 1,
+        "total_time": 0.0,
+        "avg_time": 0.0,
+        "min_time": 0.0,
+        "max_time": 0.0
+      },
+      "data_loading": {
+        "count": 1,
+        "total_time": 0.023035287857055664,
+        "avg_time": 0.023035287857055664,
+        "min_time": 0.023035287857055664,
+        "max_time": 0.023035287857055664
+      },
+      "training": {
+        "count": 1,
+        "total_time": 0.30977606773376465,
+        "avg_time": 0.30977606773376465,
+        "min_time": 0.30977606773376465,
+        "max_time": 0.30977606773376465
+      },
+      "query_1": {
+        "count": 1,
+        "total_time": 0.00846099853515625,
+        "avg_time": 0.00846099853515625,
+        "min_time": 0.00846099853515625,
+        "max_time": 0.00846099853515625
+      },
+      "query_2": {
+        "count": 1,
+        "total_time": 0.0010008811950683594,
+        "avg_time": 0.0010008811950683594,
+        "min_time": 0.0010008811950683594,
+        "max_time": 0.0010008811950683594
+      },
+      "query_3": {
+        "count": 1,
+        "total_time": 0.0,
+        "avg_time": 0.0,
+        "min_time": 0.0,
+        "max_time": 0.0
+      },
+      "query_4": {
+        "count": 1,
+        "total_time": 0.00099945068359375,
+        "avg_time": 0.00099945068359375,
+        "min_time": 0.00099945068359375,
+        "max_time": 0.00099945068359375
+      },
+      "query_5": {
+        "count": 1,
+        "total_time": 0.000997304916381836,
+        "avg_time": 0.000997304916381836,
+        "min_time": 0.000997304916381836,
+        "max_time": 0.000997304916381836
+      }
+    },
+    "slowest_operations": [
+      {
+        "operation": "training",
+        "duration": 0.30977606773376465,
+        "metadata": {}
+      },
+      {
+        "operation": "data_loading",
+        "duration": 0.023035287857055664,
+        "metadata": {}
+      },
+      {
+        "operation": "query_1",
+        "duration": 0.00846099853515625,
+        "metadata": {
+          "query": "Write a short story about a robot"
+        }
+      },
+      {
+        "operation": "query_2",
+        "duration": 0.0010008811950683594,
+        "metadata": {
+          "query": "Calculate 15 + 27"
+        }
+      },
+      {
+        "operation": "query_4",
+        "duration": 0.00099945068359375,
+        "metadata": {
+          "query": "What is the derivative of x^2?"
+        }
+      }
+    ],
+    "memory_intensive_operations": [
+      {
+        "operation": "training",
+        "memory_delta": 1.52734375,
+        "metadata": {}
+      },
+      {
+        "operation": "query_1",
+        "memory_delta": 0.31640625,
+        "metadata": {
+          "query": "Write a short story about a robot"
+        }
+      },
+      {
+        "operation": "data_loading",
+        "memory_delta": 0.01953125,
+        "metadata": {}
+      },
+      {
+        "operation": "query_4",
+        "memory_delta": 0.0078125,
+        "metadata": {
+          "query": "What is the derivative of x^2?"
+        }
+      },
+      {
+        "operation": "initialization",
+        "memory_delta": 0.00390625,
+        "metadata": {}
+      }
+    ]
+  },
+  "bottlenecks": {
+    "time_bottlenecks": [
+      {
+        "operation": "training",
+        "percentage": 89.98056057834877,
+        "avg_time": 0.30977606773376465
+      }
+    ],
+    "memory_bottlenecks": [],
+    "recommendations": [
+      "Consider optimizing the following time-intensive operations: training"
+    ]
+  }
+}

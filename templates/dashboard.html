@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Network Dashboard</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            color: #667eea;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-indicator.active {
+            background: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+
+        .status-indicator.inactive {
+            background: #f44336;
+        }
+
+        .status-indicator.training {
+            background: #ff9800;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .upload-zone {
+            border: 3px dashed #667eea;
+            border-radius: 10px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .upload-zone:hover {
+            background: rgba(102, 126, 234, 0.1);
+            border-color: #764ba2;
+        }
+
+        .upload-zone.drag-over {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: #4CAF50;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f44336 0%, #da190b 100%);
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%);
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+            margin: 15px 0;
+        }
+
+        .file-item {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .query-box {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            font-size: 1em;
+            margin: 15px 0;
+            font-family: inherit;
+        }
+
+        .response-box {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 15px 0;
+            min-height: 150px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+        }
+
+        #graph-container {
+            width: 100%;
+            height: 600px;
+            background: #1a1a1a;
+            border-radius: 10px;
+            position: relative;
+        }
+
+        .module-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: #e0e0e0;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+
+        .stat-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 400px;
+            z-index: 1000;
+            animation: slideIn 0.3s;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification.success {
+            border-left: 5px solid #4CAF50;
+        }
+
+        .notification.error {
+            border-left: 5px solid #f44336;
+        }
+
+        .notification.info {
+            border-left: 5px solid #2196F3;
+        }
+
+        .settings-group {
+            margin: 15px 0;
+        }
+
+        .settings-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .settings-group input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+
+        .node {
+            stroke: #fff;
+            stroke-width: 1.5px;
+            cursor: pointer;
+        }
+
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+
+        .node-label {
+            font-size: 10px;
+            pointer-events: none;
+            fill: #fff;
+        }
+
+        .graph-info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 0.9em;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #667eea;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 Neural Network Dashboard</h1>
+            <p class="subtitle">Graph-Based Modular Neural Network with File Training</p>
+            <div style="margin-top: 15px;">
+                <span class="status-indicator" id="status-indicator"></span>
+                <span id="status-text">Initializing...</span>
+            </div>
+        </header>
+
+        <div class="grid">
+            <!-- File Upload Section -->
+            <div class="card">
+                <h2>📁 Upload Training Data</h2>
+                <div class="upload-zone" id="upload-zone">
+                    <p style="font-size: 3em; margin-bottom: 10px;">📤</p>
+                    <p style="font-size: 1.2em; margin-bottom: 10px;">
+                        Drop files here or click to browse
+                    </p>
+                    <p style="color: #666; font-size: 0.9em;">
+                        Supported: PDF, TXT, DOC, Code files (100MB max)
+                    </p>
+                    <input type="file" id="file-input" multiple style="display: none;">
+                </div>
+
+                <div class="file-list" id="file-list"></div>
+
+                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn" onclick="uploadFiles()" id="upload-btn" disabled>
+                        Upload Files
+                    </button>
+                    <button class="btn btn-danger" onclick="clearFiles()">
+                        Clear All
+                    </button>
+                </div>
+            </div>
+
+            <!-- Training Section -->
+            <div class="card">
+                <h2>🎓 Training Control</h2>
+
+                <div class="settings-group">
+                    <label>Number of Epochs:</label>
+                    <input type="number" id="epochs" value="5" min="1" max="50">
+                </div>
+
+                <div class="settings-group">
+                    <label>Learning Rate:</label>
+                    <input type="number" id="learning-rate" value="0.1" min="0.01" max="1" step="0.01">
+                </div>
+
+                <button class="btn btn-success" onclick="startTraining()" id="train-btn" disabled>
+                    Start Training
+                </button>
+
+                <div id="training-progress" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width: 0%">0%</div>
+                    </div>
+                    <p id="training-message" style="text-align: center; margin-top: 10px;">
+                        Preparing...
+                    </p>
+                </div>
+
+                <div id="training-stats" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+
+        <!-- Query Interface -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>💬 Query Interface</h2>
+            <input type="text" class="query-box" id="query-input"
+                   placeholder="Enter your query here... (e.g., 'Write a story about AI' or 'Calculate 25 + 17')">
+            <button class="btn" onclick="processQuery()" id="query-btn">
+                Process Query
+            </button>
+
+            <div class="response-box" id="response-box">
+                Response will appear here...
+            </div>
+
+            <div id="routing-info" style="margin-top: 15px; font-size: 0.9em; color: #666;"></div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="card" style="margin-bottom: 20px;">
+            <h2>📊 System Statistics</h2>
+            <div class="stats-grid" id="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-value" id="stat-nodes">0</div>
+                    <div class="stat-label">Total Nodes</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="stat-edges">0</div>
+                    <div class="stat-label">Total Edges</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="stat-queries">0</div>
+                    <div class="stat-label">Queries Processed</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value" id="stat-trained">No</div>
+                    <div class="stat-label">System Trained</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Graph Visualization -->
+        <div class="card">
+            <h2>🕸️ Graph Visualization</h2>
+            <div class="module-tabs">
+                <button class="tab active" onclick="switchModule('text_module')">Text Module</button>
+                <button class="tab" onclick="switchModule('math_module')">Math Module</button>
+                <button class="tab" onclick="switchModule('code_module')">Code Module</button>
+            </div>
+
+            <div style="margin-bottom: 10px;">
+                <button class="btn" onclick="loadGraph()">Load Graph</button>
+                <button class="btn" onclick="exportGraph('json')">Export JSON</button>
+                <button class="btn" onclick="exportGraph('graphml')">Export GraphML</button>
+            </div>
+
+            <div id="graph-container">
+                <div class="graph-info" id="graph-info">
+                    Select a module and click "Load Graph" to visualize
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFiles = [];
+        let currentModule = 'text_module';
+        let queryCount = 0;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSystem();
+            setupUploadZone();
+            startStatusPolling();
+        });
+
+        function initializeSystem() {
+            fetch('/api/initialize', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('System initialized', 'success');
+                        updateStatus();
+                    }
+                });
+        }
+
+        function setupUploadZone() {
+            const zone = document.getElementById('upload-zone');
+            const input = document.getElementById('file-input');
+
+            zone.onclick = () => input.click();
+
+            zone.ondragover = (e) => {
+                e.preventDefault();
+                zone.classList.add('drag-over');
+            };
+
+            zone.ondragleave = () => {
+                zone.classList.remove('drag-over');
+            };
+
+            zone.ondrop = (e) => {
+                e.preventDefault();
+                zone.classList.remove('drag-over');
+                handleFiles(e.dataTransfer.files);
+            };
+
+            input.onchange = (e) => {
+                handleFiles(e.target.files);
+            };
+        }
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            displayFileList();
+            document.getElementById('upload-btn').disabled = false;
+        }
+
+        function displayFileList() {
+            const list = document.getElementById('file-list');
+            list.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'file-item';
+                item.innerHTML = `
+                    <span>📄 ${file.name} (${formatBytes(file.size)})</span>
+                    <button class="btn" style="padding: 5px 15px;" onclick="removeFile(${index})">Remove</button>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            displayFileList();
+            if (selectedFiles.length === 0) {
+                document.getElementById('upload-btn').disabled = true;
+            }
+        }
+
+        function uploadFiles() {
+            if (selectedFiles.length === 0) return;
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => formData.append('files', file));
+
+            document.getElementById('upload-btn').disabled = true;
+            document.getElementById('upload-btn').innerHTML = '<span class="loading"></span> Uploading...';
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification(`Uploaded ${data.uploaded} files`, 'success');
+                    document.getElementById('train-btn').disabled = false;
+                    selectedFiles = [];
+                    displayFileList();
+                } else {
+                    showNotification('Upload failed: ' + data.error, 'error');
+                }
+            })
+            .finally(() => {
+                document.getElementById('upload-btn').innerHTML = 'Upload Files';
+                document.getElementById('upload-btn').disabled = false;
+            });
+        }
+
+        function clearFiles() {
+            fetch('/api/clear_uploads', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        showNotification('Upload folder cleared', 'success');
+                        selectedFiles = [];
+                        displayFileList();
+                    }
+                });
+        }
+
+        function startTraining() {
+            const epochs = document.getElementById('epochs').value;
+            const learningRate = document.getElementById('learning-rate').value;
+
+            document.getElementById('training-progress').style.display = 'block';
+            document.getElementById('train-btn').disabled = true;
+
+            fetch('/api/train', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ epochs, learning_rate: parseFloat(learningRate) })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    showNotification('Training started', 'info');
+                } else {
+                    showNotification('Training failed: ' + data.error, 'error');
+                }
+            });
+        }
+
+        function processQuery() {
+            const query = document.getElementById('query-input').value;
+            if (!query) return;
+
+            document.getElementById('query-btn').disabled = true;
+            document.getElementById('response-box').textContent = 'Processing...';
+
+            fetch('/api/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('response-box').textContent = data.response;
+
+                    if (data.routing_info) {
+                        const scores = data.routing_info.all_scores;
+                        const html = `Routed to: <strong>${data.routing_info.selected_module}</strong>
+                                     (Confidence: ${(data.routing_info.confidence * 100).toFixed(1)}%)`;
+                        document.getElementById('routing-info').innerHTML = html;
+                    }
+
+                    queryCount++;
+                    document.getElementById('stat-queries').textContent = queryCount;
+                } else {
+                    document.getElementById('response-box').textContent = 'Error: ' + data.error;
+                }
+            })
+            .finally(() => {
+                document.getElementById('query-btn').disabled = false;
+            });
+        }
+
+        function switchModule(moduleName) {
+            currentModule = moduleName;
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function loadGraph() {
+            document.getElementById('graph-info').innerHTML =
+                '<span class="loading"></span> Loading graph...';
+
+            fetch(`/api/graph/${currentModule}`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        renderGraph(data.data);
+                    } else {
+                        document.getElementById('graph-info').textContent =
+                            'Error: ' + data.error;
+                    }
+                });
+        }
+
+        function renderGraph(graphData) {
+            const container = document.getElementById('graph-container');
+            container.innerHTML = '';
+
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            const svg = d3.select('#graph-container')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            const colorScale = d3.scaleOrdinal()
+                .domain(['text', 'math', 'code', 'general'])
+                .range(['#4285f4', '#34a853', '#fbbc04', '#ea4335']);
+
+            const simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(graphData.links).id(d => d.id).distance(50))
+                .force('charge', d3.forceManyBody().strength(-100))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(10));
+
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(graphData.links)
+                .join('line')
+                .attr('class', 'link')
+                .attr('stroke-width', d => Math.sqrt(d.weight * 2));
+
+            const node = svg.append('g')
+                .selectAll('circle')
+                .data(graphData.nodes)
+                .join('circle')
+                .attr('class', 'node')
+                .attr('r', d => 3 + Math.log(d.frequency + 1) * 2)
+                .attr('fill', d => colorScale(d.domain))
+                .call(drag(simulation))
+                .on('click', (event, d) => {
+                    showNotification(`Node: ${d.label} (freq: ${d.frequency})`, 'info');
+                });
+
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+            });
+
+            // Add info panel
+            const info = document.createElement('div');
+            info.className = 'graph-info';
+            info.innerHTML = `
+                <strong>Graph Statistics</strong><br>
+                Nodes: ${graphData.nodes.length}<br>
+                Edges: ${graphData.links.length}<br>
+                Click nodes for details
+            `;
+            container.appendChild(info);
+
+            function drag(simulation) {
+                function dragstarted(event) {
+                    if (!event.active) simulation.alphaTarget(0.3).restart();
+                    event.subject.fx = event.subject.x;
+                    event.subject.fy = event.subject.y;
+                }
+
+                function dragged(event) {
+                    event.subject.fx = event.x;
+                    event.subject.fy = event.y;
+                }
+
+                function dragended(event) {
+                    if (!event.active) simulation.alphaTarget(0);
+                    event.subject.fx = null;
+                    event.subject.fy = null;
+                }
+
+                return d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended);
+            }
+        }
+
+        function exportGraph(format) {
+            window.location.href = `/api/export/${currentModule}/${format}`;
+            showNotification(`Exporting graph as ${format}...`, 'info');
+        }
+
+        function startStatusPolling() {
+            setInterval(updateStatus, 2000);
+        }
+
+        function updateStatus() {
+            fetch('/api/status')
+                .then(r => r.json())
+                .then(data => {
+                    const indicator = document.getElementById('status-indicator');
+                    const statusText = document.getElementById('status-text');
+
+                    if (data.training.is_training) {
+                        indicator.className = 'status-indicator training';
+                        statusText.textContent = `Training: ${data.training.message}`;
+
+                        document.getElementById('progress-fill').style.width =
+                            data.training.progress + '%';
+                        document.getElementById('progress-fill').textContent =
+                            data.training.progress + '%';
+                        document.getElementById('training-message').textContent =
+                            data.training.message;
+
+                        if (data.training.progress === 100) {
+                            setTimeout(() => {
+                                document.getElementById('training-progress').style.display = 'none';
+                                document.getElementById('train-btn').disabled = false;
+                                updateStatistics();
+                            }, 2000);
+                        }
+                    } else if (data.trained) {
+                        indicator.className = 'status-indicator active';
+                        statusText.textContent = 'System Ready - Trained';
+                        document.getElementById('stat-trained').textContent = 'Yes';
+                    } else if (data.initialized) {
+                        indicator.className = 'status-indicator active';
+                        statusText.textContent = 'System Ready - Not Trained';
+                    } else {
+                        indicator.className = 'status-indicator inactive';
+                        statusText.textContent = 'Initializing...';
+                    }
+
+                    if (data.modules) {
+                        updateModuleStats(data.modules);
+                    }
+                });
+        }
+
+        function updateModuleStats(modules) {
+            let totalNodes = 0;
+            let totalEdges = 0;
+
+            for (const [name, stats] of Object.entries(modules)) {
+                if (stats.graph_stats) {
+                    totalNodes += stats.graph_stats.num_nodes;
+                    totalEdges += stats.graph_stats.num_edges;
+                }
+            }
+
+            document.getElementById('stat-nodes').textContent = totalNodes;
+            document.getElementById('stat-edges').textContent = totalEdges;
+        }
+
+        function updateStatistics() {
+            fetch('/api/statistics')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.training.stats) {
+                        const stats = data.training.stats;
+                        const html = `
+                            <h3>Training Results:</h3>
+                            <pre>${JSON.stringify(stats, null, 2)}</pre>
+                        `;
+                        document.getElementById('training-stats').innerHTML = html;
+                    }
+                });
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `
+                <strong>${type.toUpperCase()}</strong><br>
+                ${message}
+            `;
+
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.remove();
+            }, 4000);
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Query input enter key
+        document.getElementById('query-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                processQuery();
+            }
+        });
+    </script>
+</body>
+</html>
+

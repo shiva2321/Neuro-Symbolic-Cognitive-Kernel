@@ -1,0 +1,36 @@
+============================================================
+GRAPH NETWORK STATISTICS REPORT
+============================================================
+
+Total Nodes: 198
+Total Edges: 72
+Average Edge Weight: 0.9871
+Average Node Degree: 0.36
+Maximum Node Degree: 5
+
+Domain Distribution:
+  text: 198
+
+Top 20 Nodes by Frequency:
+  1. . (freq: 120, domain: text)
+  2. Sample (freq: 56, domain: text)
+  3. number (freq: 50, domain: text)
+  4. . Sample (freq: 50, domain: text)
+  5. Sample number (freq: 50, domain: text)
+  6. . Sample number (freq: 50, domain: text)
+  7. the (freq: 46, domain: text)
+  8. is (freq: 34, domain: text)
+  9. power (freq: 27, domain: text)
+  10. , (freq: 25, domain: text)
+  11. but (freq: 25, domain: text)
+  12. a (freq: 24, domain: text)
+  13. In (freq: 21, domain: text)
+  14. Knowledge (freq: 13, domain: text)
+  15. wisdom (freq: 13, domain: text)
+  16. knowing (freq: 13, domain: text)
+  17. how (freq: 13, domain: text)
+  18. to (freq: 13, domain: text)
+  19. use (freq: 13, domain: text)
+  20. that (freq: 13, domain: text)
+
+============================================================
