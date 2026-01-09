@@ -1,0 +1,129 @@
+# NCGN Configuration File
+# Hardware and model settings for Neuromorphic Cognitive Graph Network
+
+# Hardware Configuration
+hardware:
+  device: "cuda"  # cuda, cpu, or auto
+  gpu_memory_gb: 12  # RTX 3060 VRAM
+  ram_gb: 32
+  cpu_cores: 12  # Ryzen 5 7600
+  use_mixed_precision: true
+  gradient_checkpointing: true
+
+# Phase 1: Linguistic Graph Substrate
+linguistic_graph:
+  embedding_model: "roberta-base"  # or bert-base-uncased, distilbert-base-uncased
+  embedding_dim: 768
+  structural_encoding_dim: 8
+  window_size: 5
+  min_frequency: 2
+  max_vocab_size: 50000
+  pmi_threshold: 0.0
+
+# Phase 2: Spiking Neural Network
+spiking_network:
+  neuron_model: "lif"  # lif or izhikevich
+  tau_membrane: 10.0  # ms
+  v_threshold: 1.0
+  v_reset: 0.0
+  v_rest: 0.0
+  refractory_period: 2
+  time_steps: 50
+  encoding_method: "poisson"  # poisson, rate, temporal
+  max_firing_rate: 100.0  # Hz
+  synaptic_delay_range: [1, 5]  # timesteps
+
+# Phase 2: STDP Learning
+stdp:
+  tau_plus: 20.0  # ms
+  tau_minus: 20.0  # ms
+  A_plus: 0.01
+  A_minus: 0.01
+  w_min: 0.0
+  w_max: 1.0
+  use_homeostatic: true
+  target_rate: 0.1
+  homeostatic_strength: 0.001
+
+# Phase 3: Graph Transformer (System 1)
+graph_transformer:
+  embed_dim: 256
+  num_layers: 6
+  num_heads: 8
+  ff_dim: 1024
+  dropout: 0.1
+  use_sparse_attention: true
+  k_neighbors: 20
+  pooling_type: "attention"  # mean, max, sum, attention
+
+# Phase 3: Symbolic Reasoner (System 2)
+symbolic_reasoner:
+  knowledge_base_path: "knowledge_base/"
+  max_rules: 10000
+  reasoning_depth: 5
+  use_first_order_logic: true
+  use_temporal_reasoning: false
+
+# Phase 3: Dual System
+dual_system:
+  integration_method: "weighted"  # weighted, ensemble, cascade
+  system1_weight: 0.7
+  system2_weight: 0.3
+  confidence_threshold: 0.5
+  use_system2_verification: true
+
+# Phase 4: Continual Learning
+continual_learning:
+  method: "al_gnn"  # al_gnn, bgml, ewc, si
+  num_shards: 8
+  shard_granularity: "attribute"  # attribute, cluster, random
+  rls_lambda: 0.99  # Recursive Least Squares forgetting factor
+  memory_budget_mb: 2000
+  prototype_per_class: 5
+  use_episodic_memory: true
+  spreading_activation_steps: 3
+
+# Phase 5: Memory Optimization
+memory_optimization:
+  use_implicit_differentiation: true
+  offload_to_cpu: true
+  offload_to_disk: false
+  disk_cache_path: "cache/"
+  recompute_threshold: 0.3
+  async_communication: true
+  batch_size: 32
+  accumulation_steps: 4
+
+# Training Configuration
+training:
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  max_epochs: 100
+  warmup_steps: 1000
+  scheduler: "cosine"  # constant, linear, cosine
+  early_stopping_patience: 10
+  validation_interval: 500
+  checkpoint_interval: 1000
+  save_best_only: true
+
+# Evaluation
+evaluation:
+  benchmark: "cglb"  # cglb, ogb, custom
+  metrics: ["ap", "af", "accuracy", "f1"]
+  test_interval: 5  # epochs
+
+# Logging
+logging:
+  log_level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  log_dir: "logs/"
+  tensorboard: true
+  wandb: false
+  wandb_project: "ncgn"
+
+# Paths
+paths:
+  data_dir: "data/"
+  model_dir: "saved_models/ncgn/"
+  results_dir: "results/"
+  cache_dir: "cache/"
+

@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "id": "node_._935183",
+      "id": "node_._95890",
       "label": ".",
       "type": "punctuation",
       "domain": "text",
@@ -9,7 +9,7 @@
       "index": 0
     },
     {
-      "id": "node_sample_410800",
+      "id": "node_sample_377396",
       "label": "Sample",
       "type": "word",
       "domain": "text",
@@ -17,7 +17,7 @@
       "index": 1
     },
     {
-      "id": "node_number_610120",
+      "id": "node_number_273831",
       "label": "number",
       "type": "word",
       "domain": "text",
@@ -25,7 +25,7 @@
       "index": 2
     },
     {
-      "id": "node_. sample_76455",
+      "id": "node_. sample_479873",
       "label": ". Sample",
       "type": "phrase",
       "domain": "text",
@@ -33,7 +33,7 @@
       "index": 3
     },
     {
-      "id": "node_sample number_242763",
+      "id": "node_sample number_567654",
       "label": "Sample number",
       "type": "phrase",
       "domain": "text",
@@ -41,7 +41,7 @@
       "index": 4
     },
     {
-      "id": "node_. sample number_567228",
+      "id": "node_. sample number_462293",
       "label": ". Sample number",
       "type": "phrase",
       "domain": "text",
@@ -49,7 +49,7 @@
       "index": 5
     },
     {
-      "id": "node_the_210110",
+      "id": "node_the_413445",
       "label": "the",
       "type": "word",
       "domain": "text",
@@ -57,7 +57,7 @@
       "index": 6
     },
     {
-      "id": "node_is_135082",
+      "id": "node_is_611588",
       "label": "is",
       "type": "word",
       "domain": "text",
@@ -65,7 +65,7 @@
       "index": 7
     },
     {
-      "id": "node_power_415543",
+      "id": "node_power_851782",
       "label": "power",
       "type": "word",
       "domain": "text",
@@ -73,7 +73,7 @@
       "index": 8
     },
     {
-      "id": "node_,_350245",
+      "id": "node_,_674551",
       "label": ",",
       "type": "punctuation",
       "domain": "text",
@@ -81,7 +81,7 @@
       "index": 9
     },
     {
-      "id": "node_but_542095",
+      "id": "node_but_874257",
       "label": "but",
       "type": "word",
       "domain": "text",
@@ -89,7 +89,7 @@
       "index": 10
     },
     {
-      "id": "node_a_30519",
+      "id": "node_a_518392",
       "label": "a",
       "type": "word",
       "domain": "text",
@@ -97,7 +97,7 @@
       "index": 11
     },
     {
-      "id": "node_in_998982",
+      "id": "node_in_432819",
       "label": "In",
       "type": "word",
       "domain": "text",
@@ -105,7 +105,7 @@
       "index": 12
     },
     {
-      "id": "node_knowledge_821688",
+      "id": "node_knowledge_358883",
       "label": "Knowledge",
       "type": "word",
       "domain": "text",
@@ -113,7 +113,7 @@
       "index": 13
     },
     {
-      "id": "node_wisdom_234353",
+      "id": "node_wisdom_804204",
       "label": "wisdom",
       "type": "word",
       "domain": "text",
@@ -121,7 +121,7 @@
       "index": 14
     },
     {
-      "id": "node_knowing_182617",
+      "id": "node_knowing_120405",
       "label": "knowing",
       "type": "word",
       "domain": "text",
@@ -129,7 +129,7 @@
       "index": 15
     },
     {
-      "id": "node_how_838526",
+      "id": "node_how_725703",
       "label": "how",
       "type": "word",
       "domain": "text",
@@ -137,7 +137,7 @@
       "index": 16
     },
     {
-      "id": "node_to_856478",
+      "id": "node_to_67333",
       "label": "to",
       "type": "word",
       "domain": "text",
@@ -145,7 +145,7 @@
       "index": 17
     },
     {
-      "id": "node_use_748519",
+      "id": "node_use_737895",
       "label": "use",
       "type": "word",
       "domain": "text",
@@ -153,7 +153,7 @@
       "index": 18
     },
     {
-      "id": "node_that_430662",
+      "id": "node_that_327688",
       "label": "that",
       "type": "word",
       "domain": "text",
@@ -161,7 +161,7 @@
       "index": 19
     },
     {
-      "id": "node_effectively_215566",
+      "id": "node_effectively_307739",
       "label": "effectively",
       "type": "word",
       "domain": "text",
@@ -169,7 +169,7 @@
       "index": 20
     },
     {
-      "id": "node_knowledge is_392360",
+      "id": "node_knowledge is_120413",
       "label": "Knowledge is",
       "type": "phrase",
       "domain": "text",
@@ -177,7 +177,7 @@
       "index": 21
     },
     {
-      "id": "node_is power_254601",
+      "id": "node_is power_801611",
       "label": "is power",
       "type": "phrase",
       "domain": "text",
@@ -185,7 +185,7 @@
       "index": 22
     },
     {
-      "id": "node_power ,_376257",
+      "id": "node_power ,_963290",
       "label": "power ,",
       "type": "phrase",
       "domain": "text",
@@ -193,7 +193,7 @@
       "index": 23
     },
     {
-      "id": "node_, but_280606",
+      "id": "node_, but_445689",
       "label": ", but",
       "type": "phrase",
       "domain": "text",
@@ -201,7 +201,7 @@
       "index": 24
     },
     {
-      "id": "node_but wisdom_607873",
+      "id": "node_but wisdom_95838",
       "label": "but wisdom",
       "type": "phrase",
       "domain": "text",
@@ -209,7 +209,7 @@
       "index": 25
     },
     {
-      "id": "node_wisdom is_8309",
+      "id": "node_wisdom is_745352",
       "label": "wisdom is",
       "type": "phrase",
       "domain": "text",
@@ -217,7 +217,7 @@
       "index": 26
     },
     {
-      "id": "node_is knowing_934998",
+      "id": "node_is knowing_226881",
       "label": "is knowing",
       "type": "phrase",
       "domain": "text",
@@ -225,7 +225,7 @@
       "index": 27
     },
     {
-      "id": "node_knowing how_385349",
+      "id": "node_knowing how_181866",
       "label": "knowing how",
       "type": "phrase",
       "domain": "text",
@@ -233,7 +233,7 @@
       "index": 28
     },
     {
-      "id": "node_how to_34570",
+      "id": "node_how to_940427",
       "label": "how to",
       "type": "phrase",
       "domain": "text",
@@ -241,7 +241,7 @@
       "index": 29
     },
     {
-      "id": "node_to use_600231",
+      "id": "node_to use_605378",
       "label": "to use",
       "type": "phrase",
       "domain": "text",
@@ -249,7 +249,7 @@
       "index": 30
     },
     {
-      "id": "node_use that_583908",
+      "id": "node_use that_984833",
       "label": "use that",
       "type": "phrase",
       "domain": "text",
@@ -257,7 +257,7 @@
       "index": 31
     },
     {
-      "id": "node_that power_570814",
+      "id": "node_that power_762946",
       "label": "that power",
       "type": "phrase",
       "domain": "text",
@@ -265,7 +265,7 @@
       "index": 32
     },
     {
-      "id": "node_power effectively_190815",
+      "id": "node_power effectively_941219",
       "label": "power effectively",
       "type": "phrase",
       "domain": "text",
@@ -273,7 +273,7 @@
       "index": 33
     },
     {
-      "id": "node_effectively ._367587",
+      "id": "node_effectively ._691765",
       "label": "effectively .",
       "type": "phrase",
       "domain": "text",
@@ -281,7 +281,7 @@
       "index": 34
     },
     {
-      "id": "node_knowledge is power_615874",
+      "id": "node_knowledge is power_905339",
       "label": "Knowledge is power",
       "type": "phrase",
       "domain": "text",
@@ -289,7 +289,7 @@
       "index": 35
     },
     {
-      "id": "node_is power ,_12206",
+      "id": "node_is power ,_259392",
       "label": "is power ,",
       "type": "phrase",
       "domain": "text",
@@ -297,7 +297,7 @@
       "index": 36
     },
     {
-      "id": "node_power , but_290269",
+      "id": "node_power , but_974386",
       "label": "power , but",
       "type": "phrase",
       "domain": "text",
@@ -305,7 +305,7 @@
       "index": 37
     },
     {
-      "id": "node_, but wisdom_93595",
+      "id": "node_, but wisdom_367671",
       "label": ", but wisdom",
       "type": "phrase",
       "domain": "text",
@@ -313,7 +313,7 @@
       "index": 38
     },
     {
-      "id": "node_but wisdom is_269229",
+      "id": "node_but wisdom is_850644",
       "label": "but wisdom is",
       "type": "phrase",
       "domain": "text",
@@ -321,7 +321,7 @@
       "index": 39
     },
     {
-      "id": "node_wisdom is knowing_301745",
+      "id": "node_wisdom is knowing_885835",
       "label": "wisdom is knowing",
       "type": "phrase",
       "domain": "text",
@@ -329,7 +329,7 @@
       "index": 40
     },
     {
-      "id": "node_is knowing how_149618",
+      "id": "node_is knowing how_441148",
       "label": "is knowing how",
       "type": "phrase",
       "domain": "text",
@@ -337,7 +337,7 @@
       "index": 41
     },
     {
-      "id": "node_knowing how to_846950",
+      "id": "node_knowing how to_154254",
       "label": "knowing how to",
       "type": "phrase",
       "domain": "text",
@@ -345,7 +345,7 @@
       "index": 42
     },
     {
-      "id": "node_how to use_106046",
+      "id": "node_how to use_446947",
       "label": "how to use",
       "type": "phrase",
       "domain": "text",
@@ -353,7 +353,7 @@
       "index": 43
     },
     {
-      "id": "node_to use that_977103",
+      "id": "node_to use that_548622",
       "label": "to use that",
       "type": "phrase",
       "domain": "text",
@@ -361,7 +361,7 @@
       "index": 44
     },
     {
-      "id": "node_use that power_139391",
+      "id": "node_use that power_892766",
       "label": "use that power",
       "type": "phrase",
       "domain": "text",
@@ -369,7 +369,7 @@
       "index": 45
     },
     {
-      "id": "node_that power effectively_54675",
+      "id": "node_that power effectively_655338",
       "label": "that power effectively",
       "type": "phrase",
       "domain": "text",
@@ -377,7 +377,7 @@
       "index": 46
     },
     {
-      "id": "node_power effectively ._617264",
+      "id": "node_power effectively ._552443",
       "label": "power effectively .",
       "type": "phrase",
       "domain": "text",
@@ -385,7 +385,7 @@
       "index": 47
     },
     {
-      "id": "node_effectively . sample_700856",
+      "id": "node_effectively . sample_800714",
       "label": "effectively . Sample",
       "type": "phrase",
       "domain": "text",
@@ -393,7 +393,7 @@
       "index": 48
     },
     {
-      "id": "node_beginning_167539",
+      "id": "node_beginning_283383",
       "label": "beginning",
       "type": "word",
       "domain": "text",
@@ -401,7 +401,7 @@
       "index": 49
     },
     {
-      "id": "node_there_945265",
+      "id": "node_there_338348",
       "label": "there",
       "type": "word",
       "domain": "text",
@@ -409,7 +409,7 @@
       "index": 50
     },
     {
-      "id": "node_was_643611",
+      "id": "node_was_590117",
       "label": "was",
       "type": "word",
       "domain": "text",
@@ -417,7 +417,7 @@
       "index": 51
     },
     {
-      "id": "node_nothing_588407",
+      "id": "node_nothing_163312",
       "label": "nothing",
       "type": "word",
       "domain": "text",
@@ -425,7 +425,7 @@
       "index": 52
     },
     {
-      "id": "node_darkness_214175",
+      "id": "node_darkness_674116",
       "label": "darkness",
       "type": "word",
       "domain": "text",
@@ -433,7 +433,7 @@
       "index": 53
     },
     {
-      "id": "node_then_179313",
+      "id": "node_then_997666",
       "label": "Then",
       "type": "word",
       "domain": "text",
@@ -441,7 +441,7 @@
       "index": 54
     },
     {
-      "id": "node_light_452080",
+      "id": "node_light_792685",
       "label": "light",
       "type": "word",
       "domain": "text",
@@ -449,7 +449,7 @@
       "index": 55
     },
     {
-      "id": "node_emerged_243368",
+      "id": "node_emerged_539061",
       "label": "emerged",
       "type": "word",
       "domain": "text",
@@ -457,7 +457,7 @@
       "index": 56
     },
     {
-      "id": "node_from_383570",
+      "id": "node_from_290944",
       "label": "from",
       "type": "word",
       "domain": "text",
@@ -465,7 +465,7 @@
       "index": 57
     },
     {
-      "id": "node_void_415936",
+      "id": "node_void_808103",
       "label": "void",
       "type": "word",
       "domain": "text",
@@ -473,7 +473,7 @@
       "index": 58
     },
     {
-      "id": "node_in the_285919",
+      "id": "node_in the_535945",
       "label": "In the",
       "type": "phrase",
       "domain": "text",
@@ -481,7 +481,7 @@
       "index": 59
     },
     {
-      "id": "node_the beginning_545972",
+      "id": "node_the beginning_263227",
       "label": "the beginning",
       "type": "phrase",
       "domain": "text",
@@ -489,7 +489,7 @@
       "index": 60
     },
     {
-      "id": "node_beginning ,_887642",
+      "id": "node_beginning ,_996857",
       "label": "beginning ,",
       "type": "phrase",
       "domain": "text",
@@ -497,7 +497,7 @@
       "index": 61
     },
     {
-      "id": "node_, there_201708",
+      "id": "node_, there_862896",
       "label": ", there",
       "type": "phrase",
       "domain": "text",
@@ -505,7 +505,7 @@
       "index": 62
     },
     {
-      "id": "node_there was_259167",
+      "id": "node_there was_226819",
       "label": "there was",
       "type": "phrase",
       "domain": "text",
@@ -513,7 +513,7 @@
       "index": 63
     },
     {
-      "id": "node_was nothing_165462",
+      "id": "node_was nothing_339563",
       "label": "was nothing",
       "type": "phrase",
       "domain": "text",
@@ -521,7 +521,7 @@
       "index": 64
     },
     {
-      "id": "node_nothing but_722197",
+      "id": "node_nothing but_59478",
       "label": "nothing but",
       "type": "phrase",
       "domain": "text",
@@ -529,7 +529,7 @@
       "index": 65
     },
     {
-      "id": "node_but darkness_195752",
+      "id": "node_but darkness_541594",
       "label": "but darkness",
       "type": "phrase",
       "domain": "text",
@@ -537,7 +537,7 @@
       "index": 66
     },
     {
-      "id": "node_darkness ._227339",
+      "id": "node_darkness ._17126",
       "label": "darkness .",
       "type": "phrase",
       "domain": "text",
@@ -545,7 +545,7 @@
       "index": 67
     },
     {
-      "id": "node_. then_594579",
+      "id": "node_. then_712306",
       "label": ". Then",
       "type": "phrase",
       "domain": "text",
@@ -553,7 +553,7 @@
       "index": 68
     },
     {
-      "id": "node_then light_390353",
+      "id": "node_then light_721030",
       "label": "Then light",
       "type": "phrase",
       "domain": "text",
@@ -561,7 +561,7 @@
       "index": 69
     },
     {
-      "id": "node_light emerged_375508",
+      "id": "node_light emerged_686961",
       "label": "light emerged",
       "type": "phrase",
       "domain": "text",
@@ -569,7 +569,7 @@
       "index": 70
     },
     {
-      "id": "node_emerged from_571409",
+      "id": "node_emerged from_178765",
       "label": "emerged from",
       "type": "phrase",
       "domain": "text",
@@ -577,7 +577,7 @@
       "index": 71
     },
     {
-      "id": "node_from the_771357",
+      "id": "node_from the_771003",
       "label": "from the",
       "type": "phrase",
       "domain": "text",
@@ -585,7 +585,7 @@
       "index": 72
     },
     {
-      "id": "node_the void_555146",
+      "id": "node_the void_281472",
       "label": "the void",
       "type": "phrase",
       "domain": "text",
@@ -593,7 +593,7 @@
       "index": 73
     },
     {
-      "id": "node_void ._150769",
+      "id": "node_void ._668106",
       "label": "void .",
       "type": "phrase",
       "domain": "text",
@@ -601,7 +601,7 @@
       "index": 74
     },
     {
-      "id": "node_in the beginning_618704",
+      "id": "node_in the beginning_927470",
       "label": "In the beginning",
       "type": "phrase",
       "domain": "text",
@@ -609,7 +609,7 @@
       "index": 75
     },
     {
-      "id": "node_the beginning ,_496051",
+      "id": "node_the beginning ,_168900",
       "label": "the beginning ,",
       "type": "phrase",
       "domain": "text",
@@ -617,7 +617,7 @@
       "index": 76
     },
     {
-      "id": "node_beginning , there_770323",
+      "id": "node_beginning , there_915795",
       "label": "beginning , there",
       "type": "phrase",
       "domain": "text",
@@ -625,7 +625,7 @@
       "index": 77
     },
     {
-      "id": "node_, there was_284352",
+      "id": "node_, there was_235779",
       "label": ", there was",
       "type": "phrase",
       "domain": "text",
@@ -633,7 +633,7 @@
       "index": 78
     },
     {
-      "id": "node_there was nothing_747410",
+      "id": "node_there was nothing_516146",
       "label": "there was nothing",
       "type": "phrase",
       "domain": "text",
@@ -641,7 +641,7 @@
       "index": 79
     },
     {
-      "id": "node_was nothing but_727829",
+      "id": "node_was nothing but_783537",
       "label": "was nothing but",
       "type": "phrase",
       "domain": "text",
@@ -649,7 +649,7 @@
       "index": 80
     },
     {
-      "id": "node_nothing but darkness_874127",
+      "id": "node_nothing but darkness_374155",
       "label": "nothing but darkness",
       "type": "phrase",
       "domain": "text",
@@ -657,7 +657,7 @@
       "index": 81
     },
     {
-      "id": "node_but darkness ._665836",
+      "id": "node_but darkness ._495284",
       "label": "but darkness .",
       "type": "phrase",
       "domain": "text",
@@ -665,7 +665,7 @@
       "index": 82
     },
     {
-      "id": "node_darkness . then_36966",
+      "id": "node_darkness . then_458131",
       "label": "darkness . Then",
       "type": "phrase",
       "domain": "text",
@@ -673,7 +673,7 @@
       "index": 83
     },
     {
-      "id": "node_. then light_450085",
+      "id": "node_. then light_603041",
       "label": ". Then light",
       "type": "phrase",
       "domain": "text",
@@ -681,7 +681,7 @@
       "index": 84
     },
     {
-      "id": "node_then light emerged_831088",
+      "id": "node_then light emerged_814931",
       "label": "Then light emerged",
       "type": "phrase",
       "domain": "text",
@@ -689,7 +689,7 @@
       "index": 85
     },
     {
-      "id": "node_light emerged from_385577",
+      "id": "node_light emerged from_801956",
       "label": "light emerged from",
       "type": "phrase",
       "domain": "text",
@@ -697,7 +697,7 @@
       "index": 86
     },
     {
-      "id": "node_emerged from the_17131",
+      "id": "node_emerged from the_115380",
       "label": "emerged from the",
       "type": "phrase",
       "domain": "text",
@@ -705,7 +705,7 @@
       "index": 87
     },
     {
-      "id": "node_from the void_11181",
+      "id": "node_from the void_862162",
       "label": "from the void",
       "type": "phrase",
       "domain": "text",
@@ -713,7 +713,7 @@
       "index": 88
     },
     {
-      "id": "node_the void ._122420",
+      "id": "node_the void ._6310",
       "label": "the void .",
       "type": "phrase",
       "domain": "text",
@@ -721,7 +721,7 @@
       "index": 89
     },
     {
-      "id": "node_void . sample_980745",
+      "id": "node_void . sample_973277",
       "label": "void . Sample",
       "type": "phrase",
       "domain": "text",
@@ -729,7 +729,7 @@
       "index": 90
     },
     {
-      "id": "node_science_416529",
+      "id": "node_science_352020",
       "label": "Science",
       "type": "word",
       "domain": "text",
@@ -737,7 +737,7 @@
       "index": 91
     },
     {
-      "id": "node_and_485573",
+      "id": "node_and_678916",
       "label": "and",
       "type": "word",
       "domain": "text",
@@ -745,7 +745,7 @@
       "index": 92
     },
     {
-      "id": "node_technology_178689",
+      "id": "node_technology_396996",
       "label": "technology",
       "type": "word",
       "domain": "text",
@@ -753,7 +753,7 @@
       "index": 93
     },
     {
-      "id": "node_have_591922",
+      "id": "node_have_780241",
       "label": "have",
       "type": "word",
       "domain": "text",
@@ -761,7 +761,7 @@
       "index": 94
     },
     {
-      "id": "node_revolutionized_568632",
+      "id": "node_revolutionized_975615",
       "label": "revolutionized",
       "type": "word",
       "domain": "text",
@@ -769,7 +769,7 @@
       "index": 95
     },
     {
-      "id": "node_our_14044",
+      "id": "node_our_598718",
       "label": "our",
       "type": "word",
       "domain": "text",
@@ -777,7 +777,7 @@
       "index": 96
     },
     {
-      "id": "node_world_7570",
+      "id": "node_world_912311",
       "label": "world",
       "type": "word",
       "domain": "text",
@@ -785,7 +785,7 @@
       "index": 97
     },
     {
-      "id": "node_countless_799694",
+      "id": "node_countless_93664",
       "label": "countless",
       "type": "word",
       "domain": "text",
@@ -793,7 +793,7 @@
       "index": 98
     },
     {
-      "id": "node_ways_480153",
+      "id": "node_ways_479650",
       "label": "ways",
       "type": "word",
       "domain": "text",
@@ -801,7 +801,7 @@
       "index": 99
     },
     {
-      "id": "node_science and_101028",
+      "id": "node_science and_74",
       "label": "Science and",
       "type": "phrase",
       "domain": "text",
@@ -809,7 +809,7 @@
       "index": 100
     },
     {
-      "id": "node_and technology_949269",
+      "id": "node_and technology_87761",
       "label": "and technology",
       "type": "phrase",
       "domain": "text",
@@ -817,7 +817,7 @@
       "index": 101
     },
     {
-      "id": "node_technology have_133591",
+      "id": "node_technology have_469880",
       "label": "technology have",
       "type": "phrase",
       "domain": "text",
@@ -825,7 +825,7 @@
       "index": 102
     },
     {
-      "id": "node_have revolutionized_82214",
+      "id": "node_have revolutionized_508993",
       "label": "have revolutionized",
       "type": "phrase",
       "domain": "text",
@@ -833,7 +833,7 @@
       "index": 103
     },
     {
-      "id": "node_revolutionized our_692724",
+      "id": "node_revolutionized our_794378",
       "label": "revolutionized our",
       "type": "phrase",
       "domain": "text",
@@ -841,7 +841,7 @@
       "index": 104
     },
     {
-      "id": "node_our world_575012",
+      "id": "node_our world_585880",
       "label": "our world",
       "type": "phrase",
       "domain": "text",
@@ -849,7 +849,7 @@
       "index": 105
     },
     {
-      "id": "node_world in_396933",
+      "id": "node_world in_724936",
       "label": "world in",
       "type": "phrase",
       "domain": "text",
@@ -857,7 +857,7 @@
       "index": 106
     },
     {
-      "id": "node_in countless_707644",
+      "id": "node_in countless_410838",
       "label": "in countless",
       "type": "phrase",
       "domain": "text",
@@ -865,7 +865,7 @@
       "index": 107
     },
     {
-      "id": "node_countless ways_429532",
+      "id": "node_countless ways_737742",
       "label": "countless ways",
       "type": "phrase",
       "domain": "text",
@@ -873,7 +873,7 @@
       "index": 108
     },
     {
-      "id": "node_ways ._559287",
+      "id": "node_ways ._860807",
       "label": "ways .",
       "type": "phrase",
       "domain": "text",
@@ -881,7 +881,7 @@
       "index": 109
     },
     {
-      "id": "node_science and technology_857741",
+      "id": "node_science and technology_628933",
       "label": "Science and technology",
       "type": "phrase",
       "domain": "text",
@@ -889,7 +889,7 @@
       "index": 110
     },
     {
-      "id": "node_and technology have_962412",
+      "id": "node_and technology have_967770",
       "label": "and technology have",
       "type": "phrase",
       "domain": "text",
@@ -897,7 +897,7 @@
       "index": 111
     },
     {
-      "id": "node_technology have revolutionized_685669",
+      "id": "node_technology have revolutionized_179356",
       "label": "technology have revolutionized",
       "type": "phrase",
       "domain": "text",
@@ -905,7 +905,7 @@
       "index": 112
     },
     {
-      "id": "node_have revolutionized our_129699",
+      "id": "node_have revolutionized our_356600",
       "label": "have revolutionized our",
       "type": "phrase",
       "domain": "text",
@@ -913,7 +913,7 @@
       "index": 113
     },
     {
-      "id": "node_revolutionized our world_340289",
+      "id": "node_revolutionized our world_58809",
       "label": "revolutionized our world",
       "type": "phrase",
       "domain": "text",
@@ -921,7 +921,7 @@
       "index": 114
     },
     {
-      "id": "node_our world in_312878",
+      "id": "node_our world in_766578",
       "label": "our world in",
       "type": "phrase",
       "domain": "text",
@@ -929,7 +929,7 @@
       "index": 115
     },
     {
-      "id": "node_world in countless_308876",
+      "id": "node_world in countless_862295",
       "label": "world in countless",
       "type": "phrase",
       "domain": "text",
@@ -937,7 +937,7 @@
       "index": 116
     },
     {
-      "id": "node_in countless ways_308315",
+      "id": "node_in countless ways_598195",
       "label": "in countless ways",
       "type": "phrase",
       "domain": "text",
@@ -945,7 +945,7 @@
       "index": 117
     },
     {
-      "id": "node_countless ways ._368810",
+      "id": "node_countless ways ._854615",
       "label": "countless ways .",
       "type": "phrase",
       "domain": "text",
@@ -953,7 +953,7 @@
       "index": 118
     },
     {
-      "id": "node_ways . sample_523597",
+      "id": "node_ways . sample_505983",
       "label": "ways . Sample",
       "type": "phrase",
       "domain": "text",
@@ -961,7 +961,7 @@
       "index": 119
     },
     {
-      "id": "node_journey_270603",
+      "id": "node_journey_390843",
       "label": "journey",
       "type": "word",
       "domain": "text",
@@ -969,7 +969,7 @@
       "index": 120
     },
     {
-      "id": "node_of_586510",
+      "id": "node_of_76095",
       "label": "of",
       "type": "word",
       "domain": "text",
@@ -977,7 +977,7 @@
       "index": 121
     },
     {
-      "id": "node_thousand_604127",
+      "id": "node_thousand_135509",
       "label": "thousand",
       "type": "word",
       "domain": "text",
@@ -985,7 +985,7 @@
       "index": 122
     },
     {
-      "id": "node_miles_378203",
+      "id": "node_miles_72748",
       "label": "miles",
       "type": "word",
       "domain": "text",
@@ -993,7 +993,7 @@
       "index": 123
     },
     {
-      "id": "node_begins_853524",
+      "id": "node_begins_368303",
       "label": "begins",
       "type": "word",
       "domain": "text",
@@ -1001,7 +1001,7 @@
       "index": 124
     },
     {
-      "id": "node_with_242362",
+      "id": "node_with_788615",
       "label": "with",
       "type": "word",
       "domain": "text",
@@ -1009,7 +1009,7 @@
       "index": 125
     },
     {
-      "id": "node_single_461569",
+      "id": "node_single_108290",
       "label": "single",
       "type": "word",
       "domain": "text",
@@ -1017,7 +1017,7 @@
       "index": 126
     },
     {
-      "id": "node_step_984327",
+      "id": "node_step_503703",
       "label": "step",
       "type": "word",
       "domain": "text",
@@ -1025,7 +1025,7 @@
       "index": 127
     },
     {
-      "id": "node_forward_309687",
+      "id": "node_forward_759808",
       "label": "forward",
       "type": "word",
       "domain": "text",
@@ -1033,7 +1033,7 @@
       "index": 128
     },
     {
-      "id": "node_the journey_246528",
+      "id": "node_the journey_317969",
       "label": "The journey",
       "type": "phrase",
       "domain": "text",
@@ -1041,7 +1041,7 @@
       "index": 129
     },
     {
-      "id": "node_journey of_278129",
+      "id": "node_journey of_796735",
       "label": "journey of",
       "type": "phrase",
       "domain": "text",
@@ -1049,7 +1049,7 @@
       "index": 130
     },
     {
-      "id": "node_of a_95824",
+      "id": "node_of a_873817",
       "label": "of a",
       "type": "phrase",
       "domain": "text",
@@ -1057,7 +1057,7 @@
       "index": 131
     },
     {
-      "id": "node_a thousand_683244",
+      "id": "node_a thousand_168863",
       "label": "a thousand",
       "type": "phrase",
       "domain": "text",
@@ -1065,7 +1065,7 @@
       "index": 132
     },
     {
-      "id": "node_thousand miles_948018",
+      "id": "node_thousand miles_232625",
       "label": "thousand miles",
       "type": "phrase",
       "domain": "text",
@@ -1073,7 +1073,7 @@
       "index": 133
     },
     {
-      "id": "node_miles begins_815802",
+      "id": "node_miles begins_463527",
       "label": "miles begins",
       "type": "phrase",
       "domain": "text",
@@ -1081,7 +1081,7 @@
       "index": 134
     },
     {
-      "id": "node_begins with_736277",
+      "id": "node_begins with_684982",
       "label": "begins with",
       "type": "phrase",
       "domain": "text",
@@ -1089,7 +1089,7 @@
       "index": 135
     },
     {
-      "id": "node_with a_828029",
+      "id": "node_with a_947628",
       "label": "with a",
       "type": "phrase",
       "domain": "text",
@@ -1097,7 +1097,7 @@
       "index": 136
     },
     {
-      "id": "node_a single_342001",
+      "id": "node_a single_482112",
       "label": "a single",
       "type": "phrase",
       "domain": "text",
@@ -1105,7 +1105,7 @@
       "index": 137
     },
     {
-      "id": "node_single step_389050",
+      "id": "node_single step_132290",
       "label": "single step",
       "type": "phrase",
       "domain": "text",
@@ -1113,7 +1113,7 @@
       "index": 138
     },
     {
-      "id": "node_step forward_587909",
+      "id": "node_step forward_431270",
       "label": "step forward",
       "type": "phrase",
       "domain": "text",
@@ -1121,7 +1121,7 @@
       "index": 139
     },
     {
-      "id": "node_forward ._352574",
+      "id": "node_forward ._693590",
       "label": "forward .",
       "type": "phrase",
       "domain": "text",
@@ -1129,7 +1129,7 @@
       "index": 140
     },
     {
-      "id": "node_the journey of_717041",
+      "id": "node_the journey of_28513",
       "label": "The journey of",
       "type": "phrase",
       "domain": "text",
@@ -1137,7 +1137,7 @@
       "index": 141
     },
     {
-      "id": "node_journey of a_838144",
+      "id": "node_journey of a_794085",
       "label": "journey of a",
       "type": "phrase",
       "domain": "text",
@@ -1145,7 +1145,7 @@
       "index": 142
     },
     {
-      "id": "node_of a thousand_843514",
+      "id": "node_of a thousand_409774",
       "label": "of a thousand",
       "type": "phrase",
       "domain": "text",
@@ -1153,7 +1153,7 @@
       "index": 143
     },
     {
-      "id": "node_a thousand miles_542442",
+      "id": "node_a thousand miles_349926",
       "label": "a thousand miles",
       "type": "phrase",
       "domain": "text",
@@ -1161,7 +1161,7 @@
       "index": 144
     },
     {
-      "id": "node_thousand miles begins_548073",
+      "id": "node_thousand miles begins_770690",
       "label": "thousand miles begins",
       "type": "phrase",
       "domain": "text",
@@ -1169,7 +1169,7 @@
       "index": 145
     },
     {
-      "id": "node_miles begins with_837415",
+      "id": "node_miles begins with_359250",
       "label": "miles begins with",
       "type": "phrase",
       "domain": "text",
@@ -1177,7 +1177,7 @@
       "index": 146
     },
     {
-      "id": "node_begins with a_392871",
+      "id": "node_begins with a_699497",
       "label": "begins with a",
       "type": "phrase",
       "domain": "text",
@@ -1185,7 +1185,7 @@
       "index": 147
     },
     {
-      "id": "node_with a single_123902",
+      "id": "node_with a single_212862",
       "label": "with a single",
       "type": "phrase",
       "domain": "text",
@@ -1193,7 +1193,7 @@
       "index": 148
     },
     {
-      "id": "node_a single step_512494",
+      "id": "node_a single step_773990",
       "label": "a single step",
       "type": "phrase",
       "domain": "text",
@@ -1201,7 +1201,7 @@
       "index": 149
     },
     {
-      "id": "node_single step forward_818201",
+      "id": "node_single step forward_777150",
       "label": "single step forward",
       "type": "phrase",
       "domain": "text",
@@ -1209,7 +1209,7 @@
       "index": 150
     },
     {
-      "id": "node_step forward ._627449",
+      "id": "node_step forward ._710792",
       "label": "step forward .",
       "type": "phrase",
       "domain": "text",
@@ -1217,7 +1217,7 @@
       "index": 151
     },
     {
-      "id": "node_forward . sample_707330",
+      "id": "node_forward . sample_980978",
       "label": "forward . Sample",
       "type": "phrase",
       "domain": "text",
@@ -1225,7 +1225,7 @@
       "index": 152
     },
     {
-      "id": "node_quick_192003",
+      "id": "node_quick_596555",
       "label": "quick",
       "type": "word",
       "domain": "text",
@@ -1233,7 +1233,7 @@
       "index": 153
     },
     {
-      "id": "node_brown_345013",
+      "id": "node_brown_330428",
       "label": "brown",
       "type": "word",
       "domain": "text",
@@ -1241,7 +1241,7 @@
       "index": 154
     },
     {
-      "id": "node_fox_171176",
+      "id": "node_fox_860232",
       "label": "fox",
       "type": "word",
       "domain": "text",
@@ -1249,7 +1249,7 @@
       "index": 155
     },
     {
-      "id": "node_jumps_311855",
+      "id": "node_jumps_916354",
       "label": "jumps",
       "type": "word",
       "domain": "text",
@@ -1257,7 +1257,7 @@
       "index": 156
     },
     {
-      "id": "node_over_885065",
+      "id": "node_over_735624",
       "label": "over",
       "type": "word",
       "domain": "text",
@@ -1265,7 +1265,7 @@
       "index": 157
     },
     {
-      "id": "node_lazy_928872",
+      "id": "node_lazy_872339",
       "label": "lazy",
       "type": "word",
       "domain": "text",
@@ -1273,7 +1273,7 @@
       "index": 158
     },
     {
-      "id": "node_dog_860642",
+      "id": "node_dog_350508",
       "label": "dog",
       "type": "word",
       "domain": "text",
@@ -1281,7 +1281,7 @@
       "index": 159
     },
     {
-      "id": "node_this_705446",
+      "id": "node_this_879002",
       "label": "This",
       "type": "word",
       "domain": "text",
@@ -1289,7 +1289,7 @@
       "index": 160
     },
     {
-      "id": "node_text_271859",
+      "id": "node_text_380452",
       "label": "text",
       "type": "word",
       "domain": "text",
@@ -1297,7 +1297,7 @@
       "index": 161
     },
     {
-      "id": "node_for_1912",
+      "id": "node_for_136712",
       "label": "for",
       "type": "word",
       "domain": "text",
@@ -1305,7 +1305,7 @@
       "index": 162
     },
     {
-      "id": "node_training_75328",
+      "id": "node_training_114694",
       "label": "training",
       "type": "word",
       "domain": "text",
@@ -1313,7 +1313,7 @@
       "index": 163
     },
     {
-      "id": "node_the quick_415429",
+      "id": "node_the quick_212152",
       "label": "The quick",
       "type": "phrase",
       "domain": "text",
@@ -1321,7 +1321,7 @@
       "index": 164
     },
     {
-      "id": "node_quick brown_262321",
+      "id": "node_quick brown_542623",
       "label": "quick brown",
       "type": "phrase",
       "domain": "text",
@@ -1329,7 +1329,7 @@
       "index": 165
     },
     {
-      "id": "node_brown fox_350678",
+      "id": "node_brown fox_415644",
       "label": "brown fox",
       "type": "phrase",
       "domain": "text",
@@ -1337,7 +1337,7 @@
       "index": 166
     },
     {
-      "id": "node_fox jumps_882335",
+      "id": "node_fox jumps_286326",
       "label": "fox jumps",
       "type": "phrase",
       "domain": "text",
@@ -1345,7 +1345,7 @@
       "index": 167
     },
     {
-      "id": "node_jumps over_98032",
+      "id": "node_jumps over_703924",
       "label": "jumps over",
       "type": "phrase",
       "domain": "text",
@@ -1353,7 +1353,7 @@
       "index": 168
     },
     {
-      "id": "node_over the_938508",
+      "id": "node_over the_608905",
       "label": "over the",
       "type": "phrase",
       "domain": "text",
@@ -1361,7 +1361,7 @@
       "index": 169
     },
     {
-      "id": "node_the lazy_504658",
+      "id": "node_the lazy_865187",
       "label": "the lazy",
       "type": "phrase",
       "domain": "text",
@@ -1369,7 +1369,7 @@
       "index": 170
     },
     {
-      "id": "node_lazy dog_4953",
+      "id": "node_lazy dog_683049",
       "label": "lazy dog",
       "type": "phrase",
       "domain": "text",
@@ -1377,7 +1377,7 @@
       "index": 171
     },
     {
-      "id": "node_dog ._316962",
+      "id": "node_dog ._433158",
       "label": "dog .",
       "type": "phrase",
       "domain": "text",
@@ -1385,7 +1385,7 @@
       "index": 172
     },
     {
-      "id": "node_. this_430215",
+      "id": "node_. this_315700",
       "label": ". This",
       "type": "phrase",
       "domain": "text",
@@ -1393,7 +1393,7 @@
       "index": 173
     },
     {
-      "id": "node_this is_68382",
+      "id": "node_this is_252598",
       "label": "This is",
       "type": "phrase",
       "domain": "text",
@@ -1401,7 +1401,7 @@
       "index": 174
     },
     {
-      "id": "node_is a_217275",
+      "id": "node_is a_740579",
       "label": "is a",
       "type": "phrase",
       "domain": "text",
@@ -1409,7 +1409,7 @@
       "index": 175
     },
     {
-      "id": "node_a sample_265885",
+      "id": "node_a sample_265256",
       "label": "a sample",
       "type": "phrase",
       "domain": "text",
@@ -1417,7 +1417,7 @@
       "index": 176
     },
     {
-      "id": "node_sample text_137441",
+      "id": "node_sample text_187970",
       "label": "sample text",
       "type": "phrase",
       "domain": "text",
@@ -1425,7 +1425,7 @@
       "index": 177
     },
     {
-      "id": "node_text for_617188",
+      "id": "node_text for_869002",
       "label": "text for",
       "type": "phrase",
       "domain": "text",
@@ -1433,7 +1433,7 @@
       "index": 178
     },
     {
-      "id": "node_for training_845210",
+      "id": "node_for training_489213",
       "label": "for training",
       "type": "phrase",
       "domain": "text",
@@ -1441,7 +1441,7 @@
       "index": 179
     },
     {
-      "id": "node_training ._286621",
+      "id": "node_training ._425177",
       "label": "training .",
       "type": "phrase",
       "domain": "text",
@@ -1449,7 +1449,7 @@
       "index": 180
     },
     {
-      "id": "node_the quick brown_302232",
+      "id": "node_the quick brown_418310",
       "label": "The quick brown",
       "type": "phrase",
       "domain": "text",
@@ -1457,7 +1457,7 @@
       "index": 181
     },
     {
-      "id": "node_quick brown fox_77933",
+      "id": "node_quick brown fox_604331",
       "label": "quick brown fox",
       "type": "phrase",
       "domain": "text",
@@ -1465,7 +1465,7 @@
       "index": 182
     },
     {
-      "id": "node_brown fox jumps_484956",
+      "id": "node_brown fox jumps_273651",
       "label": "brown fox jumps",
       "type": "phrase",
       "domain": "text",
@@ -1473,7 +1473,7 @@
       "index": 183
     },
     {
-      "id": "node_fox jumps over_841983",
+      "id": "node_fox jumps over_285438",
       "label": "fox jumps over",
       "type": "phrase",
       "domain": "text",
@@ -1481,7 +1481,7 @@
       "index": 184
     },
     {
-      "id": "node_jumps over the_941516",
+      "id": "node_jumps over the_317598",
       "label": "jumps over the",
       "type": "phrase",
       "domain": "text",
@@ -1489,7 +1489,7 @@
       "index": 185
     },
     {
-      "id": "node_over the lazy_978199",
+      "id": "node_over the lazy_88269",
       "label": "over the lazy",
       "type": "phrase",
       "domain": "text",
@@ -1497,7 +1497,7 @@
       "index": 186
     },
     {
-      "id": "node_the lazy dog_562910",
+      "id": "node_the lazy dog_544574",
       "label": "the lazy dog",
       "type": "phrase",
       "domain": "text",
@@ -1505,7 +1505,7 @@
       "index": 187
     },
     {
-      "id": "node_lazy dog ._233495",
+      "id": "node_lazy dog ._938418",
       "label": "lazy dog .",
       "type": "phrase",
       "domain": "text",
@@ -1513,7 +1513,7 @@
       "index": 188
     },
     {
-      "id": "node_dog . this_291468",
+      "id": "node_dog . this_816124",
       "label": "dog . This",
       "type": "phrase",
       "domain": "text",
@@ -1521,7 +1521,7 @@
       "index": 189
     },
     {
-      "id": "node_. this is_506361",
+      "id": "node_. this is_484546",
       "label": ". This is",
       "type": "phrase",
       "domain": "text",
@@ -1529,7 +1529,7 @@
       "index": 190
     },
     {
-      "id": "node_this is a_65",
+      "id": "node_this is a_947068",
       "label": "This is a",
       "type": "phrase",
       "domain": "text",
@@ -1537,7 +1537,7 @@
       "index": 191
     },
     {
-      "id": "node_is a sample_504923",
+      "id": "node_is a sample_97418",
       "label": "is a sample",
       "type": "phrase",
       "domain": "text",
@@ -1545,7 +1545,7 @@
       "index": 192
     },
     {
-      "id": "node_a sample text_929160",
+      "id": "node_a sample text_503587",
       "label": "a sample text",
       "type": "phrase",
       "domain": "text",
@@ -1553,7 +1553,7 @@
       "index": 193
     },
     {
-      "id": "node_sample text for_764531",
+      "id": "node_sample text for_302116",
       "label": "sample text for",
       "type": "phrase",
       "domain": "text",
@@ -1561,7 +1561,7 @@
       "index": 194
     },
     {
-      "id": "node_text for training_258546",
+      "id": "node_text for training_844085",
       "label": "text for training",
       "type": "phrase",
       "domain": "text",
@@ -1569,7 +1569,7 @@
       "index": 195
     },
     {
-      "id": "node_for training ._660023",
+      "id": "node_for training ._239003",
       "label": "for training .",
       "type": "phrase",
       "domain": "text",
@@ -1577,7 +1577,7 @@
       "index": 196
     },
     {
-      "id": "node_training . sample_635659",
+      "id": "node_training . sample_613409",
       "label": "training . Sample",
       "type": "phrase",
       "domain": "text",
@@ -1587,434 +1587,434 @@
   ],
   "links": [
     {
-      "source": "node_is_135082",
-      "target": "node_power_415543",
-      "weight": 0.9799,
-      "type": "sequential"
-    },
-    {
-      "source": "node_._935183",
-      "target": "node_sample_410800",
-      "weight": 0.9849084449824761,
-      "type": "sequential"
-    },
-    {
-      "source": "node_sample_410800",
-      "target": "node_number_610120",
-      "weight": 0.9881758486376014,
-      "type": "sequential"
-    },
-    {
-      "source": "node_in_998982",
-      "target": "node_the_210110",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_the_210110",
-      "target": "node_beginning_167539",
-      "weight": 0.9032251769172397,
-      "type": "sequential"
-    },
-    {
-      "source": "node_beginning_167539",
-      "target": "node_,_350245",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_,_350245",
-      "target": "node_there_945265",
-      "weight": 0.9776550187751939,
-      "type": "sequential"
-    },
-    {
-      "source": "node_there_945265",
-      "target": "node_was_643611",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_was_643611",
-      "target": "node_nothing_588407",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_nothing_588407",
-      "target": "node_but_542095",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_but_542095",
-      "target": "node_darkness_214175",
-      "weight": 0.988110308777869,
-      "type": "sequential"
-    },
-    {
-      "source": "node_darkness_214175",
-      "target": "node_._935183",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_._935183",
-      "target": "node_then_179313",
-      "weight": 0.9899,
-      "type": "sequential"
-    },
-    {
-      "source": "node_then_179313",
-      "target": "node_light_452080",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_light_452080",
-      "target": "node_emerged_243368",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_emerged_243368",
-      "target": "node_from_383570",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_from_383570",
-      "target": "node_the_210110",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_the_210110",
-      "target": "node_void_415936",
-      "weight": 0.9899,
-      "type": "sequential"
-    },
-    {
-      "source": "node_void_415936",
-      "target": "node_._935183",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_knowledge_821688",
-      "target": "node_is_135082",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_power_415543",
-      "target": "node_,_350245",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_,_350245",
-      "target": "node_but_542095",
-      "weight": 0.9899,
-      "type": "sequential"
-    },
-    {
-      "source": "node_but_542095",
-      "target": "node_wisdom_234353",
-      "weight": 0.9899,
-      "type": "sequential"
-    },
-    {
-      "source": "node_wisdom_234353",
-      "target": "node_is_135082",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_is_135082",
-      "target": "node_knowing_182617",
-      "weight": 0.9890709292867562,
-      "type": "sequential"
-    },
-    {
-      "source": "node_knowing_182617",
-      "target": "node_how_838526",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_how_838526",
-      "target": "node_to_856478",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_to_856478",
-      "target": "node_use_748519",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_use_748519",
-      "target": "node_that_430662",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_that_430662",
-      "target": "node_power_415543",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_power_415543",
-      "target": "node_effectively_215566",
-      "weight": 0.9814416949756916,
-      "type": "sequential"
-    },
-    {
-      "source": "node_effectively_215566",
-      "target": "node_._935183",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_the_210110",
-      "target": "node_journey_270603",
-      "weight": 0.5824833158610689,
-      "type": "sequential"
-    },
-    {
-      "source": "node_journey_270603",
-      "target": "node_of_586510",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_of_586510",
-      "target": "node_a_30519",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_a_30519",
-      "target": "node_thousand_604127",
-      "weight": 0.9370512270079779,
-      "type": "sequential"
-    },
-    {
-      "source": "node_thousand_604127",
-      "target": "node_miles_378203",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_miles_378203",
-      "target": "node_begins_853524",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_begins_853524",
-      "target": "node_with_242362",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_with_242362",
-      "target": "node_a_30519",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_a_30519",
-      "target": "node_single_461569",
-      "weight": 0.9773477097380475,
-      "type": "sequential"
-    },
-    {
-      "source": "node_single_461569",
-      "target": "node_step_984327",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_step_984327",
-      "target": "node_forward_309687",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_forward_309687",
-      "target": "node_._935183",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_science_416529",
-      "target": "node_and_485573",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_and_485573",
-      "target": "node_technology_178689",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_technology_178689",
-      "target": "node_have_591922",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_have_591922",
-      "target": "node_revolutionized_568632",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_revolutionized_568632",
-      "target": "node_our_14044",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_our_14044",
-      "target": "node_world_7570",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_world_7570",
-      "target": "node_in_998982",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_in_998982",
-      "target": "node_countless_799694",
-      "weight": 0.9799,
-      "type": "sequential"
-    },
-    {
-      "source": "node_countless_799694",
-      "target": "node_ways_480153",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_ways_480153",
-      "target": "node_._935183",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_is_135082",
-      "target": "node_a_30519",
-      "weight": 0.9758436678652465,
-      "type": "sequential"
-    },
-    {
-      "source": "node_the_210110",
-      "target": "node_quick_192003",
-      "weight": 0.9490270048233286,
-      "type": "sequential"
-    },
-    {
-      "source": "node_quick_192003",
-      "target": "node_brown_345013",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_brown_345013",
-      "target": "node_fox_171176",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_fox_171176",
-      "target": "node_jumps_311855",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_jumps_311855",
-      "target": "node_over_885065",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_over_885065",
-      "target": "node_the_210110",
-      "weight": 0.9999,
-      "type": "sequential"
-    },
-    {
-      "source": "node_the_210110",
-      "target": "node_lazy_928872",
+      "source": "node_is_611588",
+      "target": "node_power_851782",
       "weight": 0.9699,
       "type": "sequential"
     },
     {
-      "source": "node_lazy_928872",
-      "target": "node_dog_860642",
+      "source": "node_._95890",
+      "target": "node_sample_377396",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_dog_860642",
-      "target": "node_._935183",
+      "source": "node_sample_377396",
+      "target": "node_number_273831",
+      "weight": 0.990221789547478,
+      "type": "sequential"
+    },
+    {
+      "source": "node_in_432819",
+      "target": "node_the_413445",
+      "weight": 0.9895724927104191,
+      "type": "sequential"
+    },
+    {
+      "source": "node_the_413445",
+      "target": "node_beginning_283383",
+      "weight": 0.9805283536118281,
+      "type": "sequential"
+    },
+    {
+      "source": "node_beginning_283383",
+      "target": "node_,_674551",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_._935183",
-      "target": "node_this_705446",
-      "weight": 0.9599,
-      "type": "sequential"
-    },
-    {
-      "source": "node_this_705446",
-      "target": "node_is_135082",
+      "source": "node_,_674551",
+      "target": "node_there_338348",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_a_30519",
-      "target": "node_sample_410800",
+      "source": "node_there_338348",
+      "target": "node_was_590117",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_sample_410800",
-      "target": "node_text_271859",
-      "weight": 0.9899,
-      "type": "sequential"
-    },
-    {
-      "source": "node_text_271859",
-      "target": "node_for_1912",
+      "source": "node_was_590117",
+      "target": "node_nothing_163312",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_for_1912",
-      "target": "node_training_75328",
+      "source": "node_nothing_163312",
+      "target": "node_but_874257",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_training_75328",
-      "target": "node_._935183",
+      "source": "node_but_874257",
+      "target": "node_darkness_674116",
       "weight": 0.9999,
       "type": "sequential"
     },
     {
-      "source": "node_number_610120",
-      "target": "node_._935183",
+      "source": "node_darkness_674116",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_._95890",
+      "target": "node_then_997666",
+      "weight": 0.9699,
+      "type": "sequential"
+    },
+    {
+      "source": "node_then_997666",
+      "target": "node_light_792685",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_light_792685",
+      "target": "node_emerged_539061",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_emerged_539061",
+      "target": "node_from_290944",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_from_290944",
+      "target": "node_the_413445",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_the_413445",
+      "target": "node_void_808103",
+      "weight": 0.9699,
+      "type": "sequential"
+    },
+    {
+      "source": "node_void_808103",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_knowledge_358883",
+      "target": "node_is_611588",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_power_851782",
+      "target": "node_,_674551",
+      "weight": 0.9878365429839638,
+      "type": "sequential"
+    },
+    {
+      "source": "node_,_674551",
+      "target": "node_but_874257",
+      "weight": 0.9799,
+      "type": "sequential"
+    },
+    {
+      "source": "node_but_874257",
+      "target": "node_wisdom_804204",
+      "weight": 0.9699,
+      "type": "sequential"
+    },
+    {
+      "source": "node_wisdom_804204",
+      "target": "node_is_611588",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_is_611588",
+      "target": "node_knowing_120405",
+      "weight": 0.9799,
+      "type": "sequential"
+    },
+    {
+      "source": "node_knowing_120405",
+      "target": "node_how_725703",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_how_725703",
+      "target": "node_to_67333",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_to_67333",
+      "target": "node_use_737895",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_use_737895",
+      "target": "node_that_327688",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_that_327688",
+      "target": "node_power_851782",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_power_851782",
+      "target": "node_effectively_307739",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_effectively_307739",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_the_413445",
+      "target": "node_journey_390843",
+      "weight": 0.5731904982698732,
+      "type": "sequential"
+    },
+    {
+      "source": "node_journey_390843",
+      "target": "node_of_76095",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_of_76095",
+      "target": "node_a_518392",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_a_518392",
+      "target": "node_thousand_135509",
+      "weight": 0.8973904533383513,
+      "type": "sequential"
+    },
+    {
+      "source": "node_thousand_135509",
+      "target": "node_miles_72748",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_miles_72748",
+      "target": "node_begins_368303",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_begins_368303",
+      "target": "node_with_788615",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_with_788615",
+      "target": "node_a_518392",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_a_518392",
+      "target": "node_single_108290",
+      "weight": 0.9263271511340911,
+      "type": "sequential"
+    },
+    {
+      "source": "node_single_108290",
+      "target": "node_step_503703",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_step_503703",
+      "target": "node_forward_759808",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_forward_759808",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_science_352020",
+      "target": "node_and_678916",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_and_678916",
+      "target": "node_technology_396996",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_technology_396996",
+      "target": "node_have_780241",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_have_780241",
+      "target": "node_revolutionized_975615",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_revolutionized_975615",
+      "target": "node_our_598718",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_our_598718",
+      "target": "node_world_912311",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_world_912311",
+      "target": "node_in_432819",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_in_432819",
+      "target": "node_countless_93664",
+      "weight": 0.989652093376085,
+      "type": "sequential"
+    },
+    {
+      "source": "node_countless_93664",
+      "target": "node_ways_479650",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_ways_479650",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_is_611588",
+      "target": "node_a_518392",
+      "weight": 0.979058697224599,
+      "type": "sequential"
+    },
+    {
+      "source": "node_the_413445",
+      "target": "node_quick_596555",
+      "weight": 0.9299,
+      "type": "sequential"
+    },
+    {
+      "source": "node_quick_596555",
+      "target": "node_brown_330428",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_brown_330428",
+      "target": "node_fox_860232",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_fox_860232",
+      "target": "node_jumps_916354",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_jumps_916354",
+      "target": "node_over_735624",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_over_735624",
+      "target": "node_the_413445",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_the_413445",
+      "target": "node_lazy_872339",
+      "weight": 0.9700935536073971,
+      "type": "sequential"
+    },
+    {
+      "source": "node_lazy_872339",
+      "target": "node_dog_350508",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_dog_350508",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_._95890",
+      "target": "node_this_879002",
+      "weight": 0.8909133236575545,
+      "type": "sequential"
+    },
+    {
+      "source": "node_this_879002",
+      "target": "node_is_611588",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_a_518392",
+      "target": "node_sample_377396",
+      "weight": 0.9994290106209645,
+      "type": "sequential"
+    },
+    {
+      "source": "node_sample_377396",
+      "target": "node_text_380452",
+      "weight": 0.9750551559412329,
+      "type": "sequential"
+    },
+    {
+      "source": "node_text_380452",
+      "target": "node_for_136712",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_for_136712",
+      "target": "node_training_114694",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_training_114694",
+      "target": "node_._95890",
+      "weight": 0.9999,
+      "type": "sequential"
+    },
+    {
+      "source": "node_number_273831",
+      "target": "node_._95890",
       "weight": 0.9999,
       "type": "sequential"
     }
