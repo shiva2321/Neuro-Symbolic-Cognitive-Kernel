@@ -4,7 +4,7 @@ GRAPH NETWORK STATISTICS REPORT
 
 Total Nodes: 198
 Total Edges: 72
-Average Edge Weight: 0.9871
+Average Edge Weight: 0.9849
 Average Node Degree: 0.36
 Maximum Node Degree: 5
 
