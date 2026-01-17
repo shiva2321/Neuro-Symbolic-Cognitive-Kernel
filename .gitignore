@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Binary brain files (memory-mapped data)
+*.dat
+*.bin
+
+# Saved models and large artifacts
+saved_models/
+
+# Temporary files
+*.log
+*.tmp
+
+# Documentation archive (historical files)
+docs/archive/
+
+# Pytest cache
+.pytest_cache/
+
+# Ignore Python bytecode in ncgn package copies
+ncgn/**/__pycache__/
+
+# Ignore personal IDE settings
+.idea/
+
+# Ignore any other build artifacts
+build/
+dist/

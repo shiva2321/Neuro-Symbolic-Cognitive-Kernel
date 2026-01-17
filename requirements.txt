@@ -1,16 +1,26 @@
-networkx>=3.2
-psutil>=5.9.0
-tqdm>=4.66.0
-pandas>=2.1.0
-plotly>=5.18.0
-matplotlib>=3.8.0
-torch>=2.1.0
-spacy>=3.7.0
-nltk>=3.8.0
-scipy>=1.11.0
-numpy>=1.24.0
-flask>=3.0.0
-PyPDF2>=3.0.0
-python-docx>=1.0.0
-anthropic>=0.18.0
-google-generativeai>=0.3.0
+# NCGN: Neuromorphic Cognitive Graph Network
+# Pure Python implementation - NO external dependencies required!
+
+# Core System: Uses ONLY Python standard library
+# - No NumPy, PyTorch, TensorFlow, or other ML libraries
+# - No package installations needed
+# - Runs on vanilla Python 3.11+
+
+# Python Standard Library Modules Used:
+# - struct: Binary data packing/unpacking
+# - mmap: Memory-mapped file I/O
+# - os, sys: File and system operations
+# - collections: Data structures
+# - random: Random number generation
+# - time: Timing operations
+
+# Optional Dependencies (for future extensions):
+# Visualization (not required for core functionality)
+# matplotlib>=3.5.0
+# networkx>=2.8.0
+
+# Testing (optional, for development)
+# pytest>=7.0.0
+
+# Note: All experiments and demos run without ANY package installations!
+
