@@ -1,59 +1,120 @@
 """
-Synapse: Represents a biological synapse connection with eligibility trace.
-NO matrix multiplication - each synapse is an independent object.
+Synapse: Biologically-inspired synaptic connection with plasticity support.
+
+Represents a connection between two neurons with:
+- Weight (synaptic strength)
+- Eligibility trace (memory of presynaptic activity for delayed learning)
+- Type classification (excitatory/inhibitory)
+
+Core responsibility: Weight the spike and pass it to postsynaptic neuron.
+Learning rules are applied externally by plasticity modules.
 """
 
+from .spike import Spike, WeightedSpike
+
+
 class Synapse:
-    def __init__(self, weight, is_inhibitory=False):
+    """
+    Biologically-inspired synaptic connection.
+
+    Maintains synaptic weight and eligibility trace.
+    Transmits incoming spikes to postsynaptic targets.
+
+    Invariants:
+    - Weight bounds: [0, 2.0] (non-negative, prevents explosion)
+    - Trace always >= 0
+    - Type is immutable (excitatory XOR inhibitory)
+    """
+
+    def __init__(self, weight: float, is_inhibitory: bool = False):
         """
+        Initialize a synapse.
+
         Args:
-            weight: Initial synaptic strength
-            is_inhibitory: If True, implements shunting inhibition
+            weight: Initial synaptic strength (typical: 0.1-1.5)
+            is_inhibitory: If True, this is an inhibitory synapse
         """
-        self.weight = weight
-        self.trace = 0.0  # Eligibility trace for delayed learning
+        self.weight = max(0.0, min(2.0, weight))  # Clamp to safe range
         self.is_inhibitory = is_inhibitory
 
-        # STDP parameters
-        self.trace_decay = 0.9  # How quickly the trace fades
-        self.trace_increment = 1.0  # How much trace is added per spike
+        # Eligibility trace: memory of recent presynaptic activity
+        self.trace = 0.0
 
-    def update_trace(self, pre_fired):
+        # STDP parameters (biological timescales)
+        self.trace_decay = 0.9  # Exponential decay of trace per timestep
+        self.trace_increment = 1.0  # How much trace increases per presynaptic spike
+
+    def transmit(self, spike: Spike) -> WeightedSpike:
         """
-        Update the eligibility trace based on presynaptic activity.
-        The trace acts as a "memory" of recent activity.
+        Transmit a presynaptic spike through this synapse.
+
+        Applies synaptic weight to the spike and marks it as inhibitory if needed.
+
+        Args:
+            spike: The incoming spike from presynaptic neuron
+
+        Returns:
+            WeightedSpike with transmission parameters applied
         """
-        # Decay existing trace
+        return WeightedSpike(
+            spike=spike,
+            weight=self.weight,
+            is_inhibitory=self.is_inhibitory
+        )
+
+    def update_trace(self, pre_fired: bool) -> None:
+        """
+        Update eligibility trace based on presynaptic activity.
+
+        The trace acts as a "memory" of recent presynaptic spikes.
+        It is used by learning rules to correlate pre and post activity.
+
+        Biological basis: calcium influx through synaptic receptors
+
+        Args:
+            pre_fired: Did the presynaptic neuron fire this timestep?
+        """
+        # Exponential decay
         self.trace *= self.trace_decay
 
         # Add new trace if presynaptic neuron fired
         if pre_fired:
             self.trace += self.trace_increment
 
-    def apply_stdp(self, post_fired, dopamine, learning_rate=0.01):
+    def apply_stdp(self, post_fired: bool, dopamine: float, learning_rate: float = 0.01) -> None:
         """
-        3-Factor STDP: Weight update based on pre-trace, post-fire, and dopamine.
+        Apply 3-Factor STDP learning rule.
+
+        Updates weight based on:
+        - Eligibility trace (presynaptic timing)
+        - Postsynaptic firing (postsynaptic timing)
+        - Dopamine (reward signal)
+
+        Learning rule:
+            ΔWeight = LearningRate × Trace × Dopamine
 
         Args:
             post_fired: Did the postsynaptic neuron fire?
-            dopamine: Global reward signal (positive or negative)
-            learning_rate: How fast weights change
+            dopamine: Reward signal (positive=strengthening, negative=weakening)
+            learning_rate: Learning rate (typical: 0.01-0.1)
         """
         if post_fired and dopamine != 0:
-            # Delta_Weight = LR * Trace * Dopamine
-            # Positive dopamine strengthens, negative weakens
+            # Only learn when postsynaptic neuron fires AND dopamine is present
             delta_w = learning_rate * self.trace * dopamine
             self.weight += delta_w
 
-            # Keep weights in reasonable bounds
+            # Clamp weight to safe bounds
             self.weight = max(0.0, min(2.0, self.weight))
 
-    def get_current(self, pre_fired):
+    def get_current(self, pre_fired: bool) -> float:
         """
-        Calculate the current contributed by this synapse.
+        Calculate the synaptic current this synapse contributes.
+
+        DEPRECATED: Use transmit() and let postsynaptic neuron handle integration.
+        Kept for backward compatibility with old code.
 
         Args:
-            pre_fired: Is the presynaptic neuron currently firing?
+            pre_fired: Is presynaptic neuron currently firing?
 
         Returns:
             Current contribution (can be negative for inhibitory)
@@ -62,4 +123,16 @@ class Synapse:
             return 0.0
 
         return self.weight if not self.is_inhibitory else -self.weight
+
+    def get_output(self) -> float:
+        """
+        DEPRECATED: Use transmit() instead.
+
+        For backward compatibility, returns weight.
+        """
+        return self.weight
+
+    def __repr__(self):
+        typ = "INH" if self.is_inhibitory else "EXC"
+        return f"Synapse({typ}, w={self.weight:.3f}, tr={self.trace:.3f})"
 

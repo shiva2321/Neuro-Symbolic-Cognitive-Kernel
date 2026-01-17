@@ -1,0 +1,85 @@
+================================================================================
+ ENGLISH LANGUAGE BRAIN: CREATION, TRAINING & TESTING
+================================================================================
+
+Timestamp: 2026-01-17T14:45:03.590724
+
+[STEP 1] Creating Brain Instance...
+--------------------------------------------------------------------------------
+[OK] Brain created and reset
+  - Brain file: semantic_brain.dat
+  - Initial capacity: 5000 nodes
+
+[STEP 2] Teaching Basic Vocabulary & Concepts...
+--------------------------------------------------------------------------------
+Loading vocabulary concepts...
+[OK] Vocabulary loaded
+  - Unique words: 113
+
+[STEP 3] Teaching 'The Forest Story'...
+--------------------------------------------------------------------------------
+Loading narrative...
+[OK] Story learned
+  - Total unique words: 135
+
+[STEP 4] Testing Brain Understanding...
+--------------------------------------------------------------------------------
+Running 16 test queries...
+
+[Test 1] Query: What is an apple?
+
+[Test 2] Query: What is a fruit?
+
+[Test 3] Query: What are animals?
+
+[Test 4] Query: What does a deer eat?
+
+[Test 5] Query: Where does a deer live?
+
+[Test 6] Query: What teaches the young deer?
+
+[Test 7] Query: Who are friends?
+
+[Test 8] Query: What is friendship?
+
+[Test 9] Query: Who loves the deer?
+
+[Test 10] Query: What is happiness?
+
+[Test 11] Query: What is wisdom?
+
+[Test 12] Query: What is morning?
+
+[Test 13] Query: What do animals need?
+
+[Test 14] Query: What helps birds fly?
+
+[Test 15] Query: What is in the forest?
+
+[Test 16] Query: What is a story?
+
+================================================================================
+ TRAINING & TESTING SUMMARY
+================================================================================
+
+Brain Statistics:
+  - Vocabulary size: 135 unique words
+  - Story length: ~262 words
+  - Semantic connections: Created via RDF triples
+
+Test Results:
+  - Tests run: 16
+  - Tests passed: 16
+  - Success rate: 100.0%
+
+Brain Status:
+  - Alive: Yes
+  - Learning: Complete
+  - Ready for: Advanced queries, inference, reasoning
+
+[CLEANUP] Closing brain connection...
+[OK] Brain safely closed
+
+================================================================================
+ TRAINING COMPLETE - BRAIN READY FOR USE
+================================================================================

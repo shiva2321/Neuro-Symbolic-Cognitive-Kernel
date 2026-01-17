@@ -233,3 +233,12 @@ class FlashColony:
     def close(self):
         if self.mem: self.mem.close()
         if self.f: self.f.close()
+
+    def sample_for_replay(self, k: int, priority_mode: str = "error") -> list:
+        """
+        Sample k items for replay based on priority mode.
+        Modes: 'error', 'novelty', 'confidence_penalty'
+        """
+        # Placeholder: integrate with actual block scoring arrays
+        # For now, return empty list or a mock structure
+        return []

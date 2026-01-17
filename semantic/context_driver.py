@@ -1,9 +1,11 @@
 import os
 import sys
 import re
+import json
 from storage.flash_colony import FlashColony
 
 BRAIN_FILE = "semantic_brain.dat"
+VOCAB_FILE = "semantic_vocab.json"
 
 # GRAMMAR RULES
 STOP_WORDS = {
@@ -50,6 +52,36 @@ class SemanticBrain:
             self.brain = FlashColony(BRAIN_FILE)
             self.brain.connect_to_file()
             print("Brain Online.")
+
+        # Load vocabulary if it exists
+        self._load_vocab()
+
+    def _load_vocab(self):
+        """Load vocabulary from file if it exists"""
+        if os.path.exists(VOCAB_FILE):
+            try:
+                with open(VOCAB_FILE, 'r') as f:
+                    data = json.load(f)
+                    self.word_to_id = {k: int(v) for k, v in data.get('word_to_id', {}).items()}
+                    self.id_to_word = {int(k): v for k, v in data.get('id_to_word', {}).items()}
+                    self.next_id = data.get('next_id', 1)
+                    if self.word_to_id:
+                        print(f"Loaded {len(self.word_to_id)} vocabulary items")
+            except:
+                pass
+
+    def _save_vocab(self):
+        """Save vocabulary to file"""
+        try:
+            data = {
+                'word_to_id': self.word_to_id,
+                'id_to_word': {str(k): v for k, v in self.id_to_word.items()},
+                'next_id': self.next_id
+            }
+            with open(VOCAB_FILE, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"Warning: Could not save vocabulary: {e}")
 
     def get_token_id(self, word, create=True):
         word = word.upper()
@@ -177,6 +209,7 @@ class SemanticBrain:
                         self.create_rdf_link(subj, "CAN", verb_action)
             i += 1
         print("Graph Updated.")
+        self._save_vocab()  # Persist vocabulary to disk
 
     def query(self, question):
         print(f"\nQ: {question}")
@@ -285,8 +318,10 @@ class SemanticBrain:
             print("   No match found.")
 
     def factory_reset(self):
-        print("\n⚠️  FACTORY RESET...")
+        print("\nFACTORY RESET...")
         self.brain.close()
         try: os.remove(BRAIN_FILE)
+        except: pass
+        try: os.remove(VOCAB_FILE)
         except: pass
         self.__init__()

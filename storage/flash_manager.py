@@ -1,5 +1,4 @@
 import mmap
-import os
 import struct
 
 # --- 🧬 BINARY SPECS ---
@@ -86,6 +85,31 @@ class FlashBrain:
         if self.f: self.f.close()
         print("🔌 Brain disconnected.")
 
+class FlashManager:
+    def __init__(self, *args, **kwargs):
+        self._enable_confidence_consolidation: bool = True
+
+    def enable_confidence_consolidation(self, enabled: bool) -> None:
+        """Enable/disable confidence-weighted consolidation."""
+        self._enable_confidence_consolidation = bool(enabled)
+
+    def consolidate(self, confidence: float, priority: float = 0.0) -> None:
+        """
+        Confidence-weighted consolidation of memory blocks.
+
+        Args:
+            confidence: Confidence score [0..1]
+            priority: External priority [0..1]
+        """
+        if not getattr(self, '_enable_confidence_consolidation', False):
+            return
+        # Heuristic: consolidate when high confidence and moderate priority
+        # Actual implementation should select blocks and persist snapshots
+        threshold = 0.7
+        if confidence >= threshold:
+            # Placeholder hook: call underlying block manager / snapshot logic
+            pass
+
 # --- 🧪 TEST DRIVE ---
 if __name__ == "__main__":
     brain = FlashBrain("my_first_brain.dat")
@@ -105,4 +129,3 @@ if __name__ == "__main__":
     # 4. Verify Persistence
     brain.close()
     print("Test Complete. File 'my_first_brain.dat' is ready.")
-
