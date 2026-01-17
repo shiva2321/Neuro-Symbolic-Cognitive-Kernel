@@ -1,0 +1,11 @@
+{
+  "start_time": "2026-01-17T12:02:19.284427",
+  "experiment": "xor",
+  "metrics": {
+    "final_accuracy": 50.0,
+    "max_accuracy": 50.0,
+    "status": "FAILED"
+  },
+  "elapsed_seconds": 0.007765054702758789,
+  "end_time": "2026-01-17T12:02:19.292193"
+}

@@ -1,9 +1,6 @@
 import sys
-import os
 import time
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from ncgn.flash import FlashColony
+from storage.flash_colony import FlashColony
 
 BRAIN_FILE = "main_brain.dat"
 VOCAB = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 .,!?"

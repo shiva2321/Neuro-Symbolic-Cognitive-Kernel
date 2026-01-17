@@ -6,11 +6,7 @@ Task: Learn the sequence A → B → C → A → B → C...
 The network must predict what comes next based on current input.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from ncgn.core import NeuromorphicNetwork
+from core.network import NeuromorphicNetwork
 
 
 class SequenceLearningExperiment:

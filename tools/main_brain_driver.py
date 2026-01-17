@@ -2,9 +2,7 @@ import os
 import sys
 import time
 import re
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from ncgn.flash import FlashColony
+from storage.flash_colony import FlashColony
 
 BRAIN_FILE = "main_brain.dat"
 

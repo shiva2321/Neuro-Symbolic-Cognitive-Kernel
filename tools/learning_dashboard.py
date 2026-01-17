@@ -3,7 +3,7 @@ Interactive Learning Dashboard - Comprehensive Monitoring System
 Showcases the successful Pavlov's Dog experiment with full visualization and controls.
 """
 
-from pavlov_experiment import PavlovExperiment
+from experiments.pavlov_experiment import PavlovExperiment
 import time
 import os
 

@@ -4,15 +4,12 @@
 import sys
 import os
 
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 # Fix Windows console encoding
 if sys.platform == 'win32':
     import codecs
     sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, errors='replace')
 
-from ncgn.semantic import context_driver
+from semantic.context_driver import SemanticBrain
 
 # Use test brain
 if os.path.exists("demo_brain.dat"):
@@ -21,9 +18,10 @@ if os.path.exists("demo_brain.dat"):
     except:
         pass
 
+from semantic import context_driver
 context_driver.BRAIN_FILE = "demo_brain.dat"
 
-ai = context_driver.SemanticBrain()
+ai = SemanticBrain()
 
 print("="*70)
 print("SEMANTIC ASSISTANT DEMO")

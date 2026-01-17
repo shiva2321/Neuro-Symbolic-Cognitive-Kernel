@@ -10,11 +10,7 @@ Experiment:
 5. Phase 3: Bell only -> Salivation! (learned association)
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from ncgn.core import NeuromorphicNetwork
+from core.network import NeuromorphicNetwork
 import time
 
 

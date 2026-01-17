@@ -1,0 +1,11 @@
+{
+  "start_time": "2026-01-17T12:02:19.312548",
+  "experiment": "semantic",
+  "metrics": {
+    "queries_attempted": 4,
+    "queries_successful": 4,
+    "status": "SUCCESS"
+  },
+  "elapsed_seconds": 0.017487764358520508,
+  "end_time": "2026-01-17T12:02:19.330036"
+}

@@ -4,11 +4,7 @@ This demonstrates continuous learning - the network retains knowledge
 from Pavlov, then learns Sequence, then learns XOR, all in one brain.
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from ncgn.core import NeuromorphicNetwork
+from core.network import NeuromorphicNetwork
 import random
 import time
 

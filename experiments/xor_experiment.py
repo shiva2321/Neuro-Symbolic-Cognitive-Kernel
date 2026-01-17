@@ -4,11 +4,7 @@ Features Lateral Inhibition to force specialization.
 H2 (AND) directly inhibits H1 (OR) to create XOR = (A OR B) AND NOT (A AND B)
 """
 
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from ncgn.core import NeuromorphicNetwork
+from core.network import NeuromorphicNetwork
 import random
 import time
 

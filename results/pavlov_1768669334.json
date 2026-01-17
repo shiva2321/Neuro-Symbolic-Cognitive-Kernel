@@ -1,0 +1,13 @@
+{
+  "start_time": "2026-01-17T12:02:14.803874",
+  "experiment": "pavlov",
+  "metrics": {
+    "baseline_salivation": 0,
+    "training_success": 2,
+    "final_bell_weight": 0.627680629756824,
+    "test_salivation": 2,
+    "status": "PARTIAL"
+  },
+  "elapsed_seconds": 0.006525993347167969,
+  "end_time": "2026-01-17T12:02:14.810400"
+}
