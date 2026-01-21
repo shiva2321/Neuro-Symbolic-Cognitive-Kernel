@@ -1,521 +1,142 @@
-# NCGN Technical Documentation v5.0
+# NCGN Unified Architecture Documentation (v6.0)
 
-## 1. System Architecture: The Dual-Process Model
-
-NCGN implements a neuro-symbolic architecture divided into two distinct but interacting systems:
-
-### System 1: The Reactive Engine (`core/system1.py`)
-A dynamical system where concepts are nodes in a graph. It operates on "ticks." Every tick, energy flows through synapses based on weights. It is "Thinking Fast"—associative, automatic, and energy-efficient.
-
-### System 2: The Deliberative Controller (`core/system2.py`)
-A symbolic validator that monitors System 1. It is "Thinking Slow"—expensive, logical, and only wakes up when System 1 is "surprised."
+**Version**: 6.0 (Unified)
+**Type**: Neuro-Symbolic Cognitive Architecture
 
 ---
 
-## 2. The Immutable Tick Pipeline
+## 1. Overview
 
-Every discrete time step ($t$) in System 1 follows a strictly serialized 8-phase execution order:
+The **Neuromorphic Cognitive Graph Network (NCGN)** is a hybrid AI architecture that combines biological plausibility with symbolic reasoning. It implements a **Dual-Process Theory** of cognition:
 
-1.  **Transduction (Phase 0)**: External energy enters the system via the `sensory_buffer`.
-2.  **Passive Decay (Phase 1)**: All nodes lose a fraction of their energy ($E = E \times 0.9$). This clears "working memory."
-3.  **Firing Determination (Phase 2)**: Nodes exceeding their threshold (default 0.75) are marked for firing.
-4.  **Refractory & Reset (Phase 3)**: Firing nodes spend their energy and enter a refractory period where they cannot fire again for $N$ ticks.
-5.  **Propagation (Phase 4)**: Spike transmission is calculated ($Input = Weight \times Spike$). Updates are buffered to prevent infinite cascades.
-6.  **Integration (Phase 5)**: Buffered energy is applied to target nodes.
-7.  **Lateral Inhibition (k-WTA) (Phase 6)**: A "Winner-Take-All" mechanism using a Min-Heap. Only the top $K$ most energetic nodes survive; all others are set to zero. This forces the system to make a "decision."
-8.  **Surprise Monitor (Phase 7)**: The system compares the current state to the state it predicted earlier.
-9.  **Maintenance (Phase 8)**: Housekeeping tasks like decaying novelty and decrementing timers.
+*   **System 1 (The Engine)**: A fast, parallel, energy-based physics engine that handles association, attention, and learning. It operates on a graph of concept nodes.
+*   **System 2 (The Controller)**: A slow, serial, logical supervisor that handles planning, schema validation, and error correction.
+
+In v6.0, these systems are unified with **3-Factor Hebbian Learning** and **Thermodynamic Regulation**, allowing the system to learn from experience while remaining logically grounded.
 
 ---
 
-## 3. Data Structures
+## 2. Directory Structure
 
-### ConceptNode (`core/memory.py`)
-The atomic unit of state.
-* `energy`: Current membrane potential (0.0 to 1.0).
-* `threshold`: Limit at which the node "fires."
-* `novelty_score`: High for new concepts, decays over time.
-
-### Synapse (`core/memory.py`)
-The unit of association.
-* `weight`: Strength of association (dictates energy flow speed).
-* `confidence`: Epistemic truth value (used by System 2 to weigh violations).
-
----
-
-## 4. Bridge & Surprise Math
-
-**PATCHED v5.1**: Uses Root Mean Square (RMS) for proper Euclidean distance calculation.
-
-Surprise is the penalty for **Violated High-Confidence Expectations**. It is calculated as:
-
-$$S = \sqrt{\sum_{n \in Predicted} ((E_{pred}(n) - E_{obs}(n)) \times Confidence(n))^2}$$
-
-*   If the system predicts something with high confidence and it *doesn't* happen, Surprise goes up.
-*   If the system sees something completely new (Novelty), Surprise stays low (because there was no prediction to violate).
-*   **Gate Threshold**: 0.45 (Lowered from 0.5 for higher sensitivity).
-
----
-
-## 5. Intervention Protocol
-
-When Surprise exceeds a threshold, System 2 pauses System 1 and executes:
-1.  **Diagnosis**: Fetches an `EventSchema` (e.g., `eat.json`) and checks if the current action triple (Agent, Action, Object) violates constraints.
-2.  **Intervention**: Modifies System 1 state. It might:
-    *   **LTD (Long-Term Depression)**: Weaken the synapse that made the bad prediction.
-    *   **Goal Injection**: Inject energy into a `Goal_Node` (like "Query User").
-3.  **Resume**: System 1 continues, now directed by the new goal energy.
-
----
-
-## 6. How to Extend
-
-To add new knowledge to the system:
-1.  Add a JSON schema to `core/schemas/`.
-2.  Define roles (agent, target) and constraints (is_edible, is_animate).
-3.  Use the `System2Controller.set_property()` method to define what the system knows about specific objects.
-
----
-
-## 7. Complete System Architecture Diagram
+The unified system consolidates all core logic into the `core/` package:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                         NCGN SYSTEM                             │
-│                   Three-Layer Architecture                       │
-└─────────────────────────────────────────────────────────────────┘
-
-                        ┌──────────────┐
-                        │     USER     │
-                        └──────┬───────┘
-                               │
-    ┌──────────────────────────┼──────────────────────────┐
-    │                          │                          │
-    ▼                          ▼                          ▼
-┌─────────┐              ┌──────────┐              ┌──────────┐
-│Dashboard│              │   CLI    │              │  API     │
-│ (Web)   │              │  Chat    │              │  Calls   │
-└────┬────┘              └────┬─────┘              └────┬─────┘
-     │                        │                         │
-     └────────────────────────┼─────────────────────────┘
-                              │
-                ┌─────────────▼──────────────┐
-                │      UI LAYER              │
-                │  • Flask WebSocket         │
-                │  • Graph Visualization     │
-                │  • Real-time Updates       │
-                └─────────────┬──────────────┘
-                              │
-                ┌─────────────▼──────────────┐
-                │    CORTEX LAYER            │
-                │                            │
-                │  ┌────────────────────┐    │
-                │  │ Dialogue Manager   │    │
-                │  │  State Machine     │    │
-                │  └─────────┬──────────┘    │
-                │            │               │
-                │  ┌─────────▼──────────┐    │
-                │  │  Ingestion &       │    │
-                │  │  Staging Buffer    │    │
-                │  └─────────┬──────────┘    │
-                └────────────┼───────────────┘
-                             │
-                ┌────────────▼───────────────┐
-                │     CORE LAYER             │
-                │                            │
-                │  ┌───────────────────┐     │
-                │  │   Graph Memory    │     │
-                │  │  • Nodes          │     │
-                │  │  • Synapses       │     │
-                │  │  • Schemas        │     │
-                │  └───────┬───────────┘     │
-                │          │                 │
-                │  ┌───────▼────┐  ┌───────┐│
-                │  │ System 1   │◄─┤System2││
-                │  │  (Fast)    │  │(Slow) ││
-                │  │            ├─►│       ││
-                │  │ 8-Phase    │  │Schema ││
-                │  │  Tick      │  │Check  ││
-                │  └────────────┘  └───────┘│
-                └────────────────────────────┘
+d:/NGCN/
+├── core/
+│   ├── system1.py          # Physics Engine (Softmax, Thermodynamics)
+│   ├── system2.py          # Logic Controller (Schemas, Intervention)
+│   ├── memory.py           # Graph Data Structures (Nodes, Synapses)
+│   ├── learning.py         # 3-Factor Hebbian & Dopamine
+│   ├── dialogue.py         # Conversation State Machine
+│   ├── query_engine.py     # Graph Traversal for QA
+│   └── games/              # Integrated Environments (Snake, Corridor)
+├── ui/
+│   ├── dashboard.py        # Unified Flask Backend
+│   └── templates/
+│       └── dashboard.html  # Tabbed Dashboard Interface
+└── tests/                  # Unified Test Suite
 ```
 
 ---
 
-## 8. Detailed Component Interactions
+## 3. System 1: The Physics Engine
 
-### 8.1 System 1 ↔ System 2 Interaction
+**File**: `core/system1.py`
 
-```
-Time →
+System 1 treats the knowledge graph as a thermodynamic system. Concepts are nodes with "Energy" (0.0 to 1.0).
 
-Tick 0: [System 1] Normal operation
-        • Energy: {dog: 1.0}
-        • Prediction: {meat: 0.85}
+### Key Dynamics
 
-Tick 1: [System 1] Surprise detected!
-        • Observation: {metal: 1.0}
-        • Surprise: 0.81 > 0.45
-        • Status: PAUSED
-        
-        [System 2] Interrupt received
-        • Load schema: eat.json
-        • Check: metal.is_edible = FALSE
-        • Diagnosis: CONSTRAINT_VIOLATION
-        
-        [System 2] Intervention
-        • Apply LTD to dog→metal
-        • Inject Query_User goal
-        • Generate: "Why metal?"
-        
-        [System 1] Resume with changes
-        • Modified weights
-        • New goal energy
-
-Tick 2: [System 1] Continue normally
-        • Process Query_User goal
-```
-
-### 8.2 Dialogue State Transitions
-
-```
-State Flow:
-
-IDLE
-  │ User: "Dogs eat meat"
-  ▼
-PROCESSING
-  │ Parse, Add to graph
-  ▼
-IDLE
-  │ Success
-  
-IDLE
-  │ User: "Dogs eat metal"
-  ▼
-PROCESSING
-  │ Surprise triggered!
-  ▼
-CLARIFICATION_PENDING
-  │ Waiting for explanation
-  │ User: "It's a robot dog"
-  ▼
-PROCESSING
-  │ Parse explanation
-  │ Create subclass
-  ▼
-IDLE
-  │ Confirmed
-```
+1.  **Propagation**: Energy flows from active nodes to their neighbors via synapses. `Output = Input × Weight`.
+2.  **Softmax Inhibition** (Replaces v5 k-WTA):
+    *   Nodes are grouped into **Clusters** (e.g., MOTOR, HIDDEN).
+    *   Within a cluster, nodes compete for activation energy.
+    *   Formula: $P(n) = \frac{e^{(E_n/T)}}{\sum e^{(E_i/T)}}$
+3.  **Thermodynamics**:
+    *   **Temperature ($T$)**: dynamic parameter controlling exploration. High $T$ = random/flat; Low $T$ = determinstic/sharp.
+    *   **Homeostasis**: Global metabolic caps prevent total energy from exploding. If $\sum E > Cap$, all nodes are scaled down.
+4.  **Seizure Damping**: If the total system energy exceeds the safety threshold (`DEFAULT_GLOBAL_ENERGY_THRESHOLD`), the engine applies a massive damping factor (0.5x) to maintain stability.
 
 ---
 
-## 9. API Reference
+## 4. Memory & Synapses
 
-### 9.1 Core Memory API
+**File**: `core/memory.py`
 
-```python
-from core.memory import GraphMemory
+### ConceptNode
+The atom of thought.
+*   `energy`: Current activation level.
+*   `threshold`: Activation barrier for firing.
+*   `cluster`: Group membership (MOTOR, SENSORY, HIDDEN).
 
-# Initialize
-memory = GraphMemory()
-
-# Add nodes
-memory.add_node(
-    node_id: str,
-    energy: float = 0.0,
-    threshold: float = 0.75,
-    novelty_score: float = 0.0
-) -> None
-
-# Add edges
-memory.add_synapse(
-    source: str,
-    target: str,
-    weight: float = 0.5,
-    confidence: float = 0.5,
-    type: str = "associates"
-) -> None
-
-# Query
-node = memory.get_node(node_id: str) -> Optional[ConceptNode]
-neighbors = memory.get_neighbors(node_id: str) -> List[str]
-active = memory.get_active_nodes() -> Set[str]
-```
-
-### 9.2 System 1 API
-
-```python
-from core.system1 import System1Engine
-
-# Initialize
-engine = System1Engine(
-    memory: GraphMemory,
-    decay_alpha: float = 0.9,
-    k_winners: int = 10,
-    refractory_period: int = 3,
-    surprise_threshold: float = 0.45
-)
-
-# Operations
-engine.inject_energy(node_id: str, energy: float) -> None
-engine.tick() -> bool
-engine.pause() -> None
-engine.resume() -> None
-
-# State queries
-firing = engine.get_firing_set() -> Set[str]
-surprise = engine.surprise_level -> float
-tick = engine.current_tick -> int
-```
-
-### 9.3 System 2 API
-
-```python
-from core.system2 import System2Controller, Triple
-
-# Initialize
-controller = System2Controller(memory: GraphMemory)
-
-# Schema management
-controller.add_schema(schema: EventSchema) -> None
-controller.load_schema(filename: str) -> EventSchema
-
-# Property management
-controller.set_property(
-    entity: str,
-    property: str,
-    value: bool
-) -> None
-
-# Diagnosis
-result = controller.process_interrupt(
-    triple: Triple,
-    surprise_level: float,
-    firing_set: Set[str]
-) -> Tuple[DiagnosisResult, InterventionPlan]
-```
+### Synapse
+The connection between thoughts. v6 adds critical learning fields:
+*   `weight`: Connection strength ($w$).
+*   `trace`: **Eligibility Trace**. Records that "Pre fired, then Post fired." Decays rapidly. Used to credit past actions for current rewards.
+*   `stability`: **Consolidation Factor**. Tracks how "entrenched" a memory is. High stability prevents overwriting (Catastrophic Forgetting Prevention).
 
 ---
 
-## 10. Performance Optimization Guide
+## 5. Learning: 3-Factor Hebbian
 
-### 10.1 Memory Optimization
+**File**: `core/learning.py`
 
-```python
-# Prune inactive nodes periodically
-if tick % 100 == 0:
-    memory.prune_inactive_nodes(threshold=0.001)
+The system learns via a biologically-inspired rule:
+$$ \Delta W = \eta \times (1 - Stability) \times Dopamine \times Trace $$
 
-# Use smaller K for attention
-engine = System1Engine(memory, k_winners=5)  # Instead of 10
-
-# Limit graph size
-MAX_NODES = 10000
-if len(memory.nodes) > MAX_NODES:
-    memory.remove_oldest_nodes(count=1000)
-```
-
-### 10.2 Computation Optimization
-
-```python
-# Increase decay rate (faster pruning)
-engine = System1Engine(memory, decay_alpha=0.85)
-
-# Reduce tick frequency for real-time apps
-import time
-for _ in range(N):
-    engine.tick()
-    time.sleep(0.1)  # 10 Hz instead of max speed
-
-# Batch operations
-for node_id in batch:
-    memory.add_node(node_id)
-# Then: memory.rebuild_indices()  # Once
-```
-
-### 10.3 Benchmarking
-
-```python
-import time
-
-# Time a single tick
-start = time.time()
-engine.tick()
-duration = time.time() - start
-print(f"Tick time: {duration*1000:.2f} ms")
-
-# Profile phases
-engine.enable_profiling()
-for _ in range(100):
-    engine.tick()
-stats = engine.get_profiling_stats()
-print(stats)
-```
+### Components
+1.  **DopamineModulator**: Calculates **Reward Prediction Error (RPE)**.
+    *   $RPE = Reward_{actual} - Reward_{baseline}$ (Washout prevention).
+    *   The system only learns when outcomes are *unexpectedly* good or bad.
+2.  **ThreeFactorLearner**: Applies the weight update.
+    *   **Trace**: "I did this action recently."
+    *   **Dopamine**: "The outcome was good."
+    *   **Stability**: "I already know this well, don't change much."
+    *   **Result**: Weights increase for successful actions, decrease for failures.
 
 ---
 
-## 11. Troubleshooting Common Issues
+## 6. System 2: The Logical Supervisor
 
-### Issue 1: High Memory Usage
+**File**: `core/system2.py`
 
-**Symptoms**: Memory grows unbounded
+System 2 monitors System 1. It does not run every tick. It triggers only on **Surprise**.
 
-**Causes**:
-- Not pruning inactive nodes
-- Creating too many nodes
-- Not cleaning up old edges
-
-**Solutions**:
-```python
-# Enable auto-pruning
-memory.enable_auto_prune(threshold=0.001, interval=100)
-
-# Limit node creation
-if len(memory.nodes) < MAX_NODES:
-    memory.add_node(node_id)
-```
-
-### Issue 2: System 2 Never Triggers
-
-**Symptoms**: No queries, no surprise
-
-**Causes**:
-- Threshold too high
-- Confidence too low
-- No schemas loaded
-
-**Solutions**:
-```python
-# Lower threshold
-engine = System1Engine(memory, surprise_threshold=0.3)
-
-# Increase confidence
-memory.add_synapse("A", "B", confidence=0.9)
-
-# Verify schemas
-print(controller.schemas)  # Should not be empty
-```
-
-### Issue 3: Slow Execution
-
-**Symptoms**: Many seconds per tick
-
-**Causes**:
-- Too many active nodes
-- Dense graph (high average degree)
-- Large K in K-WTA
-
-**Solutions**:
-```python
-# Reduce K
-engine = System1Engine(memory, k_winners=5)
-
-# Increase decay
-engine.decay_alpha = 0.85
-
-# Profile to find bottleneck
-import cProfile
-cProfile.run('engine.tick()', sort='cumulative')
-```
+### The Logic Loop
+1.  **Monitor**: Checks difference between *Predicted State* and *Observed State*.
+2.  **Interrupt**: If `Surprise > Threshold`, PAUSE System 1.
+3.  **Diagnose**:
+    *   Identify the active "Subject-Verb-Object" triple (e.g., "Dog Eat Metal").
+    *   Load the relevant **EventSchema** (`eat.json`).
+    *   Check logical constraints (`Metal.is_edible == False`).
+4.  **Intervene**:
+    *   If Violation: Trigger **LTD** (weaken the connection) or **Query User** ("Wait, dogs can't eat metal").
+    *   If Valid: Trigger **LTP** (strengthen connection).
 
 ---
 
-## 12. Advanced Topics
+## 7. Interfaces: Dashboard & Dialogue
 
-### 12.1 Custom Learning Rules
+### Unified Dashboard
+**File**: `ui/templates/dashboard.html`
 
-Implement custom synaptic plasticity:
+A single-page application connecting all subsystems:
+*   **Brain Tab**: Real-time D3.js force-directed graph. Shows active nodes (firing) and energy flow.
+*   **Games Tab**: Controls for Snake/Corridor. Shows Reinforcement Learning metrics (Reward, RPE).
+*   **Dialogue Tab**: Chat interface. Talk to the brain, teach it facts ("Sky is blue"), or ask questions.
+*   **Knowledge Tab**: Bulk ingestion of text files. Staging area review for new triples.
 
-```python
-class HebbianEngine(System1Engine):
-    """
-    System 1 with Hebbian learning.
-    Synapses strengthen when both nodes are active.
-    """
-    
-    def _phase_9_hebbian_update(self):
-        """Apply Hebbian learning rule."""
-        for (src, tgt), synapse in self.memory.edges.items():
-            src_node = self.memory.get_node(src)
-            tgt_node = self.memory.get_node(tgt)
-            
-            if src_node.energy > 0.5 and tgt_node.energy > 0.5:
-                # Strengthen: "Cells that fire together wire together"
-                synapse.weight = min(1.0, synapse.weight * 1.01)
-            else:
-                # Decay unused connections
-                synapse.weight = max(0.0, synapse.weight * 0.999)
+### Running the System
+```bash
+# Start the unified dashboard
+python -m ui.dashboard
 ```
-
-### 12.2 Custom Schemas
-
-Create domain-specific schemas:
-
-```json
-{
-  "id": "schema_breathe",
-  "action": "breathe",
-  "confidence": 0.99,
-  "roles": {
-    "agent": "living_organism",
-    "medium": "gas"
-  },
-  "constraints": {
-    "agent": ["is_alive", "has_respiratory_system"],
-    "medium": ["is_breathable"]
-  },
-  "preconditions": ["agent_is_conscious"],
-  "postconditions": ["agent_oxygenated"]
-}
-```
-
-### 12.3 Multi-Modal Integration
-
-Extend to multiple modalities:
-
-```python
-class MultiModalMemory(GraphMemory):
-    """
-    Graph memory with visual, auditory, and textual nodes.
-    """
-    
-    def add_visual_node(self, image_features: np.ndarray):
-        """Add node from visual input."""
-        node_id = f"visual_{hash(image_features.tobytes())}"
-        self.add_node(node_id, modality="visual")
-        self.node_features[node_id] = image_features
-    
-    def cross_modal_association(self, visual_id: str, text_id: str):
-        """Link visual and textual representations."""
-        self.add_synapse(
-            visual_id, text_id,
-            weight=0.7,
-            type="cross_modal"
-        )
-```
+Access at `http://localhost:5000`.
 
 ---
 
-## 13. References and Further Reading
+## 8. Limitations
 
-### Academic Papers
-- Kahneman, D. (2011). *Thinking, Fast and Slow*. (Dual-process theory)
-- Mead, C. (1990). *Neuromorphic Electronic Systems*. (Neuromorphic computing)
-- Laird, J. E. (2012). *The Soar Cognitive Architecture*. (Cognitive architectures)
-
-### Implementation Details
-- **Surprise Calculation**: Based on prediction error minimization
-- **K-WTA**: Inspired by competitive learning in cortex
-- **Schema Validation**: From rule-based expert systems
-
-### Related Projects
-- SOAR: Symbolic cognitive architecture
-- ACT-R: Cognitive architecture for modeling
-- Nengo: Neural engineering framework
-
----
-
-*For complete code examples, see [README.md](README.md) and [ARCHITECTURE.md](ARCHITECTURE.md)*
-*For workflow diagrams, see [WORKFLOW.md](WORKFLOW.md)*
-*For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md)*
+*   **Scalability**: The Python implementation slows down significantly >10k nodes due to $O(N^2)$ potential interactions (optimized to $O(E)$ but Python overhead remains).
+*   **Language**: The NLP parser is rule-based and limited to simple subject-verb-object structures. It is not an LLM.
+*   **Planning Depth**: While System 2 can intervene, it lacks a deep simulation search (MCTS) for multi-step problem solving.

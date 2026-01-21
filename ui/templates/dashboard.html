@@ -4,22 +4,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NCGN Brain Dashboard</title>
+    <title>NCGN Unified Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <style>
         :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-tertiary: #21262d;
-            --border: #30363d;
-            --text-primary: #f0f6fc;
-            --text-secondary: #8b949e;
-            --accent-blue: #58a6ff;
-            --accent-green: #3fb950;
-            --accent-yellow: #d29922;
-            --accent-red: #f85149;
-            --accent-purple: #a371f7;
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #1a1a25;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.3);
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #2a2a3a;
         }
 
         * {
@@ -29,49 +29,57 @@
         }
 
         body {
-            font-family: 'Segoe UI', system-ui, sans-serif;
+            font-family: 'Inter', system-ui, sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
-            min-height: 100vh;
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            grid-template-rows: auto 1fr auto;
             height: 100vh;
-            gap: 1px;
-            background: var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
+        /* Header */
         header {
-            grid-column: 1 / -1;
-            background: var(--bg-secondary);
-            padding: 1rem 1.5rem;
+            background: linear-gradient(135deg, var(--bg-secondary), var(--bg-card));
+            padding: 0.75rem 1.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
         }
 
         header h1 {
             font-size: 1.25rem;
-            font-weight: 600;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header-stats {
             display: flex;
-            align-items: center;
-            gap: 0.5rem;
+            gap: 1.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
         }
 
-        header h1::before {
-            content: "🧠";
+        .header-stats span {
+            color: var(--text-primary);
+            font-weight: 600;
         }
 
-        .tick-display {
-            font-size: 1.1rem;
-            color: var(--accent-blue);
-            font-weight: 500;
+        /* Layout */
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 1px;
+            background: var(--border);
+            flex: 1;
+            overflow: hidden;
         }
 
-        .graph-container {
+        /* Left Column: Brain Visualization */
+        .brain-view {
             background: var(--bg-primary);
             position: relative;
             overflow: hidden;
@@ -82,26 +90,100 @@
             height: 100%;
         }
 
-        .sidebar {
-            background: var(--bg-secondary);
-            overflow-y: auto;
+        .legend {
+            position: absolute;
+            bottom: 1rem;
+            left: 1rem;
+            background: rgba(18, 18, 26, 0.8);
+            padding: 0.5rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
             display: flex;
-            flex-direction: column;
+            gap: 1rem;
+            font-size: 0.75rem;
+            pointer-events: none;
         }
 
-        .panel {
-            padding: 1rem;
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        /* Right Column: Sidebar */
+        .sidebar {
+            background: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            background: var(--bg-card);
             border-bottom: 1px solid var(--border);
         }
 
-        .panel h3 {
-            font-size: 0.75rem;
-            text-transform: uppercase;
+        .tab {
+            flex: 1;
+            padding: 0.75rem;
+            text-align: center;
+            cursor: pointer;
             color: var(--text-secondary);
-            margin-bottom: 0.75rem;
-            letter-spacing: 0.5px;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
         }
 
+        .tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        /* Tab Content Area */
+        .tab-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: none;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .panel h3 {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+        }
+
+        /* Metrics */
         .metrics-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -109,83 +191,59 @@
         }
 
         .metric {
-            background: var(--bg-tertiary);
-            padding: 0.75rem;
+            background: var(--bg-secondary);
+            padding: 0.5rem;
             border-radius: 6px;
+            text-align: center;
+        }
+
+        .metric-val {
+            font-size: 1.1rem;
+            font-weight: 600;
         }
 
         .metric-label {
             font-size: 0.7rem;
             color: var(--text-secondary);
-            margin-bottom: 0.25rem;
         }
 
-        .metric-value {
-            font-size: 1.25rem;
-            font-weight: 600;
-        }
-
-        .metric-value.surprise {
-            color: var(--accent-purple);
-        }
-
-        .metric-value.active {
-            color: var(--accent-green);
-        }
-
-        .metric-value.firing {
-            color: var(--accent-yellow);
-        }
-
-        .metric-value.triggered {
-            color: var(--accent-red);
-        }
-
-        .controls {
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .btn-row {
-            display: flex;
-            gap: 0.5rem;
-        }
-
+        /* Buttons & Inputs */
         .btn {
-            flex: 1;
-            padding: 0.5rem 1rem;
+            background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--bg-tertiary);
             color: var(--text-primary);
+            padding: 0.5rem;
+            border-radius: 6px;
             cursor: pointer;
+            width: 100%;
             font-size: 0.85rem;
-            transition: all 0.15s;
+            transition: all 0.2s;
         }
 
         .btn:hover {
-            background: var(--border);
             border-color: var(--text-secondary);
+            background: var(--bg-secondary);
         }
 
         .btn-primary {
-            background: var(--accent-blue);
-            border-color: var(--accent-blue);
+            background: var(--accent);
+            border-color: var(--accent);
         }
 
         .btn-primary:hover {
-            background: #4393e6;
+            background: #4f46e5;
         }
 
         .btn-success {
-            background: var(--accent-green);
-            border-color: var(--accent-green);
+            background: var(--success);
+            border-color: var(--success);
+            color: #000;
         }
 
         .btn-danger {
-            background: var(--accent-red);
-            border-color: var(--accent-red);
+            background: var(--danger);
+            border-color: var(--danger);
+            color: #000;
         }
 
         .input-group {
@@ -194,943 +252,526 @@
             margin-bottom: 0.5rem;
         }
 
-        .input-group input {
-            flex: 1;
-            padding: 0.5rem;
+        input {
+            background: var(--bg-secondary);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            background: var(--bg-tertiary);
             color: var(--text-primary);
-            font-size: 0.85rem;
-        }
-
-        .input-group input:focus {
-            outline: none;
-            border-color: var(--accent-blue);
-        }
-
-        footer {
-            grid-column: 1 / -1;
-            background: var(--bg-secondary);
-            padding: 0.75rem 1.5rem;
-            display: flex;
-            gap: 1rem;
-            align-items: center;
-        }
-
-        .timeline {
-            flex: 1;
-            height: 8px;
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-            overflow: hidden;
-        }
-
-        .timeline-progress {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
-            width: 0%;
-            transition: width 0.3s;
-        }
-
-        .status {
-            font-size: 0.8rem;
-            color: var(--text-secondary);
-        }
-
-        .status-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-right: 0.5rem;
-        }
-
-        .status-dot.connected {
-            background: var(--accent-green);
-        }
-
-        .status-dot.disconnected {
-            background: var(--accent-red);
-        }
-
-        /* Node tooltip */
-        .node-tooltip {
-            position: absolute;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            padding: 0.5rem 0.75rem;
-            font-size: 0.8rem;
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.15s;
-            z-index: 100;
-        }
-
-        /* File Upload */
-        .file-upload-area {
-            border: 2px dashed var(--border);
-            padding: 1rem;
-            text-align: center;
-            border-radius: 6px;
-            margin-bottom: 0.5rem;
-            cursor: pointer;
-            transition: border-color 0.2s;
-        }
-
-        .file-upload-area:hover {
-            border-color: var(--accent-blue);
-        }
-
-        /* Activity Table */
-        .activity-table-container {
-            max-height: 200px;
-            overflow-y: auto;
-            font-size: 0.75rem;
-        }
-
-        .activity-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .activity-table th {
-            text-align: left;
-            padding: 4px;
-            color: var(--text-secondary);
-            border-bottom: 1px solid var(--border);
-            position: sticky;
-            top: 0;
-            background: var(--bg-secondary);
-        }
-
-        .activity-table td {
-            padding: 4px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        .activity-row.firing {
-            color: #fff;
-            font-weight: bold;
-            text-shadow: 0 0 5px #fff;
-        }
-
-        .node-tooltip.visible {
-            opacity: 1;
-        }
-
-        /* Legend */
-        .legend {
-            display: flex;
-            gap: 1rem;
-            flex-wrap: wrap;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-
-        .legend-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-        }
-
-        .legend-dot.low {
-            background: #1e3a5f;
-        }
-
-        .legend-dot.medium {
-            background: #5f1e5f;
-        }
-
-        .legend-dot.high {
-            background: #a83232;
-        }
-
-        .legend-dot.firing {
-            background: #ffffff;
-            box-shadow: 0 0 8px #fff;
-        }
-
-        /* Phase 3: Surprise Meter */
-        .surprise-meter {
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            padding: 0.75rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .meter-bar {
-            height: 24px;
-            background: linear-gradient(90deg, var(--accent-green) 0%, var(--accent-yellow) 50%, var(--accent-red) 100%);
-            border-radius: 4px;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .meter-fill {
-            position: absolute;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            background: var(--bg-tertiary);
-            transition: width 0.3s ease;
-        }
-
-        .meter-threshold {
-            position: absolute;
-            top: -4px;
-            bottom: -4px;
-            width: 3px;
-            background: #fff;
-            box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
-        }
-
-        .meter-value {
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin-top: 0.5rem;
-            color: var(--accent-purple);
-        }
-
-        /* Phase 3: Dialogue State Badge */
-        .dialogue-state {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
             padding: 0.5rem;
-            background: var(--bg-tertiary);
             border-radius: 6px;
+            width: 100%;
+        }
+
+        /* Game View */
+        .game-view {
+            font-family: monospace;
+            white-space: pre;
+            background: #000;
+            padding: 1rem;
+            border-radius: 8px;
+            text-align: center;
+            line-height: 1;
+            font-size: 1.2rem;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 200px;
+        }
+
+        /* Dialogue Styles */
+        .dialogue-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 600;
             margin-bottom: 0.5rem;
         }
 
-        .state-badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        .state-badge.idle {
-            background: var(--accent-blue);
-            color: #000;
-        }
-
-        .state-badge.clarification {
-            background: var(--accent-yellow);
-            color: #000;
-        }
-
-        .state-badge.confirmation {
-            background: var(--accent-purple);
-        }
-
-        .state-badge.file_review {
-            background: var(--accent-green);
-            color: #000;
-        }
-
-        /* Phase 3: Thought Cloud */
-        .thought-cloud {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
-            max-height: 120px;
-            overflow-y: auto;
-        }
-
-        .thought-tag {
-            padding: 0.25rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.7rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            transition: all 0.2s;
-        }
-
-        .thought-tag.active {
-            background: var(--accent-blue);
-            color: #000;
-            border-color: var(--accent-blue);
-        }
-
-        .thought-tag.firing {
-            background: #fff;
-            color: #000;
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
-        }
-
-        /* Phase 3: Staging Area */
-        .staging-panel {
+        .response-box {
+            background: var(--bg-secondary);
+            padding: 0.75rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+            font-size: 0.85rem;
+            min-height: 60px;
             max-height: 150px;
             overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        /* Staging */
+        .staging-list {
+            max-height: 200px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
         }
 
         .staging-item {
-            padding: 0.35rem 0.5rem;
-            background: var(--bg-tertiary);
+            font-size: 0.75rem;
+            padding: 0.5rem;
+            background: var(--bg-secondary);
+            border-left: 3px solid var(--success);
             border-radius: 4px;
-            margin-bottom: 0.25rem;
-            font-size: 0.7rem;
-            border-left: 3px solid var(--accent-green);
         }
 
         .staging-item.flagged {
-            border-left-color: var(--accent-red);
-        }
-
-        .staging-count {
-            display: flex;
-            gap: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .staging-count span {
-            font-size: 0.8rem;
-        }
-
-        .staging-count .clean {
-            color: var(--accent-green);
-        }
-
-        .staging-count .flagged {
-            color: var(--accent-red);
-        }
-
-        /* Teach Panel */
-        .teach-response {
-            background: var(--bg-tertiary);
-            border-radius: 6px;
-            padding: 0.5rem;
-            margin-top: 0.5rem;
-            font-size: 0.8rem;
-            max-height: 100px;
-            overflow-y: auto;
-            display: none;
-        }
-
-        .teach-response.visible {
-            display: block;
+            border-left-color: var(--warning);
         }
     </style>
 </head>
 
 <body>
-    <div class="dashboard">
-        <header>
-            <h1>NCGN Brain Dashboard</h1>
-            <div class="tick-display">Tick: <span id="tick-count">0</span></div>
-        </header>
+    <header>
+        <h1>🧠 NCGN Unified System</h1>
+        <div class="header-stats">
+            <div>Tick: <span id="tick">0</span></div>
+            <div>Energy: <span id="energy">0.0</span></div>
+            <div>Surprise: <span id="surprise" style="color: var(--accent);">0.00</span></div>
+        </div>
+    </header>
 
-        <div class="graph-container">
+    <div class="main-container">
+        <!-- Left: Brain Visualization -->
+        <div class="brain-view">
             <svg id="graph"></svg>
-            <div class="node-tooltip" id="tooltip"></div>
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="dot" style="background:#58a6ff"></div>Sensory
+                </div>
+                <div class="legend-item">
+                    <div class="dot" style="background:#a371f7"></div>Hidden
+                </div>
+                <div class="legend-item">
+                    <div class="dot" style="background:#f85149"></div>Motor
+                </div>
+                <div class="legend-item">
+                    <div class="dot" style="background:#fff; box-shadow:0 0 5px #fff"></div>Firing
+                </div>
+            </div>
         </div>
 
+        <!-- Right: Tabbed Sidebar -->
         <div class="sidebar">
-            <div class="panel">
-                <h3>System Metrics</h3>
-                <div class="metrics-grid">
-                    <div class="metric">
-                        <div class="metric-label">Active Nodes</div>
-                        <div class="metric-value active" id="active-count">0</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Firing</div>
-                        <div class="metric-value firing" id="firing-count">0</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">Surprise</div>
-                        <div class="metric-value surprise" id="surprise-level">0.00</div>
-                    </div>
-                    <div class="metric">
-                        <div class="metric-label">System 2</div>
-                        <div class="metric-value triggered" id="system2-status">❌</div>
-                    </div>
-                </div>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('games')">🎮 Games</div>
+                <div class="tab" onclick="switchTab('dialogue')">💬 Dialogue</div>
+                <div class="tab" onclick="switchTab('knowledge')">📚 Knowledge</div>
             </div>
 
-            <div class="panel">
-                <h3>Controls</h3>
-                <div class="controls">
-                    <div class="btn-row">
-                        <button class="btn btn-primary" id="btn-step">Step</button>
-                        <button class="btn btn-success" id="btn-run">Run 10</button>
-                    </div>
-                    <div class="btn-row">
-                        <button class="btn" id="btn-auto">▶ Auto</button>
-                        <button class="btn btn-danger" id="btn-pause">⏸ Pause</button>
+            <!-- Tab 1: Games & Control -->
+            <div id="tab-games" class="tab-content active">
+                <!-- Game Selection -->
+                <div class="panel">
+                    <h3>Environment</h3>
+                    <select id="game-selector" onchange="switchGame(this.value)"
+                        style="width:100%; padding:0.5rem; background:var(--bg-secondary); color:#fff; border:1px solid var(--border); border-radius:6px; margin-bottom:0.5rem;">
+                        <option value="corridor">Corridor (1D)</option>
+                        <option value="snake">Snake (2D)</option>
+                    </select>
+                    <div class="game-view" id="game-render">
+                        [Game View]
                     </div>
                 </div>
-            </div>
 
-            <div class="panel">
-                <h3>Inject Energy</h3>
-                <div class="input-group">
-                    <input type="text" id="inject-node" placeholder="Node ID">
-                    <input type="number" id="inject-energy" value="1.0" step="0.1" min="0" max="1" style="width: 60px;">
-                </div>
-                <button class="btn btn-primary" id="btn-inject" style="width: 100%;">Inject</button>
-            </div>
-
-            <div class="panel">
-                <h3>Add Node</h3>
-                <div class="input-group">
-                    <input type="text" id="new-node" placeholder="Node ID">
-                </div>
-                <button class="btn" id="btn-add-node" style="width: 100%;">Add Node</button>
-            </div>
-
-            <!-- Phase 3: Dialogue State -->
-            <div class="panel" id="dialogue-panel">
-                <h3>Dialogue State</h3>
-                <div class="dialogue-state">
-                    <span class="state-badge idle" id="dialogue-badge">IDLE</span>
-                    <span id="dialogue-info" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
-                </div>
-                <div style="font-size: 0.75rem; color: var(--text-secondary);">
-                    Clarifications: <span id="clarification-count">0</span> |
-                    Exceptions: <span id="exception-count">0</span>
-                </div>
-            </div>
-
-            <!-- Phase 3: Surprise Meter -->
-            <div class="panel">
-                <h3>Surprise Meter</h3>
-                <div class="surprise-meter">
-                    <div class="meter-bar">
-                        <div class="meter-fill" id="surprise-fill" style="width: 100%;"></div>
-                        <div class="meter-threshold" id="surprise-threshold" style="left: 50%;"></div>
+                <!-- Controls -->
+                <div class="panel">
+                    <h3>Controls</h3>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem; margin-bottom:0.5rem;">
+                        <button class="btn btn-primary" onclick="step()">Step</button>
+                        <button class="btn btn-success" onclick="runEpisode()">Run Episode</button>
                     </div>
-                    <div class="meter-value" id="surprise-value">0.000</div>
-                </div>
-                <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">
-                    S2 Trigger: <span id="s2-trigger-status">Ready</span>
-                </div>
-            </div>
-
-            <!-- Phase 3: Thought Cloud -->
-            <div class="panel">
-                <h3>Thought Cloud <span id="thought-count" style="color: var(--text-secondary);">(0)</span></h3>
-                <div class="thought-cloud" id="thought-cloud">
-                    <!-- Thoughts will be populated here -->
-                </div>
-            </div>
-
-            <!-- Phase 3: Dialogue & Interaction -->
-            <div class="panel">
-                <h3>Dialogue & Interaction</h3>
-                <div class="input-group">
-                    <input type="text" id="teach-input"
-                        placeholder="Teach or Ask (e.g., 'Dogs bark' or 'What eats meat?')">
-                </div>
-                <div class="btn-row" style="margin-top:0.5rem; gap: 0.5rem; display: flex;">
-                    <button class="btn btn-primary" id="btn-teach" style="flex:1">Send</button>
-                    <button class="btn btn-warning" id="btn-query" style="flex:1">Query Mode</button>
-                </div>
-                <div class="teach-response" id="teach-response"></div>
-            </div>
-
-            <!-- Phase 3: Knowledge Upload -->
-            <div class="panel">
-                <h3>Ingest Knowledge File</h3>
-                <div class="file-upload-area" id="drop-zone">
-                    <span id="file-label" style="font-size: 0.8rem; color: var(--text-secondary);">Click or Drag File
-                        Here</span>
-                    <input type="file" id="file-input" style="display: none;">
-                </div>
-                <button class="btn btn-success" id="btn-upload" style="width: 100%;" disabled>Upload & Stage</button>
-            </div>
-
-            <!-- Phase 3: Activity Monitor -->
-            <div class="panel">
-                <h3>Neural Activity Monitor</h3>
-                <div class="activity-table-container">
-                    <table class="activity-table">
-                        <thead>
-                            <tr>
-                                <th>Node</th>
-                                <th>Energy</th>
-                                <th>State</th>
-                            </tr>
-                        </thead>
-                        <tbody id="activity-tbody">
-                            <!-- Populated by JS -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Phase 3: Staging Area -->
-            <div class="panel" id="staging-panel" style="display: none;">
-                <h3>Staging Area</h3>
-                <div class="staging-count">
-                    <span class="clean">✓ <span id="staging-clean">0</span> clean</span>
-                    <span class="flagged">⚠ <span id="staging-flagged">0</span> flagged</span>
-                </div>
-                <div class="staging-panel" id="staging-items">
-                    <!-- Staged items will be populated here -->
-                </div>
-                <div class="btn-row" style="margin-top: 0.5rem;">
-                    <button class="btn btn-success" id="btn-commit">Commit</button>
-                    <button class="btn btn-danger" id="btn-discard">Discard</button>
-                </div>
-            </div>
-
-            <div class="panel">
-                <h3>Legend</h3>
-                <div class="legend">
-                    <div class="legend-item">
-                        <div class="legend-dot low"></div>
-                        <span>Low Energy</span>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:0.5rem;">
+                        <button class="btn" id="btn-auto" onclick="toggleAuto()">▶ Auto Train</button>
+                        <button class="btn btn-danger" onclick="resetGame()">Reset</button>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-dot high"></div>
-                        <span>High Energy</span>
+                </div>
+
+                <!-- Metrics -->
+                <div class="panel">
+                    <h3>Learning Metrics</h3>
+                    <div class="metrics-grid">
+                        <div class="metric">
+                            <div class="metric-val" id="reward">0.00</div>
+                            <div class="metric-label">Last Reward</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-val" id="success-rate">0%</div>
+                            <div class="metric-label">Success Rate</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-val" id="dopamine">0.00</div>
+                            <div class="metric-label">Dopamine (RPE)</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-val" id="episode">0</div>
+                            <div class="metric-label">Episode</div>
+                        </div>
                     </div>
-                    <div class="legend-item">
-                        <div class="legend-dot firing"></div>
-                        <span>Firing</span>
+                </div>
+
+                <div class="panel">
+                    <h3>Configuration</h3>
+                    <div class="input-group">
+                        <label
+                            style="font-size:0.8rem; color:var(--text-secondary); align-self:center; min-width:80px;">Episodes:</label>
+                        <input type="number" id="train-episodes" value="10">
+                        <button class="btn btn-primary" style="width:auto;" onclick="train()">Train</button>
                     </div>
+                    <button class="btn" onclick="test(10)">Run 10 Test Episodes (No Learn)</button>
+                    <div id="test-results" style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-secondary);">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 2: Dialogue -->
+            <div id="tab-dialogue" class="tab-content">
+                <div class="panel">
+                    <h3>Conversation</h3>
+                    <div class="dialogue-badge" id="dialogue-state">IDLE</div>
+                    <div class="input-group">
+                        <input type="text" id="teach-input" placeholder="Type a fact or question..."
+                            onkeypress="if(event.key==='Enter') teach()">
+                    </div>
+                    <div style="display:flex; gap:0.5rem;">
+                        <button class="btn btn-primary" onclick="teach()">Send</button>
+                        <button class="btn" onclick="queryBrain()">Query Brain</button>
+                    </div>
+                    <div class="response-box" id="dialogue-response">System ready.</div>
+                </div>
+
+                <div class="panel">
+                    <h3>System 2 Diagnostics</h3>
+                    <div class="input-group">
+                        <input type="text" id="query-input" placeholder="Is there a conflict with...?"
+                            onkeypress="if(event.key==='Enter') querySystem()">
+                    </div>
+                    <button class="btn" onclick="querySystem()">Run Diagnostic</button>
+                    <div class="response-box" id="system-response">Diagnostic output...</div>
+                </div>
+            </div>
+
+            <!-- Tab 3: Knowledge -->
+            <div id="tab-knowledge" class="tab-content">
+                <div class="panel">
+                    <h3>File Ingestion</h3>
+                    <textarea id="file-content"
+                        style="width:100%; height:80px; background:var(--bg-primary); border:1px solid var(--border); color:#fff; padding:0.5rem; border-radius:6px; font-size:0.8rem;"
+                        placeholder="Paste text content here..."></textarea>
+                    <button class="btn btn-success" style="margin-top:0.5rem;" onclick="uploadFile()">Process &
+                        Stage</button>
+                </div>
+
+                <div class="panel">
+                    <h3>Staging Area</h3>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem; font-size:0.8rem;">
+                        <span style="color:var(--success)">✓ <span id="clean-count">0</span> Clean</span>
+                        <span style="color:var(--warning)">⚠ <span id="flagged-count">0</span> Flagged</span>
+                    </div>
+                    <div class="staging-list" id="staging-list">
+                        <!-- Items populated here -->
+                        <div style="text-align:center; color:var(--text-secondary); padding:1rem;">Buffer Empty</div>
+                    </div>
+                    <button class="btn btn-primary" style="margin-top:0.5rem;" onclick="commitStaging()">Commit to
+                        Memory</button>
                 </div>
             </div>
         </div>
-
-        <footer>
-            <div class="timeline">
-                <div class="timeline-progress" id="timeline-progress"></div>
-            </div>
-            <div class="status">
-                <span class="status-dot connected" id="status-dot"></span>
-                <span id="status-text">Connected</span>
-            </div>
-        </footer>
     </div>
 
+    <!-- JavaScript Logic -->
     <script>
-        // Initialize Socket.IO
         const socket = io();
 
-        // D3 Graph Setup
+        // --- Tab Switching ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Find the clicked tab (event.target might is easiest, but let's select by text content matching logic or index)
+            // Simplified: use inline onclicks
+            const tabs = ['games', 'dialogue', 'knowledge'];
+            tabs.forEach(t => {
+                if (t === tabId) {
+                    document.getElementById('tab-' + t).classList.add('active');
+                }
+            });
+
+            // Update UI class for tabs
+            const tabEls = document.querySelectorAll('.tab');
+            if (tabId === 'games') tabEls[0].classList.add('active');
+            if (tabId === 'dialogue') tabEls[1].classList.add('active');
+            if (tabId === 'knowledge') tabEls[2].classList.add('active');
+        }
+
+        // --- D3 Graph ---
         const svg = d3.select('#graph');
-        const container = document.querySelector('.graph-container');
-        let width = container.clientWidth;
-        let height = container.clientHeight;
+        const width = document.querySelector('.brain-view').clientWidth;
+        const height = document.querySelector('.brain-view').clientHeight;
 
-        svg.attr('width', width).attr('height', height);
-
-        // Create groups for edges and nodes
-        const g = svg.append('g');
-        const linksGroup = g.append('g').attr('class', 'links');
-        const nodesGroup = g.append('g').attr('class', 'nodes');
-
-        // Zoom behavior
-        const zoom = d3.zoom()
-            .scaleExtent([0.1, 4])
-            .on('zoom', (event) => g.attr('transform', event.transform));
-        svg.call(zoom);
-
-        // Force simulation
         const simulation = d3.forceSimulation()
             .force('link', d3.forceLink().id(d => d.id).distance(100))
-            .force('charge', d3.forceManyBody().strength(-300))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('collision', d3.forceCollide().radius(30));
+            .force('charge', d3.forceManyBody().strength(-200))
+            .force('center', d3.forceCenter(width / 2, height / 2));
 
-        // Tooltip
-        const tooltip = document.getElementById('tooltip');
+        const linkGroup = svg.append('g').attr('class', 'links');
+        const nodeGroup = svg.append('g').attr('class', 'nodes');
 
-        // Current state
-        let currentNodes = [];
-        let currentLinks = [];
-        let isAutoRunning = false;
+        // Socket listeners
+        socket.on('connect', () => console.log('Connected to Brain'));
 
-        // Update graph
+        socket.on('state_update', (data) => {
+            updateGraph(data);
+            updateMetrics(data);
+            if (data.game_render) document.getElementById('game-render').textContent = data.game_render;
+        });
+
+        socket.on('training_complete', (data) => {
+            alert(`Training complete! ${data.episodes} episodes.`);
+            document.getElementById('btn-auto').classList.remove('btn-danger');
+            document.getElementById('btn-auto').textContent = '▶ Auto Train';
+        });
+
         function updateGraph(data) {
-            currentNodes = data.nodes || [];
-            currentLinks = data.links || [];
+            // Update Metrics
+            document.getElementById('tick').textContent = data.tick;
+            document.getElementById('energy').textContent = data.total_energy.toFixed(1);
 
-            // Update metrics
-            if (data.metadata) {
-                document.getElementById('tick-count').textContent = data.metadata.tick || 0;
-                document.getElementById('active-count').textContent = data.metadata.active_count || 0;
-                document.getElementById('firing-count').textContent = data.metadata.firing_count || 0;
-                document.getElementById('surprise-level').textContent =
-                    (data.metadata.surprise || 0).toFixed(3);
-                document.getElementById('system2-status').textContent =
-                    data.metadata.system2_triggered ? '✓' : '❌';
+            // D3 Update
+            const nodes = data.nodes;
+            const links = data.edges;
 
-                // Update timeline  
-                const progress = Math.min(100, (data.metadata.tick % 100));
-                document.getElementById('timeline-progress').style.width = progress + '%';
-            }
-
-            // Update links
-            const link = linksGroup.selectAll('line')
-                .data(currentLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
-
-            link.exit().remove();
-
-            const linkEnter = link.enter().append('line')
-                .attr('stroke', d => d.active ? '#ffff00' : '#444')
-                .attr('stroke-width', d => 1 + d.value * 3)
-                .attr('stroke-opacity', 0.6);
-
-            link.merge(linkEnter)
-                .attr('stroke', d => d.active ? '#ffff00' : '#555')
-                .attr('stroke-width', d => 1 + d.value * 3);
-
-            // Update nodes
-            const node = nodesGroup.selectAll('circle')
-                .data(currentNodes, d => d.id);
-
+            // Nodes
+            const node = nodeGroup.selectAll('circle').data(nodes, d => d.id);
             node.exit().remove();
 
             const nodeEnter = node.enter().append('circle')
-                .attr('r', d => d.radius || 15)
-                .attr('fill', d => d.color || '#4a90d9')
-                .attr('stroke', '#fff')
-                .attr('stroke-width', 1.5)
+                .attr('r', d => d.energy > 0 ? 8 + d.energy * 5 : 5)
                 .call(d3.drag()
                     .on('start', dragstarted)
                     .on('drag', dragged)
-                    .on('end', dragended))
-                .on('mouseover', (event, d) => {
-                    tooltip.innerHTML = `<strong>${d.id}</strong><br>Energy: ${d.energy.toFixed(3)}`;
-                    tooltip.style.left = (event.pageX + 10) + 'px';
-                    tooltip.style.top = (event.pageY - 10) + 'px';
-                    tooltip.classList.add('visible');
-                })
-                .on('mouseout', () => tooltip.classList.remove('visible'));
+                    .on('end', dragended));
 
             node.merge(nodeEnter)
-                .attr('r', d => d.radius || 15)
-                .attr('fill', d => d.firing ? '#fff' : (d.color || '#4a90d9'))
-                .attr('stroke', d => d.firing ? '#ffff00' : '#fff')
-                .attr('stroke-width', d => d.firing ? 3 : 1.5);
+                .attr('fill', d => {
+                    if (d.fired) return '#fff';
+                    if (d.cluster === 'sensory') return '#58a6ff';
+                    if (d.cluster === 'motor') return '#f85149';
+                    return '#a371f7';
+                })
+                .attr('r', d => d.energy > 0 ? 8 + d.energy * 5 : 5);
 
-            // Update labels
-            const label = nodesGroup.selectAll('text')
-                .data(currentNodes, d => d.id);
+            nodeEnter.append('title').text(d => d.id);
 
-            label.exit().remove();
+            // Links
+            const link = linkGroup.selectAll('line').data(links, d => d.source + '-' + d.target);
+            link.exit().remove();
 
-            label.enter().append('text')
-                .attr('text-anchor', 'middle')
-                .attr('dy', 4)
-                .attr('fill', '#fff')
-                .attr('font-size', '10px')
-                .attr('pointer-events', 'none')
-                .text(d => d.id);
+            const linkEnter = link.enter().append('line')
+                .attr('stroke-width', d => Math.max(1, d.weight * 3));
 
-            // Update simulation
-            simulation.nodes(currentNodes);
-            simulation.force('link').links(currentLinks);
+            link.merge(linkEnter)
+                .attr('stroke', d => d.trace > 0.1 ? '#fbbf24' : '#4b5563')
+                .attr('stroke-opacity', d => 0.6);
+
+            simulation.nodes(nodes).on('tick', () => {
+                link.merge(linkEnter)
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.merge(nodeEnter)
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+            });
+
+            simulation.force('link').links(links);
             simulation.alpha(0.3).restart();
         }
 
-        // Simulation tick
-        simulation.on('tick', () => {
-            linksGroup.selectAll('line')
-                .attr('x1', d => d.source.x)
-                .attr('y1', d => d.source.y)
-                .attr('x2', d => d.target.x)
-                .attr('y2', d => d.target.y);
+        function updateMetrics(data) {
+            if (data.learner) {
+                document.getElementById('reward').textContent = data.last_reward.toFixed(2);
+                document.getElementById('dopamine').textContent = data.modulator.last_signal.toFixed(3);
+                document.getElementById('episode').textContent = data.episode;
+            }
+        }
 
-            nodesGroup.selectAll('circle')
-                .attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-
-            nodesGroup.selectAll('text')
-                .attr('x', d => d.x)
-                .attr('y', d => d.y);
-        });
-
-        // Drag handlers
+        // D3 Drag functions
         function dragstarted(event, d) {
             if (!event.active) simulation.alphaTarget(0.3).restart();
             d.fx = d.x;
             d.fy = d.y;
         }
-
         function dragged(event, d) {
             d.fx = event.x;
             d.fy = event.y;
         }
-
         function dragended(event, d) {
             if (!event.active) simulation.alphaTarget(0);
             d.fx = null;
             d.fy = null;
         }
 
-        // Socket.IO handlers
-        socket.on('connect', () => {
-            document.getElementById('status-dot').classList.remove('disconnected');
-            document.getElementById('status-dot').classList.add('connected');
-            document.getElementById('status-text').textContent = 'Connected';
-        });
-
-        socket.on('disconnect', () => {
-            document.getElementById('status-dot').classList.remove('connected');
-            document.getElementById('status-dot').classList.add('disconnected');
-            document.getElementById('status-text').textContent = 'Disconnected';
-        });
-
-        socket.on('state_update', updateGraph);
-
-        // Button handlers
-        document.getElementById('btn-step').addEventListener('click', () => {
-            fetch('/api/step', { method: 'POST' });
-        });
-
-        document.getElementById('btn-run').addEventListener('click', () => {
-            fetch('/api/run', {
+        // --- Game Controls ---
+        function step() { fetch('/api/step', { method: 'POST' }); }
+        function runEpisode() { fetch('/api/episode', { method: 'POST' }); }
+        function train() {
+            const episodes = document.getElementById('train-episodes').value;
+            fetch('/api/train', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticks: 10 })
+                body: JSON.stringify({ episodes: episodes })
             });
-        });
+        }
 
-        document.getElementById('btn-auto').addEventListener('click', () => {
-            if (!isAutoRunning) {
+        let autoInterval = null;
+        function toggleAuto() {
+            const btn = document.getElementById('btn-auto');
+            if (btn.textContent.includes('Auto')) {
                 socket.emit('start_auto');
-                document.getElementById('btn-auto').textContent = '⏹ Stop';
-                isAutoRunning = true;
+                btn.textContent = '⏹ Stop';
+                btn.classList.add('btn-danger');
             } else {
                 socket.emit('stop_auto');
-                document.getElementById('btn-auto').textContent = '▶ Auto';
-                isAutoRunning = false;
+                btn.textContent = '▶ Auto Train';
+                btn.classList.remove('btn-danger');
             }
-        });
-
-        document.getElementById('btn-pause').addEventListener('click', () => {
-            fetch('/api/pause', { method: 'POST' })
-                .then(r => r.json())
-                .then(data => {
-                    document.getElementById('btn-pause').textContent =
-                        data.paused ? '▶ Resume' : '⏸ Pause';
-                });
-        });
-
-        document.getElementById('btn-inject').addEventListener('click', () => {
-            const nodeId = document.getElementById('inject-node').value;
-            const energy = parseFloat(document.getElementById('inject-energy').value);
-            if (nodeId) {
-                fetch('/api/inject', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ node_id: nodeId, energy: energy })
-                });
-            }
-        });
-
-        document.getElementById('btn-add-node').addEventListener('click', () => {
-            const nodeId = document.getElementById('new-node').value;
-            if (nodeId) {
-                fetch('/api/add_node', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ node_id: nodeId })
-                }).then(() => socket.emit('request_state'));
-            }
-        });
-
-        // Handle resize
-        window.addEventListener('resize', () => {
-            width = container.clientWidth;
-            height = container.clientHeight;
-            svg.attr('width', width).attr('height', height);
-            simulation.force('center', d3.forceCenter(width / 2, height / 2));
-            simulation.alpha(0.3).restart();
-        });
-
-        // Request initial state
-        socket.emit('request_state');
-
-        // ============ Phase 3: JavaScript Handlers ============
-
-        // Update thought cloud
-        function updateThoughtCloud() {
-            fetch('/api/thought_cloud')
-                .then(r => r.json())
-                .then(data => {
-                    const cloud = document.getElementById('thought-cloud');
-                    cloud.innerHTML = '';
-                    document.getElementById('thought-count').textContent = '(' + data.total_active + ')';
-                    data.thoughts.forEach(thought => {
-                        const tag = document.createElement('span');
-                        tag.className = 'thought-tag';
-                        if (thought.fired) tag.classList.add('firing');
-                        else if (thought.energy > 0.3) tag.classList.add('active');
-                        tag.textContent = thought.id;
-                        tag.title = 'Energy: ' + thought.energy.toFixed(3);
-                        cloud.appendChild(tag);
-                    });
-                });
         }
 
-        // Update surprise meter
-        function updateSurpriseMeter() {
-            fetch('/api/surprise_history')
-                .then(r => r.json())
-                .then(data => {
-                    const fillWidth = 100 - (data.current * 100);
-                    document.getElementById('surprise-fill').style.width = fillWidth + '%';
-                    document.getElementById('surprise-value').textContent = data.current.toFixed(3);
-                    const status = document.getElementById('s2-trigger-status');
-                    if (data.system2_triggered) {
-                        status.textContent = 'TRIGGERED';
-                        status.style.color = 'var(--accent-red)';
-                    } else {
-                        status.textContent = 'Ready';
-                        status.style.color = 'var(--accent-green)';
-                    }
-                });
-        }
-
-        // Update dialogue state
-        function updateDialogueState() {
-            fetch('/api/dialogue_state')
-                .then(r => r.json())
-                .then(data => {
-                    if (!data.available) return;
-                    const badge = document.getElementById('dialogue-badge');
-                    badge.textContent = data.state.toUpperCase();
-                    badge.className = 'state-badge ' + data.state;
-                    document.getElementById('clarification-count').textContent = data.clarifications;
-                    document.getElementById('exception-count').textContent = data.exceptions_learned;
-                });
-        }
-
-        // Teach & Query handler
-        function sendDialogue(isQuery = false) {
-            const input = document.getElementById('teach-input');
-            const statement = input.value.trim();
-            if (!statement) return;
-
-            const endpoint = isQuery ? '/api/query_brain' : '/api/teach';
-            const payload = isQuery ? { question: statement } : { statement: statement };
-
-            // Visual feedback
-            const responseDiv = document.getElementById('teach-response');
-            responseDiv.textContent = "Processing...";
-            responseDiv.classList.add('visible');
-
-            fetch(endpoint, {
+        function switchGame(type) {
+            fetch('/api/switch_game', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ game_type: type })
+            });
+        }
+
+        function resetGame() { fetch('/api/reset', { method: 'POST' }); }
+
+        function test(n) {
+            fetch('/api/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ episodes: n })
             })
-                .then(r => r.json())
+                .then(res => res.json())
                 .then(data => {
-                    responseDiv.textContent = data.response;
-                    input.value = '';
+                    const el = document.getElementById('test-results');
+                    el.textContent = `Success: ${(data.success_rate * 100).toFixed(1)}% | Avg Reward: ${data.avg_reward.toFixed(2)}`;
+                });
+        }
+
+        // --- Dialogue Controls ---
+        function teach() {
+            const input = document.getElementById('teach-input');
+            const statement = input.value;
+            if (!statement) return;
+
+            fetch('/api/teach', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ statement: statement })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('dialogue-response').textContent = data.response;
                     updateDialogueState();
-                    socket.emit('request_state');
-                    updateActivityTable();
+                    input.value = '';
                 });
         }
 
-        document.getElementById('btn-teach').addEventListener('click', () => sendDialogue(false));
-        document.getElementById('btn-query').addEventListener('click', () => sendDialogue(true));
-
-        document.getElementById('teach-input').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') sendDialogue(false);
-        });
-
-        // File Upload Handlers
-        const dropZone = document.getElementById('drop-zone');
-        const fileInput = document.getElementById('file-input');
-        const uploadBtn = document.getElementById('btn-upload');
-
-        dropZone.addEventListener('click', () => fileInput.click());
-
-        fileInput.addEventListener('change', () => {
-            if (fileInput.files.length > 0) {
-                document.getElementById('file-label').textContent = fileInput.files[0].name;
-                uploadBtn.disabled = false;
-            }
-        });
-
-        uploadBtn.addEventListener('click', () => {
-            const file = fileInput.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function (e) {
-                const content = e.target.result;
-                fetch('/api/upload_file', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: file.name, content: content })
-                })
-                    .then(r => r.json())
-                    .then(data => {
-                        alert("File Processed!\n" + data.response);
-                        updateDialogueState();
-                        // Update staging if needed later
-                        const stagingPanel = document.getElementById('staging-panel');
-                        if (stagingPanel) stagingPanel.style.display = 'block'; // Show if hidden
-                        updateStagingArea();
-                    });
-            };
-            reader.readAsText(file);
-        });
-
-        // Activity Monitor Update
-        function updateActivityTable() {
-            fetch('/api/all_nodes')
-                .then(r => r.json())
+        function updateDialogueState() {
+            fetch('/api/dialogue_state')
+                .then(res => res.json())
                 .then(data => {
-                    const tbody = document.getElementById('activity-tbody');
-                    tbody.innerHTML = '';
-                    // Show top 30 active/energetic nodes
-                    data.nodes.slice(0, 30).forEach(node => {
-                        const tr = document.createElement('tr');
-                        tr.className = 'activity-row ' + (node.fired ? 'firing' : '');
-                        tr.style.color = node.fired ? '#fff' : (node.active ? 'var(--accent-blue)' : 'var(--text-secondary)');
-                        tr.innerHTML = `
-                        <td>${node.id}</td>
-                        <td>${node.energy.toFixed(3)}</td>
-                        <td>${node.fired ? '🔥 FIRING' : (node.active ? 'Active' : 'Dormant')}</td>
-                    `;
-                        tbody.appendChild(tr);
-                    });
+                    document.getElementById('dialogue-state').textContent = data.state_label;
+                    // Also update staging if exists
+                    if (data.has_staging) updateStaging();
+                });
+        }
+        // Poll dialogue state periodically
+        setInterval(updateDialogueState, 2000);
+
+        function queryBrain() {
+            const q = document.getElementById('teach-input').value;
+            if (!q) return;
+            fetch('/api/query_brain', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: q })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('dialogue-response').textContent = data.success ? data.answer : "I don't know.";
                 });
         }
 
-        // Commit staging
-        document.getElementById('btn-commit').addEventListener('click', () => {
-            fetch('/api/staging/commit', { method: 'POST' })
-                .then(r => r.json())
+        // --- Knowledge Controls ---
+        function uploadFile() {
+            const content = document.getElementById('file-content').value;
+            if (!content) return;
+
+            fetch('/api/upload_file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: content })
+            })
+                .then(res => res.json())
                 .then(data => {
-                    if (data.success) {
-                        alert('Committed: +' + data.nodes_added + ' nodes, +' + data.edges_added + ' edges');
-                        socket.emit('request_state');
+                    document.getElementById('file-content').value = '';
+                    updateStaging();
+                    switchTab('knowledge');
+                });
+        }
+
+        function updateStaging() {
+            fetch('/api/staging')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('clean-count').textContent = data.clean_count;
+                    document.getElementById('flagged-count').textContent = data.flagged_count;
+
+                    const list = document.getElementById('staging-list');
+                    list.innerHTML = '';
+
+                    if (!data.active || data.total === 0) {
+                        list.innerHTML = '<div style="text-align:center; padding:1rem; color:#666">Buffer Empty</div>';
+                        return;
                     }
+
+                    // Show clean
+                    data.clean.forEach(t => {
+                        const el = document.createElement('div');
+                        el.className = 'staging-item';
+                        el.textContent = `${t.subject} --[${t.predicate}]--> ${t.object}`;
+                        list.appendChild(el);
+                    });
+
+                    // Show flagged
+                    data.flagged.forEach(t => {
+                        const el = document.createElement('div');
+                        el.className = 'staging-item flagged';
+                        el.textContent = `⚠️ ${t.subject} ${t.predicate} ${t.object}: ${t.reason}`;
+                        list.appendChild(el);
+                    });
                 });
-        });
+        }
 
-        // Periodic updates
-        setInterval(() => {
-            updateThoughtCloud();
-            updateSurpriseMeter();
-            updateDialogueState();
-            updateActivityTable();
-        }, 1000);
+        function commitStaging() {
+            fetch('/api/staging/commit', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    alert(`Committed ${data.nodes_added} nodes, ${data.edges_added} edges.`);
+                    updateStaging();
+                });
+        }
 
-        updateThoughtCloud();
-        updateSurpriseMeter();
-        updateDialogueState();
     </script>
 </body>
 

@@ -1,33 +1,56 @@
 """
-NCGN Memory Module - Core Data Structures
+NCGN v6.0 Memory Module - Core Data Structures
 
-Implements the "Hardware" of the cognitive system:
-- ConceptNode: Atomic unit of state (membrane potential)
-- Synapse: Unit of memory and association
-- GraphMemory: O(1) storage engine with forward/backward indices
-- EventSchema: Logic templates for System 2 validation
+Implements the graph storage with:
+- ConceptNode: Energy, threshold, cluster membership
+- Synapse: Weight, trace (eligibility), stability (consolidation)
+- GraphMemory: O(1) storage with cluster-aware operations
+
+Key v6.0 Changes:
+- Synapse.trace: Eligibility trace for 3-Factor Hebbian learning
+- Synapse.stability: Consolidation factor to prevent catastrophic forgetting
+- ClusterType: Groups nodes into motor/sensory/hidden for selective inhibition
 """
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Optional, Set
-import json
+from enum import Enum
+import math
+
+
+class ClusterType(Enum):
+    """
+    Node cluster types for selective inhibition.
+    
+    Softmax is applied per-cluster to motor nodes (action selection).
+    Hidden/Sensory may use different inhibition strategies.
+    """
+    MOTOR = "motor"          # Action output nodes (Softmax inhibition)
+    SENSORY = "sensory"      # Input nodes (egocentric encoding)
+    HIDDEN = "hidden"        # Internal processing nodes
+    VALUE = "value"          # Value estimation nodes (for TD learning)
+    GOAL = "goal"            # Goal/drive nodes
 
 
 class ConceptNode:
     """
-    The atomic unit of state in the NCGN.
+    The atomic unit of state in NCGN v6.0.
     
     Represents a concept with membrane potential (energy) that can
     accumulate, decay, and fire when threshold is exceeded.
+    
+    Uses __slots__ for memory efficiency.
     """
+    
     __slots__ = [
-        'id',                # str: Unique identifier ("dog")
-        'energy',            # float: 0.0 to 1.0 (Membrane Potential)
-        'resting_potential', # float: 0.0 (Base level after firing)
-        'threshold',         # float: 0.75 (Firing threshold)
-        'refractory_timer',  # int: Ticks until node can re-fire
-        'last_spike_tick',   # int: For STDP learning
-        'novelty_score',     # float: 1.0 -> 0.0 (Decays over time)
+        'id',               # str: Unique identifier
+        'energy',           # float: Current membrane potential (0.0 to 1.0)
+        'resting_potential',# float: Baseline energy level
+        'threshold',        # float: Firing threshold
+        'refractory_timer', # int: Ticks until can fire again
+        'last_spike_tick',  # int: Tick of last spike
+        'novelty_score',    # float: High for new concepts, decays over time
+        'cluster',          # ClusterType: Which group this node belongs to
     ]
     
     def __init__(
@@ -38,7 +61,8 @@ class ConceptNode:
         threshold: float = 0.75,
         refractory_timer: int = 0,
         last_spike_tick: int = -1,
-        novelty_score: float = 1.0
+        novelty_score: float = 1.0,
+        cluster: ClusterType = ClusterType.HIDDEN
     ):
         self.id = id
         self.energy = energy
@@ -47,6 +71,7 @@ class ConceptNode:
         self.refractory_timer = refractory_timer
         self.last_spike_tick = last_spike_tick
         self.novelty_score = novelty_score
+        self.cluster = cluster
     
     def can_fire(self) -> bool:
         """Check if node can fire (above threshold and not refractory)."""
@@ -54,28 +79,38 @@ class ConceptNode:
     
     def reset_after_fire(self, current_tick: int, refractory_period: int = 3):
         """Reset node state after firing."""
-        self.energy = self.resting_potential
+        self.energy = 0.0
         self.refractory_timer = refractory_period
         self.last_spike_tick = current_tick
     
     def __repr__(self) -> str:
-        return f"ConceptNode({self.id}, E={self.energy:.3f}, T={self.threshold})"
+        return f"ConceptNode({self.id}, E={self.energy:.2f}, cluster={self.cluster.value})"
 
 
 class Synapse:
     """
-    The unit of memory and association.
+    The unit of memory and association in NCGN v6.0.
     
-    Connects two ConceptNodes with weight (flow speed) and 
-    confidence (epistemic truth value).
+    Connects two ConceptNodes with:
+    - weight: Strength of connection (energy flow speed)
+    - trace: Eligibility trace for 3-Factor Hebbian learning
+    - stability: Consolidation factor that protects against forgetting
+    
+    CRITICAL v6.0 CHANGES:
+    - trace: Set to 1.0 on Pre/Post coincidence, decays exponentially
+    - stability: Increases with repeated reinforcement, gates learning rate
+    
+    Uses __slots__ for memory efficiency.
     """
+    
     __slots__ = [
         'target_id',    # str: Pointer to post-synaptic node
-        'type',         # str: "is_a", "eats", "temporal_next", etc.
-        'weight',       # float: 0.0 to 1.0 (Hebbian association strength)
-        'confidence',   # float: 0.0 to 1.0 (Epistemic truth value)
-        'stdp_trace',   # float: Eligibility trace for delayed learning
-        'last_active',  # int: Last tick this synapse transmitted a spike
+        'type',         # str: Semantic type of relationship
+        'weight',       # float: Connection strength (0.0 to 1.0)
+        'confidence',   # float: Epistemic certainty (for System 2)
+        'trace',        # float: Eligibility trace for 3-Factor learning
+        'stability',    # float: Consolidation factor (0.0 = labile, 1.0 = rigid)
+        'last_active',  # int: Tick of last activation
     ]
     
     def __init__(
@@ -84,47 +119,85 @@ class Synapse:
         type: str = "associates",
         weight: float = 0.5,
         confidence: float = 0.5,
-        stdp_trace: float = 0.0,
+        trace: float = 0.0,
+        stability: float = 0.0,
         last_active: int = -1
     ):
         self.target_id = target_id
         self.type = type
         self.weight = weight
         self.confidence = confidence
-        self.stdp_trace = stdp_trace
+        self.trace = trace
+        self.stability = stability
         self.last_active = last_active
     
     def transmit(self, spike_magnitude: float = 1.0) -> float:
         """Calculate energy to transmit to target."""
         return self.weight * spike_magnitude
     
+    def decay_trace(self, decay_rate: float = 0.95):
+        """
+        Decay the eligibility trace.
+        
+        Called each tick. The trace decays exponentially, maintaining
+        a memory of recent activity for delayed reward assignment.
+        """
+        self.trace *= decay_rate
+        if self.trace < 0.001:
+            self.trace = 0.0
+    
+    def set_eligible(self):
+        """
+        Mark synapse as eligible for learning.
+        
+        Called when Pre-synaptic and Post-synaptic nodes are
+        both active (Hebbian coincidence detection).
+        """
+        self.trace = 1.0
+    
     def __repr__(self) -> str:
-        return f"Synapse(→{self.target_id}, W={self.weight:.2f}, C={self.confidence:.2f})"
+        return f"Synapse(→{self.target_id}, w={self.weight:.2f}, t={self.trace:.2f}, s={self.stability:.2f})"
 
 
 class GraphMemory:
     """
-    The optimized storage engine for NCGN.
+    The optimized storage engine for NCGN v6.0.
     
     All lookups are O(1) using dictionary-based indices.
-    Provides forward and backward edge traversal for both
-    prediction (forward) and explanation (backward) queries.
+    Provides forward and backward edge traversal, cluster grouping,
+    and metabolic (energy) tracking for thermodynamic regulation.
+    
+    Key v6.0 Features:
+    - Cluster-based node grouping for selective inhibition
+    - Global energy tracking for seizure prevention
+    - Traced synapse tracking for efficient reward broadcast
     """
     
     def __init__(self):
-        # Primary Index: O(1) retrieval by node ID
+        # Core storage
         self.nodes: Dict[str, ConceptNode] = {}
         
-        # Forward Index (Adjacency): O(1) retrieval of downstream neighbors
-        # { "dog": [Synapse(meat), Synapse(bark)] }
-        self.forward_edges: Dict[str, List[Synapse]] = {}
+        # Edge indices
+        # Forward: source_id -> List[Synapse]
+        self._forward_edges: Dict[str, List[Synapse]] = {}
+        # Backward: target_id -> List[(source_id, Synapse)]
+        self._backward_edges: Dict[str, List[Tuple[str, Synapse]]] = {}
         
-        # Reverse Index: O(1) retrieval of upstream causes
-        # { "meat": [("dog", Synapse)] }
-        self.backward_edges: Dict[str, List[Tuple[str, Synapse]]] = {}
-        
-        # Active nodes set for sparse iteration
+        # Activity tracking
         self._active_nodes: Set[str] = set()
+        
+        # Cluster indices (for selective inhibition)
+        self._clusters: Dict[ClusterType, Set[str]] = {
+            cluster: set() for cluster in ClusterType
+        }
+        
+        # Traced synapse tracking (for efficient reward broadcast)
+        # Contains (source_id, Synapse) pairs with non-zero trace
+        self._traced_synapses: Set[Tuple[str, str]] = set()
+        
+        # Metabolic tracking
+        self._total_energy: float = 0.0
+        self._energy_cap: float = 10.0  # Maximum total energy (entropy control)
     
     # =====================
     # Node Operations
@@ -135,7 +208,8 @@ class GraphMemory:
         node_id: str,
         energy: float = 0.0,
         threshold: float = 0.75,
-        novelty_score: float = 1.0
+        novelty_score: float = 1.0,
+        cluster: ClusterType = ClusterType.HIDDEN
     ) -> ConceptNode:
         """Add a new node to the graph. O(1)."""
         if node_id in self.nodes:
@@ -145,14 +219,20 @@ class GraphMemory:
             id=node_id,
             energy=energy,
             threshold=threshold,
-            novelty_score=novelty_score
+            novelty_score=novelty_score,
+            cluster=cluster
         )
+        
         self.nodes[node_id] = node
-        self.forward_edges[node_id] = []
-        self.backward_edges[node_id] = []
+        self._forward_edges[node_id] = []
+        self._backward_edges[node_id] = []
+        
+        # Add to cluster index
+        self._clusters[cluster].add(node_id)
         
         if energy > 0:
             self._active_nodes.add(node_id)
+            self._total_energy += energy
         
         return node
     
@@ -164,31 +244,9 @@ class GraphMemory:
         """Check if node exists. O(1)."""
         return node_id in self.nodes
     
-    def remove_node(self, node_id: str) -> bool:
-        """Remove a node and all its edges. O(E) where E is edge count."""
-        if node_id not in self.nodes:
-            return False
-        
-        # Remove forward edges from this node
-        del self.forward_edges[node_id]
-        
-        # Remove backward references to this node
-        for source_id, synapse in self.backward_edges.get(node_id, []):
-            edges = self.forward_edges.get(source_id, [])
-            self.forward_edges[source_id] = [s for s in edges if s.target_id != node_id]
-        
-        # Remove backward edges from this node
-        del self.backward_edges[node_id]
-        
-        # Remove forward references from other nodes
-        for edges in self.forward_edges.values():
-            edges[:] = [s for s in edges if s.target_id != node_id]
-        
-        # Remove from active set and nodes dict
-        self._active_nodes.discard(node_id)
-        del self.nodes[node_id]
-        
-        return True
+    def get_cluster_nodes(self, cluster: ClusterType) -> Set[str]:
+        """Get all node IDs in a specific cluster."""
+        return self._clusters.get(cluster, set()).copy()
     
     # =====================
     # Synapse Operations
@@ -201,13 +259,18 @@ class GraphMemory:
         type: str = "associates",
         weight: float = 0.5,
         confidence: float = 0.5
-    ) -> Optional[Synapse]:
+    ) -> Synapse:
         """Add a synapse between two nodes. O(1)."""
-        # Ensure both nodes exist
+        # Ensure nodes exist
         if source_id not in self.nodes:
             self.add_node(source_id)
         if target_id not in self.nodes:
             self.add_node(target_id)
+        
+        # Check for existing synapse
+        for synapse in self._forward_edges[source_id]:
+            if synapse.target_id == target_id and synapse.type == type:
+                return synapse
         
         synapse = Synapse(
             target_id=target_id,
@@ -216,37 +279,84 @@ class GraphMemory:
             confidence=confidence
         )
         
-        # Add to forward index
-        self.forward_edges[source_id].append(synapse)
-        
-        # Add to backward index
-        self.backward_edges[target_id].append((source_id, synapse))
+        self._forward_edges[source_id].append(synapse)
+        self._backward_edges[target_id].append((source_id, synapse))
         
         return synapse
     
     def get_outgoing(self, node_id: str) -> List[Synapse]:
         """Get all outgoing synapses from a node. O(1)."""
-        return self.forward_edges.get(node_id, [])
+        return self._forward_edges.get(node_id, [])
     
     def get_incoming(self, node_id: str) -> List[Tuple[str, Synapse]]:
         """Get all incoming synapses to a node. O(1)."""
-        return self.backward_edges.get(node_id, [])
+        return self._backward_edges.get(node_id, [])
     
-    def get_synapse(self, source_id: str, target_id: str, type: Optional[str] = None) -> Optional[Synapse]:
-        """Find a specific synapse. O(E) where E is outgoing edges from source."""
-        for synapse in self.forward_edges.get(source_id, []):
+    def get_synapse(
+        self, 
+        source_id: str, 
+        target_id: str, 
+        type: Optional[str] = None
+    ) -> Optional[Synapse]:
+        """Find a specific synapse."""
+        for synapse in self._forward_edges.get(source_id, []):
             if synapse.target_id == target_id:
                 if type is None or synapse.type == type:
                     return synapse
         return None
     
     # =====================
-    # Active Node Management
+    # Trace Management
+    # =====================
+    
+    def mark_synapse_traced(self, source_id: str, target_id: str):
+        """Mark a synapse as having non-zero trace."""
+        self._traced_synapses.add((source_id, target_id))
+    
+    def unmark_synapse_traced(self, source_id: str, target_id: str):
+        """Remove synapse from traced set (when trace decays to 0)."""
+        self._traced_synapses.discard((source_id, target_id))
+    
+    def get_traced_synapses(self) -> List[Tuple[str, Synapse]]:
+        """
+        Get all synapses with non-zero eligibility trace.
+        
+        This enables efficient reward broadcast without iterating
+        over all synapses in the graph.
+        """
+        result = []
+        for source_id, target_id in self._traced_synapses:
+            synapse = self.get_synapse(source_id, target_id)
+            if synapse and synapse.trace > 0:
+                result.append((source_id, synapse))
+        return result
+    
+    def decay_all_traces(self, decay_rate: float = 0.95):
+        """
+        Decay all eligibility traces in the graph.
+        
+        Removes synapses from traced set when trace reaches 0.
+        """
+        to_remove = []
+        for source_id, target_id in self._traced_synapses:
+            synapse = self.get_synapse(source_id, target_id)
+            if synapse:
+                synapse.decay_trace(decay_rate)
+                if synapse.trace == 0:
+                    to_remove.append((source_id, target_id))
+        
+        for key in to_remove:
+            self._traced_synapses.discard(key)
+    
+    # =====================
+    # Activity Tracking
     # =====================
     
     def mark_active(self, node_id: str):
         """Mark a node as active (has non-zero energy)."""
-        self._active_nodes.add(node_id)
+        node = self.nodes.get(node_id)
+        if node:
+            self._active_nodes.add(node_id)
     
     def mark_inactive(self, node_id: str):
         """Mark a node as inactive."""
@@ -256,77 +366,121 @@ class GraphMemory:
         """Get the set of currently active nodes."""
         return self._active_nodes.copy()
     
+    def is_active(self, node_id: str) -> bool:
+        """Check if a node is currently active."""
+        return node_id in self._active_nodes
+    
     def update_active_set(self):
         """Refresh the active set based on current energies."""
-        self._active_nodes = {
-            node_id for node_id, node in self.nodes.items()
-            if node.energy > 0
-        }
+        self._active_nodes.clear()
+        self._total_energy = 0.0
+        
+        for node_id, node in self.nodes.items():
+            if node.energy > 0:
+                self._active_nodes.add(node_id)
+                self._total_energy += node.energy
     
     # =====================
-    # Utility Methods
+    # Metabolic Tracking
     # =====================
     
+    def get_total_energy(self) -> float:
+        """Get total system energy (for entropy monitoring)."""
+        return self._total_energy
+    
+    def update_total_energy(self):
+        """Recalculate total system energy."""
+        self._total_energy = sum(
+            node.energy for node in self.nodes.values()
+        )
+        return self._total_energy
+    
+    def get_cluster_energy(self, cluster: ClusterType) -> float:
+        """Get total energy in a specific cluster."""
+        total = 0.0
+        for node_id in self._clusters.get(cluster, set()):
+            node = self.nodes.get(node_id)
+            if node:
+                total += node.energy
+        return total
+    
+    # =====================
+    # Statistics
+    # =====================
+    
+    @property
     def node_count(self) -> int:
         """Total number of nodes."""
         return len(self.nodes)
     
+    @property
     def edge_count(self) -> int:
         """Total number of synapses."""
-        return sum(len(edges) for edges in self.forward_edges.values())
+        return sum(len(edges) for edges in self._forward_edges.values())
+    
+    @property
+    def traced_count(self) -> int:
+        """Number of synapses with active traces."""
+        return len(self._traced_synapses)
     
     def clear(self):
         """Clear all nodes and edges."""
         self.nodes.clear()
-        self.forward_edges.clear()
-        self.backward_edges.clear()
+        self._forward_edges.clear()
+        self._backward_edges.clear()
         self._active_nodes.clear()
+        self._traced_synapses.clear()
+        for cluster in self._clusters.values():
+            cluster.clear()
+        self._total_energy = 0.0
+    
+    def get_stats(self) -> Dict:
+        """Get comprehensive memory statistics."""
+        return {
+            "nodes": self.node_count,
+            "edges": self.edge_count,
+            "active": len(self._active_nodes),
+            "traced": self.traced_count,
+            "total_energy": self._total_energy,
+            "clusters": {
+                c.value: len(self._clusters[c]) 
+                for c in ClusterType
+            }
+        }
 
 
 @dataclass
 class EventSchema:
     """
-    Logic template for System 2 validation.
+    Schema definition for an action (System 2 rule).
     
-    Defines the expected structure and constraints for actions,
-    allowing the system to detect violations like "Dog eats Metal".
+    Used for validation and expectation generation.
+    Added for compatibility with System 2 dialogue intervention.
     """
-    id: str                              # e.g., "schema_eat"
-    action: str                          # e.g., "eat"
-    confidence: float                    # How much we trust this rule
-    roles: Dict[str, str]                # e.g., {"agent": "animate_object", "target": "edible_object"}
-    constraints: Dict[str, List[str]] = field(default_factory=dict)  # e.g., {"target": ["is_edible"]}
+    action: str
+    constraints: Dict[str, List[str]] = field(default_factory=dict)  # role -> [required_properties]
+    effects: Dict[str, List[str]] = field(default_factory=dict)      # role -> [added_properties]
+    id: str = field(init=False)
+    confidence: float = 1.0
+    
+    def __post_init__(self):
+        self.id = f"schema_{self.action}"
+
+    def validate(self, role: str, properties: Set[str]) -> bool:
+        """Check if properties satisfy constraints for a role."""
+        if role not in self.constraints:
+            return True
+        required = set(self.constraints[role])
+        return required.issubset(properties)
     
     @classmethod
-    def from_json(cls, json_path: str) -> 'EventSchema':
-        """Load schema from JSON file."""
-        with open(json_path, 'r') as f:
-            data = json.load(f)
-        return cls(
-            id=data['id'],
-            action=data['action'],
-            confidence=data.get('confidence', 0.5),
-            roles=data.get('roles', {}),
-            constraints=data.get('constraints', {})
+    def from_dict(cls, data: Dict) -> 'EventSchema':
+        """Create schema from dictionary (v5 compatibility)."""
+        schema = cls(
+            action=data.get('action', ''),
+            constraints=data.get('constraints', {}),
+            effects=data.get('effects', {}),
+            confidence=data.get('confidence', 1.0)
         )
-    
-    @classmethod
-    def from_dict(cls, data: dict) -> 'EventSchema':
-        """Load schema from dictionary."""
-        return cls(
-            id=data['id'],
-            action=data['action'],
-            confidence=data.get('confidence', 0.5),
-            roles=data.get('roles', {}),
-            constraints=data.get('constraints', {})
-        )
-    
-    def to_dict(self) -> dict:
-        """Convert schema to dictionary."""
-        return {
-            'id': self.id,
-            'action': self.action,
-            'confidence': self.confidence,
-            'roles': self.roles,
-            'constraints': self.constraints
-        }
+        return schema
+

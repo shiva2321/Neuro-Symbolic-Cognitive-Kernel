@@ -1,58 +1,68 @@
 """
-NCGN System 1 Engine - The Physics Engine
+NCGN v6.0 System 1 Engine - Valence-Driven Physics
 
-Implements the immutable 8-phase tick pipeline:
-- Phase 0: Transduction (Input Buffer)
-- Phase 1: Passive Decay (The Leak)
-- Phase 2: Firing Determination
-- Phase 3: Refractory & Reset
-- Phase 4: Propagation (Spike Transmission)
-- Phase 5: Integration (Update State)
-- Phase 6: Lateral Inhibition (k-WTA Attention)
-- Phase 7: The Bridge (Surprise Monitor)
-- Phase 8: Maintenance
+Implements the physics engine with:
+- Softmax Inhibition (replaces k-WTA)
+- Homeostatic Normalization (entropy control)
+- Dynamic Temperature Annealing
+- Eligibility trace updates (Phase 2)
+- Global energy monitoring (seizure prevention)
 
-The execution order is STRICTLY SERIALIZED to prevent
+The execution order is strictly serialized to prevent
 "ghost" signals and race conditions.
 """
 
 import math
-import heapq
+import random
 from typing import Dict, Set, List, Optional, Callable, Tuple
-from .memory import GraphMemory, ConceptNode
+from .memory import GraphMemory, ConceptNode, Synapse, ClusterType
 
 
 class System1Engine:
     """
-    The physics engine that executes the dynamical system.
+    The physics engine for NCGN v6.0.
     
-    Time is discretized into ticks. Each tick follows the
-    immutable 8-phase execution order.
+    Time is discretized into ticks. Each tick follows an
+    8-phase execution order with Softmax inhibition for
+    action selection and homeostatic energy regulation.
     """
     
     # Default parameters (biologically grounded)
     DEFAULT_DECAY_ALPHA = 0.9       # Energy decay per tick
     DEFAULT_THRESHOLD = 0.75        # Firing threshold
     DEFAULT_REFRACTORY_PERIOD = 3   # Ticks until re-fire
-    DEFAULT_K_WINNERS = 10          # k-WTA attention limit
+    DEFAULT_TRACE_DECAY = 0.95      # Eligibility trace decay per tick
     DEFAULT_NOVELTY_DECAY = 0.999   # Novelty decay per tick
-    DEFAULT_SURPRISE_GATE = 0.45     # PATCHED v5.1: Lowered from 0.5 for higher sensitivity
+    
+    # Thermodynamic parameters
+    DEFAULT_BASE_TEMPERATURE = 0.5  # Softmax temperature baseline
+    DEFAULT_ENERGY_CAP = 10.0       # Maximum cluster energy (entropy control)
+    DEFAULT_GLOBAL_ENERGY_THRESHOLD = 50.0  # Seizure threshold
+    DEFAULT_SEIZURE_DAMPING = 0.5   # Damping factor on seizure
     
     def __init__(
         self,
         memory: GraphMemory,
         decay_alpha: float = DEFAULT_DECAY_ALPHA,
-        k_winners: int = DEFAULT_K_WINNERS,
         refractory_period: int = DEFAULT_REFRACTORY_PERIOD,
-        surprise_threshold: float = DEFAULT_SURPRISE_GATE,
-        novelty_decay: float = DEFAULT_NOVELTY_DECAY
+        trace_decay: float = DEFAULT_TRACE_DECAY,
+        novelty_decay: float = DEFAULT_NOVELTY_DECAY,
+        base_temperature: float = DEFAULT_BASE_TEMPERATURE,
+        energy_cap: float = DEFAULT_ENERGY_CAP,
+        k_winners: int = None,  # v5 compatibility
+        surprise_threshold: float = None  # v5 compatibility
     ):
         self.memory = memory
         self.decay_alpha = decay_alpha
-        self.k_winners = k_winners
         self.refractory_period = refractory_period
-        self.surprise_threshold = surprise_threshold
+        self.trace_decay = trace_decay
         self.novelty_decay = novelty_decay
+        self.base_temperature = base_temperature
+        self.energy_cap = energy_cap
+        
+        # v5 compatibility state
+        self.system2_triggered = False
+        self.surprise_level = 0.0
         
         # State tracking
         self.current_tick: int = 0
@@ -60,38 +70,36 @@ class System1Engine:
         self.pending_energy: Dict[str, float] = {}  # Buffered propagation
         self.firing_set: Set[str] = set()           # Nodes firing this tick
         
-        # Expected state for surprise calculation (captured before tick)
+        # Dynamic temperature (affected by global energy)
+        self.temperature: float = base_temperature
+        
+        # Surprise monitoring (for System 2 integration)
+        self.surprise_level: float = 0.0
         self.expected_state: Dict[str, float] = {}
         
-        # Surprise monitoring
-        self.surprise_level: float = 0.0
-        self.system2_triggered: bool = False
-        self.system2_callback: Optional[Callable[[float], None]] = None
+        # Callbacks
+        self.on_surprise: Optional[Callable[[float], None]] = None
         
         # Flags
-        self.paused: bool = False  # Set by System 2 to pause execution
-        
+        self.paused: bool = False
+    
     # =====================
     # Input Interface
     # =====================
     
-    def inject_energy(self, node_id: str, energy: float):
+    def inject_energy(self, node_id: str, energy: float, cluster: ClusterType = ClusterType.SENSORY):
         """
         Queue external energy to be applied in Phase 0.
         
         This is the ONLY way external energy enters the system.
         """
         if node_id not in self.memory.nodes:
-            self.memory.add_node(node_id)
+            self.memory.add_node(node_id, cluster=cluster)
         
         if node_id in self.sensory_buffer:
             self.sensory_buffer[node_id] += energy
         else:
             self.sensory_buffer[node_id] = energy
-    
-    def set_system2_callback(self, callback: Callable[[float], None]):
-        """Set callback for System 2 interrupt."""
-        self.system2_callback = callback
     
     # =====================
     # The Tick Pipeline
@@ -107,18 +115,18 @@ class System1Engine:
         if self.paused:
             return False
         
-        # Capture expected state for surprise calculation BEFORE any changes
+        # Capture expected state for surprise calculation
         self._capture_expected_state()
         
         # THE IMMUTABLE TICK ORDER
         self._phase_0_transduction()
         self._phase_1_decay()
-        self._phase_2_firing_determination()
-        self._phase_3_refractory_reset()
-        self._phase_4_propagation()
-        self._phase_5_integration()
-        self._phase_6_kwta_inhibition()
-        self._phase_7_surprise_monitor()
+        self._phase_2_trace_update()          # NEW: Update eligibility traces
+        self._phase_3_firing_determination()
+        self._phase_4_refractory_reset()
+        self._phase_5_propagation()
+        self._phase_6_integration()
+        self._phase_7_softmax_inhibition()    # CHANGED: Softmax instead of k-WTA
         self._phase_8_maintenance()
         
         self.current_tick += 1
@@ -131,7 +139,7 @@ class System1Engine:
             if self.tick():
                 completed += 1
             else:
-                break  # Paused by System 2
+                break
         return completed
     
     # =====================
@@ -139,13 +147,12 @@ class System1Engine:
     # =====================
     
     def _capture_expected_state(self):
-        """Capture current state as the "expected" state for surprise calc."""
+        """Capture current state as the 'expected' state for surprise calc."""
         self.expected_state = {
-            node_id: node.energy * node.threshold
+            node_id: node.energy
             for node_id, node in self.memory.nodes.items()
             if node.energy > 0
         }
-        # print(f"DEBUG: Captured Expected State: {self.expected_state}")
     
     def _phase_0_transduction(self):
         """
@@ -159,7 +166,6 @@ class System1Engine:
                 node.energy = min(1.0, node.energy + energy)
                 self.memory.mark_active(node_id)
         
-        # Clear the buffer after applying
         self.sensory_buffer.clear()
     
     def _phase_1_decay(self):
@@ -176,7 +182,6 @@ class System1Engine:
             if node:
                 node.energy *= self.decay_alpha
                 
-                # Deactivate if energy is negligible
                 if node.energy < 0.001:
                     node.energy = 0.0
                     to_deactivate.append(node_id)
@@ -184,12 +189,35 @@ class System1Engine:
         for node_id in to_deactivate:
             self.memory.mark_inactive(node_id)
     
-    def _phase_2_firing_determination(self):
+    def _phase_2_trace_update(self):
         """
-        Phase 2: Identify nodes that will fire this tick.
+        Phase 2: Update eligibility traces based on Hebbian coincidence.
+        
+        NEW in v6.0: For every synapse where Pre and Post are both active,
+        set the eligibility trace to 1.0. This flags the synapse for
+        potential learning when reward arrives.
+        """
+        active_nodes = self.memory.get_active_nodes()
+        
+        for post_id in active_nodes:
+            post_node = self.memory.get_node(post_id)
+            if not post_node or post_node.energy < 0.1:
+                continue
+            
+            # Check incoming synapses for Pre/Post coincidence
+            for source_id, synapse in self.memory.get_incoming(post_id):
+                if source_id in active_nodes:
+                    source_node = self.memory.get_node(source_id)
+                    if source_node and source_node.energy > 0.1:
+                        # Hebbian coincidence: both Pre and Post active
+                        synapse.set_eligible()
+                        self.memory.mark_synapse_traced(source_id, post_id)
+    
+    def _phase_3_firing_determination(self):
+        """
+        Phase 3: Identify nodes that will fire this tick.
         
         Criteria: E > Threshold AND Refractory_Timer == 0
-        CRUCIAL: Do not update targets yet - capture state first.
         """
         self.firing_set.clear()
         
@@ -198,9 +226,9 @@ class System1Engine:
             if node and node.can_fire():
                 self.firing_set.add(node_id)
     
-    def _phase_3_refractory_reset(self):
+    def _phase_4_refractory_reset(self):
         """
-        Phase 3: Reset firing nodes and set refractory period.
+        Phase 4: Reset firing nodes and set refractory period.
         
         Energy is "spent" to create the spike.
         """
@@ -208,11 +236,11 @@ class System1Engine:
             node = self.memory.get_node(node_id)
             if node:
                 node.reset_after_fire(self.current_tick, self.refractory_period)
-                self.memory.mark_inactive(node_id)  # Energy is now 0
+                self.memory.mark_inactive(node_id)
     
-    def _phase_4_propagation(self):
+    def _phase_5_propagation(self):
         """
-        Phase 4: Calculate spike transmission.
+        Phase 5: Calculate spike transmission.
         
         For every synapse from firing nodes:
         - Calculate Input_target = Weight × Spike_Magnitude
@@ -221,7 +249,7 @@ class System1Engine:
         Constraint: We buffer updates to prevent cascades in same tick.
         """
         self.pending_energy.clear()
-        spike_magnitude = 1.0  # Standard spike amplitude
+        spike_magnitude = 1.0
         
         for source_id in self.firing_set:
             for synapse in self.memory.get_outgoing(source_id):
@@ -233,135 +261,188 @@ class System1Engine:
                 else:
                     self.pending_energy[target_id] = energy_transfer
                 
-                # Update synapse activity
                 synapse.last_active = self.current_tick
     
-    def _phase_5_integration(self):
+    def _phase_6_integration(self):
         """
-        Phase 5: Apply pending energy to target nodes.
+        Phase 6: Apply pending energy to target nodes.
         """
         for node_id, energy in self.pending_energy.items():
             node = self.memory.get_node(node_id)
             if node:
-                # Only integrate if not in refractory period
                 if node.refractory_timer == 0:
                     node.energy = min(1.0, node.energy + energy)
                     if node.energy > 0:
                         self.memory.mark_active(node_id)
     
-    def _phase_6_kwta_inhibition(self):
+    def _phase_7_softmax_inhibition(self):
         """
-        Phase 6: Lateral Inhibition using k-WTA.
+        Phase 7: Softmax Inhibition (replaces k-WTA).
         
-        Algorithm: Min-Heap Selection
-        - Keep top K most energetic nodes
-        - Hard-set all others to E=0
+        CHANGED in v6.0: Instead of hard winner selection, apply
+        probabilistic Softmax inhibition to motor clusters.
         
-        Complexity: O(M log K) where M is active nodes
+        Algorithm:
+        1. Update dynamic temperature based on global energy
+        2. For each cluster (especially MOTOR):
+           a. Apply Homeostatic Normalization (divisive)
+           b. Compute Softmax probabilities
+           c. Sample one winner (for MOTOR) or scale energies (for HIDDEN)
+        
+        Entropy Explosion Prevention:
+        - Divisive normalization bounds cluster energy
+        - Temperature feedback loop prevents runaway activation
+        - Gating threshold excludes near-zero nodes from Softmax
         """
-        active_nodes = self.memory.get_active_nodes()
+        # 1. Update temperature based on global energy
+        self._update_temperature()
         
-        if len(active_nodes) <= self.k_winners:
-            return  # No inhibition needed
+        # 2. Check for seizure condition (global energy too high)
+        total_energy = self.memory.update_total_energy()
+        if total_energy > self.DEFAULT_GLOBAL_ENERGY_THRESHOLD:
+            self._apply_seizure_damping()
+            return
         
-        # Build min-heap of size K
-        # Heap contains (energy, node_id) tuples
-        min_heap: List[Tuple[float, str]] = []
+        # 3. Apply Softmax to MOTOR cluster (action selection)
+        self._apply_cluster_softmax(ClusterType.MOTOR, sample=True)
         
-        for node_id in active_nodes:
+        # 4. Apply graded inhibition to HIDDEN cluster (competition)
+        self._apply_cluster_softmax(ClusterType.HIDDEN, sample=False)
+    
+    def _update_temperature(self):
+        """
+        Dynamic Temperature Annealing.
+        
+        Temperature responds to global energy:
+        - High energy → Low temperature (decisive, exploitation)
+        - Low energy → High temperature (exploratory, creativity)
+        
+        Formula: τ = τ_base + α × (E_target - E_total)
+        """
+        total_energy = self.memory.get_total_energy()
+        target_energy = 5.0  # Homeostatic target
+        
+        # Temperature increases when system is quiet (exploration)
+        # Temperature decreases when system is loud (exploitation)
+        alpha = 0.1
+        self.temperature = self.base_temperature + alpha * (target_energy - total_energy)
+        
+        # Clamp to reasonable range
+        self.temperature = max(0.1, min(2.0, self.temperature))
+    
+    def _apply_cluster_softmax(self, cluster: ClusterType, sample: bool = True):
+        """
+        Apply Softmax inhibition to a specific cluster.
+        
+        Args:
+            cluster: Which cluster to process
+            sample: If True, sample one winner (for MOTOR).
+                    If False, scale energies by probability (for HIDDEN).
+        
+        Entropy Explosion Prevention (explicit comment as required):
+        - GATING: Nodes with E < 0.05 are excluded from Softmax
+        - HOMEOSTATIC NORMALIZATION: If cluster sum > E_cap, scale down
+        - These mechanisms prevent irrelevant nodes from accumulating
+          probability mass and causing entropy explosion.
+        """
+        cluster_nodes = self.memory.get_cluster_nodes(cluster)
+        if not cluster_nodes:
+            return
+        
+        # Gather active energies with GATING (exclude near-zero)
+        active_energies: Dict[str, float] = {}
+        for node_id in cluster_nodes:
             node = self.memory.get_node(node_id)
-            if not node:
-                continue
-            
-            if len(min_heap) < self.k_winners:
-                heapq.heappush(min_heap, (node.energy, node_id))
-            elif node.energy > min_heap[0][0]:
-                heapq.heapreplace(min_heap, (node.energy, node_id))
+            if node and node.energy > 0.05:  # GATING THRESHOLD
+                active_energies[node_id] = node.energy
         
-        # Build winner set
-        winners = {node_id for _, node_id in min_heap}
+        if not active_energies:
+            return
         
-        # Suppress losers
-        to_deactivate = []
-        for node_id in active_nodes:
-            if node_id not in winners:
+        # HOMEOSTATIC NORMALIZATION
+        # If cluster sum exceeds metabolic cap, scale down proportionally
+        # This prevents entropy explosion by bounding total activation
+        cluster_sum = sum(active_energies.values())
+        if cluster_sum > self.energy_cap:
+            scale = self.energy_cap / cluster_sum
+            active_energies = {k: v * scale for k, v in active_energies.items()}
+            # Apply scaling to actual nodes
+            for node_id, scaled_e in active_energies.items():
                 node = self.memory.get_node(node_id)
                 if node:
-                    node.energy = 0.0
-                    to_deactivate.append(node_id)
+                    node.energy = scaled_e
         
-        for node_id in to_deactivate:
-            self.memory.mark_inactive(node_id)
-    
-    def _phase_7_surprise_monitor(self):
-        """
-        Phase 7: The Bridge - Calculate surprise and trigger System 2.
+        # Compute Softmax
+        # Subtract max for numerical stability
+        max_e = max(active_energies.values())
+        exp_values: Dict[str, float] = {}
         
-        Surprise = penalty for violated high-confidence expectations.
+        for node_id, energy in active_energies.items():
+            exp_values[node_id] = math.exp((energy - max_e) / self.temperature)
         
-        PATCHED v5.1: Uses RMS (sqrt) for proper Euclidean distance.
+        exp_sum = sum(exp_values.values())
+        if exp_sum == 0:
+            return
         
-        Formula:
-        S = sqrt(Σ ((E_pred(n) - E_obs(n)) × Confidence(n))²)
+        probabilities = {k: v / exp_sum for k, v in exp_values.items()}
         
-        Logic:
-        - Missing expectations cause high surprise
-        - Novel (low confidence) inputs don't cause surprise
-        """
-        self.surprise_level = self._calculate_surprise()
-        
-        if self.surprise_level > self.surprise_threshold:
-            self.system2_triggered = True
-            if self.system2_callback:
-                self.system2_callback(self.surprise_level)
+        if sample:
+            # Sample one winner (for MOTOR cluster - action selection)
+            winner = self._sample_from_distribution(probabilities)
+            
+            # Suppress all non-winners
+            for node_id in cluster_nodes:
+                node = self.memory.get_node(node_id)
+                if node:
+                    if node_id == winner:
+                        node.energy = 1.0  # Winner takes all
+                    else:
+                        node.energy = 0.0
+                        self.memory.mark_inactive(node_id)
         else:
-            self.system2_triggered = False
+            # Scale energies by probability (graded competition)
+            for node_id in cluster_nodes:
+                node = self.memory.get_node(node_id)
+                if node:
+                    prob = probabilities.get(node_id, 0.0)
+                    node.energy *= prob
+                    if node.energy < 0.001:
+                        node.energy = 0.0
+                        self.memory.mark_inactive(node_id)
     
-    def _calculate_surprise(self) -> float:
-        """
-        Calculate set-based surprise.
+    def _sample_from_distribution(self, probabilities: Dict[str, float]) -> Optional[str]:
+        """Sample a node ID from probability distribution."""
+        if not probabilities:
+            return None
         
-        PATCHED v5.1: Uses RMS (sqrt) for proper Euclidean distance.
+        r = random.random()
+        cumulative = 0.0
         
-        Penalizes:
-        - Expected nodes that are missing
-        - Based on confidence of the violated expectation
-        """
-        sum_of_squares = 0.0
+        for node_id, prob in probabilities.items():
+            cumulative += prob
+            if r <= cumulative:
+                return node_id
         
-        # Current observed state
-        observed_state = {
-            node_id: node.energy
-            for node_id, node in self.memory.nodes.items()
-            if node.energy > 0
-        }
-        
-        # Check each expected node
-        for node_id, expected_energy in self.expected_state.items():
-            observed_energy = observed_state.get(node_id, 0.0)
-            
-            # Get confidence from incoming synapses
-            confidence = self._get_node_confidence(node_id)
-            
-            # Difference weighted by confidence
-            diff = expected_energy - observed_energy
-            if diff > 0:  # Only penalize missing expectations
-                surprise_contrib = (diff * confidence) ** 2
-                sum_of_squares += surprise_contrib
-        
-        # CRITICAL FIX v5.1: Apply sqrt for Root Mean Square (Euclidean distance)
-        total_surprise = math.sqrt(sum_of_squares)
-        
-        return min(1.0, total_surprise)
+        return list(probabilities.keys())[-1]
     
-    def _get_node_confidence(self, node_id: str) -> float:
-        """Get average confidence of synapses pointing to this node."""
-        incoming = self.memory.get_incoming(node_id)
-        if not incoming:
-            return 0.0  # Novel node - no confidence
+    def _apply_seizure_damping(self):
+        """
+        Global damping when total energy exceeds threshold.
         
-        total = sum(synapse.confidence for _, synapse in incoming)
-        return total / len(incoming)
+        Seizure Prevention (explicit comment as required):
+        This is the "emergency brake" for entropy explosion.
+        When global energy exceeds the critical threshold, we
+        apply massive damping to ALL nodes, effectively resetting
+        the system to a quiet state. This mimics the post-ictal
+        refractory period after a biological seizure.
+        """
+        for node_id in self.memory.get_active_nodes():
+            node = self.memory.get_node(node_id)
+            if node:
+                node.energy *= self.DEFAULT_SEIZURE_DAMPING
+                if node.energy < 0.01:
+                    node.energy = 0.0
+                    self.memory.mark_inactive(node_id)
     
     def _phase_8_maintenance(self):
         """
@@ -369,6 +450,8 @@ class System1Engine:
         
         - Decrement refractory timers
         - Decay novelty scores
+        - Decay eligibility traces
+        - Update energy tracking
         """
         # Decrement refractory timers
         for node in self.memory.nodes.values():
@@ -377,6 +460,62 @@ class System1Engine:
             
             # Decay novelty
             node.novelty_score *= self.novelty_decay
+        
+        # Decay all eligibility traces
+        self.memory.decay_all_traces(self.trace_decay)
+        
+        # Update energy tracking
+        self.memory.update_total_energy()
+    
+    # =====================
+    # Action Selection API
+    # =====================
+    
+    def select_action(self, motor_node_ids: List[str]) -> Optional[str]:
+        """
+        Get the currently selected action from motor cluster.
+        
+        After running tick(), the motor cluster has been processed
+        by Softmax. This method returns the winning motor node.
+        
+        Returns:
+            The node_id of the winning motor node, or None if no action.
+        """
+        best_node = None
+        best_energy = 0.0
+        
+        for node_id in motor_node_ids:
+            node = self.memory.get_node(node_id)
+            if node and node.energy > best_energy:
+                best_energy = node.energy
+                best_node = node_id
+        
+        return best_node
+    
+    def get_action_probabilities(self, motor_node_ids: List[str]) -> Dict[str, float]:
+        """
+        Get the current probability distribution over actions.
+        
+        Useful for debugging and visualization.
+        """
+        energies = {}
+        for node_id in motor_node_ids:
+            node = self.memory.get_node(node_id)
+            if node and node.energy > 0.05:
+                energies[node_id] = node.energy
+        
+        if not energies:
+            return {}
+        
+        max_e = max(energies.values())
+        exp_values = {k: math.exp((v - max_e) / self.temperature) 
+                      for k, v in energies.items()}
+        exp_sum = sum(exp_values.values())
+        
+        if exp_sum == 0:
+            return {}
+        
+        return {k: v / exp_sum for k, v in exp_values.items()}
     
     # =====================
     # System 2 Interface
@@ -389,30 +528,19 @@ class System1Engine:
     def resume(self):
         """Resume the tick loop."""
         self.paused = False
-        self.system2_triggered = False
     
     def get_firing_set(self) -> Set[str]:
         """Get the set of nodes that fired in the last tick."""
         return self.firing_set.copy()
-    
-    def get_active_energies(self) -> Dict[str, float]:
-        """Get current energy levels of active nodes."""
-        return {
-            node_id: self.memory.get_node(node_id).energy
-            for node_id in self.memory.get_active_nodes()
-        }
-    
-    # =====================
-    # State Inspection
-    # =====================
     
     def get_state_summary(self) -> dict:
         """Get a summary of the current system state."""
         return {
             'tick': self.current_tick,
             'active_nodes': len(self.memory.get_active_nodes()),
-            'total_nodes': self.memory.node_count(),
-            'surprise': self.surprise_level,
-            'system2_triggered': self.system2_triggered,
+            'total_nodes': self.memory.node_count,
+            'total_energy': self.memory.get_total_energy(),
+            'temperature': self.temperature,
+            'traced_synapses': self.memory.traced_count,
             'paused': self.paused
         }

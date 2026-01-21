@@ -24,9 +24,9 @@ from core.system1 import System1Engine
 from core.system2 import System2Controller, DiagnosisType
 
 # Phase 3 imports
-from cortex.ingestion import Triple, RelationType, text_to_triples, DocumentReader
-from cortex.staging import StagingBuffer, ConflictType, MergeResult
-from cortex.dialogue import (
+from core.ingestion import Triple, RelationType, text_to_triples, DocumentReader
+from core.staging import StagingBuffer, ConflictType, MergeResult
+from core.dialogue import (
     DialogueManager, DialogueState, DialogueContext,
     Proposal, ProposalType
 )
