@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCGN Brain Dashboard</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #8b949e;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-yellow: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #a371f7;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            gap: 1px;
+            background: var(--border);
+        }
+
+        header {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            padding: 1rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        header h1::before {
+            content: "🧠";
+        }
+
+        .tick-display {
+            font-size: 1.1rem;
+            color: var(--accent-blue);
+            font-weight: 500;
+        }
+
+        .graph-container {
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+        }
+
+        #graph {
+            width: 100%;
+            height: 100%;
+        }
+
+        .sidebar {
+            background: var(--bg-secondary);
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .panel h3 {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.75rem;
+            letter-spacing: 0.5px;
+        }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+
+        .metric {
+            background: var(--bg-tertiary);
+            padding: 0.75rem;
+            border-radius: 6px;
+        }
+
+        .metric-label {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .metric-value {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .metric-value.surprise {
+            color: var(--accent-purple);
+        }
+
+        .metric-value.active {
+            color: var(--accent-green);
+        }
+
+        .metric-value.firing {
+            color: var(--accent-yellow);
+        }
+
+        .metric-value.triggered {
+            color: var(--accent-red);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.15s;
+        }
+
+        .btn:hover {
+            background: var(--border);
+            border-color: var(--text-secondary);
+        }
+
+        .btn-primary {
+            background: var(--accent-blue);
+            border-color: var(--accent-blue);
+        }
+
+        .btn-primary:hover {
+            background: #4393e6;
+        }
+
+        .btn-success {
+            background: var(--accent-green);
+            border-color: var(--accent-green);
+        }
+
+        .btn-danger {
+            background: var(--accent-red);
+            border-color: var(--accent-red);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+        }
+
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+
+        footer {
+            grid-column: 1 / -1;
+            background: var(--bg-secondary);
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .timeline {
+            flex: 1;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .timeline-progress {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent-blue), var(--accent-purple));
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .status {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-dot.connected {
+            background: var(--accent-green);
+        }
+
+        .status-dot.disconnected {
+            background: var(--accent-red);
+        }
+
+        /* Node tooltip */
+        .node-tooltip {
+            position: absolute;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.8rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s;
+            z-index: 100;
+        }
+
+        /* File Upload */
+        .file-upload-area {
+            border: 2px dashed var(--border);
+            padding: 1rem;
+            text-align: center;
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: border-color 0.2s;
+        }
+
+        .file-upload-area:hover {
+            border-color: var(--accent-blue);
+        }
+
+        /* Activity Table */
+        .activity-table-container {
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.75rem;
+        }
+
+        .activity-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .activity-table th {
+            text-align: left;
+            padding: 4px;
+            color: var(--text-secondary);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            background: var(--bg-secondary);
+        }
+
+        .activity-table td {
+            padding: 4px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .activity-row.firing {
+            color: #fff;
+            font-weight: bold;
+            text-shadow: 0 0 5px #fff;
+        }
+
+        .node-tooltip.visible {
+            opacity: 1;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .legend-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .legend-dot.low {
+            background: #1e3a5f;
+        }
+
+        .legend-dot.medium {
+            background: #5f1e5f;
+        }
+
+        .legend-dot.high {
+            background: #a83232;
+        }
+
+        .legend-dot.firing {
+            background: #ffffff;
+            box-shadow: 0 0 8px #fff;
+        }
+
+        /* Phase 3: Surprise Meter */
+        .surprise-meter {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 0.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .meter-bar {
+            height: 24px;
+            background: linear-gradient(90deg, var(--accent-green) 0%, var(--accent-yellow) 50%, var(--accent-red) 100%);
+            border-radius: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .meter-fill {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            background: var(--bg-tertiary);
+            transition: width 0.3s ease;
+        }
+
+        .meter-threshold {
+            position: absolute;
+            top: -4px;
+            bottom: -4px;
+            width: 3px;
+            background: #fff;
+            box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
+        }
+
+        .meter-value {
+            text-align: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            color: var(--accent-purple);
+        }
+
+        /* Phase 3: Dialogue State Badge */
+        .dialogue-state {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            margin-bottom: 0.5rem;
+        }
+
+        .state-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .state-badge.idle {
+            background: var(--accent-blue);
+            color: #000;
+        }
+
+        .state-badge.clarification {
+            background: var(--accent-yellow);
+            color: #000;
+        }
+
+        .state-badge.confirmation {
+            background: var(--accent-purple);
+        }
+
+        .state-badge.file_review {
+            background: var(--accent-green);
+            color: #000;
+        }
+
+        /* Phase 3: Thought Cloud */
+        .thought-cloud {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .thought-tag {
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            transition: all 0.2s;
+        }
+
+        .thought-tag.active {
+            background: var(--accent-blue);
+            color: #000;
+            border-color: var(--accent-blue);
+        }
+
+        .thought-tag.firing {
+            background: #fff;
+            color: #000;
+            box-shadow: 0 0 8px rgba(255, 255, 255, 0.5);
+        }
+
+        /* Phase 3: Staging Area */
+        .staging-panel {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .staging-item {
+            padding: 0.35rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            margin-bottom: 0.25rem;
+            font-size: 0.7rem;
+            border-left: 3px solid var(--accent-green);
+        }
+
+        .staging-item.flagged {
+            border-left-color: var(--accent-red);
+        }
+
+        .staging-count {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .staging-count span {
+            font-size: 0.8rem;
+        }
+
+        .staging-count .clean {
+            color: var(--accent-green);
+        }
+
+        .staging-count .flagged {
+            color: var(--accent-red);
+        }
+
+        /* Teach Panel */
+        .teach-response {
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            max-height: 100px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .teach-response.visible {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="dashboard">
+        <header>
+            <h1>NCGN Brain Dashboard</h1>
+            <div class="tick-display">Tick: <span id="tick-count">0</span></div>
+        </header>
+
+        <div class="graph-container">
+            <svg id="graph"></svg>
+            <div class="node-tooltip" id="tooltip"></div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <h3>System Metrics</h3>
+                <div class="metrics-grid">
+                    <div class="metric">
+                        <div class="metric-label">Active Nodes</div>
+                        <div class="metric-value active" id="active-count">0</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Firing</div>
+                        <div class="metric-value firing" id="firing-count">0</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Surprise</div>
+                        <div class="metric-value surprise" id="surprise-level">0.00</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">System 2</div>
+                        <div class="metric-value triggered" id="system2-status">❌</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Controls</h3>
+                <div class="controls">
+                    <div class="btn-row">
+                        <button class="btn btn-primary" id="btn-step">Step</button>
+                        <button class="btn btn-success" id="btn-run">Run 10</button>
+                    </div>
+                    <div class="btn-row">
+                        <button class="btn" id="btn-auto">▶ Auto</button>
+                        <button class="btn btn-danger" id="btn-pause">⏸ Pause</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Inject Energy</h3>
+                <div class="input-group">
+                    <input type="text" id="inject-node" placeholder="Node ID">
+                    <input type="number" id="inject-energy" value="1.0" step="0.1" min="0" max="1" style="width: 60px;">
+                </div>
+                <button class="btn btn-primary" id="btn-inject" style="width: 100%;">Inject</button>
+            </div>
+
+            <div class="panel">
+                <h3>Add Node</h3>
+                <div class="input-group">
+                    <input type="text" id="new-node" placeholder="Node ID">
+                </div>
+                <button class="btn" id="btn-add-node" style="width: 100%;">Add Node</button>
+            </div>
+
+            <!-- Phase 3: Dialogue State -->
+            <div class="panel" id="dialogue-panel">
+                <h3>Dialogue State</h3>
+                <div class="dialogue-state">
+                    <span class="state-badge idle" id="dialogue-badge">IDLE</span>
+                    <span id="dialogue-info" style="font-size: 0.75rem; color: var(--text-secondary);"></span>
+                </div>
+                <div style="font-size: 0.75rem; color: var(--text-secondary);">
+                    Clarifications: <span id="clarification-count">0</span> |
+                    Exceptions: <span id="exception-count">0</span>
+                </div>
+            </div>
+
+            <!-- Phase 3: Surprise Meter -->
+            <div class="panel">
+                <h3>Surprise Meter</h3>
+                <div class="surprise-meter">
+                    <div class="meter-bar">
+                        <div class="meter-fill" id="surprise-fill" style="width: 100%;"></div>
+                        <div class="meter-threshold" id="surprise-threshold" style="left: 50%;"></div>
+                    </div>
+                    <div class="meter-value" id="surprise-value">0.000</div>
+                </div>
+                <div style="font-size: 0.7rem; color: var(--text-secondary); text-align: center;">
+                    S2 Trigger: <span id="s2-trigger-status">Ready</span>
+                </div>
+            </div>
+
+            <!-- Phase 3: Thought Cloud -->
+            <div class="panel">
+                <h3>Thought Cloud <span id="thought-count" style="color: var(--text-secondary);">(0)</span></h3>
+                <div class="thought-cloud" id="thought-cloud">
+                    <!-- Thoughts will be populated here -->
+                </div>
+            </div>
+
+            <!-- Phase 3: Dialogue & Interaction -->
+            <div class="panel">
+                <h3>Dialogue & Interaction</h3>
+                <div class="input-group">
+                    <input type="text" id="teach-input"
+                        placeholder="Teach or Ask (e.g., 'Dogs bark' or 'What eats meat?')">
+                </div>
+                <div class="btn-row" style="margin-top:0.5rem; gap: 0.5rem; display: flex;">
+                    <button class="btn btn-primary" id="btn-teach" style="flex:1">Send</button>
+                    <button class="btn btn-warning" id="btn-query" style="flex:1">Query Mode</button>
+                </div>
+                <div class="teach-response" id="teach-response"></div>
+            </div>
+
+            <!-- Phase 3: Knowledge Upload -->
+            <div class="panel">
+                <h3>Ingest Knowledge File</h3>
+                <div class="file-upload-area" id="drop-zone">
+                    <span id="file-label" style="font-size: 0.8rem; color: var(--text-secondary);">Click or Drag File
+                        Here</span>
+                    <input type="file" id="file-input" style="display: none;">
+                </div>
+                <button class="btn btn-success" id="btn-upload" style="width: 100%;" disabled>Upload & Stage</button>
+            </div>
+
+            <!-- Phase 3: Activity Monitor -->
+            <div class="panel">
+                <h3>Neural Activity Monitor</h3>
+                <div class="activity-table-container">
+                    <table class="activity-table">
+                        <thead>
+                            <tr>
+                                <th>Node</th>
+                                <th>Energy</th>
+                                <th>State</th>
+                            </tr>
+                        </thead>
+                        <tbody id="activity-tbody">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Phase 3: Staging Area -->
+            <div class="panel" id="staging-panel" style="display: none;">
+                <h3>Staging Area</h3>
+                <div class="staging-count">
+                    <span class="clean">✓ <span id="staging-clean">0</span> clean</span>
+                    <span class="flagged">⚠ <span id="staging-flagged">0</span> flagged</span>
+                </div>
+                <div class="staging-panel" id="staging-items">
+                    <!-- Staged items will be populated here -->
+                </div>
+                <div class="btn-row" style="margin-top: 0.5rem;">
+                    <button class="btn btn-success" id="btn-commit">Commit</button>
+                    <button class="btn btn-danger" id="btn-discard">Discard</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Legend</h3>
+                <div class="legend">
+                    <div class="legend-item">
+                        <div class="legend-dot low"></div>
+                        <span>Low Energy</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot high"></div>
+                        <span>High Energy</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-dot firing"></div>
+                        <span>Firing</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <div class="timeline">
+                <div class="timeline-progress" id="timeline-progress"></div>
+            </div>
+            <div class="status">
+                <span class="status-dot connected" id="status-dot"></span>
+                <span id="status-text">Connected</span>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Initialize Socket.IO
+        const socket = io();
+
+        // D3 Graph Setup
+        const svg = d3.select('#graph');
+        const container = document.querySelector('.graph-container');
+        let width = container.clientWidth;
+        let height = container.clientHeight;
+
+        svg.attr('width', width).attr('height', height);
+
+        // Create groups for edges and nodes
+        const g = svg.append('g');
+        const linksGroup = g.append('g').attr('class', 'links');
+        const nodesGroup = g.append('g').attr('class', 'nodes');
+
+        // Zoom behavior
+        const zoom = d3.zoom()
+            .scaleExtent([0.1, 4])
+            .on('zoom', (event) => g.attr('transform', event.transform));
+        svg.call(zoom);
+
+        // Force simulation
+        const simulation = d3.forceSimulation()
+            .force('link', d3.forceLink().id(d => d.id).distance(100))
+            .force('charge', d3.forceManyBody().strength(-300))
+            .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('collision', d3.forceCollide().radius(30));
+
+        // Tooltip
+        const tooltip = document.getElementById('tooltip');
+
+        // Current state
+        let currentNodes = [];
+        let currentLinks = [];
+        let isAutoRunning = false;
+
+        // Update graph
+        function updateGraph(data) {
+            currentNodes = data.nodes || [];
+            currentLinks = data.links || [];
+
+            // Update metrics
+            if (data.metadata) {
+                document.getElementById('tick-count').textContent = data.metadata.tick || 0;
+                document.getElementById('active-count').textContent = data.metadata.active_count || 0;
+                document.getElementById('firing-count').textContent = data.metadata.firing_count || 0;
+                document.getElementById('surprise-level').textContent =
+                    (data.metadata.surprise || 0).toFixed(3);
+                document.getElementById('system2-status').textContent =
+                    data.metadata.system2_triggered ? '✓' : '❌';
+
+                // Update timeline  
+                const progress = Math.min(100, (data.metadata.tick % 100));
+                document.getElementById('timeline-progress').style.width = progress + '%';
+            }
+
+            // Update links
+            const link = linksGroup.selectAll('line')
+                .data(currentLinks, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+            link.exit().remove();
+
+            const linkEnter = link.enter().append('line')
+                .attr('stroke', d => d.active ? '#ffff00' : '#444')
+                .attr('stroke-width', d => 1 + d.value * 3)
+                .attr('stroke-opacity', 0.6);
+
+            link.merge(linkEnter)
+                .attr('stroke', d => d.active ? '#ffff00' : '#555')
+                .attr('stroke-width', d => 1 + d.value * 3);
+
+            // Update nodes
+            const node = nodesGroup.selectAll('circle')
+                .data(currentNodes, d => d.id);
+
+            node.exit().remove();
+
+            const nodeEnter = node.enter().append('circle')
+                .attr('r', d => d.radius || 15)
+                .attr('fill', d => d.color || '#4a90d9')
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 1.5)
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended))
+                .on('mouseover', (event, d) => {
+                    tooltip.innerHTML = `<strong>${d.id}</strong><br>Energy: ${d.energy.toFixed(3)}`;
+                    tooltip.style.left = (event.pageX + 10) + 'px';
+                    tooltip.style.top = (event.pageY - 10) + 'px';
+                    tooltip.classList.add('visible');
+                })
+                .on('mouseout', () => tooltip.classList.remove('visible'));
+
+            node.merge(nodeEnter)
+                .attr('r', d => d.radius || 15)
+                .attr('fill', d => d.firing ? '#fff' : (d.color || '#4a90d9'))
+                .attr('stroke', d => d.firing ? '#ffff00' : '#fff')
+                .attr('stroke-width', d => d.firing ? 3 : 1.5);
+
+            // Update labels
+            const label = nodesGroup.selectAll('text')
+                .data(currentNodes, d => d.id);
+
+            label.exit().remove();
+
+            label.enter().append('text')
+                .attr('text-anchor', 'middle')
+                .attr('dy', 4)
+                .attr('fill', '#fff')
+                .attr('font-size', '10px')
+                .attr('pointer-events', 'none')
+                .text(d => d.id);
+
+            // Update simulation
+            simulation.nodes(currentNodes);
+            simulation.force('link').links(currentLinks);
+            simulation.alpha(0.3).restart();
+        }
+
+        // Simulation tick
+        simulation.on('tick', () => {
+            linksGroup.selectAll('line')
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
+
+            nodesGroup.selectAll('circle')
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            nodesGroup.selectAll('text')
+                .attr('x', d => d.x)
+                .attr('y', d => d.y);
+        });
+
+        // Drag handlers
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        // Socket.IO handlers
+        socket.on('connect', () => {
+            document.getElementById('status-dot').classList.remove('disconnected');
+            document.getElementById('status-dot').classList.add('connected');
+            document.getElementById('status-text').textContent = 'Connected';
+        });
+
+        socket.on('disconnect', () => {
+            document.getElementById('status-dot').classList.remove('connected');
+            document.getElementById('status-dot').classList.add('disconnected');
+            document.getElementById('status-text').textContent = 'Disconnected';
+        });
+
+        socket.on('state_update', updateGraph);
+
+        // Button handlers
+        document.getElementById('btn-step').addEventListener('click', () => {
+            fetch('/api/step', { method: 'POST' });
+        });
+
+        document.getElementById('btn-run').addEventListener('click', () => {
+            fetch('/api/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticks: 10 })
+            });
+        });
+
+        document.getElementById('btn-auto').addEventListener('click', () => {
+            if (!isAutoRunning) {
+                socket.emit('start_auto');
+                document.getElementById('btn-auto').textContent = '⏹ Stop';
+                isAutoRunning = true;
+            } else {
+                socket.emit('stop_auto');
+                document.getElementById('btn-auto').textContent = '▶ Auto';
+                isAutoRunning = false;
+            }
+        });
+
+        document.getElementById('btn-pause').addEventListener('click', () => {
+            fetch('/api/pause', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('btn-pause').textContent =
+                        data.paused ? '▶ Resume' : '⏸ Pause';
+                });
+        });
+
+        document.getElementById('btn-inject').addEventListener('click', () => {
+            const nodeId = document.getElementById('inject-node').value;
+            const energy = parseFloat(document.getElementById('inject-energy').value);
+            if (nodeId) {
+                fetch('/api/inject', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ node_id: nodeId, energy: energy })
+                });
+            }
+        });
+
+        document.getElementById('btn-add-node').addEventListener('click', () => {
+            const nodeId = document.getElementById('new-node').value;
+            if (nodeId) {
+                fetch('/api/add_node', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ node_id: nodeId })
+                }).then(() => socket.emit('request_state'));
+            }
+        });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            width = container.clientWidth;
+            height = container.clientHeight;
+            svg.attr('width', width).attr('height', height);
+            simulation.force('center', d3.forceCenter(width / 2, height / 2));
+            simulation.alpha(0.3).restart();
+        });
+
+        // Request initial state
+        socket.emit('request_state');
+
+        // ============ Phase 3: JavaScript Handlers ============
+
+        // Update thought cloud
+        function updateThoughtCloud() {
+            fetch('/api/thought_cloud')
+                .then(r => r.json())
+                .then(data => {
+                    const cloud = document.getElementById('thought-cloud');
+                    cloud.innerHTML = '';
+                    document.getElementById('thought-count').textContent = '(' + data.total_active + ')';
+                    data.thoughts.forEach(thought => {
+                        const tag = document.createElement('span');
+                        tag.className = 'thought-tag';
+                        if (thought.fired) tag.classList.add('firing');
+                        else if (thought.energy > 0.3) tag.classList.add('active');
+                        tag.textContent = thought.id;
+                        tag.title = 'Energy: ' + thought.energy.toFixed(3);
+                        cloud.appendChild(tag);
+                    });
+                });
+        }
+
+        // Update surprise meter
+        function updateSurpriseMeter() {
+            fetch('/api/surprise_history')
+                .then(r => r.json())
+                .then(data => {
+                    const fillWidth = 100 - (data.current * 100);
+                    document.getElementById('surprise-fill').style.width = fillWidth + '%';
+                    document.getElementById('surprise-value').textContent = data.current.toFixed(3);
+                    const status = document.getElementById('s2-trigger-status');
+                    if (data.system2_triggered) {
+                        status.textContent = 'TRIGGERED';
+                        status.style.color = 'var(--accent-red)';
+                    } else {
+                        status.textContent = 'Ready';
+                        status.style.color = 'var(--accent-green)';
+                    }
+                });
+        }
+
+        // Update dialogue state
+        function updateDialogueState() {
+            fetch('/api/dialogue_state')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.available) return;
+                    const badge = document.getElementById('dialogue-badge');
+                    badge.textContent = data.state.toUpperCase();
+                    badge.className = 'state-badge ' + data.state;
+                    document.getElementById('clarification-count').textContent = data.clarifications;
+                    document.getElementById('exception-count').textContent = data.exceptions_learned;
+                });
+        }
+
+        // Teach & Query handler
+        function sendDialogue(isQuery = false) {
+            const input = document.getElementById('teach-input');
+            const statement = input.value.trim();
+            if (!statement) return;
+
+            const endpoint = isQuery ? '/api/query_brain' : '/api/teach';
+            const payload = isQuery ? { question: statement } : { statement: statement };
+
+            // Visual feedback
+            const responseDiv = document.getElementById('teach-response');
+            responseDiv.textContent = "Processing...";
+            responseDiv.classList.add('visible');
+
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+                .then(r => r.json())
+                .then(data => {
+                    responseDiv.textContent = data.response;
+                    input.value = '';
+                    updateDialogueState();
+                    socket.emit('request_state');
+                    updateActivityTable();
+                });
+        }
+
+        document.getElementById('btn-teach').addEventListener('click', () => sendDialogue(false));
+        document.getElementById('btn-query').addEventListener('click', () => sendDialogue(true));
+
+        document.getElementById('teach-input').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendDialogue(false);
+        });
+
+        // File Upload Handlers
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const uploadBtn = document.getElementById('btn-upload');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) {
+                document.getElementById('file-label').textContent = fileInput.files[0].name;
+                uploadBtn.disabled = false;
+            }
+        });
+
+        uploadBtn.addEventListener('click', () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                const content = e.target.result;
+                fetch('/api/upload_file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name, content: content })
+                })
+                    .then(r => r.json())
+                    .then(data => {
+                        alert("File Processed!\n" + data.response);
+                        updateDialogueState();
+                        // Update staging if needed later
+                        const stagingPanel = document.getElementById('staging-panel');
+                        if (stagingPanel) stagingPanel.style.display = 'block'; // Show if hidden
+                        updateStagingArea();
+                    });
+            };
+            reader.readAsText(file);
+        });
+
+        // Activity Monitor Update
+        function updateActivityTable() {
+            fetch('/api/all_nodes')
+                .then(r => r.json())
+                .then(data => {
+                    const tbody = document.getElementById('activity-tbody');
+                    tbody.innerHTML = '';
+                    // Show top 30 active/energetic nodes
+                    data.nodes.slice(0, 30).forEach(node => {
+                        const tr = document.createElement('tr');
+                        tr.className = 'activity-row ' + (node.fired ? 'firing' : '');
+                        tr.style.color = node.fired ? '#fff' : (node.active ? 'var(--accent-blue)' : 'var(--text-secondary)');
+                        tr.innerHTML = `
+                        <td>${node.id}</td>
+                        <td>${node.energy.toFixed(3)}</td>
+                        <td>${node.fired ? '🔥 FIRING' : (node.active ? 'Active' : 'Dormant')}</td>
+                    `;
+                        tbody.appendChild(tr);
+                    });
+                });
+        }
+
+        // Commit staging
+        document.getElementById('btn-commit').addEventListener('click', () => {
+            fetch('/api/staging/commit', { method: 'POST' })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Committed: +' + data.nodes_added + ' nodes, +' + data.edges_added + ' edges');
+                        socket.emit('request_state');
+                    }
+                });
+        });
+
+        // Periodic updates
+        setInterval(() => {
+            updateThoughtCloud();
+            updateSurpriseMeter();
+            updateDialogueState();
+            updateActivityTable();
+        }, 1000);
+
+        updateThoughtCloud();
+        updateSurpriseMeter();
+        updateDialogueState();
+    </script>
+</body>
+
+</html>

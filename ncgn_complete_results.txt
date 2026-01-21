@@ -1,0 +1,168 @@
+============================================================
+      NCGN COMPLETE IMPLEMENTATION TEST & DEMO RESULTS      
+============================================================
+
+--- PHASE 1: UNIT TESTS ---
+test_chain_activation_abc (tests.test_physics.TestEnergyPropagation.test_chain_activation_abc)
+Test: A->B->C chain activation. ... ok
+test_energy_decay_without_stimulation (tests.test_physics.TestEnergyPropagation.test_energy_decay_without_stimulation)
+Test: Energy decays to 0 without reinforcement. ... ok
+test_energy_stays_bounded (tests.test_physics.TestEnergyPropagation.test_energy_stays_bounded)
+Test: Energy is clamped to [0, 1] range. ... ok
+test_refractory_period_enforcement (tests.test_physics.TestEnergyPropagation.test_refractory_period_enforcement)
+Test: Nodes cannot fire during refractory period. ... ok
+test_buffered_propagation_no_cascade (tests.test_physics.TestSpikePropagation.test_buffered_propagation_no_cascade)
+Test: Propagation is buffered to prevent same-tick cascades. ... ok
+test_weight_affects_transmission (tests.test_physics.TestSpikePropagation.test_weight_affects_transmission)
+Test: Synapse weight affects energy transmitted. ... ok
+test_nodes_deactivate_after_decay (tests.test_physics.TestActiveNodeTracking.test_nodes_deactivate_after_decay)
+Test: Nodes are removed from active set when energy -> 0. ... ok
+test_only_active_nodes_processed (tests.test_physics.TestActiveNodeTracking.test_only_active_nodes_processed)
+Test: Only nodes with energy > 0 are in active set. ... ok
+test_exactly_k_winners (tests.test_wta.TestKWTAAlgorithm.test_exactly_k_winners)
+Test: Activate 100 nodes with random energies. ... ok
+test_kwta_efficiency_large_scale (tests.test_wta.TestKWTAAlgorithm.test_kwta_efficiency_large_scale)
+Test: k-WTA should handle large numbers efficiently. ... ok
+test_losers_suppressed_to_zero (tests.test_wta.TestKWTAAlgorithm.test_losers_suppressed_to_zero)
+Test: Losing nodes have energy set to exactly 0. ... ok
+test_no_inhibition_when_under_k (tests.test_wta.TestKWTAAlgorithm.test_no_inhibition_when_under_k)
+Test: No inhibition when active nodes <= K. ... ok
+test_winners_are_highest_energy (tests.test_wta.TestKWTAAlgorithm.test_winners_are_highest_energy)
+Test: Winners should be the K highest energy nodes. ... ok
+test_kwta_in_tick_pipeline (tests.test_wta.TestKWTAIntegration.test_kwta_in_tick_pipeline)
+Test: k-WTA runs correctly within full tick. ... ok
+test_low_confidence_low_surprise (tests.test_surprise.TestSurpriseCalculation.test_low_confidence_low_surprise)
+Test: Low confidence association should produce low surprise. ... ok
+test_missing_expectation_high_surprise (tests.test_surprise.TestSurpriseCalculation.test_missing_expectation_high_surprise)
+Test: Pre-charge "Meat" node. Input "Metal". ... FAIL
+test_novel_input_no_surprise (tests.test_surprise.TestSurpriseCalculation.test_novel_input_no_surprise)
+Test: Completely new input should not cause surprise. ... ok
+test_capture_predictions (tests.test_surprise.TestSurpriseMonitor.test_capture_predictions)
+Test prediction capture. ... ok
+test_violated_expectations_list (tests.test_surprise.TestSurpriseMonitor.test_violated_expectations_list)
+Test getting list of violated expectations. ... ok
+test_system2_trigger (tests.test_surprise.TestSurpriseInPipeline.test_system2_trigger)
+Test: High surprise should trigger System 2. ... ok
+test_property_management (tests.test_system2.TestSchemaValidation.test_property_management)
+Test setting and getting properties. ... ok
+test_schema_from_dict (tests.test_system2.TestSchemaValidation.test_schema_from_dict)
+Test creating schema from dictionary. ... ok
+test_constraint_violation_detected (tests.test_system2.TestDiagnosis.test_constraint_violation_detected)
+Test detection of constraint violations. ... ok
+test_missing_knowledge_detected (tests.test_system2.TestDiagnosis.test_missing_knowledge_detected)
+Test detection of missing knowledge. ... ok
+test_no_issue_when_constraints_met (tests.test_system2.TestDiagnosis.test_no_issue_when_constraints_met)
+Test that valid actions pass. ... ok
+test_missing_knowledge_asks_question (tests.test_system2.TestInterventionPlanning.test_missing_knowledge_asks_question)
+Test that missing knowledge leads to property query. ... ok
+test_violation_generates_query (tests.test_system2.TestInterventionPlanning.test_violation_generates_query)
+Test that violations lead to user queries. ... ok
+test_dog_eat_meat_no_issue (tests.test_system2.TestDogEatMetal.test_dog_eat_meat_no_issue)
+Sanity check: Dog eating meat should NOT trigger issues. ... ok
+test_dog_eat_metal_full_scenario (tests.test_system2.TestDogEatMetal.test_dog_eat_metal_full_scenario)
+Complete end-to-end test of the Dog Eat Metal scenario. ... ok
+test_apply_ltd (tests.test_system2.TestInterventionApplication.test_apply_ltd)
+Test that LTD (Long-Term Depression) weakens synapses. ... ok
+test_energy_injection (tests.test_system2.TestInterventionApplication.test_energy_injection)
+Test that interventions can inject energy. ... ok
+
+======================================================================
+FAIL: test_missing_expectation_high_surprise (tests.test_surprise.TestSurpriseCalculation.test_missing_expectation_high_surprise)
+Test: Pre-charge "Meat" node. Input "Metal".
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "D:\NGCN\tests\test_surprise.py", line 66, in test_missing_expectation_high_surprise
+    assert engine.surprise_level > 0.3, \
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Surprise 0.07199999999999997 should be high when expectation is inhibited
+
+----------------------------------------------------------------------
+Ran 31 tests in 0.015s
+
+FAILED (failures=1)
+
+
+--- PHASE 2: SYSTEM DEMO ---
+
+############################################################
+#  NCGN - Neuromorphic Cognitive Graph Network
+#  Demo Suite
+############################################################
+
+============================================================
+DEMO 1: Basic Energy Propagation
+============================================================
+
+Created chain: A -> B -> C
+Injecting energy into A...
+  Tick 0: Active nodes = {'B': '0.800'}
+  Tick 1: Active nodes = {'C': '0.800'}
+  Tick 2: Active nodes = {}
+  Tick 3: Active nodes = {}
+  Tick 4: Active nodes = {}
+
+[SUCCESS] Energy propagates through the chain
+
+============================================================
+DEMO 2: K-WTA Attention (Competing Concepts)
+============================================================
+
+Initial energies: ['apple=0.1', 'banana=0.2', 'cherry=0.3', 'date=0.4', 'elderberry=0.5']
+K = 3 (only 3 concepts can be active)
+
+After k-WTA: Active = {'elderberry', 'date', 'cherry'}
+Winners are the 3 highest energy concepts: cherry, date, elderberry
+  apple: energy=0.000 [suppressed]
+  banana: energy=0.000 [suppressed]
+  cherry: energy=0.300 [WINNER]
+  date: energy=0.400 [WINNER]
+  elderberry: energy=0.500 [WINNER]
+
+[SUCCESS] K-WTA keeps only the strongest concepts active
+
+============================================================
+DEMO 3: Dog Eat Metal (Cognitive Surprise)
+============================================================
+
+Knowledge Graph:
+  dog --[eats]--> meat (high confidence)
+  meat: is_edible = True
+  metal: is_edible = False
+
+--- STEP 1: PREDICTION ---
+Activating 'dog' concept...
+  'meat' predicted with energy: 0.900
+
+--- STEP 2: UNEXPECTED OBSERVATION ---
+Instead of meat, we observe METAL!
+  Surprise level: 0.405
+
+--- STEP 3: SYSTEM 2 DIAGNOSIS ---
+  Diagnosis Type: constraint_violation
+  Violated Constraints: ['is_edible']
+  Explanation: Object 'metal' violates constraints: ['is_edible']
+
+--- STEP 4: RESPONSE ---
+  Action: query_user
+  Query: Expected dog to eat something edible, but 'metal' is not edible. Is this correct?
+
+============================================================
+
+[SUCCESS] SYSTEM CORRECTLY:
+  1. Predicted 'meat' (high confidence)
+  2. Detected surprise when 'metal' observed
+  3. Diagnosed constraint violation (metal ≠ edible)
+  4. Generated clarification query
+============================================================
+
+[SUCCESS] Dog Eat Metal Test PASSED
+
+############################################################
+#  All demos completed successfully!
+############################################################
+
+
+
+============================================================
+                  END OF RESULTS                            
+============================================================

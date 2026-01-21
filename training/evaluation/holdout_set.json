@@ -1,0 +1,55 @@
+[
+    {
+        "description": "Test dog-meat association",
+        "inputs": [
+            {
+                "id": "dog",
+                "energy": 1.0
+            }
+        ],
+        "expected": [
+            "meat"
+        ],
+        "category": "recall"
+    },
+    {
+        "description": "Test cat-fish association",
+        "inputs": [
+            {
+                "id": "cat",
+                "energy": 1.0
+            }
+        ],
+        "expected": [
+            "fish"
+        ],
+        "category": "recall"
+    },
+    {
+        "description": "Test metal inedibility",
+        "inputs": [
+            {
+                "id": "metal",
+                "energy": 1.0
+            }
+        ],
+        "expected": [
+            "inedible"
+        ],
+        "constraints": {
+            "metal.is_edible": false
+        },
+        "category": "constraint"
+    },
+    {
+        "description": "Test novel animal with food",
+        "inputs": [
+            {
+                "id": "elephant",
+                "energy": 1.0
+            }
+        ],
+        "expected": [],
+        "category": "generalization"
+    }
+]

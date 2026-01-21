@@ -1,0 +1,54 @@
+[
+    {
+        "id": "eat_schema",
+        "name": "Eating Action Schema",
+        "type": "schema",
+        "difficulty": 4,
+        "prerequisites": [
+            "edibility_basics",
+            "inedibility"
+        ],
+        "examples": [
+            {
+                "inputs": [
+                    {
+                        "id": "dog",
+                        "energy": 1.0
+                    },
+                    {
+                        "id": "eat",
+                        "energy": 0.5
+                    }
+                ],
+                "expected": [
+                    "meat",
+                    "edible"
+                ],
+                "constraints": {
+                    "meat.is_edible": true
+                },
+                "description": "Dog eating meat is valid"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "cat",
+                        "energy": 1.0
+                    },
+                    {
+                        "id": "eat",
+                        "energy": 0.5
+                    }
+                ],
+                "expected": [
+                    "fish",
+                    "edible"
+                ],
+                "constraints": {
+                    "fish.is_edible": true
+                },
+                "description": "Cat eating fish is valid"
+            }
+        ]
+    }
+]

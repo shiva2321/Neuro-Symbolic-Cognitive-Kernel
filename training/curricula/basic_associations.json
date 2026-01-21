@@ -1,0 +1,142 @@
+[
+    {
+        "id": "basic_associations",
+        "name": "Basic Animal-Food Associations",
+        "type": "association",
+        "difficulty": 1,
+        "prerequisites": [],
+        "examples": [
+            {
+                "inputs": [
+                    {
+                        "id": "dog",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "meat"
+                ],
+                "description": "Dogs eat meat"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "cat",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "fish"
+                ],
+                "description": "Cats eat fish"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "rabbit",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "carrot"
+                ],
+                "description": "Rabbits eat carrots"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "bird",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "seed"
+                ],
+                "description": "Birds eat seeds"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "cow",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "grass"
+                ],
+                "description": "Cows eat grass"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "horse",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "hay"
+                ],
+                "description": "Horses eat hay"
+            }
+        ]
+    },
+    {
+        "id": "category_membership",
+        "name": "Category Membership",
+        "type": "association",
+        "difficulty": 2,
+        "prerequisites": [
+            "basic_associations"
+        ],
+        "examples": [
+            {
+                "inputs": [
+                    {
+                        "id": "dog",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "animal"
+                ],
+                "description": "Dog is an animal"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "cat",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "animal"
+                ],
+                "description": "Cat is an animal"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "meat",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "food"
+                ],
+                "description": "Meat is food"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "fish",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "food"
+                ],
+                "description": "Fish is food"
+            }
+        ]
+    }
+]

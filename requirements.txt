@@ -1,0 +1,21 @@
+# NCGN - Neuromorphic Cognitive Graph Network
+# No ML libraries required - pure Python implementation
+
+# Core dependencies
+pytest>=7.0.0
+
+# Visualization (optional)
+flask>=2.3.0
+flask-socketio>=5.3.0
+networkx>=3.0
+matplotlib>=3.7.0
+
+# Data Acquisition (optional)
+datasets>=2.14.0
+requests>=2.31.0
+
+# Terminal UI (optional)
+rich>=13.0.0
+
+# NLP (Phase 3 - Ingestion)
+spacy>=3.5.0

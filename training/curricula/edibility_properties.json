@@ -1,0 +1,144 @@
+[
+    {
+        "id": "edibility_basics",
+        "name": "Basic Edibility Properties",
+        "type": "property",
+        "difficulty": 2,
+        "prerequisites": [
+            "basic_associations"
+        ],
+        "examples": [
+            {
+                "inputs": [
+                    {
+                        "id": "meat",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "edible"
+                ],
+                "constraints": {
+                    "meat.is_edible": true
+                },
+                "description": "Meat is edible"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "fish",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "edible"
+                ],
+                "constraints": {
+                    "fish.is_edible": true
+                },
+                "description": "Fish is edible"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "carrot",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "edible"
+                ],
+                "constraints": {
+                    "carrot.is_edible": true
+                },
+                "description": "Carrot is edible"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "grass",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "edible"
+                ],
+                "constraints": {
+                    "grass.is_edible": true
+                },
+                "description": "Grass is edible (for animals)"
+            }
+        ]
+    },
+    {
+        "id": "inedibility",
+        "name": "Non-Edible Objects",
+        "type": "property",
+        "difficulty": 3,
+        "prerequisites": [
+            "edibility_basics"
+        ],
+        "examples": [
+            {
+                "inputs": [
+                    {
+                        "id": "metal",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "inedible"
+                ],
+                "constraints": {
+                    "metal.is_edible": false
+                },
+                "description": "Metal is NOT edible"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "plastic",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "inedible"
+                ],
+                "constraints": {
+                    "plastic.is_edible": false
+                },
+                "description": "Plastic is NOT edible"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "rock",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "inedible"
+                ],
+                "constraints": {
+                    "rock.is_edible": false
+                },
+                "description": "Rock is NOT edible"
+            },
+            {
+                "inputs": [
+                    {
+                        "id": "glass",
+                        "energy": 1.0
+                    }
+                ],
+                "expected": [
+                    "inedible"
+                ],
+                "constraints": {
+                    "glass.is_edible": false
+                },
+                "description": "Glass is NOT edible"
+            }
+        ]
+    }
+]

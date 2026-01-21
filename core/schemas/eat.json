@@ -1,0 +1,15 @@
+{
+    "id": "schema_eat",
+    "action": "eat",
+    "confidence": 0.95,
+    "roles": {
+        "agent": "animate_object",
+        "target": "edible_object"
+    },
+    "constraints": {
+        "target": [
+            "is_edible",
+            "not_toxic"
+        ]
+    }
+}
