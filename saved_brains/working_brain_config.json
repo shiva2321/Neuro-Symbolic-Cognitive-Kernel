@@ -1,0 +1,62 @@
+{
+  "name": "working_brain",
+  "saved_at": "2026-01-21T19:27:24.566564",
+  "version": "7.0",
+  "config": {
+    "initial_capacity": 10000,
+    "decay_delta": 0.1,
+    "flow_alpha": 0.8,
+    "default_threshold": 0.75,
+    "refractory_period": 10,
+    "learning_rate": 0.01,
+    "weight_min": 0.0,
+    "weight_max": 1.0,
+    "norm_beta": 0.01,
+    "seizure_threshold": 50.0,
+    "seizure_damping": 0.5
+  },
+  "stats": {
+    "topology": {
+      "num_nodes": 5,
+      "num_edges": 0,
+      "max_index": 4,
+      "is_dirty": true
+    },
+    "state": {
+      "capacity": 10000,
+      "current_max_idx": 4,
+      "active_count": 0,
+      "total_energy": 0.0,
+      "tick_count": 0,
+      "matrix_shape": null,
+      "matrix_nnz": 0,
+      "embeddings_loaded": false
+    },
+    "engine": {
+      "tick_count": 10,
+      "last_surprise": 0.0,
+      "pending_injections": 0,
+      "last_firing_count": 0,
+      "active_concepts": 0,
+      "total_energy": 0.0
+    },
+    "learner": {
+      "total_updates": 0,
+      "total_ltp": 0,
+      "total_ltd": 0,
+      "last_update_count": 0,
+      "learning_rate": 0.01
+    },
+    "modulator": {
+      "expected_reward": 0.0,
+      "history_length": 0,
+      "avg_reward": 0.0,
+      "avg_rpe": 0.0
+    },
+    "semantics": null,
+    "reasoner": null,
+    "properties_count": 0,
+    "history_length": 0
+  },
+  "properties": {}
+}

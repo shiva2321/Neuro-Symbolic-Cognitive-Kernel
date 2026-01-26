@@ -1,0 +1,13 @@
+{
+  "nodes": [
+    {
+      "label": "sun",
+      "index": 0
+    },
+    {
+      "label": "hot",
+      "index": 1
+    }
+  ],
+  "edges": []
+}

@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NCGN v7 Dashboard</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        :root {
+            --bg-dark: #0a0a12;
+            --bg-card: #12121e;
+            --bg-hover: #1a1a2e;
+            --accent: #6366f1;
+            --accent-glow: rgba(99, 102, 241, 0.4);
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --text: #e2e8f0;
+            --text-dim: #64748b;
+            --node-default: #4f46e5;
+            --node-active: #22c55e;
+            --node-firing: #f59e0b;
+            --edge-color: rgba(99, 102, 241, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--bg-card), #1e1e3f);
+            padding: 0.75rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        header h1 {
+            font-size: 1.25rem;
+            background: linear-gradient(90deg, #818cf8, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .status-bar {
+            display: flex;
+            gap: 1.5rem;
+            font-size: 0.8rem;
+        }
+
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .stat-value {
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        .stat-label {
+            color: var(--text-dim);
+        }
+
+        main {
+            display: grid;
+            grid-template-columns: 280px 1fr 300px;
+            height: calc(100vh - 52px);
+        }
+
+        .panel {
+            background: var(--bg-card);
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .panel:last-child {
+            border-right: none;
+        }
+
+        .panel-header {
+            padding: 0.75rem 1rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.75rem;
+        }
+
+        /* Graph Visualization */
+        #graph-container {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, #0f0f1a 0%, #050508 100%);
+            position: relative;
+        }
+
+        #graph-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .node circle {
+            stroke: rgba(255, 255, 255, 0.3);
+            stroke-width: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .node circle:hover {
+            stroke: white;
+            stroke-width: 3px;
+        }
+
+        .node text {
+            fill: var(--text);
+            font-size: 10px;
+            pointer-events: none;
+            text-anchor: middle;
+            dominant-baseline: middle;
+        }
+
+        .link {
+            stroke: var(--edge-color);
+            stroke-opacity: 0.6;
+            fill: none;
+        }
+
+        .node.firing circle {
+            stroke: var(--node-firing);
+            stroke-width: 4px;
+            filter: drop-shadow(0 0 8px var(--node-firing));
+        }
+
+        /* Controls */
+        .control-section {
+            margin-bottom: 1rem;
+        }
+
+        .control-section h3 {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            color: var(--text-dim);
+            margin-bottom: 0.5rem;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            background: rgba(0, 0, 0, 0.3);
+            color: var(--text);
+            font-size: 0.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        button {
+            width: 100%;
+            padding: 0.5rem;
+            border: none;
+            border-radius: 6px;
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-bottom: 0.25rem;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            filter: brightness(1.1);
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        button.success {
+            background: var(--success);
+        }
+
+        button.warning {
+            background: var(--warning);
+            color: #000;
+        }
+
+        button.danger {
+            background: var(--error);
+        }
+
+        button.active {
+            box-shadow: 0 0 12px var(--accent-glow);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .btn-group button {
+            flex: 1;
+        }
+
+        /* Game Panel */
+        .game-display {
+            background: #000;
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 1.2rem;
+            text-align: center;
+            min-height: 150px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            white-space: pre;
+            line-height: 1.2;
+        }
+
+        .game-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .game-stat {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.5rem;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .game-stat-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+
+        .game-stat-label {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+        }
+
+        /* Activity Log */
+        .log-entry {
+            font-family: 'Consolas', monospace;
+            font-size: 0.7rem;
+            padding: 0.3rem 0.5rem;
+            border-left: 3px solid var(--accent);
+            margin-bottom: 0.25rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 0 4px 4px 0;
+        }
+
+        .log-entry.tick {
+            border-color: #22c55e;
+        }
+
+        .log-entry.learning {
+            border-color: #f59e0b;
+        }
+
+        .log-entry.game {
+            border-color: #3b82f6;
+        }
+
+        .log-entry.injection {
+            border-color: #c084fc;
+        }
+
+        .log-time {
+            color: var(--text-dim);
+            margin-right: 0.5rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab {
+            padding: 0.5rem 1rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: var(--text-dim);
+            border-bottom: 2px solid transparent;
+        }
+
+        .tab:hover {
+            color: var(--text);
+        }
+
+        .tab.active {
+            color: var(--accent);
+            border-color: var(--accent);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Node List */
+        .node-list {
+            list-style: none;
+        }
+
+        .node-item {
+            display: flex;
+            align-items: center;
+            padding: 0.4rem;
+            margin-bottom: 0.2rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .node-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .node-energy-bar {
+            width: 40px;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+            margin-right: 0.5rem;
+            overflow: hidden;
+        }
+
+        .node-energy-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), #c084fc);
+            transition: width 0.3s;
+        }
+
+        .node-label {
+            flex: 1;
+            font-size: 0.8rem;
+        }
+
+        .node-value {
+            font-size: 0.7rem;
+            color: var(--text-dim);
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            padding: 0.5rem 0.75rem;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            pointer-events: none;
+            z-index: 100;
+            display: none;
+        }
+
+        /* File drop */
+        .file-drop {
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+        }
+
+        .file-drop:hover,
+        .file-drop.dragover {
+            border-color: var(--accent);
+            background: rgba(99, 102, 241, 0.1);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>🧠 NCGN v7 Dashboard</h1>
+        <div class="status-bar">
+            <div class="stat">
+                <span class="stat-label">Tick</span>
+                <span class="stat-value" id="stat-tick">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Nodes</span>
+                <span class="stat-value" id="stat-nodes">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Edges</span>
+                <span class="stat-value" id="stat-edges">0</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">Energy</span>
+                <span class="stat-value" id="stat-energy">0.00</span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- Left Panel: Controls -->
+        <div class="panel">
+            <div class="tabs">
+                <div class="tab active" data-tab="brain">Brain</div>
+                <div class="tab" data-tab="game">Game</div>
+                <div class="tab" data-tab="chat">Chat</div>
+                <div class="tab" data-tab="files">Files</div>
+            </div>
+
+            <div class="panel-content">
+                <!-- Brain Tab -->
+                <div id="tab-brain" class="tab-content active">
+                    <div class="control-section">
+                        <h3>Inject Energy</h3>
+                        <input type="text" id="inject-label" placeholder="Concept name...">
+                        <button onclick="inject()">⚡ Inject</button>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Propagation</h3>
+                        <div class="btn-group">
+                            <button onclick="think(1)">1 Step</button>
+                            <button onclick="think(10)">10 Steps</button>
+                        </div>
+                        <button class="secondary" id="auto-btn" onclick="toggleAutoThink()">▶ Auto Run</button>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Learning</h3>
+                        <input type="range" id="reward-slider" min="-1" max="1" step="0.1" value="0.5">
+                        <div style="text-align: center; font-size: 0.8rem; margin-bottom: 0.5rem;">
+                            Reward: <span id="reward-value">0.5</span>
+                        </div>
+                        <button class="success" onclick="learn()">Apply Reward</button>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Persistence</h3>
+                        <input type="text" id="brain-name" placeholder="Brain name...">
+                        <div class="btn-group">
+                            <button class="success" onclick="saveBrain()">Save</button>
+                            <button onclick="loadBrainDialog()">Load</button>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <button class="danger" onclick="clearBrain()">Clear Brain</button>
+                    </div>
+                </div>
+
+                <!-- Game Tab -->
+                <div id="tab-game" class="tab-content">
+                    <div class="control-section">
+                        <h3>Select Game</h3>
+                        <select id="game-select">
+                            <option value="corridor">Corridor 1D</option>
+                            <option value="snake">Snake</option>
+                        </select>
+                        <button onclick="startGame()">Start Game</button>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Game Display</h3>
+                        <div class="game-display" id="game-display">No game active</div>
+                        <div class="game-stats">
+                            <div class="game-stat">
+                                <div class="game-stat-value" id="game-episode">0</div>
+                                <div class="game-stat-label">Episode</div>
+                            </div>
+                            <div class="game-stat">
+                                <div class="game-stat-value" id="game-reward">0</div>
+                                <div class="game-stat-label">Reward</div>
+                            </div>
+                            <div class="game-stat">
+                                <div class="game-stat-value" id="game-steps">0</div>
+                                <div class="game-stat-label">Steps</div>
+                            </div>
+                            <div class="game-stat">
+                                <div class="game-stat-value" id="game-success">0%</div>
+                                <div class="game-stat-label">Success</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Training</h3>
+                        <div class="btn-group">
+                            <button onclick="gameStep()">Step</button>
+                            <button onclick="gameEpisode()">Episode</button>
+                        </div>
+                        <button class="success" id="train-btn" onclick="toggleTraining()">▶ Train</button>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Manual Control</h3>
+                        <div class="btn-group">
+                            <button onclick="gameAction('left')">← Left</button>
+                            <button onclick="gameAction('right')">Right →</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Files Tab -->
+                <div id="tab-files" class="tab-content">
+                    <div class="control-section">
+                        <h3>Upload Knowledge</h3>
+                        <div class="file-drop" id="file-drop">
+                            📄 Drop text file or click
+                        </div>
+                        <input type="file" id="file-input" style="display:none" accept=".txt,.md">
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Quick Input</h3>
+                        <textarea id="text-input" rows="4" placeholder="Enter text to learn..."></textarea>
+                        <button onclick="learnText()">Learn Text</button>
+                    </div>
+
+                    <div class="control-section">
+                        <h3>Logging</h3>
+                        <div class="btn-group">
+                            <button onclick="enableLogging()" class="success">Enable</button>
+                            <button onclick="disableLogging()" class="secondary">Disable</button>
+                        </div>
+                        <button onclick="exportLogs()">Export Logs</button>
+                    </div>
+                </div>
+
+                <!-- Chat Tab -->
+                <div id="tab-chat" class="tab-content">
+                    <div class="control-section">
+                        <h3>Query Brain</h3>
+                        <div id="chat-history"
+                            style="height: 300px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 0.5rem; border-radius: 4px; margin-bottom: 0.5rem; font-size: 0.8rem;">
+                            <div style="color: var(--text-dim);">Ask a question to see associations...</div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <input type="text" id="chat-input" placeholder="Type a concept or question..."
+                                style="margin-bottom: 0;">
+                            <button onclick="sendChat()" style="width: auto; margin-bottom: 0;">Send</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center: Graph Visualization -->
+        <div id="graph-container">
+            <svg id="graph-svg"></svg>
+            <div class="tooltip" id="tooltip"></div>
+        </div>
+
+        <!-- Right Panel: Activity -->
+        <div class="panel">
+            <div class="panel-header">Active Concepts</div>
+            <div class="panel-content" style="flex: 0 0 200px; overflow-y: auto;">
+                <ul class="node-list" id="active-list"></ul>
+            </div>
+
+            <div class="panel-header">Activity Log</div>
+            <div class="panel-content" id="log-panel"></div>
+        </div>
+    </main>
+
+    <script>
+        // === State ===
+        const socket = io();
+        let autoThinking = false;
+        let training = false;
+        let simulation = null;
+        let graphData = { nodes: [], links: [] };
+
+        // === Initialization ===
+        document.addEventListener('DOMContentLoaded', () => {
+            initGraph();
+            initEventListeners();
+            refreshState();
+        });
+
+        // === D3 Graph ===
+        function initGraph() {
+            const svg = d3.select('#graph-svg');
+            const container = document.getElementById('graph-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            svg.attr('viewBox', [0, 0, width, height]);
+
+            // Arrow marker for directed edges
+            svg.append('defs').append('marker')
+                .attr('id', 'arrowhead')
+                .attr('viewBox', '-5 -5 10 10')
+                .attr('refX', 20)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M-5,-5L5,0L-5,5')
+                .attr('fill', 'rgba(99, 102, 241, 0.5)');
+
+            // Create groups for links and nodes
+            svg.append('g').attr('class', 'links');
+            svg.append('g').attr('class', 'nodes');
+
+            // Initialize simulation
+            simulation = d3.forceSimulation()
+                .force('link', d3.forceLink().id(d => d.id).distance(80))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(30));
+        }
+
+        function updateGraph(nodes, edges, activeSet = {}) {
+            const svg = d3.select('#graph-svg');
+            const container = document.getElementById('graph-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Preserve old node positions to prevent jitter
+            const oldNodes = new Map(graphData.nodes.map(d => [d.id, d]));
+
+            // Update data
+            graphData.nodes = nodes.map(n => {
+                const old = oldNodes.get(n.label);
+                return {
+                    id: n.label,
+                    energy: n.energy,
+                    firing: n.firing || false,
+                    x: old ? old.x : undefined,
+                    y: old ? old.y : undefined,
+                    vx: old ? old.vx : undefined,
+                    vy: old ? old.vy : undefined
+                };
+            });
+
+            graphData.links = edges.map(e => ({
+                source: e.source,
+                target: e.target,
+                weight: e.weight
+            }));
+
+            // Update links
+            const link = svg.select('.links')
+                .selectAll('line')
+                .data(graphData.links, d => `${d.source.id || d.source}-${d.target.id || d.target}`);
+
+            link.exit().remove();
+
+            const linkEnter = link.enter()
+                .append('line')
+                .attr('class', 'link')
+                .attr('marker-end', 'url(#arrowhead)');
+
+            link.merge(linkEnter)
+                .attr('stroke-width', d => Math.max(1, d.weight * 3))
+                .attr('stroke-opacity', d => 0.3 + d.weight * 0.5);
+
+            // Update nodes
+            const node = svg.select('.nodes')
+                .selectAll('.node')
+                .data(graphData.nodes, d => d.id);
+
+            node.exit().remove();
+
+            const nodeEnter = node.enter()
+                .append('g')
+                .attr('class', 'node')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended))
+                .on('click', (event, d) => {
+                    inject(d.id);
+                })
+                .on('mouseover', showTooltip)
+                .on('mouseout', hideTooltip);
+
+            nodeEnter.append('circle')
+                .attr('r', 15);
+
+            nodeEnter.append('text')
+                .attr('dy', 25)
+                .text(d => d.id.length > 10 ? d.id.slice(0, 8) + '...' : d.id);
+
+            // Update all nodes
+            const allNodes = node.merge(nodeEnter);
+
+            allNodes.select('circle')
+                .attr('r', d => 10 + d.energy * 15)
+                .attr('fill', d => {
+                    if (d.firing) return 'var(--node-firing)';
+                    if (d.energy > 0.3) return 'var(--node-active)';
+                    return 'var(--node-default)';
+                })
+                .attr('fill-opacity', d => 0.5 + d.energy * 0.5);
+
+            allNodes.classed('firing', d => d.firing);
+
+            // Update simulation
+            simulation.nodes(graphData.nodes);
+            simulation.force('link').links(graphData.links);
+            simulation.alpha(0.3).restart();
+
+            simulation.on('tick', () => {
+                svg.select('.links').selectAll('line')
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                svg.select('.nodes').selectAll('.node')
+                    .attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+        }
+
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+
+        function showTooltip(event, d) {
+            const tooltip = document.getElementById('tooltip');
+            tooltip.innerHTML = `<strong>${d.id}</strong><br>Energy: ${d.energy.toFixed(3)}`;
+            tooltip.style.left = (event.pageX + 10) + 'px';
+            tooltip.style.top = (event.pageY + 10) + 'px';
+            tooltip.style.display = 'block';
+        }
+
+        function hideTooltip() {
+            document.getElementById('tooltip').style.display = 'none';
+        }
+
+        // === Event Listeners ===
+        function initEventListeners() {
+            // Tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    tab.classList.add('active');
+                    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+                });
+            });
+
+            // Reward slider
+            document.getElementById('reward-slider').addEventListener('input', e => {
+                document.getElementById('reward-value').textContent = e.target.value;
+            });
+
+            // File drop
+            const fileDrop = document.getElementById('file-drop');
+            const fileInput = document.getElementById('file-input');
+
+            fileDrop.addEventListener('click', () => fileInput.click());
+            fileDrop.addEventListener('dragover', e => { e.preventDefault(); fileDrop.classList.add('dragover'); });
+            fileDrop.addEventListener('dragleave', () => fileDrop.classList.remove('dragover'));
+            fileDrop.addEventListener('drop', e => {
+                e.preventDefault();
+                fileDrop.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+            fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+            // Enter key handlers
+            document.getElementById('inject-label').addEventListener('keypress', e => { if (e.key === 'Enter') inject(); });
+        }
+
+        // === WebSocket ===
+        socket.on('connect', () => refreshState());
+
+        socket.on('brain_state', data => {
+            updateStats(data);
+            if (data.nodes && data.edges) {
+                updateGraph(data.nodes, data.edges, data.active || {});
+            }
+            updateActiveList(data.active || {});
+        });
+
+        socket.on('game_update', data => {
+            updateGameDisplay(data);
+        });
+
+        // === API Functions ===
+        async function api(endpoint, method = 'GET', data = null) {
+            try {
+                const options = { method, headers: { 'Content-Type': 'application/json' } };
+                if (data) options.body = JSON.stringify(data);
+                const response = await fetch('/api/' + endpoint, options);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                return await response.json();
+            } catch (e) {
+                console.error("API Error:", e);
+                addLog(`Error: ${e.message}`, 'error');
+                return { success: false, error: e.message };
+            }
+        }
+
+        async function refreshState() {
+            const state = await api('brain/state');
+            updateStats({
+                tick: state.tick,
+                nodes: state.stats?.topology?.num_nodes || (Array.isArray(state.nodes) ? state.nodes.length : 0),
+                edges: state.stats?.topology?.num_edges || (Array.isArray(state.edges) ? state.edges.length : 0),
+                total_energy: state.stats?.state?.total_energy || 0
+            });
+
+            if (state.nodes && state.edges) {
+                updateGraph(state.nodes, state.edges, state.active || {});
+            }
+            updateActiveList(state.active || {});
+        }
+
+        function updateStats(data) {
+            if (data.tick !== undefined) document.getElementById('stat-tick').textContent = data.tick;
+
+            // Fix for [object Object] bug: check if it's an array
+            if (data.nodes !== undefined) {
+                const count = Array.isArray(data.nodes) ? data.nodes.length : data.nodes;
+                document.getElementById('stat-nodes').textContent = count;
+            }
+
+            if (data.edges !== undefined) {
+                const count = Array.isArray(data.edges) ? data.edges.length : data.edges;
+                document.getElementById('stat-edges').textContent = count;
+            }
+
+            if (data.total_energy !== undefined) document.getElementById('stat-energy').textContent = data.total_energy.toFixed(2);
+        }
+
+        function updateActiveList(active) {
+            const list = document.getElementById('active-list');
+            list.innerHTML = '';
+
+            const sorted = Object.entries(active).sort((a, b) => b[1] - a[1]).slice(0, 15);
+            for (const [label, energy] of sorted) {
+                const li = document.createElement('li');
+                li.className = 'node-item';
+                li.onclick = () => inject(label);
+                li.innerHTML = `
+                    <div class="node-energy-bar">
+                        <div class="node-energy-fill" style="width: ${energy * 100}%"></div>
+                    </div>
+                    <span class="node-label">${label}</span>
+                    <span class="node-value">${energy.toFixed(3)}</span>
+                `;
+                list.appendChild(li);
+            }
+        }
+
+        function addLog(message, type = 'info') {
+            const panel = document.getElementById('log-panel');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="log-time">${time}</span>${message}`;
+            panel.insertBefore(entry, panel.firstChild);
+            while (panel.children.length > 50) panel.removeChild(panel.lastChild);
+        }
+
+        // === Brain Actions ===
+        async function inject(label = null) {
+            label = label || document.getElementById('inject-label').value.trim();
+            if (!label) return;
+
+            await api('brain/inject', 'POST', { label, energy: 1.0 });
+            addLog(`Injected: ${label}`, 'injection');
+            document.getElementById('inject-label').value = '';
+            refreshState();
+        }
+
+        async function think(steps = 10) {
+            const result = await api('brain/think', 'POST', { steps });
+            addLog(`Think ${steps} steps (tick: ${result.tick})`, 'tick');
+            refreshState();
+        }
+
+        function toggleAutoThink() {
+            autoThinking = !autoThinking;
+            const btn = document.getElementById('auto-btn');
+            if (autoThinking) {
+                btn.textContent = '⏹ Stop';
+                btn.classList.add('active');
+                socket.emit('start_auto_think');
+            } else {
+                btn.textContent = '▶ Auto Run';
+                btn.classList.remove('active');
+                socket.emit('stop_auto_think');
+            }
+        }
+
+        async function learn() {
+            const reward = parseFloat(document.getElementById('reward-slider').value);
+            const result = await api('brain/learn', 'POST', { reward });
+            addLog(`Reward ${reward} → ${result.updates} updates`, 'learning');
+        }
+
+        async function clearBrain() {
+            if (!confirm('Clear all brain data?')) return;
+            await api('brain/clear', 'POST');
+            addLog('Brain cleared', 'info');
+            refreshState();
+        }
+
+        async function saveBrain() {
+            const name = document.getElementById('brain-name').value.trim() || 'brain_' + Date.now();
+            const result = await api('brain/save', 'POST', { name });
+            if (result.success) addLog(`Saved: ${name}`, 'info');
+            else addLog(`Save failed: ${result.error}`, 'error');
+        }
+
+        async function loadBrainDialog() {
+            const result = await api('brain/list');
+            if (!result.brains || result.brains.length === 0) {
+                alert('No saved brains found');
+                return;
+            }
+            const name = prompt('Enter brain name to load:\n' + result.brains.map(b => b.name).join('\n'));
+            if (name) {
+                const loadResult = await api('brain/load', 'POST', { name });
+                if (loadResult.success) {
+                    addLog(`Loaded: ${name}`, 'info');
+                    refreshState();
+                }
+            }
+        }
+
+        // === File Upload ===
+        async function handleFiles(files) {
+            for (const file of files) {
+                const text = await file.text();
+                const result = await api('file/upload', 'POST', { content: text, filename: file.name });
+                addLog(`Uploaded ${file.name}: +${result.concepts_added} nodes, +${result.connections_added} edges`, 'injection');
+            }
+            refreshState();
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chat-input');
+            const history = document.getElementById('chat-history');
+            const question = input.value.trim();
+
+            if (!question) return;
+
+            // Add user message
+            const userMsg = document.createElement('div');
+            userMsg.style.marginBottom = '0.5rem';
+            userMsg.innerHTML = `<strong style="color: var(--accent);">You:</strong> ${question}`;
+            history.appendChild(userMsg);
+
+            input.value = '';
+
+            // Send to brain
+            const result = await api('brain/ask', 'POST', { question });
+
+            // Add brain response
+            const brainMsg = document.createElement('div');
+            brainMsg.style.marginBottom = '0.5rem';
+            brainMsg.style.paddingLeft = '0.5rem';
+            brainMsg.style.borderLeft = '2px solid var(--accent)';
+
+            // Show associations
+            const associations = Object.entries(result.active || {})
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5)
+                .map(([k, v]) => `${k} (${v.toFixed(2)})`)
+                .join(', ');
+
+            brainMsg.innerHTML = `<strong style="color: #c084fc;">Brain:</strong> Thinking about connections...<br>
+                <em style="color: var(--text-dim); font-size: 0.75rem;">Associations: ${associations || 'None'}</em>`;
+
+            history.appendChild(brainMsg);
+            history.scrollTop = history.scrollHeight;
+
+            refreshState();
+        }
+
+        async function learnText() {
+            const text = document.getElementById('text-input').value.trim();
+            if (!text) return;
+            const result = await api('file/upload', 'POST', { content: text, filename: 'input' });
+            addLog(`Learned: +${result.concepts_added} nodes`, 'injection');
+            document.getElementById('text-input').value = '';
+            refreshState();
+        }
+
+        async function enableLogging() {
+            await api('log/enable', 'POST');
+            addLog('Logging enabled', 'info');
+        }
+
+        async function disableLogging() {
+            await api('log/disable', 'POST');
+            addLog('Logging disabled', 'info');
+        }
+
+        async function exportLogs() {
+            const result = await api('log/export', 'POST');
+            addLog(`Logs exported: ${result.path}`, 'info');
+        }
+
+        // === Game Functions ===
+        async function startGame() {
+            const game = document.getElementById('game-select').value;
+            const result = await api('game/start', 'POST', { game });
+            addLog(`Started ${game} game`, 'game');
+            updateGameDisplay(result);
+        }
+
+        async function gameStep() {
+            const result = await api('game/step', 'POST');
+            updateGameDisplay(result);
+            addLog(`Step: reward=${result.reward}`, 'game');
+            refreshState();
+        }
+
+        async function gameEpisode() {
+            const result = await api('game/episode', 'POST');
+            updateGameDisplay(result);
+            addLog(`Episode done: reward=${result.total_reward}`, 'game');
+            refreshState();
+        }
+
+        async function gameAction(action) {
+            const result = await api('game/action', 'POST', { action });
+            updateGameDisplay(result);
+        }
+
+        function toggleTraining() {
+            training = !training;
+            const btn = document.getElementById('train-btn');
+            if (training) {
+                btn.textContent = '⏹ Stop';
+                btn.classList.add('active');
+                socket.emit('start_training');
+            } else {
+                btn.textContent = '▶ Train';
+                btn.classList.remove('active');
+                socket.emit('stop_training');
+            }
+        }
+
+        function updateGameDisplay(data) {
+            if (data.render) document.getElementById('game-display').textContent = data.render;
+            if (data.episode !== undefined) document.getElementById('game-episode').textContent = data.episode;
+            if (data.reward !== undefined) document.getElementById('game-reward').textContent = data.reward.toFixed(1);
+            if (data.steps !== undefined) document.getElementById('game-steps').textContent = data.steps;
+            if (data.success_rate !== undefined) document.getElementById('game-success').textContent = (data.success_rate * 100).toFixed(0) + '%';
+        }
+    </script>
+</body>
+
+</html>

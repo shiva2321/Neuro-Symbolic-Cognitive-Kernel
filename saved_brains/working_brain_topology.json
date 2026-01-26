@@ -1,0 +1,25 @@
+{
+  "nodes": [
+    {
+      "label": "dogs",
+      "index": 0
+    },
+    {
+      "label": "mammals",
+      "index": 1
+    },
+    {
+      "label": "bark",
+      "index": 2
+    },
+    {
+      "label": "eat",
+      "index": 3
+    },
+    {
+      "label": "meat",
+      "index": 4
+    }
+  ],
+  "edges": []
+}

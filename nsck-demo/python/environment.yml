@@ -1,0 +1,22 @@
+name: nsck-env
+channels:
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pytorch
+  - torchvision
+  - torchaudio
+  - cpuonly
+  - pip
+  - pyzmq
+  - numpy
+  - pandas
+  - pip:
+    - snntorch
+    - brevitas
+    - pymdp
+    - maturin
+    - pytest
+    - tqdm
