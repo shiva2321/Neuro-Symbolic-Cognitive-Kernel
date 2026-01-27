@@ -34,20 +34,23 @@ class DashboardApp:
         self.log_queue = queue.Queue()
         self.zmq_queue = queue.Queue()
         
+        # LOGGING BUFFER
+        self.event_log = []
+        
         # ZMQ
         self.context = zmq.Context()
         self.push_sock = self.context.socket(zmq.PUSH)
-        self.push_sock.connect("tcp://127.0.0.1:5555") 
+        self.push_sock.connect("tcp://127.0.0.1:5565") 
         
         self.sub_sock = self.context.socket(zmq.SUB)
-        self.sub_sock.connect("tcp://127.0.0.1:5557") 
+        self.sub_sock.connect("tcp://127.0.0.1:5567") 
         self.sub_sock.setsockopt_string(zmq.SUBSCRIBE, "") 
         
         # Data Buffers (Only accessed by Main Thread)
         self.max_history = 100
         self.data = {
-            "snake": {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history)},
-            "pong":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history)}
+            "snake": {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history)},
+            "pong":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history)}
         }
         self.current_vis = None 
         
@@ -65,18 +68,21 @@ class DashboardApp:
         control_frame = tk.Frame(self.root, bg=BG_COLOR, pady=10)
         control_frame.pack(fill="x", padx=10)
         
-        tk.Label(control_frame, text="CONTROLS:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
-        
+        # PROCESS CONTROLS
+        tk.Label(control_frame, text="MANUAL:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
         self.btn_server = self._make_proc_btn(control_frame, "Server", "python_server.py")
         self.btn_snake = self._make_proc_btn(control_frame, "Snake", "snake_ui.py")
         self.btn_pong = self._make_proc_btn(control_frame, "Pong", "pong_ui.py")
         
-        tk.Label(control_frame, text="| ADMIN:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=20)
-        tk.Button(control_frame, text="FORCE SLEEP", command=self._cmd_sleep, bg="#ff9900", fg="black", font=FONT_HEADER).pack(side="left", padx=5)
-        tk.Button(control_frame, text="RESET MEMORY", command=self._cmd_reset, bg="#cc0000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        # EXPERIMENTS
+        tk.Label(control_frame, text="| EXPERIMENTS:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=20)
+        tk.Button(control_frame, text="STRICT TRANSFER", command=self._run_transfer_exp, bg="#9900cc", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         
-        tk.Label(control_frame, text="| LOGS:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=20)
-        tk.Button(control_frame, text="EXPORT LOG", command=self._cmd_export_log, bg="blue", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        tk.Label(control_frame, text="| ADMIN:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=20)
+        tk.Button(control_frame, text="RESET", command=self._cmd_reset, bg="#cc0000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        
+        self.lbl_status = tk.Label(control_frame, text="READY", bg="black", fg="#00ff00", font=FONT_MAIN, width=30)
+        self.lbl_status.pack(side="right", padx=10)
 
         # 2. MAIN LAYOUT
         main_pane = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=BG_COLOR)
@@ -86,7 +92,7 @@ class DashboardApp:
         left_frame = tk.Frame(main_pane, bg=BG_COLOR)
         main_pane.add(left_frame, width=800)
         
-        self.fig_perf, (self.ax1, self.ax2) = plt.subplots(2, 1, figsize=(6, 6), facecolor=BG_COLOR)
+        self.fig_perf, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(6, 8), facecolor=BG_COLOR)
         self.fig_perf.tight_layout(pad=3.0)
         self._setup_perf_plots()
         
@@ -115,6 +121,16 @@ class DashboardApp:
         self.ax_motor.set_ylim(0, 1)
         self.bar_motor = self.ax_motor.bar(["UP", "DN", "LF", "RT"], [0,0,0,0], color=ACCENT_COLOR)
         
+        # New: System 2 Indicator
+        self.ax_sys2 = self.fig_brain.add_axes([0.15, 0.92, 0.7, 0.05]) # Top bar overlay
+        self.ax_sys2.axis('off')
+        self.ind_sys2 = self.ax_sys2.text(0.5, 0.5, "SYSTEM 2: IDLE", ha='center', va='center', 
+                                         color='gray', weight='bold', fontsize=10, 
+                                         bbox=dict(facecolor='black', alpha=0.5))
+        
+        # New: Entropy Text Overlay
+        self.txt_entropy = self.fig_brain.text(0.5, 0.02, "Entropy: 0.00", ha='center', color='white', fontsize=10)
+        
         canvas_brain = FigureCanvasTkAgg(self.fig_brain, master=right_frame)
         canvas_brain.draw()
         canvas_brain.get_tk_widget().pack(fill="both", expand=True)
@@ -142,6 +158,16 @@ class DashboardApp:
         self.line_snake_loss, = self.ax2.plot([], [], label="Snake", color="#00ff00", linestyle="--")
         self.line_pong_loss, = self.ax2.plot([], [], label="Pong", color="#00ccff", linestyle="--")
         self.ax2.legend(facecolor=BG_COLOR, labelcolor=FG_COLOR)
+        
+        # Fix Duplicate Legend
+        # self.ax2.legend(facecolor=BG_COLOR, labelcolor=FG_COLOR) 
+        
+        self.ax3.set_title("Task Score (Survival/Rally)", color=FG_COLOR)
+        self.ax3.set_facecolor(BG_COLOR)
+        self.ax3.tick_params(colors=FG_COLOR)
+        self.line_snake_score, = self.ax3.plot([], [], label="Snake", color="#00ff00")
+        self.line_pong_score, = self.ax3.plot([], [], label="Pong", color="#00ccff")
+        self.ax3.legend(facecolor=BG_COLOR, labelcolor=FG_COLOR)
 
     def _make_proc_btn(self, parent, name, script):
         btn = tk.Button(parent, text=f"START {name}", width=15, command=lambda: self._toggle_proc(name, script))
@@ -149,34 +175,40 @@ class DashboardApp:
         btn.pack(side="left", padx=5)
         return btn
 
-    def _toggle_proc(self, name, script):
+    def _toggle_proc(self, name, script, args=[]):
         if self.procs[name] is None:
             try:
                 # Capture Stdout/Stderr
-                # Resolve script path relative to this dashboard file
                 base_dir = os.path.dirname(os.path.abspath(__file__))
                 script_path = os.path.join(base_dir, script)
                 
-                cmd = [sys.executable, script_path]
+                cmd = [sys.executable, "-u", script_path] + args
                 
-                # Run in the script's directory so it finds its assets (weights, etc)
+                # Check for active experiment log dir
+                log_file = None
+                if hasattr(self, 'exp_dir') and self.exp_dir:
+                     log_path = os.path.join(self.exp_dir, f"{name.lower()}.log")
+                     log_file = open(log_path, "w", buffering=1)
+                
                 p = subprocess.Popen(
                     cmd, 
                     cwd=base_dir,
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE,
                     text=True,
-                    bufsize=1 # Line buffered
+                    bufsize=1 
                 )
                 self.procs[name] = p
                 
                 # Start Thread to read output
-                threading.Thread(target=self._read_stream, args=(p.stdout, f"[{name}]"), daemon=True).start()
-                threading.Thread(target=self._read_stream, args=(p.stderr, f"[{name} ERR]"), daemon=True).start()
+                threading.Thread(target=self._read_stream, args=(p.stdout, f"[{name}]", log_file), daemon=True).start()
+                threading.Thread(target=self._read_stream, args=(p.stderr, f"[{name} ERR]", log_file), daemon=True).start()
                 
                 self.log_queue.put(f"Started {name} (PID: {p.pid})")
-                btn = getattr(self, f"btn_{name.lower()}")
-                btn.config(text=f"STOP {name}", bg="red")
+                
+                if hasattr(self, f"btn_{name.lower()}"):
+                    btn = getattr(self, f"btn_{name.lower()}")
+                    btn.config(text=f"STOP {name}", bg="red")
             except Exception as e:
                 self.log_queue.put(f"Error starting {name}: {e}")
         else:
@@ -188,17 +220,65 @@ class DashboardApp:
                 p.kill()
             self.procs[name] = None
             self.log_queue.put(f"Stopped {name}")
-            btn = getattr(self, f"btn_{name.lower()}")
-            btn.config(text=f"START {name}", bg="green")
+            if hasattr(self, f"btn_{name.lower()}"):
+                btn = getattr(self, f"btn_{name.lower()}")
+                btn.config(text=f"START {name}", bg="green")
 
-    def _read_stream(self, stream, prefix):
+    def _read_stream(self, stream, prefix, log_file=None):
         try:
             for line in iter(stream.readline, ''):
                 self.log_queue.put(f"{prefix} {line.strip()}")
+                if log_file:
+                    log_file.write(f"[{time.strftime('%H:%M:%S')}] {line}")
         except Exception:
             pass
         finally:
             stream.close()
+            if log_file: log_file.close()
+
+    # --- EXPERIMENT LOGIC ---
+    def _run_transfer_exp(self):
+        # 1. Setup Environment
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        self.exp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "experiments", f"transfer_{timestamp}")
+        os.makedirs(self.exp_dir, exist_ok=True)
+        
+        self.lbl_status.config(text=f"EXP RUNNING: {timestamp}", bg="yellow", fg="black")
+        self.log_queue.put(f"=== STARTING STRICT TRANSFER EXPERIMENT ({timestamp}) ===")
+        self.log_queue.put(f"Logs: {self.exp_dir}")
+
+        # 2. Start Server (Strict Mode)
+        self._toggle_proc("Server", "python_server.py", ["--no-teacher", "--freeze-pong"])
+        
+        # 3. Start Snake (Phase 1)
+        self.root.after(2000, lambda: self._toggle_proc("Snake", "snake_ui.py"))
+        
+        # 4. Schedule Switch to Pong (Phase 2)
+        self.root.after(15000, self._exp_switch_to_pong)
+        
+    def _exp_switch_to_pong(self):
+        self.log_queue.put("=== EXPERIMENT PHASE 2: SWITCHING TO PONG ===")
+        # Kill Snake
+        if self.procs["Snake"]:
+            self._toggle_proc("Snake", "snake_ui.py")
+        
+        # Start Pong
+        self.root.after(2000, lambda: self._toggle_proc("Pong", "pong_ui.py"))
+        
+        # Schedule End
+        self.root.after(30000, self._exp_end)
+
+    def _exp_end(self):
+        self.log_queue.put("=== EXPERIMENT COMPLETE ===")
+        # Kill Pong
+        if self.procs["Pong"]:
+            self._toggle_proc("Pong", "pong_ui.py")
+        # Kill Server
+        if self.procs["Server"]:
+            self._toggle_proc("Server", "python_server.py")
+        
+        self.lbl_status.config(text="EXP COMPLETE", bg="green", fg="white")
+        self.exp_dir = None # Reset logging
 
     def _cmd_sleep(self):
         self.push_sock.send_json({"type": "admin", "cmd": "force_sleep"})
@@ -211,10 +291,19 @@ class DashboardApp:
     def _cmd_export_log(self):
         filename = f"run_log_{int(time.time())}.txt"
         try:
-            content = self.log_area.get("1.0", "end")
+            # Section 1: Console
+            console_content = self.log_area.get("1.0", "end")
+            
+            # Section 2: Brain Events
+            events_content = "\n".join(self.event_log)
+            
             with open(filename, "w", encoding="utf-8") as f:
-                f.write(content)
-            messagebox.showinfo("Export Log", f"Log saved to {filename}")
+                f.write("=== SECTION 1: SYSTEM CONSOLE ===\n")
+                f.write(console_content)
+                f.write("\n\n=== SECTION 2: BRAIN EVENT STREAM (Decisions & Interventions) ===\n")
+                f.write(events_content)
+                
+            messagebox.showinfo("Export Log", f"Log saved to {filename}\n(Includes {len(self.event_log)} brain events)")
         except Exception as e:
             messagebox.showerror("Export Error", str(e))
 
@@ -251,10 +340,38 @@ class DashboardApp:
                     if game in self.data:
                         self.data[game]["agree"].append(payload["agree_pct"])
                         self.data[game]["loss"].append(payload["loss"])
+                        self.data[game]["score"].append(payload.get("score", 0)) # Assuming server sends score OR we track steps
                         perf_updated = True
                 elif msg.startswith("VIS:"):
-                    self.current_vis = json.loads(msg[4:])
+                    payload = json.loads(msg[4:])
+                    self.current_vis = payload
                     vis_updated = True
+                    
+                    # LOG EVENT
+                    ts = time.strftime('%H:%M:%S')
+                    task = payload.get('task', 'UNK')
+                    t_act = payload['teacher']
+                    s_act = payload['student']
+                    agree = payload['agreed']
+                    probs = [f"{p:.2f}" for p in payload['probs']]
+                    
+                    actions = ["UP", "DN", "LF", "RT"]
+                    t_str = actions[t_act] if 0 <= t_act < 4 else f"UNK({t_act})"
+                    s_str = actions[s_act] if 0 <= s_act < 4 else f"UNK({s_act})"
+                    
+                    status = "AGREE" if agree else "INTERVENE"
+                    extra = ""
+                    
+                    if payload.get("veto"):
+                        status = "VETO"
+                        extra = f" | {payload.get('veto_log')}"
+                    
+                    if payload.get("vsa_rescue"):
+                        extra += " | [VSA RESCUE]"
+                    
+                    log_line = f"[{ts}] {task.upper()} | {status} | Teacher: {t_str} | Student: {s_str} {probs} (H={payload.get('entropy',0):.2f}){extra}"
+                    self.event_log.append(log_line)
+                    
                 msgs_processed += 1
             except Exception:
                 pass
@@ -277,10 +394,15 @@ class DashboardApp:
         self.line_pong_agree.set_data(range(len(self.data["pong"]["agree"])), self.data["pong"]["agree"])
         self.line_snake_loss.set_data(range(len(self.data["snake"]["loss"])), self.data["snake"]["loss"])
         self.line_pong_loss.set_data(range(len(self.data["pong"]["loss"])), self.data["pong"]["loss"])
+        self.line_snake_score.set_data(range(len(self.data["snake"]["score"])), self.data["snake"]["score"])
+        self.line_pong_score.set_data(range(len(self.data["pong"]["score"])), self.data["pong"]["score"])
         
         max_len = max(len(self.data["snake"]["agree"]), len(self.data["pong"]["agree"]), 1)
         self.ax1.set_xlim(0, max_len)
         self.ax2.set_xlim(0, max_len)
+        self.ax3.set_xlim(0, max_len) # Autoscale limit?
+        self.ax3.relim()
+        self.ax3.autoscale_view()
         self.fig_perf.canvas.draw_idle()
 
     def _update_vis_plot(self):
@@ -292,10 +414,56 @@ class DashboardApp:
         for rect, h in zip(self.bar_motor.patches, probs):
             rect.set_height(h)
         
-        agreed = self.current_vis["agreed"]
-        title = "AGREEMENT" if agreed else "INTERVENTION!"
-        color = "#00ff00" if agreed else "#ff0000"
+        agreed = self.current_vis.get("agreed", False)
+        veto = self.current_vis.get("veto", False)
+        
+        # Visualize VSA Rescue (Gated)
+        vsa_rescue = self.current_vis.get("vsa_rescue", False)
+        entropy = self.current_vis.get("entropy", 0.0)
+
+        # Update System 2 Indicator
+        if veto:
+            self.ind_sys2.set_text(f"SYSTEM 2 VETO: {self.current_vis.get('veto_log', 'ACTION')}")
+            self.ind_sys2.set_bbox(dict(facecolor='red', alpha=0.8))
+            self.ind_sys2.set_color('white')
+            title = "VETO ACTIVE"
+            color = "#ff0000"
+        elif vsa_rescue:
+            self.ind_sys2.set_text("SYSTEM 2: HELPING")
+            self.ind_sys2.set_bbox(dict(facecolor='#00ccff', alpha=0.5))
+            self.ind_sys2.set_color('white')
+            title = "RESCUE ACTIVE"
+            color = "#00ccff"
+        elif agreed:
+            self.ind_sys2.set_text("SYSTEM 2: IDLE")
+            self.ind_sys2.set_bbox(dict(facecolor='black', alpha=0.5))
+            self.ind_sys2.set_color('gray')
+            title = "AGREEMENT"
+            color = "#00ff00"
+        else:
+            self.ind_sys2.set_text("SYSTEM 2: IDLE")
+            self.ind_sys2.set_bbox(dict(facecolor='black', alpha=0.5))
+            self.ind_sys2.set_color('gray')
+            title = "INTERVENTION"
+            color = "#ffa500" # Orange for teacher intervention
+            
         self.ax_motor.set_title(f"Motor Probs : {title}", color=color)
+        
+
+        
+        if vsa_rescue:
+             self.ax_motor.set_xlabel(f"*** VSA RESCUE (H={entropy:.2f}) ***", color='#00ccff', fontsize=10, weight='bold')
+        elif entropy > 0.6:
+             self.ax_motor.set_xlabel(f"High Uncertainty (H={entropy:.2f})", color='yellow', fontsize=8)
+        else:
+             self.ax_motor.set_xlabel(f"Confident (H={entropy:.2f})", color='gray', fontsize=8)
+        
+        # Update Overlay Text
+        self.txt_entropy.set_text(f"Entropy: {entropy:.2f}")
+        if entropy > 0.6:
+            self.txt_entropy.set_color('yellow' if not vsa_rescue else '#00ccff')
+        else:
+            self.txt_entropy.set_color('white')
         
         self.fig_brain.canvas.draw_idle()
 

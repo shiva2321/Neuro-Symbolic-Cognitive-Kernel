@@ -20,13 +20,14 @@ class PongGame:
         self.p2_y = 10 
         self.score_p1 = 0
         self.score_p2 = 0
+        self.rally_count = 0
         
         self.context = zmq.Context()
         self.push = self.context.socket(zmq.PUSH)
-        self.push.connect("tcp://127.0.0.1:5555")
+        self.push.connect("tcp://127.0.0.1:5565")
         
         self.sub = self.context.socket(zmq.SUB)
-        self.sub.connect("tcp://127.0.0.1:5556")
+        self.sub.connect("tcp://127.0.0.1:5566")
         self.sub.setsockopt_string(zmq.SUBSCRIBE, "PONG:")
         self.sub.setsockopt(zmq.RCVTIMEO, 100) # 100ms Timeout (Frame is ~30ms, so 3 frames dropped max)
         
@@ -38,6 +39,7 @@ class PongGame:
         self.ball_y = 15
         self.ball_dx = 1 if random.random() > 0.5 else -1
         self.ball_dy = random.choice([-1, -0.5, 0.5, 1])
+        self.rally_count = 0
 
     def get_frame(self):
         img = np.zeros((10, 10), dtype=np.uint8)
@@ -70,10 +72,17 @@ class PongGame:
                 state = {
                     "ball_y": self.ball_y,
                     "ball_dy": self.ball_dy,
-                    "p1_y": self.p1_y
+                    "p1_y": self.p1_y,
+                    "ball_x": self.ball_x,
+                    "ball_dx": self.ball_dx
                 }
                 
-                payload = {"game": "pong", "image": b64, "state": state}
+                payload = {
+                    "game": "pong", 
+                    "image": b64, 
+                    "state": state,
+                    "score": self.rally_count # Metric for transfer success
+                }
                 self.push.send_json(payload)
                 
                 # Receive with Timeout
@@ -110,9 +119,11 @@ class PongGame:
         if self.ball_x <= 1:
             if self.p1_y <= self.ball_y <= self.p1_y + self.paddle_h:
                 self.ball_dx *= -1
-                self.ball_dx = abs(self.ball_dx) 
+                self.ball_dx = abs(self.ball_dx)
+                self.rally_count += 1
             else:
                 self.score_p2 += 1
+                self.rally_count = 0
                 self.reset_ball()
                 
         if self.ball_x >= 29:
@@ -129,7 +140,7 @@ class PongGame:
         self.canvas.create_oval(self.ball_x*10, self.ball_y*10, (self.ball_x+1)*10, (self.ball_y+1)*10, fill="white")
         self.canvas.create_rectangle(0, self.p1_y*10, 10, (self.p1_y+self.paddle_h)*10, fill="#00FF00") 
         self.canvas.create_rectangle(290, self.p2_y*10, 300, (self.p2_y+self.paddle_h)*10, fill="#FF0000") 
-        self.canvas.create_text(150, 20, text=f"{self.score_p1} - {self.score_p2}", fill="white", font=("Arial", 16))
+        self.canvas.create_text(150, 20, text=f"{self.score_p1} - {self.score_p2} (Rally: {self.rally_count})", fill="white", font=("Arial", 16))
         
         self.root.after(40, self.game_loop)
 

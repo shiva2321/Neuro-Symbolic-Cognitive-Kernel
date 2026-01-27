@@ -19,10 +19,10 @@ class SnakeGame:
         
         self.context = zmq.Context()
         self.push = self.context.socket(zmq.PUSH)
-        self.push.connect("tcp://127.0.0.1:5555")
+        self.push.connect("tcp://127.0.0.1:5565")
         
         self.sub = self.context.socket(zmq.SUB)
-        self.sub.connect("tcp://127.0.0.1:5556")
+        self.sub.connect("tcp://127.0.0.1:5566")
         self.sub.setsockopt_string(zmq.SUBSCRIBE, "SNAKE:")
         
         threading.Thread(target=self.network_loop, daemon=True).start()
@@ -45,10 +45,16 @@ class SnakeGame:
             # ORACLE STATE
             state = {
                 "head": self.snake[0],
-                "food": self.food
+                "food": self.food,
+                "body": self.snake
             }
             
-            payload = {"game": "snake", "image": b64, "state": state}
+            payload = {
+                "game": "snake", 
+                "image": b64, 
+                "state": state,
+                "score": len(self.snake) - 3 # Score = Apples Eaten
+            }
             self.push.send_json(payload)
             
             msg = self.sub.recv_string() 
