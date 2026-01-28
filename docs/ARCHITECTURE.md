@@ -320,7 +320,11 @@ $$S_t = \begin{cases} 1 & \text{if } U_t > \theta \\ 0 & \text{otherwise} \end{c
 
 **Refractory Reset:**
 
-$$U_t \leftarrow U_t - S_t \theta \quad \text{(subtract threshold after spike)}$$
+$$U_t \leftarrow U_{reset} \quad \text{if } S_t = 1$$
+
+where $U_{reset} = 0$ (hard reset to resting potential after spike).
+
+**Note:** This is a hard reset mechanism. After firing, the neuron's membrane potential is reset to 0, ensuring a refractory period before the next spike.
 
 #### Energy Efficiency Analysis
 
@@ -337,7 +341,7 @@ $$U_t \leftarrow U_t - S_t \theta \quad \text{(subtract threshold after spike)}$
 
 ### 4.2 Vector Symbolic Architecture (System 2)
 
-#### Rust Implementation (`hypervec_rs`)
+#### Rust Implementation (`rust_vsa/`)
 
 **Data Structure:**
 ```rust

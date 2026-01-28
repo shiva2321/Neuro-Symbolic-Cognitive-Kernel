@@ -506,16 +506,24 @@ for episode in range(1000):
 ### Export to Neuromorphic Hardware
 
 ```python
-# Convert to Loihi format
-from nsck.neuromorphic import export_to_loihi
+# Convert to Loihi format (Future feature - Coming soon!)
+# This functionality is planned but not yet implemented
 
-loihi_model = export_to_loihi(
-    snn_weights=snn.state_dict(),
-    codebook=codebook,
-    target_chip="loihi2"
-)
+# Placeholder for future implementation:
+# from nsck.neuromorphic import export_to_loihi
+# 
+# loihi_model = export_to_loihi(
+#     snn_weights=snn.state_dict(),
+#     codebook=codebook,
+#     target_chip="loihi2"
+# )
+# 
+# loihi_model.save("brain.nxnet")
 
-loihi_model.save("brain.nxnet")
+# Current workaround: Export weights and manually convert
+import torch
+torch.save(snn.state_dict(), "weights_for_loihi.pth")
+print("Weights saved. Manual conversion to Loihi format required.")
 ```
 
 ### Integrate with ROS
@@ -608,25 +616,27 @@ torch.cuda.empty_cache()
 ### Full Documentation Structure
 
 - **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Complete system architecture with diagrams and formulas
-- **[LEARNING_AND_MEMORY.md](./LEARNING_AND_MEMORY.md)** - Deep dive into learning mechanisms
-- **[MATHEMATICAL_FOUNDATIONS.md](./MATHEMATICAL_FOUNDATIONS.md)** - All equations and proofs
-- **[SYSTEM_WORKFLOWS.md](./SYSTEM_WORKFLOWS.md)** - Detailed operational workflows
-- **[CROSS_SESSION_KNOWLEDGE.md](./CROSS_SESSION_KNOWLEDGE.md)** - Knowledge persistence and transfer
-- **[COMPARISON_NCGN_NSCK.md](./COMPARISON_NCGN_NSCK.md)** - Evolution from legacy to current
+- **[LEARNING_AND_MEMORY.md](./LEARNING_AND_MEMORY.md)** - Deep dive into learning mechanisms, memory systems, knowledge persistence
+- **[Mathematical Foundations](./ARCHITECTURE.md#5-mathematical-foundations)** - All equations and proofs (in ARCHITECTURE.md)
+- **[System Workflows](./ARCHITECTURE.md#8-system-workflows)** - Detailed operational workflows (in ARCHITECTURE.md)
+- **[Evolution: NCGN→NSCK](./ARCHITECTURE.md#9-evolution-ncgn--nsck)** - Architectural comparison (in ARCHITECTURE.md)
 
 ### API Reference
 
 ```python
-# Core classes
-from python.snn_qat import TaskAwareSNN
-from python.symbol_grounding import ReasoningEngine
-from python.simulation import sim_snake, sim_pong
+# Core classes (run from nsck-demo directory)
+import sys
+sys.path.append('python')
+
+from snn_qat import TaskAwareSNN
+from symbol_grounding import ReasoningEngine
+from simulation import sim_snake, sim_pong
 
 # Training utilities
-from python.train_snn import train_snn, evaluate_snn
+from train_snn import train_snn, evaluate_snn
 
 # Visualization
-from python.dashboard import NSCKDashboard
+from dashboard import NSCKDashboard
 ```
 
 ---

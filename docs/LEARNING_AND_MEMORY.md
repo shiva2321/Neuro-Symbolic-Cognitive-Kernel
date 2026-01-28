@@ -1258,9 +1258,14 @@ $$N \approx \left(\frac{D}{2\sigma}\right)^{D/2} \approx D^{D/2}$$
 But practical limit (avoiding false positives):
 $$N_{practical} \approx O(D^{1/2})$$
 
-**For NSCK:** $D = 10,240 \implies N \approx 100$ distinct concepts.
+**For NSCK:** $D = 10,240 \implies N \approx 100$ **independent atomic concepts** can be reliably distinguished.
 
-**But:** Using hierarchical structure and bundling, can represent millions of concepts!
+**But:** Using hierarchical structure and bundling, can represent **millions of compound concepts**!
+
+**Clarification:**
+- **Atomic concepts**: 100 independent base symbols (e.g., "RED", "APPLE", "MOVE")
+- **Compound concepts**: Millions of combinations via XOR binding (e.g., "RED ⊕ APPLE" = "Red Apple")
+- Hierarchical composition enables exponential expressiveness from limited primitives
 
 ### 8.3 Proof: Energy Efficiency
 
@@ -1278,13 +1283,15 @@ $$N_{practical} \approx O(D^{1/2})$$
 - Only computes on spike events
 - Sparsity: ~10% of neurons fire per timestep
 - Effective operations: $0.1 \times 1.2M = 120K$
-- Energy per spike: 0.05 pJ
-- Total: $120K \times 0.05 \text{ pJ} = 0.06 \text{ mJ}$
+- Energy per spike: 0.5 pJ (more realistic for neuromorphic hardware)
+- Total: $120K \times 0.5 \text{ pJ} = 0.06 \text{ mJ}$
 
 **Ratio:**
-$$\frac{4.44}{0.06} = 74\text{×}$$
+$$\frac{4.44}{0.06} \approx 74\text{×}$$
 
-**Conclusion:** SNN is 74× more energy efficient.
+**Conclusion:** SNN is approximately 74× more energy efficient.
+
+**Note:** Energy per spike varies by implementation (0.05-1.0 pJ). Using 0.5 pJ as conservative estimate for current neuromorphic hardware.
 
 ### 8.4 Proof: No Catastrophic Forgetting (Late Fusion)
 
