@@ -6,11 +6,13 @@ import cv2
 import base64
 import json
 import random
+import uuid
 
 class PongGame:
     def __init__(self, root):
         self.root = root
-        self.root.title("NSCK Pong (Student vs AI)")
+        self.session_id = str(uuid.uuid4())[:8]
+        self.root.title(f"NSCK Pong (Student vs AI) [{self.session_id}]")
         self.canvas = tk.Canvas(root, width=300, height=300, bg="black")
         self.canvas.pack()
         
@@ -20,7 +22,12 @@ class PongGame:
         self.p2_y = 10 
         self.score_p1 = 0
         self.score_p2 = 0
+        self.score_p2 = 0
         self.rally_count = 0
+        
+        # RL Metrics
+        self.current_reward = 0.0
+        self.done = False
         
         self.context = zmq.Context()
         self.push = self.context.socket(zmq.PUSH)
@@ -79,9 +86,13 @@ class PongGame:
                 
                 payload = {
                     "game": "pong", 
+                    "session_id": self.session_id,
                     "image": b64, 
                     "state": state,
-                    "score": self.rally_count # Metric for transfer success
+                    "state": state,
+                    "score": self.rally_count, # Metric for transfer success
+                    "reward": self.current_reward,
+                    "done": self.done
                 }
                 self.push.send_json(payload)
                 
@@ -116,14 +127,21 @@ class PongGame:
         
         if self.ball_y <= 0 or self.ball_y >= 30: self.ball_dy *= -1
         
+        # Reset params
+        self.current_reward = 0.0
+        self.done = False
+
         if self.ball_x <= 1:
             if self.p1_y <= self.ball_y <= self.p1_y + self.paddle_h:
                 self.ball_dx *= -1
                 self.ball_dx = abs(self.ball_dx)
                 self.rally_count += 1
+                self.current_reward = 1.0 # Hit Reward
             else:
                 self.score_p2 += 1
                 self.rally_count = 0
+                self.current_reward = -10.0 # Miss Penalty
+                self.done = True
                 self.reset_ball()
                 
         if self.ball_x >= 29:
@@ -132,6 +150,8 @@ class PongGame:
                 self.ball_dx = -abs(self.ball_dx) 
             else:
                 self.score_p1 += 1
+                self.current_reward = 10.0 # Win Reward
+                self.done = True
                 self.reset_ball()
 
         self.move_ai_paddle()

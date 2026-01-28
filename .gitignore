@@ -1,0 +1,8 @@
+**/target/
+**/__pycache__/
+*.pyc
+*.log
+*.txt
+!nsck_gameplay_log.txt
+run_log_*.txt
+nsck-demo/10Minute_experiment_video.mp4

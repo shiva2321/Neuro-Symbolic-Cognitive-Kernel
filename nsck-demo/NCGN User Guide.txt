@@ -1,0 +1,609 @@
+NCGN User Guide
+What is NCGN?
+NCGN (Neural Concept Graph Network) is a cognitive AI system that thinks like you do - combining fast intuition with careful reasoning. It's like having a brain that can learn, remember, and explain its thoughts.
+
+The Big Idea
+Imagine your brain as a network of connected ideas. When you think about "dog," nearby concepts like "pet," "bark," and "fur" automatically activate. That's System 1 - fast, automatic thinking.
+
+But sometimes you need to reason carefully: "If all dogs are mammals, and all mammals are warm-blooded, then..." That's System 2 - slow, deliberate thinking.
+
+NCGN gives you both, working together.
+
+Why NCGN?
+Problems It Solves
+Problem	Traditional AI	NCGN Solution
+Black Box	"The model says no, deal with it"	Shows you exactly which concepts activated and why
+Can't Learn	Retrain from scratch	Learns continuously from feedback (like humans)
+Slow Reasoning	Every query hits the LLM	Fast associations handle 90% of queries instantly
+Forgets	No memory between sessions	Persistent knowledge graph you can save/load
+Hallucinations	Makes up facts	Tracks confidence and asks when unsure
+Real-World Use Cases
+Knowledge Base: Build a graph of your domain knowledge that learns and grows
+Game AI: Train agents that learn from experience (included: Snake, Bridge, Corridor)
+Semantic Search: Find concepts by meaning, not just keywords
+Explainable AI: Every decision shows its reasoning chain
+Interactive Learning: Teach the system like you'd teach a person
+Key Features
+🚀 Blazing Fast
+< 10ms per cognitive tick
+Vectorized operations using NumPy/SciPy
+Sparse matrix multiplication for efficiency
+🧠 Brain-Inspired
+Dual-process cognition (System 1 + System 2)
+Hebbian learning ("neurons that fire together, wire together")
+Refractory periods prevent overactivity
+Dopamine-like reward signals modulate learning
+📊 Transparent
+See every active concept and its energy
+Visualize propagation in real-time
+Export complete activity logs
+Inspect confidence scores
+💾 Persistent
+Save/load entire brain state
+JSON topology for human readability
+NumPy arrays for efficient state storage
+🔌 Extensible
+Plug in your own LLM (TinyLlama, Llama-3, etc.)
+Custom embedding models
+Easy to add new games/environments
+Modular architecture
+Quick Start
+Installation
+# Clone the repository
+git clone https://github.com/yourusername/Node_network.git
+cd Node_network
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Install rustworkx (graph backend)
+pip install rustworkx
+
+# (Optional) For semantic features
+pip install sentence-transformers
+
+# (Optional) For LLM reasoning
+pip install llama-cpp-python
+Your First Brain
+from ncgn.brain import Brain
+
+# Create a brain
+brain = Brain()
+
+# Add concepts
+brain.add_concept("dog")
+brain.add_concept("mammal")
+brain.add_concept("pet")
+
+# Connect them
+brain.connect("dog", "mammal", weight=0.9)  # Strong connection
+brain.connect("dog", "pet", weight=0.7)
+
+# Inject energy and think
+brain.inject("dog", energy=1.0)
+active = brain.think(steps=10)
+
+print(active)
+# Output: {'dog': 0.85, 'mammal': 0.67, 'pet': 0.52, ...}
+Learning from Feedback
+# Brain made a good association
+brain.learn(reward=1.0)  # Strengthen active connections
+
+# Brain made a bad association
+brain.learn(reward=-0.5)  # Weaken active connections
+
+# Targeted learning
+brain.strengthen("dog", "mammal", factor=1.5)  # Make specific connection stronger
+brain.weaken("dog", "reptile", factor=0.5)     # Make specific connection weaker
+Asking Questions
+# Simple query (uses System 1 only)
+response = brain.ask("What is a dog?")
+print(response)
+
+# Full cognitive cycle (uses System 1 + System 2)
+result = brain.process_input(
+   "Dogs are mammals that bark",
+   propagation_steps=10,
+   apply_updates=True
+)
+
+print(result["formatted_response"])
+print(result["graph_updates"])
+Usage Examples
+Example 1: Building a Knowledge Graph
+from ncgn.brain import Brain
+
+brain = Brain()
+
+# Add animal taxonomy
+brain.add_concept("animal")
+brain.add_concept("mammal")
+brain.add_concept("reptile")
+brain.add_concept("dog")
+brain.add_concept("cat")
+brain.add_concept("snake")
+
+# Build hierarchy
+brain.connect("mammal", "animal", weight=0.95)
+brain.connect("reptile", "animal", weight=0.95)
+brain.connect("dog", "mammal", weight=0.9)
+brain.connect("cat", "mammal", weight=0.9)
+brain.connect("snake", "reptile", weight=0.9)
+
+# Add properties
+brain.set_property("mammal", "warm_blooded", True)
+brain.set_property("reptile", "cold_blooded", True)
+brain.set_property("dog", "domestic", True)
+
+# Query
+brain.inject("dog", 1.0)
+active = brain.think(steps=5)
+print(active)
+# {'dog': 0.89, 'mammal': 0.72, 'animal': 0.54, ...}
+
+# Check propagation
+if brain.get_concept_energy("animal") > 0.3:
+   print("✓ Dog activated animal (correct hierarchy)")
+Example 2: Semantic Entry Points
+from ncgn.brain import Brain
+
+brain = Brain(use_embeddings=True)
+
+# Add concepts
+brain.add_concept("artificial_intelligence")
+brain.add_concept("machine_learning")
+brain.add_concept("deep_learning")
+brain.add_concept("neural_networks")
+
+brain.connect("deep_learning", "machine_learning", weight=0.85)
+brain.connect("machine_learning", "artificial_intelligence", weight=0.9)
+brain.connect("neural_networks", "deep_learning", weight=0.8)
+
+# Query with natural language
+query = "How do neural nets work?"
+
+# Semantic layer finds entry points
+entry_points = brain.semantics.find_entry_points(
+   query, 
+   brain.topology, 
+   top_k=3
+)
+
+print("Entry points:", entry_points)
+# [('neural_networks', 0.82), ('deep_learning', 0.71), ('machine_learning', 0.58)]
+
+# Auto-inject and propagate
+for label, similarity in entry_points:
+   brain.inject(label, similarity * 0.5)
+
+active = brain.think(steps=10)
+print("Active concepts:", active)
+Example 3: Game Learning
+from ncgn.brain import Brain
+from ncgn.games.snake import SnakeGame
+
+brain = Brain()
+game = SnakeGame(grid_size=10)
+
+# Training loop
+for episode in range(100):
+   state = game.reset()
+   total_reward = 0
+   
+   while True:
+       # Get sensory input
+       sensory = game.get_sensory()
+       
+       # Inject perception
+       for direction, obj in sensory.vision.items():
+           brain.inject(f"see_{obj}_{direction}", 0.5)
+       
+       # Think and select action
+       brain.think(steps=3)
+       active = brain.get_active_concepts()
+       
+       # Get possible actions
+       actions = game.get_possible_actions()
+       
+       # Filter active concepts to valid actions
+       action_energies = {
+           action: active.get(action, 0.0)
+           for action in actions
+       }
+       
+       # Select best action (winner-take-all)
+       action = max(action_energies, key=action_energies.get)
+       
+       # Execute
+       sensory, reward, done = game.step(action)
+       total_reward += reward
+       
+       # Learn from outcome
+       brain.learn(reward)
+       
+       if done:
+           break
+   
+   print(f"Episode {episode}: Reward = {total_reward}")
+Example 4: Confidence and Conflicts
+from ncgn.brain import Brain
+
+brain = Brain()
+
+# Teach initial knowledge
+brain.add_concept("sun")
+brain.add_concept("east")
+brain.add_concept("west")
+
+brain.connect("sun", "east", weight=0.9)
+brain.confidence.reinforce("sun", "east", source_type="training")
+
+# Check confidence
+conf = brain.confidence.get_confidence("sun", "east")
+print(f"Confidence: {conf}")  # 0.9 (high)
+
+# Try to add conflicting knowledge
+result = brain.process_input(
+   "The sun rises in the west",
+   apply_updates=True
+)
+
+# Check for conflicts
+if result["graph_updates"]["conflicts"]:
+   conflict = result["graph_updates"]["conflicts"][0]
+   print(f"Conflict detected: {conflict.message}")
+   print(f"Existing confidence: {conflict.existing_confidence}")
+
+# System asks for clarification instead of blindly accepting
+print(result["formatted_response"])
+# "I'm confused. My knowledge says the sun rises in the east (confidence: 0.9). 
+#  Can you clarify?"
+Example 5: Persistence
+from ncgn.brain import Brain
+from ncgn.persistence import BrainPersistence
+
+# Create and train a brain
+brain = Brain()
+# ... add concepts, connections, train ...
+
+# Save to disk
+BrainPersistence.save(brain, save_dir="./saved_brains", name="my_brain")
+
+# Later: Load from disk
+brain = BrainPersistence.load(save_dir="./saved_brains", name="my_brain")
+
+# Resume where you left off
+print(brain.get_stats())
+Configuration
+Basic Config
+from ncgn.config import Config
+from ncgn.brain import Brain
+
+config = Config(
+   # Graph capacity
+   initial_capacity=10000,
+   
+   # Physics parameters
+   decay_delta=0.1,        # Energy decay per tick (0-1)
+   flow_alpha=0.8,         # Propagation strength (0-1)
+   default_threshold=0.75, # Firing threshold (0-1)
+   refractory_period=10,   # Cooldown ticks after firing
+   
+   # Learning
+   learning_rate=0.01,     # Hebbian learning rate
+   weight_min=0.0,         # Minimum edge weight
+   weight_max=1.0,         # Maximum edge weight
+   
+   # LLM (optional)
+   llm_model_path="path/to/model.gguf",
+   llm_context_window=4096,
+   llm_gpu_layers=-1,      # -1 = all layers on GPU
+)
+
+brain = Brain(config=config)
+Parameter Guide
+Physics Parameters
+Parameter	Range	Effect	Recommended
+decay_delta	0.0-0.5	How fast energy dissipates	0.05-0.15
+flow_alpha	0.0-1.0	How much energy propagates	0.7-0.9
+default_threshold	0.5-0.95	When nodes "fire"	0.7-0.8
+refractory_period	0-20	Cooldown after firing	5-15 ticks
+norm_beta	0.0-0.1	Global normalization	0.01-0.05
+seizure_threshold	10-100	Max total energy	30-70
+Tuning Tips:
+
+High decay → Concepts fade quickly, less memory
+Low decay → Concepts persist, more chaotic
+High flow → Strong spreading activation, concepts far away activate
+Low flow → Localized activation, only nearest neighbors
+High threshold → Hard to fire, sparse activation
+Low threshold → Easy to fire, everything activates
+Learning Parameters
+Parameter	Range	Effect	Recommended
+learning_rate	0.001-0.1	How fast weights change	0.01-0.03
+weight_min	0.0	Minimum edge weight	0.0
+weight_max	0.5-1.5	Maximum edge weight	1.0
+genesis_threshold	0.5-1.0	Auto-create edges	0.7-0.9
+Troubleshooting
+Common Issues
+1. Everything Activates (Seizure)
+Symptom: All concepts have high energy, brain "seizes up"
+
+Cause: Too much input energy or too little decay
+
+Solution:
+
+# Reduce input energy
+brain.inject("concept", energy=0.3)  # Instead of 1.0
+
+# Increase decay
+config.decay_delta = 0.15  # More aggressive decay
+
+# Lower flow rate
+config.flow_alpha = 0.6
+
+# Enable stronger seizure damping
+config.seizure_damping = 0.3
+2. Nothing Activates
+Symptom: Injected concepts immediately die out
+
+Cause: Too much decay, threshold too high, or not enough edges
+
+Solution:
+
+# Reduce decay
+config.decay_delta = 0.05
+
+# Lower threshold
+config.default_threshold = 0.6
+
+# Add more connections
+brain.connect("concept1", "concept2", weight=0.8)
+
+# Inject more energy
+brain.inject("concept", energy=1.0)
+3. Learning Doesn't Work
+Symptom: Weights don't change after learn()
+
+Cause: No active edges during learning, or learning rate too low
+
+Solution:
+
+# Check active concepts
+active = brain.get_active_concepts()
+print(f"Active: {len(active)} concepts")
+
+# Ensure edges exist between active concepts
+for concept in active:
+   neighbors = brain.topology.get_neighbors(concept)
+   print(f"{concept} → {neighbors}")
+
+# Increase learning rate
+config.learning_rate = 0.05
+
+# Apply larger reward
+brain.learn(reward=5.0)
+4. LLM Not Loading
+Symptom: linguist is None, warnings about LLM
+
+Cause: Missing dependencies or invalid model path
+
+Solution:
+
+# Install LLM dependencies
+pip install llama-cpp-python
+
+# Download a model (example: TinyLlama)
+wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf \
+    -O models/tinyllama.gguf
+
+# Point to correct path
+config.llm_model_path = "models/tinyllama.gguf"
+brain = Brain(config=config)
+5. Semantic Search Not Working
+Symptom: brain.semantics is None
+
+Cause: Missing sentence-transformers or disabled embeddings
+
+Solution:
+
+pip install sentence-transformers
+brain = Brain(use_embeddings=True)
+Performance Optimization
+For Large Graphs (> 100K nodes)
+config = Config(
+   initial_capacity=200000,  # Pre-allocate
+   decay_delta=0.2,          # Aggressive pruning
+   active_energy_threshold=0.1,  # Ignore weak activations
+)
+
+# Use sparse queries
+active = brain.engine.get_top_k_active(k=50)  # Instead of get_active_concepts()
+For Real-Time Applications
+# Reduce propagation steps
+brain.think(steps=3)  # Instead of 10
+
+# Disable LLM for fast queries
+brain.linguist = None
+brain.formatter = None
+
+# Use System 1 only
+brain.inject("query_concept", 0.8)
+result = brain.think(steps=5)
+Memory Usage
+# Disable embeddings (saves ~1.5KB per node)
+brain = Brain(use_embeddings=False)
+
+# Use smaller embedding model
+config.embedding_model = "paraphrase-MiniLM-L3-v2"  # 384→128 dims
+
+# Clear caches periodically
+if brain.semantics:
+   brain.semantics.clear_cache()
+Advanced Topics
+Custom Propagation Rules
+# Modify propagation equation
+from ncgn.engine import PropagationEngine
+
+class CustomEngine(PropagationEngine):
+   def propagate(self, steps=1):
+       # Your custom logic
+       A = self.state.activations
+       W = self.state.adjacency
+       
+       for _ in range(steps):
+           # Custom equation
+           A *= 0.95  # Decay
+           A += W.dot(A) * 0.7  # Propagate
+           A = np.tanh(A)  # Custom activation
+           
+       return self.get_active_concepts()
+
+# Use it
+brain.engine = CustomEngine(brain.state, brain.topology, brain.config)
+Custom Learning Rules
+from ncgn.learner import HebbianLearner
+
+class CustomLearner(HebbianLearner):
+   def apply_reward(self, modulator, active_threshold=0.1):
+       # Your custom learning logic
+       # Example: Oja's rule for normalization
+       A = self.state.activations
+       W = self.state.adjacency
+       
+       for i, j in active_edges:
+           w_ij = W.data[...]
+           delta = learning_rate * (a_i * a_j - w_ij * a_j**2)
+           W.data[...] += delta
+       
+       return update_count
+
+brain.learner = CustomLearner(brain.state, brain.topology, brain.config)
+Hybrid Semantic Weights
+# Use embeddings for initial weights, then let Hebbian learning adjust
+brain = Brain(use_embeddings=True)
+
+# Add concepts with semantic initialization
+concepts = ["dog", "cat", "pet", "animal"]
+for concept in concepts:
+   brain.add_concept(concept)
+
+# Auto-connect with semantic weights
+for i, c1 in enumerate(concepts):
+   for c2 in concepts[i+1:]:
+       weight = brain.semantics.compute_semantic_weight(c1, c2)
+       if weight > 0.5:  # Only create strong semantic links
+           brain.connect(c1, c2, weight=weight)
+
+# Now let experience refine these weights
+# ... interact with brain, provide rewards ...
+Best Practices
+1. Start Small, Scale Up
+# Begin with a small graph
+brain = Brain()
+brain.add_concept("A")
+brain.add_concept("B")
+brain.connect("A", "B", weight=0.8)
+
+# Test propagation
+brain.inject("A", 1.0)
+active = brain.think(steps=5)
+assert "B" in active, "Propagation failed"
+
+# Once working, add more concepts
+2. Use Semantic Grounding
+# Let embeddings handle fuzzy matching
+brain = Brain(use_embeddings=True)
+
+# User says "dogs", graph has "dog" → automatic similarity match
+entry_points = brain.semantics.find_entry_points("dogs", brain.topology)
+# [('dog', 0.95), ...]
+3. Monitor Confidence
+# Always check confidence before making decisions
+def safe_connect(brain, src, tgt, weight):
+   existing_weight = brain.topology.get_edge_weight(src, tgt)
+   
+   if existing_weight:
+       conf = brain.confidence.get_confidence(src, tgt)
+       if conf > 0.8:
+           print(f"Warning: Overwriting high-confidence edge ({conf:.2f})")
+   
+   brain.connect(src, tgt, weight)
+   brain.confidence.reinforce(src, tgt)
+4. Regular Checkpoints
+from ncgn.persistence import BrainPersistence
+
+# Save after significant changes
+if brain.topology.num_edges % 1000 == 0:
+   BrainPersistence.save(brain, "./checkpoints", f"brain_epoch_{epoch}")
+5. Use Logging for Debugging
+from ncgn.logger import BrainLogger
+
+logger = BrainLogger(enabled=True)
+
+# Log key events
+logger.log_injection("concept", 0.8)
+logger.log_tick(tick, total_energy, active_count, firing_count, top_active)
+logger.log_learning("src", "tgt", old_w, new_w, reward, "ltp")
+
+# Export for analysis
+logger.export_session("./logs/session_001.json")
+API Quick Reference
+Brain Class
+brain = Brain(config=None, use_embeddings=True)
+
+# Concepts
+brain.add_concept(label, initial_energy=0.0, threshold=None)
+brain.remove_concept(label)
+brain.has_concept(label) → bool
+brain.get_concept_energy(label) → float
+brain.set_concept_energy(label, energy)
+
+# Connections
+brain.connect(source, target, weight=None) → bool
+brain.disconnect(source, target) → bool
+brain.get_connection_weight(source, target) → float
+brain.set_connection_weight(source, target, weight) → bool
+
+# Propagation (System 1)
+brain.inject(label, energy) → bool
+brain.inject_multiple({label: energy, ...}) → int
+brain.think(steps=10) → Dict[str, float]
+brain.get_active_concepts(threshold=None) → Dict[str, float]
+brain.get_top_concepts(k=10) → Dict[str, float]
+
+# Reasoning (System 2)
+brain.ask(question, propagation_steps=5) → str
+brain.process_input(user_input, propagation_steps=10) → Dict
+
+# Learning
+brain.learn(reward) → int
+brain.strengthen(source, target, factor=1.5) → bool
+brain.weaken(source, target, factor=0.5) → bool
+
+# Properties
+brain.set_property(label, prop, value)
+brain.get_property(label, prop) → Optional[bool]
+brain.get_all_properties(label) → Dict
+
+# Utilities
+brain.clear()
+brain.get_stats() → Dict
+Community and Support
+Getting Help
+Documentation: Full API reference
+Architecture: Technical details
+Examples: /examples directory
+Issues: GitHub Issues for bug reports
+Contributing
+We welcome contributions! Areas of interest:
+
+New game environments
+Improved learning algorithms
+Visualization tools
+Performance optimizations
+Documentation improvements
+License
+MIT License - see LICENSE file for details.
+
+Made with 🧠 by the NCGN Team

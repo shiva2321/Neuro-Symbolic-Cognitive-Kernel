@@ -3,6 +3,33 @@ import torch.nn as nn
 import snntorch as snn
 from snntorch import surrogate
 
+# --- TERNARY QUANTIZATION LOGIC ---
+class TernaryQuantize(torch.autograd.Function):
+    """
+    Ternary Weight Quantization: Maps weights to {-1, 0, 1}
+    Uses Straight-Through Estimator (STE) for gradients.
+    """
+    @staticmethod
+    def forward(ctx, input, delta=0.1):
+        # Scale to max magnitude
+        scale = input.abs().max() + 1e-6
+        x = input / scale
+        
+        # Ternarize: -1 if < -delta, 1 if > delta, 0 otherwise
+        out = torch.zeros_like(x)
+        out[x > delta] = 1.0
+        out[x < -delta] = -1.0
+        
+        return out * scale # Multiply back scale for magnitude preservation
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        # STE: Pass gradient through as is
+        return grad_output, None
+
+def ternarize_weight(w):
+    return TernaryQuantize.apply(w)
+
 # Adapted to standard nn.Conv2d to ensure compatibility without Brevitas dependency
 class TaskAwareSNN(nn.Module):
     def __init__(self, beta=0.5):
@@ -30,12 +57,19 @@ class TaskAwareSNN(nn.Module):
         # 2. Specialized Heads (The "Task Experts")
         self.head_snake = nn.Linear(64, 4) # UP, DOWN, LEFT, RIGHT
         self.head_pong  = nn.Linear(64, 2) # UP, DOWN
+        self.head_chars = nn.Linear(64, 62) # 0-9, A-Z, a-z
         self.lif_out    = snn.Leaky(beta=beta, spike_grad=spike_grad, output=True, threshold=0.5)
 
     def forward(self, x, task_id):
-        # x shape: [Batch, 4, 10, 10] (Frames)
-        # task_id: 0 (Pong) or 1 (Snake)
-        
+        # 1. APPLY TERNARY QUANTIZATION TO WEIGHTS (ON THE FLY)
+        # This keeps the float weights for gradients but uses Ternary for inference
+        w_conv1 = ternarize_weight(self.conv1.weight)
+        w_conv2 = ternarize_weight(self.conv2.weight)
+        w_fc_s  = ternarize_weight(self.fc_shared.weight)
+        w_h_sn  = ternarize_weight(self.head_snake.weight)
+        w_h_po  = ternarize_weight(self.head_pong.weight)
+        w_h_ch  = ternarize_weight(self.head_chars.weight)
+
         # Init State
         mem1 = self.lif1.init_leaky()
         mem2 = self.lif2.init_leaky()
@@ -46,31 +80,31 @@ class TaskAwareSNN(nn.Module):
         
         # Simulation Steps (T=8)
         for step in range(8):
-            # Layer 1
-            cur1 = self.conv1(x)
-            # BN skipped for stability as before
+            # Layer 1 (Functional to use quantized W)
+            cur1 = torch.nn.functional.conv2d(x, w_conv1, stride=2, padding=1)
             spk1, mem1 = self.lif1(cur1, mem1)
             
             # Layer 2
-            cur2 = self.conv2(spk1)
+            cur2 = torch.nn.functional.conv2d(spk1, w_conv2, stride=2, padding=1)
             spk2, mem2 = self.lif2(cur2, mem2)
             
             # Shared Linear + Late Fusion
-            flat = self.flatten(spk2) # [Batch, 288]
+            flat = self.flatten(spk2)
             
-            # Inject Context Here (Late Fusion)
-            # Create (Batch, 1) tensor for task_id
+            # Inject Context
             task_tensor = torch.full((x.size(0), 1), float(task_id), device=x.device)
-            combined = torch.cat([flat, task_tensor], dim=1) # [Batch, 289]
+            combined = torch.cat([flat, task_tensor], dim=1) 
             
-            cur_shared = self.fc_shared(combined)
+            cur_shared = torch.nn.functional.linear(combined, w_fc_s)
             spk_shared, mem_shared = self.lif_shared(cur_shared, mem_shared)
 
-            # Task Switching Head
+            # Task Switching Head (Functional to use quantized W)
             if task_id == 1: # Snake
-                cur_out = self.head_snake(spk_shared)
-            else: # Pong
-                cur_out = self.head_pong(spk_shared)
+                cur_out = torch.nn.functional.linear(spk_shared, w_h_sn, self.head_snake.bias)
+            elif task_id == 0: # Pong
+                cur_out = torch.nn.functional.linear(spk_shared, w_h_po, self.head_pong.bias)
+            else: # Characters (Task 2)
+                cur_out = torch.nn.functional.linear(spk_shared, w_h_ch, self.head_chars.bias) 
             
             spk_out, mem_out = self.lif_out(cur_out, mem_out)
             spk_rec.append(spk_out)

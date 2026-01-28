@@ -5,17 +5,24 @@ import numpy as np
 import cv2
 import base64
 import random
+import uuid
 
 class SnakeGame:
     def __init__(self, root):
         self.root = root
-        self.root.title("NSCK Snake (Student)")
+        self.session_id = str(uuid.uuid4())[:8]
+        self.root.title(f"NSCK Snake (Student) [{self.session_id}]")
         self.canvas = tk.Canvas(root, width=300, height=300, bg="black")
         self.canvas.pack()
         
         self.snake = [(5, 5), (5, 6), (5, 7)]
         self.food = (2, 2)
+        self.food = (2, 2)
         self.direction = "UP"
+        
+        # RL Metrics
+        self.current_reward = 0.0
+        self.done = False
         
         self.context = zmq.Context()
         self.push = self.context.socket(zmq.PUSH)
@@ -51,9 +58,13 @@ class SnakeGame:
             
             payload = {
                 "game": "snake", 
+                "session_id": self.session_id,
                 "image": b64, 
                 "state": state,
-                "score": len(self.snake) - 3 # Score = Apples Eaten
+                "state": state,
+                "score": len(self.snake) - 3, # Score = Apples Eaten
+                "reward": self.current_reward,
+                "done": self.done
             }
             self.push.send_json(payload)
             
@@ -68,10 +79,17 @@ class SnakeGame:
         elif self.direction == "RIGHT": head_x = (head_x + 1) % 10
         
         new_head = (head_x, head_y)
-        if new_head in self.snake: self.snake = [(5,5)] 
+        self.current_reward = -0.1 # Step Penalty
+        self.done = False
+        
+        if new_head in self.snake: 
+            self.current_reward = -10.0 # Death Penalty
+            self.done = True
+            self.snake = [(5,5)] 
         else:
             self.snake.insert(0, new_head)
             if new_head == self.food:
+                self.current_reward = 10.0 # Goal Reward
                 self.food = (random.randint(0,9), random.randint(0,9))
             else:
                 self.snake.pop()

@@ -5,6 +5,7 @@ import torch.optim as optim
 import numpy as np
 import time
 import os
+import threading
 import json
 import base64
 import cv2
@@ -13,6 +14,10 @@ import random
 from collections import defaultdict, deque
 from symbol_grounding import ActionSemantics
 from simulation import sim_snake, sim_pong
+from character_dataset import get_dataloader # New Import
+from concept_mapper import ConceptMapper
+import threading
+import queue
 
 # --- ABLATION FLAGS (DEFAULTS) ---
 ENABLE_SNN = True
@@ -45,12 +50,15 @@ class LogAggregator:
     def __init__(self, interval=5.0, zmq_pub=None):
         self.interval = interval
         self.last_print = time.time()
-        self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0})
+        self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0, "session_id": "unknown", "score": 0})
         self.zmq_pub = zmq_pub
 
-    def update(self, game, agreed, loss):
+    def update(self, game, agreed, loss, score, session_id="unknown"):
+        self.stats[game]["session_id"] = session_id
         self.stats[game]["steps"] += 1
         self.stats[game]["loss_sum"] += loss
+        self.stats[game]["score"] = max(self.stats[game]["score"], score) # Keep max score seen in interval
+
         if agreed:
             self.stats[game]["agreements"] += 1
         else:
@@ -64,14 +72,19 @@ class LogAggregator:
                 if total == 0: continue
                 agree_pct = (data["agreements"] / total) * 100
                 avg_loss = data["loss_sum"] / total
-                status_strs.append(f"{game.upper()}: AGREE {agree_pct:.1f}% (Loss {avg_loss:.4f})")
+                score = data["score"]
+                
+                # Format: SNAKE: AGREE 95.0% (Loss 0.1234) | Score: 15
+                status_strs.append(f"{game.upper()}: AGREE {agree_pct:.1f}% (Loss {avg_loss:.4f} | Score {score})")
                 
                 # Broadcast Telemetry
                 if self.zmq_pub:
                     telemetry = {
                         "game": game,
+                        "session_id": data.get("session_id", "unknown"),
                         "agree_pct": float(agree_pct),
                         "loss": float(avg_loss),
+                        "score": int(score),
                         "steps": total,
                         "timestamp": time.time()
                     }
@@ -80,7 +93,7 @@ class LogAggregator:
             if status_strs:
                 print(f"[{time.strftime('%H:%M:%S')}] " + " | ".join(status_strs))
             
-            self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0})
+            self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0, "session_id": "unknown", "score": 0})
             self.last_print = time.time()
 
 # --- MEMORY (REPLAY BUFFER) ---
@@ -93,12 +106,14 @@ class ReplayBuffer:
             "pong":  {True: deque(maxlen=self.capacity), False: deque(maxlen=self.capacity)}
         }
     
-    def push(self, state, task_id, target, agreed, game_type):
+    def push(self, state, task_id, action_idx, reward, agreed, game_type):
         # Detach and move to CPU to save GPU RAM
         state_cpu = state.detach().cpu()
         
         # Store tuple
-        experience = (state_cpu, task_id, target, agreed)
+        # We store: (State, TaskID, Action, Reward)
+        task_id = 1.0 if game_type == "snake" else 0.0
+        experience = (state_cpu, task_id, int(action_idx), float(reward))
         
         # Route to correct quadrant
         self.buffers[game_type][agreed].append(experience)
@@ -115,9 +130,6 @@ class ReplayBuffer:
             for agreed in [True, False]:
                 buf = self.buffers[game][agreed]
                 if len(buf) > 0:
-                    # Random sampling from deque
-                    # Optimization: If deque is large, random.sample might be slow if converted to list.
-                    # But for 2500 items, list conversion is fast enough (~ms).
                     count = min(len(buf), target_per_q)
                     batch.extend(random.sample(buf, count))
                     
@@ -126,12 +138,13 @@ class ReplayBuffer:
         random.shuffle(batch) # Shuffle mixed batch
         
         # Collate
-        states, task_ids, targets, _ = zip(*batch)
+        states, task_ids, actions, rewards = zip(*batch)
         
         return (
             torch.cat(states, dim=0), 
-            torch.tensor(task_ids, dtype=torch.float), # Used for task tensor const
-            torch.tensor(targets, dtype=torch.long)
+            torch.tensor(task_ids, dtype=torch.float), 
+            torch.tensor(actions, dtype=torch.long),
+            torch.tensor(rewards, dtype=torch.float)
         )
         
     def count(self):
@@ -141,61 +154,161 @@ class ReplayBuffer:
                 total += len(self.buffers[game][ag])
         return total
 
-def sleep_cycle(model, optimizer, buffer, device, epochs=SLEEP_EPOCHS):
+    def count(self):
+        total = 0
+        for game in self.buffers:
+            for ag in self.buffers[game]:
+                total += len(self.buffers[game][ag])
+        return total
+
+def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all", epochs=SLEEP_EPOCHS):
     if buffer.count() < REPLAY_BATCH_SIZE: return
     
-    print(">> [SLEEP] Consolidating Memories...")
-    model.train()
+    print(f">> [SLEEP] Consolidating Memories ({target_game.upper()})...")
+    
+    # We run the training loop here. 
+    # CRITICAL: We DO NOT hold the lock for the entire duration if we want to be "nice".
+    # But for safety/simplicity in PyTorch (simultaneous backward/forward is bad), we SHOULD hold it.
+    # To be "non-blocking-ish", we could sleep briefly between batches? 
+    # No, let's just hold it. Frame drops in game are acceptable for "Sleep".
+    # User said: "other game plays should be able to play". 
+    # If we hold lock for 5 epochs * N batches, it might block for seconds.
+    # We must lock PER STEP.
+    
     total_loss = 0.0
     steps = 0
     criterion = nn.CrossEntropyLoss()
     
-    # Revised Sleep Logic: Iterate per buffer to match SNN scalar input expectation
+    games_to_train = ["snake", "pong"] if target_game == "all" else [target_game]
+    
     for _ in range(epochs):
-        # Sample Snake
-        snake_batch = []
-        buf_s_a = buffer.buffers["snake"][True]
-        buf_s_d = buffer.buffers["snake"][False]
-        if len(buf_s_a) > 0: snake_batch.extend(random.sample(buf_s_a, min(len(buf_s_a), REPLAY_BATCH_SIZE//4)))
-        if len(buf_s_d) > 0: snake_batch.extend(random.sample(buf_s_d, min(len(buf_s_d), REPLAY_BATCH_SIZE//4)))
-        
-        if snake_batch:
-            # Snake FWD
-            obs, tasks, targs, _ = zip(*snake_batch)
+        for game in games_to_train:
+            # Sample (No Lock needed for buffer read if careful, but buffer isn't thread safe either really. 
+            # We assume main thread only PUSHES, this thread only SAMPLES. Deque is thread-safe for append/pop, but sample?)
+            # Random.sample on deque is not atomic.
+            # Let's risk it or lock buffer? 
+            # Ideally strict lock, but let's try fine-grained.
+            
+            # 1. Prepare Batch (CPU work, no lock needed mostly)
+            batch = []
+            try:
+                buf_a = buffer.buffers[game][True]
+                buf_d = buffer.buffers[game][False]
+                if len(buf_a) > 0: batch.extend(random.sample(buf_a, min(len(buf_a), REPLAY_BATCH_SIZE//4)))
+                if len(buf_d) > 0: batch.extend(random.sample(buf_d, min(len(buf_d), REPLAY_BATCH_SIZE//4)))
+            except:
+                continue # dict change size during iteration?
+
+            if not batch: continue
+
+            obs, tasks, actions, rewards = zip(*batch)
             inp = torch.cat(obs, dim=0).to(device)
-            lbl = torch.tensor(targs, dtype=torch.long).to(device)
+            a_lbl = torch.tensor(actions, dtype=torch.long).to(device)
+            r_val = torch.tensor(rewards, dtype=torch.float).to(device)
             
-            optimizer.zero_grad()
-            out = model(inp, 1) # task_id 1 = Snake
-            loss = criterion(out, lbl)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-            steps += 1
+            task_id = 1 if game == "snake" else 0
             
-        # Sample Pong
-        pong_batch = []
-        buf_p_a = buffer.buffers["pong"][True]
-        buf_p_d = buffer.buffers["pong"][False]
-        if len(buf_p_a) > 0: pong_batch.extend(random.sample(buf_p_a, min(len(buf_p_a), REPLAY_BATCH_SIZE//4)))
-        if len(buf_p_d) > 0: pong_batch.extend(random.sample(buf_p_d, min(len(buf_p_d), REPLAY_BATCH_SIZE//4)))
-        
-        if pong_batch:
-            # Pong FWD
-            obs, tasks, targs, _ = zip(*pong_batch)
-            inp = torch.cat(obs, dim=0).to(device)
-            lbl = torch.tensor(targs, dtype=torch.long).to(device)
+            # 2. Train Step (Model Mutating -> LOCK REQUIRED)
+            with model_lock:
+                # Re-set training mode just in case main thread set it to Eval? 
+                model.train() 
+                optimizer.zero_grad()
+                out = model(inp, task_id)
+                
+                if NO_TEACHER:
+                     # RL Loss (Policy Gradient)
+                     dist = torch.distributions.Categorical(logits=out)
+                     log_probs = dist.log_prob(a_lbl)
+                     loss = -(log_probs * r_val).mean()
+                else:
+                     loss = criterion(out, a_lbl)
+                
+                loss.backward()
+                optimizer.step()
+                total_loss += loss.item()
+                steps += 1
             
-            optimizer.zero_grad()
-            out = model(inp, 0) # task_id 0 = Pong
-            loss = criterion(out, lbl)
-            loss.backward()
-            optimizer.step()
-            total_loss += loss.item()
-            steps += 1
+            # Sleep tiny bit to let Main Thread breathe?
+            time.sleep(0.01) 
             
     if steps > 0:
-        print(f"   AVG SLEEP LOSS: {total_loss/steps:.4f}")
+        print(f"   AVG SLEEP LOSS ({target_game.upper()}): {total_loss/steps:.4f}")
+
+def run_sleep_thread(model, optimizer, buffer, device, model_lock, target_game):
+    t = threading.Thread(target=sleep_cycle, args=(model, optimizer, buffer, device, model_lock, target_game))
+    t.daemon = True
+    t.start()
+
+# --- CHARACTER TRAINING THREAD ---
+def train_character_thread(model, optimizer_global, device, model_lock, epochs=1, mode="handwritten", text=None):
+    if text:
+        print(f">> [CHAR_TRAIN] Training on TYPED Text: '{text}'...")
+    else:
+        print(f">> [CHAR_TRAIN] Starting Background Training ({mode.upper()})...")
+        
+    try:
+        # 1. FREEZE ALL EXCEPT CHARACTER HEAD
+        with model_lock:
+            for name, param in model.named_parameters():
+                if "head_chars" not in name:
+                    param.requires_grad = False
+        
+        # 2. Setup Local Optimizer (Only for the Character Head)
+        trainable_params = [p for p in model.parameters() if p.requires_grad]
+        optimizer_local = torch.optim.Adam(trainable_params, lr=0.001)
+        
+        if text or mode == "typed":
+            from character_dataset import get_text_dataloader
+            target_text = text if text else "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+            dl = get_text_dataloader(target_text, batch_size=32, num_repeats=200)
+        else:
+            # handwritten mode: digit (mnist) vs alphanumeric (emnist)
+            # Use 4 workers for speed if possible
+            dl = get_dataloader(batch_size=32, split="train", num_samples=2000, num_workers=4, mode="alphanumeric") 
+            
+        criterion = nn.CrossEntropyLoss()
+        model.train()
+        
+        total_loss = 0.0
+        steps = 0
+        
+        for epoch in range(epochs):
+            for x, y in dl:
+                x, y = x.to(device), y.to(device)
+                task_id = 2 
+                
+                with model_lock:
+                    optimizer_local.zero_grad()
+                    out = model(x, task_id)
+                    loss = criterion(out, y)
+                    loss.backward()
+                    optimizer_local.step()
+                
+                total_loss += loss.item()
+                steps += 1
+                time.sleep(0) # Minimal yield for "Fast-Pass"
+                
+        # 3. UNFREEZE for future game adaptive training
+        with model_lock:
+            for param in model.parameters():
+                param.requires_grad = True
+                
+        tag = f"'{text}'" if text else mode.upper()
+        print(f">> [CHAR_TRAIN] {tag} Complete. Avg Loss: {total_loss/max(1,steps):.4f}")
+        
+    except Exception as e:
+        print(f"[ERROR] Char Training Failed: {e}")
+        # Ensure unfreeze on error
+        with model_lock:
+            for param in model.parameters():
+                param.requires_grad = True
+        
+
+def run_char_train(model, optimizer, device, model_lock, epochs=1, mode="handwritten", text=None):
+    t = threading.Thread(target=train_character_thread, args=(model, optimizer, device, model_lock, epochs, mode, text))
+    t.daemon = True
+    t.start()
+
 
 def calculate_entropy(probs_tensor):
     # probs: [batch, classes]
@@ -289,19 +402,43 @@ def main():
     
     # NEW: TaskAwareSNN (Late Fusion)
     model = TaskAwareSNN(beta=0.5).to(device)
+    model_lock = threading.Lock() # Lock for model/optimizer access
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
     criterion = nn.CrossEntropyLoss()
     
     if os.path.exists(MODEL_PATH):
         try:
-            model.load_state_dict(torch.load(MODEL_PATH))
-            print("loaded weights.")
+            state_dict = torch.load(MODEL_PATH, weights_only=True)
+            
+            # --- WEIGHT SURGERY ---
+            # If the saved model has 10 outputs but current has 62, copy the 10
+            if "head_chars.weight" in state_dict:
+                saved_size = state_dict["head_chars.weight"].shape[0]
+                current_size = model.head_chars.weight.shape[0]
+                
+                if saved_size == 10 and current_size == 62:
+                    print(f">> [SURGERY] Migrating weights: {saved_size} -> {current_size} classes")
+                    # Create new weight/bias with current size
+                    new_weight = model.head_chars.weight.clone()
+                    new_bias = model.head_chars.bias.clone()
+                    
+                    # Copy old weights into the top
+                    new_weight[:10] = state_dict["head_chars.weight"]
+                    new_bias[:10] = state_dict["head_chars.bias"]
+                    
+                    # Update state_dict so strict loading works (or just set them manually)
+                    state_dict["head_chars.weight"] = new_weight
+                    state_dict["head_chars.bias"] = new_bias
+            
+            model.load_state_dict(state_dict, strict=False)
+            print("loaded weights (with Surgery if needed).")
         except Exception as e:
             print(f"Starting fresh (New Arch: {e})")
     else:
          print("Starting fresh.")
     
     logger = LogAggregator(zmq_pub=pub_sock_stats) # Pass socket
+    concept_mapper = ConceptMapper() # Initialize Mapper
     buffer = ReplayBuffer() # Initialize Memory
     
     history = {"snake": deque(maxlen=4), "pong": deque(maxlen=4)}
@@ -319,23 +456,108 @@ def main():
             if msg.get("type") == "admin":
                 cmd = msg.get("cmd")
                 print(f"[ADMIN] COMMAND RECEIVED: {cmd}")
-                if cmd == "force_sleep":
-                    sleep_cycle(model, optimizer, buffer, device)
+                if cmd == "admin_sleep_snake":
+                    run_sleep_thread(model, optimizer, buffer, device, model_lock, "snake")
+                elif cmd == "admin_sleep_pong":
+                     run_sleep_thread(model, optimizer, buffer, device, model_lock, "pong")
+                elif cmd == "force_sleep":
+                    run_sleep_thread(model, optimizer, buffer, device, model_lock, "all")
                 elif cmd == "reset_memory":
                      buffer = ReplayBuffer()
+                elif cmd == "toggle_teacher":
+                     NO_TEACHER = not NO_TEACHER
+                     print(f">> TEACHER STATUS: {'OFF' if NO_TEACHER else 'ON'}")
+                elif cmd == "strict_transfer_cfg":
+                     NO_TEACHER = True
+                     FREEZE_PONG = True
+                     print(">> STRICT TRANSFER CONFIG APPLIED (Teacher=OFF, Pong=Frozen)")           
+                elif cmd == "train_char":
+                    epochs = msg.get("epochs", 1)
+                    mode = msg.get("mode", "handwritten")
+                    text = msg.get("text", None)
+                    run_char_train(model, optimizer, device, model_lock, epochs=epochs, mode=mode, text=text)
+                elif cmd == "set_device":
+                    new_device_str = msg.get("device", "cpu")
+                    if new_device_str == "gpu" and torch.cuda.is_available():
+                        new_device = torch.device("cuda")
+                    else:
+                        new_device = torch.device("cpu")
+                    
+                    if new_device != device:
+                        print(f">> [DEVICE] Switching from {device} to {new_device}...")
+                        with model_lock:
+                            device = new_device
+                            model.to(device)
+                            # Re-init optimizer if moving between CPU/GPU to ensure state is on correct device
+                            # Actually, Adam state can be moved, but it's often safer to re-init or use a helper
+                            # For SNN-QAT, re-init with same params is fine since we are mostly doing Live training
+                            optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+                            print(f">> [DEVICE] Model migrated to {device}")
                 continue # Skip game logic
+
+            # --- PREDICTION REQUEST (CHARACTERS) ---
+            if msg.get("type") == "predict_char":
+                # Handle Character Prediction
+                try:
+                    # 1. Decode Image (Expects base64 of 28x28 or similar)
+                    img_bytes = base64.b64decode(msg["image"])
+                    np_arr = np.frombuffer(img_bytes, np.uint8)
+                    img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
+                    
+                    # 2. Resize to 10x10
+                    img_10 = cv2.resize(img, (10, 10), interpolation=cv2.INTER_AREA)
+                    
+                    # 3. Preprocess
+                    img_float = img_10.astype(np.float32) / 255.0
+                    frames = np.stack([img_float]*4, axis=0) # [4, 10, 10]
+                    inp = torch.tensor(frames).unsqueeze(0).float().to(device) # [1, 4, 10, 10]
+                    
+                    # 4. Inference (Task 2)
+                    with model_lock:
+                        model.eval() # Temp Eval
+                        out = model(inp, 2)
+                        model.train() # Resume Train mode default?
+                        
+                    probs = torch.softmax(out, dim=1).detach().cpu().numpy()[0]
+                    pred_class = int(np.argmax(probs))
+                    # Fix warning: ensure probs is treated efficiently
+                    entropy = calculate_entropy(torch.from_numpy(probs).unsqueeze(0)).item()
+                    
+                    explanation = concept_mapper.get_explanation(pred_class)
+                    
+                    # 5. Send Result (VIS Channel)
+                    res_payload = {
+                         "task": "char_recognition", 
+                         "grid": img_float.tolist(),
+                         "probs": probs.tolist(), 
+                         "prediction": pred_class,
+                         "explanation": explanation,
+                         "entropy": entropy,
+                         "teacher": -1, "student": pred_class, "agreed": True
+                    }
+                    pub_sock_stats.send_string(f"VIS:{json.dumps(res_payload)}")
+                    
+                    print(f"[CHAR] Predicted: {pred_class} -> {explanation} (Conf: {probs[pred_class]:.2f})")
+                    
+                except Exception as e:
+                    print(f"Predict Error: {e}")
+                
+                continue
             
             game_type = msg.get("game", "unknown")
+            session_id = msg.get("session_id", "unknown")
             
             # --- SLEEP TRIGGER: TASK SWITCH ---
-            if ENABLE_SLEEP and last_game_type is not None and game_type != last_game_type:
-                # Context Switch detected: SLEEP to consolidate previous context
-                print(f"[SWITCH] Task Switch ({last_game_type}->{game_type}): Triggering Sleep...")
-                sleep_cycle(model, optimizer, buffer, device)
+            # DISABLED AUTO-SLEEP AS PER USER REQUEST ("after sessions i will start sleep")
+            # We only sleep when manually requested via dashboard.
+            # if ENABLE_SLEEP and last_game_type is not None and game_type != last_game_type:
+            #     pass 
             
             last_game_type = game_type
             
             state_data = msg.get("state", {})
+            reward = msg.get("reward", 0.0)
+            done = msg.get("done", False)
             img_bytes = base64.b64decode(msg["image"])
             np_arr = np.frombuffer(img_bytes, np.uint8)
             img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
@@ -377,12 +599,14 @@ def main():
             while len(frames_list) < 4: frames_list.insert(0, frames_list[0])
             stacked_np = np.stack(frames_list, axis=0) # [4, 10, 10]
             
+            # Use the 'device' variable which can now be updated
             input_tensor = torch.from_numpy(stacked_np).float().to(device) 
             input_tensor = input_tensor.unsqueeze(0) # [1, 4, 10, 10]
             
-            # Forward
-            optimizer.zero_grad()
-            rate_out = model(input_tensor, task_id) 
+            # Forward (WITH LOCK)
+            with model_lock:
+                 optimizer.zero_grad()
+                 rate_out = model(input_tensor, task_id) 
             
             # --- VSA PRIOR MASKING (GATED TRANSFER) ---
             snn_probs = torch.softmax(rate_out, dim=1)
@@ -488,6 +712,12 @@ def main():
             # Did the Final System get it right?
             system_agreed = (student_idx == teacher_idx)
             
+            # DEFINE FINAL ACTION (Moved up for RL Training)
+            if NO_TEACHER:
+                final_action_idx = student_idx
+            else:
+                final_action_idx = student_idx if system_agreed else teacher_idx
+            
             loss_val = 0.0
             
             # Gated Training Rule:
@@ -503,38 +733,52 @@ def main():
                 elif snn_agreed:
                     pass # SNN effectively mastered this state
                 else:
-                    # SNN was wrong (or confused). TEACH IT.
-                    # We train on the Teacher's signal (Oracle).
-                    target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
+                    # SNN was wrong (or confused). 
+                    # If Teacher ON: Train on Teacher.
+                    # If Teacher OFF: Train on Reward (RL) or Skip?
                     
-                    # Compute loss on RAW SNN LOGITS (rate_out)
-                    # We want the SNN to map Input -> Teacher Action, ignoring VSA bias.
-                    loss = criterion(rate_out, target)
+                    if NO_TEACHER:
+                        # RL UPDATE (Live)
+                        # We executed 'final_action_idx' (Student).
+                        # We received 'reward'.
+                        # Loss = -log_prob(action) * reward
+                        dist = torch.distributions.Categorical(logits=rate_out)
+                        log_prob = dist.log_prob(torch.tensor([final_action_idx], device=device))
+                        loss = -(log_prob * reward)
+                    else:
+                        # IMITATION UPDATE (Live)
+                        target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
+                        loss = criterion(rate_out, target)
                     
-                    # FREEZE PONG CHECK
                     if not (game_type == "pong" and FREEZE_PONG):
-                        loss.backward()
-                        optimizer.step()
+                        with model_lock:
+                            if loss.requires_grad:
+                                loss.backward()
+                                optimizer.step()
                         
                     loss_val = loss.item()
                 
-            # MEMORY: Store Experience based on SYSTEM outcome (Behavioral Cloning)
-            # We store what we *did* (student_idx) and whether it worked (system_agreed)
-            buffer.push(input_tensor, task_id, teacher_idx, system_agreed, game_type)
+            # MEMORY: Store Experience
+            # We store what we *did* (final_action_idx) and the result (reward)
+            buffer.push(input_tensor, task_id, final_action_idx, reward, system_agreed, game_type)
             
-            logger.update(game_type, system_agreed, loss_val)
+            # Retrieve score from message payload
+            current_score = msg.get("score", 0)
+            logger.update(game_type, system_agreed, loss_val, current_score, session_id)
             logger.check_print()
             
             # --- VISUALIZATION TELEMETRY (Every 10 Steps) ---
             if steps_total % 10 == 0:
-                # Prepare Data
-                grid_list = curr_np.tolist() # 10x10 list
-                probs_list = probs[0].tolist() # List of floats
+                # 1. Prepare Telemetry Payload
+                grid_list = curr_np.tolist()
+                probs_list = probs[0].tolist()
                 vis_payload = {
                     "grid": grid_list,
                     "probs": probs_list,
+                    "reward": float(reward),
+                    "game": game_type,
                     "teacher": teacher_idx,
-                    "student": student_idx, # The executed action
+                    "student": student_idx,
                     "agreed": bool(system_agreed),
                     "task": game_type,
                     "veto": reasoning_override,
@@ -542,9 +786,36 @@ def main():
                     "vsa_prior": vsa_prior.tolist() if 'vsa_prior' in locals() and len(vsa_prior) > 0 else [],
                     "vsa_rescue": prior_active,
                     "entropy": entropy,
-                    "score": msg.get("score", 0) # FORWARD SCORE FROM GAME UI
+                    "session_id": session_id,
+                    "teacher_active": not NO_TEACHER,
+                    "score": msg.get("score", 0)
                 }
                 pub_sock_stats.send_string(f"VIS:{json.dumps(vis_payload)}")
+
+                # 2. Prepare Console Output
+                ts = time.strftime('%H:%M:%S')
+                t_act = vis_payload['teacher']
+                s_act = vis_payload['student']
+                
+                if game_type == "char_recognition":
+                     label_map = [str(i) for i in range(10)]
+                elif game_type == "snake":
+                     label_map = ["UP", "DN", "LF", "RT"]
+                else: # Pong
+                     label_map = ["UP", "DN"]
+                
+                t_str = label_map[t_act] if 0 <= t_act < len(label_map) else f"UNK({t_act})"
+                s_str = label_map[s_act] if 0 <= s_act < len(label_map) else f"UNK({s_act})"
+                
+                # Logic for "PREDICT" status
+                status = "PREDICT" if game_type == "char_recognition" else ("AGREE" if vis_payload['agreed'] else "INTERVENE")
+                probs_str = [f"{p:.2f}" for p in vis_payload['probs']]
+                
+                if game_type == "char_recognition":
+                    explanation = concept_mapper.get_explanation(s_act)
+                    print(f"[{ts}] {game_type.upper()} | {status} | Brain: {s_str} ({explanation}) {probs_str} (H={vis_payload['entropy']:.2f})")
+                else:
+                    print(f"[{ts}] {game_type.upper()} | {status} | Brain: {s_str} {probs_str} (H={vis_payload['entropy']:.2f})")
 
             actions = ["UP", "DOWN", "LEFT", "RIGHT"]
             cmd = "UP"
@@ -583,8 +854,9 @@ def main():
                  torch.save(model.state_dict(), MODEL_PATH)
             
             # --- SLEEP TRIGGER: INTERVAL ---
-            if ENABLE_SLEEP and steps_total % SLEEP_INTERVAL == 0:
-                 sleep_cycle(model, optimizer, buffer, device)
+            # DISABLED AUTO-SLEEP (Manual Only)
+            # if ENABLE_SLEEP and steps_total % SLEEP_INTERVAL == 0:
+            #      sleep_cycle(model, optimizer, buffer, device, model_lock, "all")
 
         except Exception as e:
             print(f"Error: {e}")

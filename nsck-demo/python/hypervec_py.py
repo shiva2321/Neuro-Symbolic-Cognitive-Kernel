@@ -3,7 +3,7 @@ import random
 
 DIMENSION = 10240
 
-class HyperVector:
+class HyperVectorPy:
     def __init__(self, seed=None):
         if seed is not None:
             self.rng = np.random.default_rng(seed)
@@ -23,14 +23,14 @@ class HyperVector:
 
     @staticmethod
     def zero():
-        obj = HyperVector.__new__(HyperVector)
+        obj = HyperVectorPy.__new__(HyperVectorPy)
         obj.bits = np.zeros(DIMENSION, dtype=np.int8)
         return obj
 
     def xor(self, other):
         # XOR is addition in binary fields
         new_bits = np.bitwise_xor(self.bits, other.bits)
-        return HyperVector.from_bits(new_bits)
+        return HyperVectorPy.from_bits(new_bits)
 
     def bundle(self, other):
         # Majority rule for 2 vectors with random tie break
@@ -52,7 +52,7 @@ class HyperVector:
         same = np.bitwise_and(a, b)
         
         bundle_bits = np.bitwise_or(same, np.bitwise_and(diff, rand_mask))
-        return HyperVector.from_bits(bundle_bits)
+        return HyperVectorPy.from_bits(bundle_bits)
 
     def similarity(self, other):
         # Hamming distance
@@ -65,6 +65,16 @@ class HyperVector:
         
     def __repr__(self):
         return f"<HyperVector dim={DIMENSION} (Python)>"
+
+# Shim: Try Rust, Fallback to Python
+try:
+    # Rename to avoid name collision if the module was named the same, 
+    # but we renamed the crate to hypervec_rs so it's clean.
+    from hypervec_rs import HyperVector
+    print(">> [VSA] Using Rust Accelerator (hypervec_rs)")
+except ImportError:
+    print(">> [VSA] Using Python Fallback")
+    HyperVector = HyperVectorPy
 
 # Module level exposure
 # In python, 'hypervec_py.HyperVector' will work if we import this file as hypervec_py

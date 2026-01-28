@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 
 const DIMENSION: usize = 10240;
 
-#[pyclass]
+#[pyclass(module = "hypervec_rs")]
 #[derive(Clone, Debug)]
 struct HyperVector {
     bits: Vec<u64>, // Using u64 blocks for 10240 bits. 10240 / 64 = 160 blocks.
@@ -101,10 +101,23 @@ impl HyperVector {
     fn __repr__(&self) -> String {
         format!("<HyperVector dim={}>", DIMENSION)
     }
+
+    // Pickle Support
+    fn __getstate__(&self, py: Python) -> PyResult<PyObject> {
+        // Return bits as a byte array or list of ints. 
+        // List of u64 is simplest for now.
+        Ok(self.bits.to_object(py))
+    }
+
+    fn __setstate__(&mut self, state: PyObject, py: Python) -> PyResult<()> {
+        let bits: Vec<u64> = state.extract(py)?;
+        self.bits = bits;
+        Ok(())
+    }
 }
 
 #[pymodule]
-fn hypervec_py(_py: Python, m: &PyModule) -> PyResult<()> {
+fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<HyperVector>()?;
     Ok(())
 }

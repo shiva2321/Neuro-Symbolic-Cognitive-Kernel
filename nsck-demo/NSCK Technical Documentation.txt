@@ -1,0 +1,1502 @@
+NSCK Technical Documentation
+Table of Contents
+Module Overview
+Python Server API
+SNN Architecture API
+Training Pipeline
+Game Interfaces
+VSA Module
+Active Inference
+Dashboard API
+ZMQ Protocol Specification
+Extension Guide
+Performance Profiling
+Module Overview
+File Structure
+nsck-demo/
+├── python/
+│   ├── python_server.py       # Core brain server with SNN, replay, teacher
+│   ├── snn_qat.py            # TaskAwareSNN architecture definition
+│   ├── train_snn.py          # Offline training utilities (optional)
+│   ├── snake_ui.py           # Snake game UI and ZMQ client
+│   ├── pong_ui.py            # Pong game UI and ZMQ client
+│   ├── dashboard.py          # Real-time monitoring dashboard
+│   ├── hypervec_py.py        # Pure Python VSA implementation
+│   ├── build_codebook.py     # VSA codebook generator
+│   ├── ai_controller.py      # Active Inference agent (pymdp)
+│   └── chatbot.py            # NLP chatbot with VSA intent classification
+├── rust_vsa/
+│   └── src/lib.rs            # High-performance VSA in Rust (PyO3)
+└── java-ui/
+   └── src/main/java/nsck/
+       ├── Main.java         # JavaFX application entry
+       ├── SnakeCanvas.java  # JavaFX Snake game
+       └── ChatWindow.java   # JavaFX chat interface
+Python Server API
+File: python_server.py
+
+Main Components
+1. LogAggregator Class
+Purpose: Aggregates and reports training statistics with ZMQ broadcasting.
+
+class LogAggregator:
+   def __init__(self, interval: float = 5.0, zmq_pub: zmq.Socket = None)
+Parameters:
+
+interval (float): Seconds between statistics reports
+zmq_pub (zmq.Socket): Optional ZMQ publisher for telemetry
+Methods:
+
+update(game: str, agreed: bool, loss: float)
+Records a single training step.
+
+Parameters:
+
+game (str): "snake" or "pong"
+agreed (bool): Whether student and teacher agreed
+loss (float): Training loss value (0.0 if agreed)
+Example:
+
+logger = LogAggregator(interval=5.0, zmq_pub=pub_socket)
+logger.update("snake", agreed=True, loss=0.0)
+logger.update("snake", agreed=False, loss=1.234)
+check_print()
+Checks if interval elapsed and prints/publishes statistics.
+
+ZMQ Message Format:
+
+{
+   "game": str,
+   "agree_pct": float,  # 0-100
+   "loss": float,
+   "steps": int,
+   "timestamp": float
+}
+Sent with prefix "STATS:".
+
+2. ReplayBuffer Class
+Purpose: Stratified experience replay with four quadrants.
+
+class ReplayBuffer:
+   def __init__(self, capacity_per_quadrant: int = 2500)
+Structure:
+
+self.buffers = {
+   "snake": {True: deque(), False: deque()},  # Agreed/Disagreed
+   "pong":  {True: deque(), False: deque()}
+}
+Methods:
+
+push(state, task_id, target, agreed, game_type)
+Stores an experience in the appropriate quadrant.
+
+Parameters:
+
+state (torch.Tensor): Input tensor [1, 4, 10, 10]
+task_id (int): 0 (Pong) or 1 (Snake)
+target (int): Teacher action index
+agreed (bool): Agreement status
+game_type (str): "snake" or "pong"
+Implementation:
+
+def push(self, state, task_id, target, agreed, game_type):
+   state_cpu = state.detach().cpu()
+   experience = (state_cpu, task_id, target, agreed)
+   self.buffers[game_type][agreed].append(experience)
+sample(batch_size: int) -> Optional[Tuple]
+Performs stratified sampling across all quadrants.
+
+Returns:
+
+None if buffer is empty
+Tuple of (states, task_ids, targets) otherwise
+Algorithm:
+
+target_per_quadrant = batch_size // 4  # 8 samples per quadrant
+
+batch = []
+for game in ["snake", "pong"]:
+   for agreed in [True, False]:
+       buffer = self.buffers[game][agreed]
+       count = min(len(buffer), target_per_quadrant)
+       batch.extend(random.sample(buffer, count))
+
+random.shuffle(batch)
+return collate(batch)
+count() -> int
+Returns total number of experiences.
+
+3. sleep_cycle Function
+Purpose: Memory consolidation through replay learning.
+
+def sleep_cycle(
+   model: nn.Module,
+   optimizer: optim.Optimizer,
+   buffer: ReplayBuffer,
+   device: torch.device,
+   epochs: int = SLEEP_EPOCHS
+)
+Algorithm:
+
+for epoch in range(epochs):
+   # Snake batch
+   snake_batch = stratified_sample(buffer, "snake")
+   if snake_batch:
+       inputs, labels = snake_batch
+       optimizer.zero_grad()
+       outputs = model(inputs, task_id=1)
+       loss = criterion(outputs, labels)
+       loss.backward()
+       optimizer.step()
+   
+   # Pong batch
+   pong_batch = stratified_sample(buffer, "pong")
+   if pong_batch:
+       # Similar training...
+Triggers:
+
+Task Switch: When game_type changes
+Interval: Every SLEEP_INTERVAL steps (default 1000)
+Example:
+
+if steps_total % SLEEP_INTERVAL == 0:
+   sleep_cycle(model, optimizer, buffer, device)
+4. Teacher Oracles
+Manhattan Snake Oracle
+Purpose: Greedy pathfinding toward food with obstacle avoidance.
+
+def manhattan_snake_move(state: dict, obstacles: set) -> int
+Parameters:
+
+state (dict): {"head": (x, y), "food": (fx, fy)}
+obstacles (set): Set of (x, y) coordinates to avoid
+Algorithm:
+
+head_x, head_y = state["head"]
+food_x, food_y = state["food"]
+
+best_action = None
+min_distance = infinity
+
+for action_idx, (dx, dy) in enumerate(DIRECTIONS):
+   next_x = (head_x + dx) % GRID_SIZE
+   next_y = (head_y + dy) % GRID_SIZE
+   
+   if (next_x, next_y) in obstacles:
+       continue  # Skip blocked moves
+   
+   distance = |next_x - food_x| + |next_y - food_y|
+   
+   if distance < min_distance:
+       min_distance = distance
+       best_action = action_idx
+
+return best_action
+Complexity: O(4) = O(1) for 4 directions
+
+Pong Oracle
+Purpose: Ball tracking with paddle center alignment.
+
+def get_pong_oracle(state: dict) -> int
+Parameters:
+
+state (dict): {"ball_y": float, "p1_y": float}
+Algorithm:
+
+ball_y = state["ball_y"]
+paddle_center = state["p1_y"] + PADDLE_HEIGHT / 2
+
+if paddle_center < ball_y - TOLERANCE:
+   return 1  # Move DOWN
+elif paddle_center > ball_y + TOLERANCE:
+   return 0  # Move UP
+else:
+   return 0  # Stay (default UP)
+Tolerance: ±1 pixel prevents jittering
+
+5. Main Loop
+Purpose: Core event loop processing game inputs.
+
+def main():
+   # Setup ZMQ
+   pull_sock = zmq.PULL on 5555
+   pub_sock = zmq.PUB on 5556
+   pub_stats = zmq.PUB on 5557
+   
+   # Initialize
+   model = TaskAwareSNN()
+   optimizer = Adam(lr=LEARNING_RATE)
+   buffer = ReplayBuffer()
+   logger = LogAggregator()
+   
+   while True:
+       msg = pull_sock.recv_json()
+       
+       # Admin command handling
+       if msg["type"] == "admin":
+           handle_admin(msg["cmd"])
+           continue
+       
+       # Extract game state
+       game_type = msg["game"]
+       state = msg["state"]
+       image = decode_base64_png(msg["image"])
+       
+       # Task switch detection
+       if game_type != last_game_type:
+           sleep_cycle(model, optimizer, buffer, device)
+       
+       # Process input
+       frames = build_temporal_stack(image, history[game_type])
+       input_tensor = torch.from_numpy(frames).unsqueeze(0)
+       
+       # Teacher prediction
+       teacher_action = oracle(game_type, state, image)
+       
+       # Student inference
+       task_id = 1 if game_type == "snake" else 0
+       output = model(input_tensor, task_id)
+       student_action = argmax(softmax(output))
+       
+       # Disagreement gate
+       if student_action == teacher_action:
+           # Agreement: No training
+           final_action = student_action
+           loss = 0.0
+       else:
+           # Disagreement: Train and intervene
+           final_action = teacher_action
+           loss = cross_entropy(output, teacher_action)
+           loss.backward()
+           optimizer.step()
+       
+       # Store experience
+       buffer.push(input_tensor, task_id, teacher_action, 
+                  agreed=(student_action == teacher_action), game_type)
+       
+       # Update statistics
+       logger.update(game_type, agreed, loss)
+       logger.check_print()
+       
+       # Publish action
+       pub_sock.send_string(f"{game_type.upper()}:{ACTION_NAMES[final_action]}")
+       
+       # Periodic telemetry
+       if steps % 10 == 0:
+           send_visualization(pub_stats, image, output, teacher_action, 
+                            student_action, agreed)
+       
+       # Save checkpoint
+       if steps % SAVE_INTERVAL == 0:
+           torch.save(model.state_dict(), MODEL_PATH)
+SNN Architecture API
+File: snn_qat.py
+
+TaskAwareSNN Class
+Purpose: Multi-task spiking neural network with late fusion.
+
+class TaskAwareSNN(nn.Module):
+   def __init__(self, beta: float = 0.5)
+Parameters:
+
+beta (float): LIF neuron leak constant (0-1). Higher = less leak.
+Architecture Layers
+Layer 1: Convolutional Layer 1
+self.conv1 = nn.Conv2d(
+   in_channels=4,      # 4 temporal frames
+   out_channels=16,    # 16 feature maps
+   kernel_size=3,
+   stride=2,
+   padding=1
+)
+self.lif1 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid(slope=25), 
+                     threshold=0.5)
+Input Shape: [Batch, 4, 10, 10]
+Output Shape: [Batch, 16, 5, 5]
+
+Receptive Field: 3×3 with stride 2 → 50% spatial reduction
+
+Layer 2: Convolutional Layer 2
+self.conv2 = nn.Conv2d(
+   in_channels=16,
+   out_channels=32,
+   kernel_size=3,
+   stride=2,
+   padding=1
+)
+self.lif2 = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid(slope=25),
+                     threshold=0.5)
+Input Shape: [Batch, 16, 5, 5]
+Output Shape: [Batch, 32, 3, 3]
+
+Total Params (Conv Layers):
+
+Conv1: 4×16×3×3 = 576
+Conv2: 16×32×3×3 = 4,608
+Total: 5,184
+Layer 3: Late Fusion Layer
+self.flatten = nn.Flatten()
+self.fc_shared = nn.Linear(
+   in_features=(32 * 3 * 3) + 1,  # 289 (288 visual + 1 task)
+   out_features=64
+)
+self.lif_shared = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid(slope=25),
+                          threshold=0.5)
+Task ID Injection:
+
+flat = self.flatten(conv2_spikes)  # [Batch, 288]
+task_tensor = torch.full((batch_size, 1), float(task_id))  # [Batch, 1]
+combined = torch.cat([flat, task_tensor], dim=1)  # [Batch, 289]
+Total Params (FC Shared): 289×64 = 18,496
+
+Layer 4: Task-Specific Heads
+self.head_snake = nn.Linear(64, 4)  # UP, DOWN, LEFT, RIGHT
+self.head_pong = nn.Linear(64, 2)   # UP, DOWN
+self.lif_out = snn.Leaky(beta=beta, spike_grad=surrogate.fast_sigmoid(slope=25),
+                       output=True, threshold=0.5)
+Head Selection Logic:
+
+if task_id == 1:  # Snake
+   current = self.head_snake(shared_spikes)
+else:  # Pong
+   current = self.head_pong(shared_spikes)
+
+spikes_out, mem_out = self.lif_out(current, mem_out)
+Total Params (Heads):
+
+Snake: 64×4 = 256
+Pong: 64×2 = 128
+Total: 384
+Overall Parameter Count: 5,184 + 18,496 + 384 = 24,064 parameters
+
+Forward Pass
+def forward(self, x: torch.Tensor, task_id: int) -> torch.Tensor
+Parameters:
+
+x (torch.Tensor): Input tensor [Batch, 4, 10, 10]
+task_id (int): 0 (Pong) or 1 (Snake)
+Returns:
+
+torch.Tensor: Output logits [Batch, num_actions]
+[Batch, 4] for Snake
+[Batch, 2] for Pong
+Algorithm:
+
+# Initialize membrane potentials
+mem1 = self.lif1.init_leaky()
+mem2 = self.lif2.init_leaky()
+mem_shared = self.lif_shared.init_leaky()
+mem_out = self.lif_out.init_leaky()
+
+spike_recordings = []
+
+# Simulate for T timesteps
+for t in range(T=8):
+   # Visual cortex
+   cur1 = self.conv1(x)
+   spk1, mem1 = self.lif1(cur1, mem1)
+   
+   cur2 = self.conv2(spk1)
+   spk2, mem2 = self.lif2(cur2, mem2)
+   
+   # Late fusion
+   flat = self.flatten(spk2)
+   task_vec = torch.full((x.size(0), 1), float(task_id), device=x.device)
+   fused = torch.cat([flat, task_vec], dim=1)
+   
+   cur_shared = self.fc_shared(fused)
+   spk_shared, mem_shared = self.lif_shared(cur_shared, mem_shared)
+   
+   # Task head
+   if task_id == 1:
+       cur_out = self.head_snake(spk_shared)
+   else:
+       cur_out = self.head_pong(spk_shared)
+   
+   spk_out, mem_out = self.lif_out(cur_out, mem_out)
+   spike_recordings.append(spk_out)
+
+# Rate coding: Sum spikes over time
+output = torch.stack(spike_recordings, dim=0).sum(0)
+return output
+Computational Complexity:
+
+Conv1: 16×(3×3×4)×(5×5) = 14,400 MACs
+Conv2: 32×(3×3×16)×(3×3) = 41,472 MACs
+FC: 289×64 = 18,496 MACs
+Head: 64×4 = 256 MACs (max)
+Total per timestep: ~75K MACs
+Total per inference (T=8): ~600K MACs
+Inference Time (CPU):
+
+Intel i7-10700K: ~2-3ms
+ARM Cortex-A72 (RPi 4): ~8-10ms
+Intel Loihi (projected): <0.5ms
+LIF Neuron Dynamics
+Implemented by: snntorch.Leaky
+
+Discrete-Time Update:
+
+# Current injection
+I[t] = W @ x[t]
+
+# Membrane potential update
+U[t] = beta * U[t-1] + I[t]
+
+# Spike generation
+if U[t] >= threshold:
+   S[t] = 1
+   U[t] = U[t] - threshold  # Soft reset
+else:
+   S[t] = 0
+
+return S[t], U[t]
+Surrogate Gradient (Backward):
+
+# Forward: Heaviside step function
+grad_forward = H(U - theta)
+
+# Backward: Fast sigmoid approximation
+grad_backward = k * sigma(k*U) * (1 - sigma(k*U))
+
+where sigma(x) = 1 / (1 + exp(-x))
+     k = slope parameter (default 25)
+Python Implementation:
+
+class FastSigmoid(torch.autograd.Function):
+   @staticmethod
+   def forward(ctx, input, slope=25):
+       ctx.save_for_backward(input)
+       ctx.slope = slope
+       return (input > 0).float()
+   
+   @staticmethod
+   def backward(ctx, grad_output):
+       input, = ctx.saved_tensors
+       slope = ctx.slope
+       grad_input = grad_output / (slope * torch.abs(input) + 1.0) ** 2
+       return grad_input, None
+Gradient Flow Visualization:
+
+Loss → Output Spikes → LIF Membrane → FC Weights → ...
+        ↓ (Surrogate)
+      Smooth gradient even through discontinuous spikes
+Training Pipeline
+Online Training (Main Mode)
+Location: python_server.py main loop
+
+Steps:
+
+Receive game state via ZMQ
+Preprocess input: 10×10 grayscale → 4-frame stack
+Teacher prediction: Oracle heuristic
+Student inference: SNN forward pass
+Disagreement check: Compare predictions
+Conditional training: Train only on disagreements
+Memory storage: Push to replay buffer
+Action execution: Return action via ZMQ
+Loss Function:
+
+criterion = nn.CrossEntropyLoss()
+
+# Only computed on disagreements
+if student_action != teacher_action:
+   target = torch.tensor([teacher_action], dtype=torch.long)
+   output = model(input, task_id)
+   loss = criterion(output, target)
+   loss.backward()
+   optimizer.step()
+Optimizer:
+
+optimizer = torch.optim.Adam(
+   model.parameters(),
+   lr=0.0005,
+   betas=(0.9, 0.999),
+   eps=1e-8
+)
+Offline Training (Sleep Consolidation)
+Location: python_server.py → sleep_cycle()
+
+Frequency:
+
+Every task switch
+Every 1000 steps
+Algorithm:
+
+for epoch in range(SLEEP_EPOCHS=5):
+   # Snake replay
+   snake_experiences = sample_stratified(buffer, "snake", batch_size=16)
+   if snake_experiences:
+       inputs, labels = collate(snake_experiences)
+       outputs = model(inputs, task_id=1)
+       loss_snake = criterion(outputs, labels)
+       loss_snake.backward()
+       optimizer.step()
+   
+   # Pong replay
+   pong_experiences = sample_stratified(buffer, "pong", batch_size=16)
+   if pong_experiences:
+       inputs, labels = collate(pong_experiences)
+       outputs = model(inputs, task_id=0)
+       loss_pong = criterion(outputs, labels)
+       loss_pong.backward()
+       optimizer.step()
+Benefits:
+
+Prevents catastrophic forgetting
+Balances task performance
+Consolidates rare experiences
+Synthetic Training (Optional)
+Location: train_snn.py
+
+Purpose: Pre-train on synthetic data before deployment.
+
+Data Generation:
+
+def generate_synthetic_data():
+   X = []
+   y = []
+   
+   for _ in range(NUM_SAMPLES=1000):
+       grid = np.zeros((10, 10), dtype=np.float32)
+       
+       # Place apple randomly
+       apple_x, apple_y = np.random.randint(0, 10, 2)
+       grid[apple_y, apple_x] = 1.0
+       
+       # Label based on simple rule
+       if apple_x < 5:
+           label = 2  # Move LEFT
+       else:
+           label = 3  # Move RIGHT
+       
+       X.append(grid.flatten())
+       y.append(label)
+   
+   return torch.tensor(X), torch.tensor(y)
+Training Loop:
+
+dataset = TensorDataset(X, y)
+loader = DataLoader(dataset, batch_size=32, shuffle=True)
+
+for epoch in range(EPOCHS):
+   for batch_x, batch_y in loader:
+       optimizer.zero_grad()
+       output = model(batch_x.view(-1, 1, 10, 10), task_id=1)
+       loss = criterion(output, batch_y)
+       loss.backward()
+       optimizer.step()
+Game Interfaces
+Snake UI
+File: snake_ui.py
+
+SnakeGame Class
+class SnakeGame:
+   def __init__(self, root: tk.Tk)
+Attributes:
+
+snake (list): Body segments as [(x, y), ...]
+food (tuple): Food position (x, y)
+direction (str): Current direction "UP"/"DOWN"/"LEFT"/"RIGHT"
+push (zmq.Socket): PUSH socket to server (5555)
+sub (zmq.Socket): SUB socket from server (5556)
+Methods:
+
+get_frame() -> np.ndarray
+Renders 10×10 grayscale frame.
+
+Encoding:
+
+Food: 128 (gray)
+Snake body: 255 (white)
+Empty: 0 (black)
+def get_frame(self):
+   img = np.zeros((10, 10), dtype=np.uint8)
+   img[self.food[1], self.food[0]] = 128
+   for x, y in self.snake:
+       img[y, x] = 255
+   return img
+network_loop()
+Background thread for ZMQ communication.
+
+def network_loop(self):
+   while True:
+       # Send state
+       img = self.get_frame()
+       _, buf = cv2.imencode('.png', img)
+       b64 = base64.b64encode(buf).decode('utf-8')
+       
+       payload = {
+           "game": "snake",
+           "image": b64,
+           "state": {
+               "head": self.snake[0],
+               "food": self.food
+           }
+       }
+       self.push.send_json(payload)
+       
+       # Receive action
+       msg = self.sub.recv_string()  # "SNAKE:UP"
+       self.direction = msg.split(":")[1]
+game_loop()
+Tkinter main loop for game logic and rendering.
+
+def game_loop(self):
+   # Move head
+   head_x, head_y = self.snake[0]
+   if self.direction == "UP":
+       head_y = (head_y - 1) % 10
+   # ... other directions
+   
+   new_head = (head_x, head_y)
+   
+   # Collision check
+   if new_head in self.snake:
+       self.snake = [(5, 5)]  # Reset
+   else:
+       self.snake.insert(0, new_head)
+       if new_head == self.food:
+           # Grow snake
+           self.food = (random.randint(0, 9), random.randint(0, 9))
+       else:
+           self.snake.pop()
+   
+   # Render
+   self.canvas.delete("all")
+   self.canvas.create_rectangle(...)  # Draw food (red)
+   for x, y in self.snake:
+       self.canvas.create_rectangle(...)  # Draw body (green)
+   
+   # Schedule next tick
+   self.root.after(100, self.game_loop)  # 100ms = 10 FPS
+Pong UI
+File: pong_ui.py
+
+PongGame Class
+class PongGame:
+   def __init__(self, root: tk.Tk)
+Attributes:
+
+ball_x, ball_y (float): Ball position
+ball_dx, ball_dy (float): Ball velocity
+p1_y (int): Player 1 paddle Y position (student)
+p2_y (int): Player 2 paddle Y position (AI opponent)
+paddle_h (int): Paddle height (6 units)
+score_p1, score_p2 (int): Scores
+Methods:
+
+get_frame() -> np.ndarray
+Renders 10×10 grayscale frame.
+
+Encoding:
+
+def get_frame(self):
+   img = np.zeros((10, 10), dtype=np.uint8)
+   
+   # Ball (target)
+   bx, by = int(self.ball_x / 3), int(self.ball_y / 3)
+   if 0 <= bx < 10 and 0 <= by < 10:
+       img[by, bx] = 128
+   
+   # Player paddle (self)
+   py_start = int(self.p1_y / 3)
+   py_end = int((self.p1_y + self.paddle_h) / 3)
+   for y in range(max(0, py_start), min(10, py_end + 1)):
+       img[y, 0] = 255
+   
+   # Opponent paddle
+   p2_start = int(self.p2_y / 3)
+   p2_end = int((self.p2_y + self.paddle_h) / 3)
+   for y in range(max(0, p2_start), min(10, p2_end + 1)):
+       img[y, 9] = 50  # Dim gray
+   
+   return img
+move_ai_paddle()
+Simple AI for opponent (85% accuracy).
+
+def move_ai_paddle(self):
+   if random.random() < 0.85:  # 85% smart, 15% random
+       paddle_center = self.p2_y + self.paddle_h / 2
+       if paddle_center < self.ball_y:
+           self.p2_y += 1
+       elif paddle_center > self.ball_y:
+           self.p2_y -= 1
+   
+   self.p2_y = max(0, min(30 - self.paddle_h, self.p2_y))
+game_loop()
+Physics and rendering loop.
+
+def game_loop(self):
+   # Ball physics
+   self.ball_x += self.ball_dx
+   self.ball_y += self.ball_dy
+   
+   # Wall bounces
+   if self.ball_y <= 0 or self.ball_y >= 30:
+       self.ball_dy *= -1
+   
+   # Paddle collisions
+   if self.ball_x <= 1:  # Left paddle
+       if self.p1_y <= self.ball_y <= self.p1_y + self.paddle_h:
+           self.ball_dx *= -1  # Bounce
+       else:
+           self.score_p2 += 1  # Opponent scores
+           self.reset_ball()
+   
+   # ... similar for right paddle
+   
+   self.move_ai_paddle()
+   
+   # Render
+   self.canvas.delete("all")
+   self.canvas.create_oval(...)  # Ball
+   self.canvas.create_rectangle(...)  # Paddles
+   
+   self.root.after(40, self.game_loop)  # 40ms = 25 FPS
+VSA Module
+Python Implementation
+File: hypervec_py.py
+
+HyperVector Class
+class HyperVector:
+   def __init__(self, seed: Optional[int] = None)
+Attributes:
+
+bits (np.ndarray): Binary array of shape (10240,), dtype=int8
+Methods:
+
+__init__(seed)
+Generates random hypervector.
+
+def __init__(self, seed=None):
+   if seed is not None:
+       self.rng = np.random.default_rng(seed)
+   else:
+       self.rng = np.random.default_rng()
+   
+   self.bits = self.rng.integers(0, 2, size=DIMENSION, dtype=np.int8)
+xor(other: HyperVector) -> HyperVector
+Binding operation.
+
+def xor(self, other):
+   new_bits = np.bitwise_xor(self.bits, other.bits)
+   return HyperVector.from_bits(new_bits)
+Example:
+
+apple = HyperVector(seed=1)
+north = HyperVector(seed=2)
+target = apple.xor(north)  # Encode "APPLE is NORTH"
+
+# Decode: target XOR apple ≈ north
+decoded = target.xor(apple)
+print(decoded.similarity(north))  # Should be close to 1.0
+bundle(other: HyperVector) -> HyperVector
+Superposition operation with random tie-breaking.
+
+def bundle(self, other):
+   rand_mask = np.random.randint(0, 2, size=DIMENSION, dtype=np.int8)
+   
+   a = self.bits
+   b = other.bits
+   diff = np.bitwise_xor(a, b)
+   same = np.bitwise_and(a, b)
+   
+   # Where bits agree: keep. Where differ: random choice
+   bundle_bits = np.bitwise_or(same, np.bitwise_and(diff, rand_mask))
+   return HyperVector.from_bits(bundle_bits)
+Example:
+
+apple = HyperVector(seed=1)
+banana = HyperVector(seed=2)
+fruit = apple.bundle(banana)  # Superposition
+
+print(fruit.similarity(apple))   # ~0.75
+print(fruit.similarity(banana))  # ~0.75
+similarity(other: HyperVector) -> float
+Normalized Hamming similarity.
+
+def similarity(self, other):
+   diff = np.bitwise_xor(self.bits, other.bits)
+   hamming_dist = np.sum(diff)
+   return 1.0 - (hamming_dist / DIMENSION)
+Range: [0.0, 1.0]
+
+1.0 = Identical
+0.5 = Random/Orthogonal
+0.0 = Perfectly anti-correlated (rare)
+Rust Implementation
+File: rust_vsa/src/lib.rs
+
+Advantages:
+
+10-100x faster than Python
+Parallelized bitwise operations
+Memory-efficient packed representation
+HyperVector Struct
+#[pyclass]
+#[derive(Clone, Debug)]
+struct HyperVector {
+   bits: Vec<u64>,  // 160 u64 blocks for 10,240 bits
+}
+Storage: 160 × 8 bytes = 1,280 bytes per vector
+
+Methods
+new(seed: Option<u64>) -> Self
+#[new]
+fn new(seed: Option<u64>) -> Self {
+   let mut rng = match seed {
+       Some(s) => ChaCha8Rng::seed_from_u64(s),
+       None => ChaCha8Rng::from_entropy(),
+   };
+
+   let num_u64 = DIMENSION / 64;  // 160
+   let mut bits = Vec::with_capacity(num_u64);
+   
+   for _ in 0..num_u64 {
+       bits.push(rng.gen());  // Random u64
+   }
+
+   HyperVector { bits }
+}
+xor(&self, other: &HyperVector) -> HyperVector
+fn xor(&self, other: &HyperVector) -> HyperVector {
+   let fused: Vec<u64> = self.bits.iter()
+       .zip(other.bits.iter())
+       .map(|(a, b)| a ^ b)  // XOR each u64 block
+       .collect();
+   HyperVector { bits: fused }
+}
+Performance: ~1 microsecond
+
+similarity(&self, other: &HyperVector) -> f64
+fn similarity(&self, other: &HyperVector) -> f64 {
+   let mut hamming_dist: u32 = 0;
+   
+   for (a, b) in self.bits.iter().zip(other.bits.iter()) {
+       hamming_dist += (a ^ b).count_ones();  // Population count
+   }
+   
+   1.0 - (hamming_dist as f64 / DIMENSION as f64)
+}
+Performance: ~10 microseconds (with count_ones hardware instruction)
+
+Codebook Generation
+File: build_codebook.py
+
+def build_codebook():
+   codebook = {}
+   
+   concepts = [
+       "NORTH", "SOUTH", "EAST", "WEST",
+       "APPLE", "WALL", "EMPTY", "SNAKE_BODY",
+       "INTENT_PLAY_SNAKE", "INTENT_UNKNOWN"
+   ]
+   
+   for concept in concepts:
+       hv = hypervec_py.HyperVector(seed=None)  # Random
+       codebook[concept] = hv
+   
+   with open("codebook.pkl", "wb") as f:
+       pickle.dump(codebook, f)
+Usage:
+
+import pickle
+with open("codebook.pkl", "rb") as f:
+   codebook = pickle.load(f)
+
+# Query example
+apple = codebook["APPLE"]
+north = codebook["NORTH"]
+
+# Encode rule: "Apple is North"
+rule = apple.xor(north)
+
+# Query: "Where is Apple?"
+response = rule.xor(apple)
+print(response.similarity(north))  # High similarity = "North"
+Active Inference
+File: ai_controller.py
+
+SnakeAI Class
+Purpose: Bayesian decision-making agent using pymdp.
+
+class SnakeAI:
+   def __init__(self)
+Generative Model Components:
+
+Observations
+num_obs = [3]  # 0: Apple, 1: Wall, 2: Empty
+States
+num_states = [4]  # 0: Apple_North, 1: Apple_South, 2: Apple_East, 3: Apple_West
+Actions
+num_controls = [4]  # 0: North, 1: South, 2: East, 3: West
+A-Matrix (Likelihood)
+Maps states to observations:
+
+A = utils.random_A_matrix(num_obs, num_states)
+
+# Example structure:
+# A[o, s] = P(observation | state)
+# A[0, 0] = 0.9  # If Apple_North, likely observe Apple
+B-Matrix (Transition)
+State dynamics under actions:
+
+B = utils.random_B_matrix(num_states, num_controls)
+
+# Example structure:
+# B[s', s, a] = P(state_next | state, action)
+# B[1, 0, 1] = 0.8  # If Apple_North and move South, likely reach Apple_South
+C-Matrix (Preferences)
+Prior preferences over observations:
+
+C = utils.obj_array_zeros(num_obs)
+C[0][0] = 5.0   # Strongly prefer observing Apple (eating it)
+C[0][1] = -5.0  # Strongly avoid observing Wall (collision)
+C[0][2] = 0.0   # Neutral about Empty space
+Methods
+step(observation_idx: int, precision_signal: float = 1.0) -> int
+Performs one inference-action cycle.
+
+def step(self, observation_idx, precision_signal=1.0):
+   # State inference
+   obs = [observation_idx]
+   qs = self.agent.infer_states(obs)  # Posterior belief over states
+   
+   # Policy selection (minimize expected free energy)
+   q_pi, neg_efe = self.agent.infer_policies()
+   
+   # Sample action
+   action = self.agent.sample_action()  # Sample from policy distribution
+   
+   return int(action[0])
+Expected Free Energy (EFE):
+
+G(π) = E_Q(o,s|π)[log Q(s|π) - log P(o, s)]
+    = -Epistemic_Value - Pragmatic_Value
+
+Epistemic Value: Information gain (exploration)
+Pragmatic Value: Expected reward from C-matrix (exploitation)
+Policy Distribution:
+
+P(π) = σ(-γ * G(π))
+
+where σ = softmax, γ = precision (inverse temperature)
+Example Usage:
+
+ai = SnakeAI()
+
+# Game loop
+while True:
+   # Get SNN classification
+   snn_output = model(observation)
+   obs_idx = argmax(snn_output)  # 0: Apple, 1: Wall, 2: Empty
+   
+   # Get VSA confidence
+   vsa_sim = hypervector.similarity(codebook[concept])
+   precision = vsa_sim
+   
+   # Active inference decision
+   action = ai.step(obs_idx, precision)
+   
+   # Execute action
+   execute(action)
+Dashboard API
+File: dashboard.py
+
+DashboardApp Class
+class DashboardApp:
+   def __init__(self, root: tk.Tk)
+Architecture:
+
+Main Thread (Tkinter)
+ ↓
+ ├─ GUI Rendering (50ms tick)
+ ├─ Log Display Updates
+ ├─ Plot Updates
+ └─ User Input Handling
+
+Background Thread (ZMQ Listener)
+ ↓
+ └─ Telemetry Reception → Queue → Main Thread
+Components
+Process Management
+def _toggle_proc(self, name: str, script: str):
+   if self.procs[name] is None:
+       # Start process
+       cmd = [sys.executable, script_path]
+       p = subprocess.Popen(cmd, cwd=base_dir, 
+                           stdout=subprocess.PIPE, 
+                           stderr=subprocess.PIPE)
+       self.procs[name] = p
+       
+       # Start log readers
+       threading.Thread(target=self._read_stream, 
+                       args=(p.stdout, f"[{name}]"), 
+                       daemon=True).start()
+   else:
+       # Stop process
+       self.procs[name].terminate()
+       self.procs[name] = None
+ZMQ Listener Thread
+def _zmq_listener(self):
+   while self.running:
+       if self.sub_sock.poll(100):
+           msg = self.sub_sock.recv_string()
+           self.zmq_queue.put(msg)  # Thread-safe queue
+Receives:
+
+"STATS:{json}" → Performance metrics
+"VIS:{json}" → Visualization data
+Main Update Loop
+def _main_update_loop(self):
+   # Consume logs (limit 50/tick to prevent UI freeze)
+   while not self.log_queue.empty() and logs_processed < 50:
+       msg = self.log_queue.get_nowait()
+       self.log_area.insert("end", msg)
+       logs_processed += 1
+   
+   # Consume telemetry
+   while not self.zmq_queue.empty() and msgs_processed < 50:
+       msg = self.zmq_queue.get_nowait()
+       
+       if msg.startswith("STATS:"):
+           data = json.loads(msg[6:])
+           self.data[data["game"]]["agree"].append(data["agree_pct"])
+           self.data[data["game"]]["loss"].append(data["loss"])
+           perf_updated = True
+       
+       elif msg.startswith("VIS:"):
+           self.current_vis = json.loads(msg[4:])
+           vis_updated = True
+   
+   # Update plots
+   if perf_updated:
+       self._update_perf_plots()
+   if vis_updated:
+       self._update_vis_plot()
+   
+   # Schedule next tick (50ms = 20 FPS)
+   self.root.after(50, self._main_update_loop)
+Performance Plots
+def _update_perf_plots(self):
+   # Agreement plot
+   self.line_snake_agree.set_data(range(len(self.data["snake"]["agree"])), 
+                                  self.data["snake"]["agree"])
+   self.line_pong_agree.set_data(range(len(self.data["pong"]["agree"])), 
+                                 self.data["pong"]["agree"])
+   
+   # Loss plot
+   self.line_snake_loss.set_data(range(len(self.data["snake"]["loss"])), 
+                                 self.data["snake"]["loss"])
+   self.line_pong_loss.set_data(range(len(self.data["pong"]["loss"])), 
+                                self.data["pong"]["loss"])
+   
+   self.fig_perf.canvas.draw_idle()
+Visualization Update
+def _update_vis_plot(self):
+   # Heatmap (visual cortex)
+   self.im_vis.set_data(self.current_vis["grid"])
+   
+   # Bar chart (motor cortex)
+   probs = self.current_vis["probs"]
+   for rect, height in zip(self.bar_motor.patches, probs):
+       rect.set_height(height)
+   
+   # Title color (agreement status)
+   agreed = self.current_vis["agreed"]
+   title = "AGREEMENT" if agreed else "INTERVENTION!"
+   color = "#00ff00" if agreed else "#ff0000"
+   self.ax_motor.set_title(f"Motor Probs : {title}", color=color)
+   
+   self.fig_brain.canvas.draw_idle()
+ZMQ Protocol Specification
+Message Flow Diagram
+┌─────────┐                 ┌─────────┐                 ┌──────────┐
+│  Game   │────── 5555 ─────│ Server  │───── 5556 ──────│  Game    │
+│  UI     │      PUSH       │ (Brain) │      PUB        │  UI      │
+└─────────┘                 └────┬────┘                 └──────────┘
+                                │
+                           5557 │ PUB
+                                │
+                           ┌────▼────┐
+                           │Dashboard│
+                           └─────────┘
+Port 5555: Game → Server (PULL)
+Socket Type: PULL (Server binds)
+
+Message Schema:
+
+{
+ "type": "game" | "admin",
+ 
+ // If type="game":
+ "game": "snake" | "pong",
+ "image": "base64_encoded_png",
+ "state": {
+   // Snake-specific
+   "head": [int, int],
+   "food": [int, int],
+   
+   // Pong-specific
+   "ball_y": float,
+   "ball_dy": float,
+   "p1_y": float
+ },
+ 
+ // If type="admin":
+ "cmd": "force_sleep" | "reset_memory"
+}
+Example (Snake):
+
+{
+ "game": "snake",
+ "image": "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9...",
+ "state": {
+   "head": [5, 5],
+   "food": [2, 8]
+ }
+}
+Image Encoding:
+
+img = np.zeros((10, 10), dtype=np.uint8)
+# ... populate img ...
+_, buffer = cv2.imencode('.png', img)
+b64_str = base64.b64encode(buffer).decode('utf-8')
+Port 5556: Server → Game (PUB)
+Socket Type: PUB (Server binds)
+
+Message Format: "{GAME_TYPE}:{ACTION}"
+
+Examples:
+
+SNAKE:UP
+SNAKE:DOWN
+SNAKE:LEFT
+SNAKE:RIGHT
+
+PONG:UP
+PONG:DOWN
+Subscription:
+
+# Subscribe to specific game
+sub_sock.setsockopt_string(zmq.SUBSCRIBE, "SNAKE:")
+
+# Or all messages
+sub_sock.setsockopt_string(zmq.SUBSCRIBE, "")
+Port 5557: Server → Dashboard (PUB)
+Socket Type: PUB (Server binds)
+
+Message Types:
+
+1. Statistics
+Prefix: "STATS:"
+
+Payload:
+
+{
+ "game": "snake" | "pong",
+ "agree_pct": float,      // 0-100
+ "loss": float,           // Training loss
+ "steps": int,            // Steps in this interval
+ "timestamp": float       // Unix timestamp
+}
+Example:
+
+STATS:{"game":"snake","agree_pct":72.3,"loss":0.541,"steps":50,"timestamp":1699123456.789}
+Frequency: Every 5 seconds (configurable)
+
+2. Visualization
+Prefix: "VIS:"
+
+Payload:
+
+{
+ "grid": [[float]],       // 10×10 matrix, values [0-1]
+ "probs": [float],        // Action probabilities (length 2 or 4)
+ "teacher": int,          // Teacher action index
+ "student": int,          // Student action index
+ "agreed": bool,
+ "task": "snake" | "pong"
+}
+Example:
+
+VIS:{"grid":[[0,0,0,...],[...]],"probs":[0.1,0.7,0.15,0.05],"teacher":1,"student":1,"agreed":true,"task":"snake"}
+Frequency: Every 10 steps
+
+Extension Guide
+Adding a New Game
+Step 1: Create Game UI
+# my_game_ui.py
+import zmq, cv2, base64, numpy as np, tkinter as tk
+
+class MyGame:
+   def __init__(self, root):
+       self.root = root
+       self.canvas = tk.Canvas(root, width=300, height=300)
+       self.canvas.pack()
+       
+       # ZMQ Setup
+       context = zmq.Context()
+       self.push = context.socket(zmq.PUSH)
+       self.push.connect("tcp://127.0.0.1:5555")
+       self.sub = context.socket(zmq.SUB)
+       self.sub.connect("tcp://127.0.0.1:5556")
+       self.sub.setsockopt_string(zmq.SUBSCRIBE, "MYGAME:")
+       
+       # Start threads
+       threading.Thread(target=self.network_loop, daemon=True).start()
+       self.game_loop()
+   
+   def get_frame(self):
+       img = np.zeros((10, 10), dtype=np.uint8)
+       # Populate with game-specific rendering
+       return img
+   
+   def network_loop(self):
+       while True:
+           img = self.get_frame()
+           _, buf = cv2.imencode('.png', img)
+           
+           payload = {
+               "game": "mygame",
+               "image": base64.b64encode(buf).decode('utf-8'),
+               "state": {"custom_data": 123}
+           }
+           self.push.send_json(payload)
+           
+           msg = self.sub.recv_string()
+           action = msg.split(":")[1]
+           self.handle_action(action)
+   
+   def game_loop(self):
+       # Update game state
+       # Render to canvas
+       self.root.after(50, self.game_loop)
+
+if __name__ == "__main__":
+   root = tk.Tk()
+   MyGame(root)
+   root.mainloop()
+Step 2: Add Teacher Oracle
+# In python_server.py
+
+def get_mygame_oracle(state):
+   # Implement heuristic logic
+   # Return action index
+   return best_action
+
+# In main loop:
+if game_type == "mygame":
+   task_id = 2  # New task ID
+   teacher_idx = get_mygame_oracle(state_data)
+Step 3: Extend SNN Architecture
+# In snn_qat.py
+
+class TaskAwareSNN(nn.Module):
+   def __init__(self, beta=0.5):
+       # ... existing layers ...
+       
+       # Add new head
+       self.head_mygame = nn.Linear(64, num_actions)
+   
+   def forward(self, x, task_id):
+       # ... existing logic ...
+       
+       # Add routing
+       if task_id == 2:  # MyGame
+           cur_out = self.head_mygame(spk_shared)
+Step 4: Update Dashboard
+# In dashboard.py
+
+# Add button
+self.btn_mygame = self._make_proc_btn(control_frame, "MyGame", "my_game_ui.py")
+
+# Add data buffer
+self.data["mygame"] = {
+   "agree": deque(maxlen=self.max_history),
+   "loss": deque(maxlen=self.max_history)
+}
+
+# Add plot line
+self.line_mygame_agree, = self.ax1.plot([], [], label="MyGame", color="#ff00ff")
+Adding VSA Reasoning
+Concept Encoding
+# Build enhanced codebook
+codebook = {
+   "NORTH": HyperVector(seed=1),
+   "SOUTH": HyperVector(seed=2),
+   "EAST": HyperVector(seed=3),
+   "WEST": HyperVector(seed=4),
+   "APPLE": HyperVector(seed=5),
+   "DANGER": HyperVector(seed=6)
+}
+
+# Encode situation: "Apple is North"
+situation = codebook["APPLE"].xor(codebook["NORTH"])
+
+# Store rule: "If Apple-North, then Move-North"
+rule = situation.xor(codebook["NORTH"])  # Action encoding
+
+# Query: "What to do?"
+response = rule.xor(situation)
+action_similarity = response.similarity(codebook["NORTH"])
+
+if action_similarity > 0.7:
+   return "NORTH"
+Integration with SNN
+# In python_server.py main loop
+
+# After SNN inference
+snn_output = model(input_tensor, task_id)
+snn_action = argmax(softmax(snn_output))
+
+# VSA lookup
+obs_vector = encode_observation(img)
+best_match = None
+best_sim = 0
+
+for concept, vector in codebook.items():
+   sim = obs_vector.similarity(vector)
+   if sim > best_sim:
+       best_sim = sim
+       best_match = concept
+
+# Query VSA memory for action
+if best_sim > 0.8:  # High confidence
+   vsa_action = query_rule_memory(best_match)
+   
+   # Combine with SNN (voting, weighted average, etc.)
+   final_action = combine(snn_action, vsa_action, weights=[0.7, 0.3])
+else:
+   final_action = snn_action  # Low confidence, trust SNN
+Neuromorphic Hardware Deployment
+Intel Loihi Preparation
+# Export to NxSDK format (Intel's Loihi SDK)
+
+import nxsdk
+from nxsdk.graph.processes.phase_processes import PhaseProcessNode
+
+# Map TaskAwareSNN layers to Loihi cores
+# Each LIF neuron → Loihi neuron (1:1 mapping)
+
+conv1_neurons = nxsdk.createCompartmentGroup(
+   size=16 * 5 * 5,  # 16 channels × 5×5 spatial
+   vThMant=int(0.5 * 2**6),  # Threshold
+   decayU=int(0.5 * 2**12),  # Decay (beta)
+)
+
+# Create synaptic connections
+for src, dst, weight in conv1_weights:
+   nxsdk.createSynapse(src, dst, weight=int(weight * 2**6))
+
+# Run inference
+loihi_board.run(timesteps=8)
+spikes = conv1_neurons.get_spikes()
+Benefits:
+
+Energy: ~1 µJ per inference (vs. 800 µJ on GPU)
+Latency: <0.5 ms (vs. 2-5 ms on CPU)
+Power: <100 mW (vs. 400W GPU)
+Performance Profiling
+Profiling Tools
+# CPU profiling
+python -m cProfile -o profile.stats python_server.py
+python -m pstats profile.stats
+
+# Memory profiling
+pip install memory_profiler
+python -m memory_profiler python_server.py
+
+# Line-by-line profiling
+pip install line_profiler
+kernprof -l -v python_server.py
+Bottleneck Analysis
+Typical Profile (10,000 steps):
+
+Function	Time (%)	Calls
+model.forward()	35%	10,000
+cv2.imencode()	20%	10,000
+zmq.recv_json()	15%	10,000
+loss.backward()	12%	~3,000
+optimizer.step()	8%	~3,000
+Other	10%	-
+Optimization Strategies
+1. Reduce Timesteps
+# In snn_qat.py
+for step in range(4):  # Down from 8
+   # ... simulation ...
+
+# Trade-off: 50% speedup, 5-10% accuracy drop
+2. Use TorchScript
+# Compile model
+scripted_model = torch.jit.script(model)
+scripted_model.save("snn_scripted.pt")
+
+# Load and use
+model = torch.jit.load("snn_scripted.pt")
+# 20-30% faster inference
+3. Batch Processing (Sleep Only)
+# Instead of sample-by-sample, use larger batches
+batch = buffer.sample(batch_size=128)  # Up from 32
+# Faster but more memory
+4. Native ZMQ Encoding
+# Skip cv2.imencode for speed
+img_bytes = img.tobytes()
+payload = {
+   "game": "snake",
+   "image": base64.b64encode(img_bytes).decode('utf-8'),
+   "shape": img.shape
+}
+
+# Decode:
+img = np.frombuffer(base64.b64decode(payload["image"]), dtype=np.uint8)
+img = img.reshape(payload["shape"])
+5. C++ Extension for VSA
+# Use Rust implementation instead of Python
+import hypervec_py  # Compiled Rust module
+# 10-100x faster operations
+Appendix: Complete API Reference
+python_server.py
+class LogAggregator:
+   __init__(interval: float, zmq_pub: zmq.Socket)
+   update(game: str, agreed: bool, loss: float)
+   check_print()
+
+class ReplayBuffer:
+   __init__(capacity_per_quadrant: int)
+   push(state: Tensor, task_id: int, target: int, agreed: bool, game_type: str)
+   sample(batch_size: int) -> Optional[Tuple[Tensor, Tensor, Tensor]]
+   count() -> int
+
+def sleep_cycle(model, optimizer, buffer, device, epochs=5)
+def manhattan_snake_move(state: dict, obstacles: set) -> int
+def get_snake_oracle(state: dict, img: np.ndarray) -> int
+def get_pong_oracle(state: dict) -> int
+def main()
+snn_qat.py
+class TaskAwareSNN(nn.Module):
+   __init__(beta: float = 0.5)
+   forward(x: Tensor, task_id: int) -> Tensor
+hypervec_py.py
+class HyperVector:
+   __init__(seed: Optional[int] = None)
+   @classmethod from_bits(bits: np.ndarray) -> HyperVector
+   @staticmethod zero() -> HyperVector
+   xor(other: HyperVector) -> HyperVector
+   bundle(other: HyperVector) -> HyperVector
+   similarity(other: HyperVector) -> float
+dashboard.py
+class DashboardApp:
+   __init__(root: tk.Tk)
+   _setup_ui()
+   _make_proc_btn(parent, name: str, script: str)
+   _toggle_proc(name: str, script: str)
+   _cmd_sleep()
+   _cmd_reset()
+   _zmq_listener()
+   _main_update_loop()
+   _update_perf_plots()
+   _update_vis_plot()
+NSCK Technical Documentation v1.0
+Complete API Reference and Implementation Guide

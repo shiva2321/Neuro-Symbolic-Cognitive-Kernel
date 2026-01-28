@@ -1,0 +1,1307 @@
+NCGN Architecture Documentation
+Table of Contents
+System Overview
+Design Philosophy
+Core Architecture
+Component Details
+Mathematical Foundations
+Design Patterns
+Performance Analysis
+Data Flow Diagrams
+System Overview
+NCGN (Neural Concept Graph Network) is a hybrid cognitive architecture combining fast associative propagation (System 1) with deliberative reasoning (System 2). It models cognition as signal propagation through a weighted directed graph, where concepts are nodes and associations are weighted edges.
+
+Key Innovation: Dual-Process Cognition
+┌─────────────────────────────────────────────────────────────┐
+│                    NCGN v2.0 Architecture                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────┐         ┌──────────────┐                │
+│  │  System 1    │◄────────┤  System 2    │                │
+│  │  (Fast)      │         │  (Slow)      │                │
+│  │              │         │              │                │
+│  │ Propagation  │         │ Linguistic   │                │
+│  │   Engine     │────────►│ Processor    │                │
+│  └──────┬───────┘         └──────┬───────┘                │
+│         │                        │                         │
+│         │      ┌─────────────────┘                        │
+│         │      │                                          │
+│         ▼      ▼                                          │
+│  ┌──────────────────────┐                                │
+│  │   Graph Topology     │                                │
+│  │   (rustworkx)        │                                │
+│  └──────────────────────┘                                │
+│         │                                                 │
+│         ▼                                                 │
+│  ┌──────────────────────┐                                │
+│  │  Cognitive State     │                                │
+│  │  (NumPy SoA)         │                                │
+│  └──────────────────────┘                                │
+│         │                                                 │
+│         ▼                                                 │
+│  ┌──────────────────────┐                                │
+│  │  Hebbian Learner     │                                │
+│  │  (3-Factor)          │                                │
+│  └──────────────────────┘                                │
+│                                                           │
+│  ┌──────────────────────────────────────────┐           │
+│  │         Logic Core (v2.0)                │           │
+│  │  ┌─────────────┬──────────────────────┐  │           │
+│  │  │ Confidence  │ Conflict Detection   │  │           │
+│  │  │  Tracker    │      Engine          │  │           │
+│  │  └─────────────┴──────────────────────┘  │           │
+│  │  ┌──────────────────────────────────┐    │           │
+│  │  │      Decision Engine             │    │           │
+│  │  └──────────────────────────────────┘    │           │
+│  └──────────────────────────────────────────┘           │
+│                                                           │
+└───────────────────────────────────────────────────────────┘
+Design Tenets
+Separation of Concerns: System 1 (reflexive) ≠ System 2 (deliberative)
+Data-Oriented Design: All state in contiguous arrays, not object hierarchies
+Cache Optimization: Structure-of-Arrays for SIMD vectorization
+Lazy Computation: Rebuild matrices only when topology changes (dirty flag)
+Thread Safety: Lock-protected index registry for concurrent access
+Design Philosophy
+Dual-Process Theory Implementation
+NCGN implements Kahneman's dual-process theory:
+
+Aspect	System 1 (Propagation)	System 2 (Reasoning)
+Speed	Fast (< 1ms per tick)	Slow (100-1000ms)
+Method	Matrix multiplication	LLM inference
+Energy	O(E) sparse operations	O(N²) transformer
+Role	Association, intuition	Logic, planning
+Trigger	Always active	On-demand
+Output	Activation patterns	Graph updates
+Biological Inspiration
+Neuron Dynamics          →    NCGN Model
+─────────────────────────────────────────────
+Membrane potential       →    activations[i]
+Synaptic weights         →    adjacency_matrix[i,j]
+Refractory period        →    refractory_counters[i]
+Action potential         →    threshold crossing
+Hebbian plasticity       →    3-factor learning
+Dopamine modulation      →    reward signal
+Core Architecture
+Component Hierarchy
+Brain (Coordinator)
+ ├── GraphTopology (Structure)
+ │     ├── rustworkx.PyDiGraph (C++ backend)
+ │     └── IndexRegistry (Label↔Index mapping)
+ │
+ ├── CognitiveState (Data)
+ │     ├── activations: float32[N]
+ │     ├── thresholds: float32[N]
+ │     ├── refractory_counters: int32[N]
+ │     ├── resting_potentials: float32[N]
+ │     ├── novelty_scores: float32[N]
+ │     ├── embeddings: float32[N × 384]
+ │     └── adjacency_csr: scipy.sparse.csr_matrix
+ │
+ ├── PropagationEngine (System 1)
+ │     ├── inject() - Energy input
+ │     ├── propagate() - Matrix-vector mult
+ │     └── get_active_concepts() - Query
+ │
+ ├── HebbianLearner (Plasticity)
+ │     ├── apply_reward() - Modulated learning
+ │     ├── auto_learn() - Co-occurrence genesis
+ │     └── apply_targeted_ltp/ltd() - Explicit
+ │
+ ├── SemanticLayer (Grounding)
+ │     ├── SentenceTransformer model
+ │     ├── find_entry_points() - Semantic search
+ │     └── compute_semantic_weight() - Init edges
+ │
+ ├── ConfidenceTracker (Verification)
+ │     ├── edge_confidence: Dict[(src, tgt), float]
+ │     ├── edge_provenance: Dict[(src, tgt), metadata]
+ │     └── reinforce() / decay()
+ │
+ ├── ConflictDetector (Logic)
+ │     └── check_conflict() - Detect contradictions
+ │
+ ├── DecisionEngine (Control)
+ │     ├── select_action() - Winner-Take-All
+ │     └── decide_acceptance() - Accept/Reject/Curious
+ │
+ ├── LinguisticProcessor (System 2 Input)
+ │     └── extract_triplets() - Text → Graph updates
+ │
+ └── NaturalLanguageFormatter (System 2 Output)
+       └── format_response() - State → Text
+Component Details
+1. GraphTopology: Integer-Indexed Graph
+Purpose: Manage graph structure with automatic label↔index synchronization.
+
+Key Feature: Rustworkx uses integer indices only. IndexRegistry maintains perfect bidirectional mapping.
+
+# Thread-safe mapping
+class IndexRegistry:
+   _label_to_idx: Dict[str, int]
+   _idx_to_label: Dict[int, str]
+   _lock: threading.Lock
+Critical Property: When nodes are deleted, Rustworkx leaves "holes" and reuses indices. Callers MUST zero the state arrays at deleted indices using CognitiveState.zero_index().
+
+Operations:
+
+add_concept(label) → Returns integer index
+add_connection(src, tgt, weight) → Creates/updates edge
+get_adjacency_data() → Returns (sources, targets, weights) for matrix construction
+Complexity:
+
+Add node: O(1)
+Add edge: O(1)
+Lookup label→index: O(1) hash table
+Extract adjacency: O(E) where E = edge count
+2. CognitiveState: Structure-of-Arrays
+Purpose: Store all cognitive state in cache-optimal contiguous arrays.
+
+Memory Layout:
+
+activations:          [0.5, 0.3, 0.0, 0.9, ...]  float32[N]
+thresholds:           [0.75, 0.75, 0.8, 0.6, ...]  float32[N]
+refractory_counters:  [0, 3, 0, 5, ...]            int32[N]
+resting_potentials:   [0.0, 0.0, 0.1, 0.0, ...]   float32[N]
+novelty_scores:       [1.0, 0.95, 0.88, 1.0, ...] float32[N]
+embeddings:           [[0.2, 0.5, ...], ...]       float32[N × 384]
+Why float32? 2× memory bandwidth vs float64, sufficient precision for activations.
+
+Dynamic Capacity: Pre-allocated, doubles when full (amortized O(1) growth).
+
+def ensure_capacity(self, required_idx: int) -> bool:
+   if required_idx < self.capacity:
+       return False
+   
+   new_capacity = self.capacity
+   while new_capacity <= required_idx:
+       new_capacity *= 2
+   
+   # Resize all arrays...
+CSR Matrix Caching: Adjacency matrix is rebuilt ONLY when topology changes:
+
+def synchronize_matrix(self, topology: GraphTopology) -> None:
+   if not topology.is_dirty:
+       return  # No rebuild needed
+   
+   sources, targets, weights = topology.get_adjacency_data()
+   coo = coo_matrix((weights, (sources, targets)), shape=(n, n))
+   self._adj_csr = coo.tocsr()
+   topology.mark_clean()
+Complexity:
+
+Access activation: O(1)
+Resize capacity: O(N) amortized O(1)
+Rebuild CSR matrix: O(E + N) where E = edges, N = nodes
+3. PropagationEngine: Vectorized Dynamics
+Purpose: System 1 dynamics using sparse matrix operations.
+
+Core Equation
+The propagation equation at each tick t:
+
+$$ \mathbf{A}_{t+1} = \sigma\left(\frac{\mathbf{A}_t \cdot (1-\delta) + \mathbf{W} \cdot \mathbf{A}t \cdot \alpha + \mathbf{I}{\text{ext}}}{1 + \beta \cdot \sum \mathbf{A}_t}\right) \odot (1 - \mathbf{R}) $$
+
+Where:
+
+A
+t
+ = Activation vector at time 
+t
+ (size N)
+δ
+ = Decay rate (default 0.1)
+W
+ = Sparse adjacency matrix (CSR, size N×N)
+α
+ = Flow/conductivity rate (default 0.8)
+I
+ext
+ = External input vector
+β
+ = Normalization constant (default 0.01)
+σ
+ = Sigmoid activation function
+R
+ = Refractory mask (1 if refractory, 0 otherwise)
+⊙
+ = Element-wise multiplication
+Sigmoid Activation
+Numerically stable sigmoid:
+
+σ
+(
+x
+)
+=
+{
+1
+1
++
+e
+−
+x
+if 
+x
+≥
+0
+ 
+e
+x
+1
++
+e
+x
+if 
+x
+<
+0
+
+Applied with scaling: 
+σ
+(
+6
+⋅
+A
+−
+3
+)
+ to map [0,1] to useful sigmoid range.
+
+Divisive Normalization
+Homeostatic mechanism to prevent runaway activation:
+
+'_' allowed only in math mode
+
+
+\text{norm_factor} = 1 + \beta \cdot \sum_{i=1}^{N} A_i
+
+'_' allowed only in math mode
+
+
+\mathbf{A}_t \leftarrow \frac{\mathbf{A}_t}{\text{norm_factor}}
+
+Refractory Period
+After firing (crossing threshold), neurons enter refractory period:
+
+firing_indices = np.where((A > thresholds) & (R == 0))[0]
+R[firing_indices] = refractory_period  # Set cooldown
+A[firing_indices] = 0.0  # Reset activation
+Refractory counters decay each tick: 
+R
+[
+R
+>
+0
+]
+←
+R
+[
+R
+>
+0
+]
+−
+1
+
+Seizure Damping
+Global stability mechanism:
+
+If 
+∑
+i
+=
+1
+N
+A
+i
+>
+θ
+seizure
+,
+A
+←
+A
+⋅
+d
+seizure
+
+Where 
+θ
+seizure
+=
+50.0
+ and 
+d
+seizure
+=
+0.5
+ (default).
+
+Propagation Algorithm
+Input: External injections, Number of steps
+Output: Active concepts dictionary
+
+1. Synchronize CSR matrix if topology dirty
+2. For each step:
+  a. Apply external input buffer
+  b. Decay: A ← A × (1 - δ)
+  c. Propagate: A ← A + W @ A × α
+  d. Normalize: A ← A / (1 + β × ΣA)
+  e. Sigmoid: A ← σ(6A - 3)
+  f. Find firing nodes: F = {i | A[i] > threshold[i] ∧ R[i] = 0}
+  g. Apply refractory: R[F] ← refractory_period, A[F] ← 0
+  h. Mask refractory: A ← A ⊙ (1 - R_mask)
+  i. Decay refractory: R[R>0] ← R[R>0] - 1
+  j. Seizure damping if ΣA > θ_seizure
+  k. Clamp: A ← clip(A, 0, 1)
+3. Return active concepts {label: activation | activation > threshold}
+Complexity: O(E + N) per tick where E = edges, N = nodes (sparse matrix-vector multiplication).
+
+4. HebbianLearner: 3-Factor Plasticity
+Purpose: Reward-modulated learning with automatic edge genesis.
+
+3-Factor Hebbian Rule
+$$ \Delta w_{ij} = \eta \cdot M \cdot a_i \cdot a_j \cdot \mathbb{1}{w{ij} \text{ exists}} $$
+
+Where:
+
+η
+ = Learning rate (default 0.01)
+M
+ = Reward modulator (dopamine-like signal)
+a
+i
+ = Pre-synaptic activation
+a
+j
+ = Post-synaptic activation
+$\mathbb{1}{w{ij} \text{ exists}}$ = Only update existing synapses
+Reward Prediction Error (RPE)
+The modulator 
+M
+ is calculated as RPE:
+
+M
+=
+R
+actual
+−
+R
+expected
+
+R
+expected
+←
+α
+baseline
+⋅
+R
+actual
++
+(
+1
+−
+α
+baseline
+)
+⋅
+R
+expected
+
+Where 
+α
+baseline
+=
+0.1
+ (exponential moving average).
+
+Sign of M:
+
+M
+>
+0
+ → LTP (Long-Term Potentiation) - strengthen synapses
+M
+<
+0
+ → LTD (Long-Term Depression) - weaken synapses
+M
+≈
+0
+ → No change
+Weight Update with Clamping
+w
+i
+j
+(
+t
++
+1
+)
+=
+clip
+(
+w
+i
+j
+(
+t
+)
++
+Δ
+w
+i
+j
+,
+w
+min
+,
+w
+max
+)
+
+Where 
+w
+min
+=
+0.0
+ and 
+w
+max
+=
+1.0
+ by default.
+
+Auto-Genesis (Structural Plasticity)
+Co-occurrence tracking without LLM:
+
+def auto_learn(self, active_indices: Set[int], threshold: int = 5) -> int:
+   # For all pairs of active nodes
+   for i, j in combinations(active_indices, 2):
+       co_occurrence_counts[(i, j)] += 1
+       
+       if co_occurrence_counts[(i, j)] >= threshold:
+           # Auto-create edge!
+           topology.add_connection(label_i, label_j, weight=0.3)
+Rationale: If two concepts repeatedly co-activate, they should be connected.
+
+Learning Algorithm
+Input: Reward modulator M, Active threshold
+Output: Number of synapses updated
+
+1. Calculate active set A = {i | activation[i] > threshold}
+2. If M > 0, run auto_learn(A) for structural plasticity
+3. If no edges or |A| < 2, return 0
+4. For each active pre-synaptic node i ∈ A:
+  a. For each outgoing edge (i→j) where j ∈ A:
+     b. Δw ← η × M × activation[i] × activation[j]
+     c. w_ij ← clip(w_ij + Δw, w_min, w_max)
+     d. If Δw > 0, reinforce confidence
+5. Return update count
+Complexity: O(E_active) where E_active = edges between active nodes (typically << E).
+
+5. SemanticLayer: Embedding-Based Grounding
+Purpose: Bridge natural language to graph concepts using semantic similarity.
+
+Model
+Uses SentenceTransformers (default: all-MiniLM-L6-v2):
+
+Dimension: 384
+Context: Multi-lingual, general-purpose
+Speed: ~1000 sentences/sec on CPU
+Encoding
+Text → Vector: $$ \mathbf{e} = \text{SentenceTransformer}(\text{text}) \in \mathbb{R}^{384} $$
+
+Normalized to unit length internally by model.
+
+Similarity Measure
+Cosine similarity:
+
+sim
+(
+a
+,
+b
+)
+=
+e
+a
+⋅
+e
+b
+|
+e
+a
+|
+|
+e
+b
+|
+
+Returns value in 
+[
+−
+1
+,
+1
+]
+.
+
+Semantic Weight Initialization
+Edge weight from similarity:
+
+w
+i
+j
+=
+sim
+(
+label
+i
+,
+label
+j
+)
++
+1
+2
+
+Maps 
+[
+−
+1
+,
+1
+]
+→
+[
+0
+,
+1
+]
+.
+
+Entry Point Detection
+For user input query:
+
+1. Encode query: e_query = encode(query)
+2. Encode all concept labels: {e_i | i ∈ concepts}
+3. Compute similarities: {sim(e_query, e_i) | i ∈ concepts}
+4. Return top-K with sim ≥ min_threshold
+5. Inject energy proportional to similarity
+Complexity: O(N × d) where N = concepts, d = embedding dimension (384).
+
+6. Confidence & Verification (v2.0)
+ConfidenceTracker
+Tracks reliability of knowledge:
+
+$$ \text{confidence}(e_{ij}) = \text{base}{\text{source}} + \min(0.8, 0.1 \times \text{count}(e{ij})) $$
+
+Where:
+
+base
+source
+ = 0.5 (training data), 0.2 (user input), 0.1 (auto-hebbian)
+count
+(
+e
+i
+j
+)
+ = Number of times edge was observed/reinforced
+Provenance Tracking:
+
+edge_provenance[(src, tgt)] = {
+   "count": int,
+   "source_type": "training" | "user" | "auto_hebbian",
+   "first_seen": timestamp,
+   "last_verified": timestamp
+}
+Decay: 
+confidence
+←
+confidence
+×
+0.99
+ per cycle (forgetting curve).
+
+ConflictDetector
+Identifies contradictions:
+
+def check_conflict(source, relation, target) -> ConflictReport:
+   # Check existing edges from source
+   existing_targets = topology.get_neighbors(source)
+   
+   for existing_target in existing_targets:
+       confidence_existing = confidence_tracker.get_confidence(source, existing_target)
+       
+       # If high confidence and semantically contradictory
+       if confidence_existing > 0.9 and are_contradictory(existing_target, target):
+           return ConflictReport(type=HARD_REJECT, ...)
+       elif confidence_existing > 0.5:
+           return ConflictReport(type=CURIOSITY, ...)
+   
+   return ConflictReport(type=NEW_KNOWLEDGE)
+Conflict Types:
+
+HARD_REJECT: Confidence > 0.9 (block new knowledge)
+CURIOSITY: Confidence 0.5-0.9 (ask user for clarification)
+ACCEPT: Confidence < 0.5 (overwrite)
+NEW_KNOWLEDGE: No conflict
+DecisionEngine
+Winner-Take-All selection:
+
+action
+∗
+=
+arg
+⁡
+max
+a
+∈
+actions
+activation
+(
+a
+)
+
+With exploration (future): $$ P(\text{action}_i) = \frac{\exp(\text{activation}_i / T)}{\sum_j \exp(\text{activation}_j / T)} $$
+
+Where 
+T
+ = temperature parameter.
+
+Acceptance Decision:
+
+If conflict.type == NEW_KNOWLEDGE:  return "accept"
+If conflict.type == HARD_REJECT:    return "reject"
+If conflict.type == CURIOSITY:      return "curiosity" (ask user)
+If conflict.type == ACCEPT:         return "accept" (overwrite)
+7. Linguistic Peripherals (System 2)
+LinguisticProcessor
+Purpose: Parse natural language → structured graph updates (NO reasoning/decisions).
+
+Process:
+
+Input: "Dogs have fur."
+     ↓
+LLM with JSON schema (TinyLlama / Llama-3)
+     ↓
+Output: KnowledgeGraphUpdate {
+ reasoning: "User stated dogs possess fur...",
+ new_nodes: [
+   {label: "dog", properties: {is_alive: true}},
+   {label: "fur", properties: {}}
+ ],
+ new_edges: [
+   {source: "dog", target: "fur", relation_type: "has_part", weight: 0.8}
+ ]
+}
+Schema (Pydantic):
+
+class KnowledgeGraphUpdate(BaseModel):
+   reasoning: str  # Chain-of-Thought (generated FIRST)
+   new_nodes: List[ConceptNode]
+   new_edges: List[RelationEdge]
+   nodes_to_remove: List[str]
+   edges_to_weaken: List[RelationEdge]
+Key Feature: reasoning field forces LLM to explain BEFORE proposing changes (Chain-of-Thought).
+
+NaturalLanguageFormatter
+Purpose: Translate internal brain state → human-readable text (NO reasoning).
+
+Process:
+
+Input: {
+ user_input: "What color is the sun?",
+ active_concepts: {sun: 0.9, yellow: 0.7, star: 0.5},
+ decision: "ACCEPT"
+}
+     ↓
+LLM with formatting prompt
+     ↓
+Output: "The sun is yellow. It's a star that emits light."
+Critical Rule: Formatter ONLY uses provided active concepts. NO hallucination from LLM's training data.
+
+Mathematical Foundations
+Information Theory Perspective
+Surprise (Prediction Error)
+$$ \text{Surprise}(t) = \text{RMS}(\mathbf{A}{\text{expected}} - \mathbf{A}{\text{observed}}) $$
+
+=
+1
+N
+active
+∑
+i
+∈
+active
+(
+A
+i
+expected
+−
+A
+i
+observed
+)
+2
+
+Used for:
+
+Detecting unexpected activations
+Triggering System 2 reasoning
+Novelty detection
+Novelty Scores
+Per-concept novelty decays exponentially:
+
+novelty
+i
+(
+t
++
+1
+)
+=
+0.999
+×
+novelty
+i
+(
+t
+)
+
+Resets to 1.0 on first activation. Low novelty → habituated concept.
+
+Graph Theory Properties
+Degree Distribution
+For concept 
+i
+:
+
+In-degree: 
+d
+in
+(
+i
+)
+=
+|
+j
+:
+w
+j
+i
+>
+0
+|
+Out-degree: 
+d
+out
+(
+i
+)
+=
+|
+j
+:
+w
+i
+j
+>
+0
+|
+Hub Detection: Concepts with high degree are cognitive "hubs" (e.g., "thing", "object").
+
+Shortest Path for Reasoning
+Shortest path from concept 
+A
+ to 
+B
+:
+
+d
+(
+A
+,
+B
+)
+=
+min
+paths 
+p
+∑
+(
+i
+,
+j
+)
+∈
+p
+−
+log
+⁡
+(
+w
+i
+j
+)
+
+Used for:
+
+Measuring conceptual distance
+Explaining reasoning chains
+Graph compression
+Centrality Measures
+Activation Centrality: 
+1
+T
+∑
+t
+=
+1
+T
+A
+i
+(
+t
+)
+ (average activation over time)
+
+Betweenness: How often concept 
+i
+ appears in shortest paths (not currently computed).
+
+Dynamical Systems View
+Fixed Points
+Equilibrium states where 
+A
+t
++
+1
+=
+A
+t
+:
+
+A
+∗
+=
+σ
+(
+A
+∗
+⋅
+(
+1
+−
+δ
+)
++
+W
+⋅
+A
+∗
+⋅
+α
+1
++
+β
+⋅
+∑
+A
+∗
+)
+
+Attractor Dynamics: System tends toward stable activation patterns (memory recall).
+
+Stability Analysis
+Decay (
+δ
+>
+0
+) ensures:
+
+lim
+t
+→
+∞
+A
+t
+=
+0
+ without input
+No persistent oscillations
+Seizure damping prevents:
+
+Divergence (runaway activation)
+Saturated states
+Design Patterns
+1. Data-Oriented Design (DOD)
+Problem: Object-Oriented Programming (OOP) causes cache misses.
+
+Traditional OOP (cache-inefficient):
+
+class Neuron:
+   def __init__(self):
+       self.activation = 0.0
+       self.threshold = 0.75
+       self.refractory = 0
+
+neurons = [Neuron() for _ in range(10000)]
+
+# Cache-inefficient: neurons scattered in memory
+for neuron in neurons:
+   neuron.activation *= 0.9  # Cache miss every iteration
+DOD (cache-optimal):
+
+activations = np.zeros(10000, dtype=np.float32)
+thresholds = np.full(10000, 0.75, dtype=np.float32)
+refractory = np.zeros(10000, dtype=np.int32)
+
+# Cache-efficient: contiguous memory access
+activations *= 0.9  # Vectorized, SIMD-optimized
+Benefits:
+
+Contiguous memory → fewer cache misses
+SIMD vectorization (AVX-512 on modern CPUs)
+10-100× faster for large N
+2. Structure-of-Arrays (SoA)
+Variant of DOD: Separate arrays for each property.
+
+Array-of-Structures (AoS) - cache-inefficient:
+
+neurons = np.array(
+   [(activation, threshold, refractory) for ...],
+   dtype=[('a', 'f4'), ('t', 'f4'), ('r', 'i4')]
+)
+# Access: neurons['a'] - strided access
+Structure-of-Arrays (SoA) - cache-optimal:
+
+activations = np.array([...], dtype='f4')
+thresholds = np.array([...], dtype='f4')
+refractory = np.array([...], dtype='i4')
+# Access: activations - contiguous
+Why? Processing often touches ONE property at a time. SoA ensures all data for that property is contiguous.
+
+3. Dirty Flag Pattern
+Problem: Rebuilding CSR matrix is expensive (O(E + N)).
+
+Solution: Mark topology "dirty" when changed, rebuild only when needed.
+
+class GraphTopology:
+   def __init__(self):
+       self._dirty = False
+   
+   def add_connection(self, src, tgt, weight):
+       # ... modify graph ...
+       self._dirty = True
+   
+   def mark_clean(self):
+       self._dirty = False
+
+class CognitiveState:
+   def synchronize_matrix(self, topology):
+       if not topology.is_dirty:
+           return  # Skip rebuild
+       
+       # Rebuild CSR matrix
+       self._adj_csr = build_csr(topology)
+       topology.mark_clean()
+Performance: Eliminates redundant matrix builds between propagation steps.
+
+4. Lazy Initialization
+Problem: Loading large models (LLM, SentenceTransformer) is slow.
+
+Solution: Delay initialization until first use.
+
+class SemanticLayer:
+   def __init__(self, model_name):
+       self._model = None  # Not loaded
+       self._model_name = model_name
+   
+   @property
+   def model(self):
+       if self._model is None:
+           # Load on first access
+           self._model = SentenceTransformer(self._model_name)
+       return self._model
+Benefits:
+
+Fast Brain instantiation
+Don't load unused components
+Parallel startup possible
+5. Registry Pattern
+Problem: Rustworkx uses integer indices, but humans use string labels.
+
+Solution: Bidirectional registry with thread-safe lookups.
+
+class IndexRegistry:
+   def __init__(self):
+       self._label_to_idx = {}
+       self._idx_to_label = {}
+       self._lock = threading.Lock()
+   
+   def register(self, label, idx):
+       with self._lock:
+           self._label_to_idx[label] = idx
+           self._idx_to_label[idx] = label
+   
+   def get_index(self, label) -> Optional[int]:
+       return self._label_to_idx.get(label)
+Performance: O(1) lookups in both directions.
+
+Performance Analysis
+Complexity Analysis
+Operation	Complexity	Notes
+Add concept	O(1)	Hash table + array append
+Add edge	O(1)	Rustworkx edge insertion
+Get neighbors	O(d)	d = out-degree
+Rebuild CSR	O(E + N)	COO → CSR conversion
+Propagate 1 tick	O(E + N)	SpMV + vector ops
+Semantic search	O(N × d)	d = embedding dim (384)
+Hebbian update	O(E_active)	E_active << E
+Memory Complexity
+Per-Node Storage:
+
+activations:          4 bytes (float32)
+thresholds:           4 bytes (float32)
+refractory_counters:  4 bytes (int32)
+resting_potentials:   4 bytes (float32)
+novelty_scores:       4 bytes (float32)
+embeddings:           1536 bytes (384 × float32)
+─────────────────────────────────────────
+Total:                1556 bytes/node
+For 10,000 nodes: ~15 MB
+
+Per-Edge Storage:
+
+CSR indices:  4 bytes (int32)
+CSR data:     4 bytes (float32)
+─────────────────────────────────
+Total:        8 bytes/edge
+For 50,000 edges: ~400 KB
+
+Benchmark Results (Typical Hardware: Ryzen 5600X, 32GB RAM)
+Metric	Value
+Graph construction (1000 nodes, 5000 edges)	~50 ms
+Semantic encoding (100 concepts)	~200 ms (CPU)
+Propagation 10 ticks (1000 nodes, 5000 edges)	~5 ms
+Hebbian learning (100 active edges)	~1 ms
+LLM triplet extraction (TinyLlama)	~500 ms
+Full cognitive cycle (input → response)	~800 ms
+Scaling Characteristics
+Propagation Time vs Graph Size (log-log plot)
+
+Time (ms)
+ ^
+10│                                    ╱
+ │                                 ╱
+ │                              ╱
+1│                           ╱
+ │                        ╱
+ │                     ╱
+0.1│──────────────╱──────────────────►
+  100       1K      10K     100K   Nodes
+
+Slope ≈ 1.0 (linear scaling with edges)
+Data Flow Diagrams
+Full Cognitive Cycle
+┌─────────────────────────────────────────────────────────────┐
+│                   process_input(user_text)                  │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  1. Semantic Entry Point Detection   │
+        │     SemanticLayer.find_entry_points  │
+        │     → [(label, similarity), ...]     │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  2. Energy Injection                 │
+        │     engine.inject(label, similarity) │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  3. System 1 Propagation             │
+        │     engine.propagate(steps=10)       │
+        │     → {label: activation, ...}       │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  4. Linguistic Parsing (if LLM)      │
+        │     linguist.extract_triplets(text)  │
+        │     → KnowledgeGraphUpdate           │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  5. Conflict Detection               │
+        │     conflicts.check_conflict(edge)   │
+        │     → ConflictReport                 │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  6. Decision Making                  │
+        │     decision.decide_acceptance()     │
+        │     → "accept" | "reject" | "curious"│
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  7. Apply Graph Updates (if accept)  │
+        │     topology.add_connection(...)     │
+        │     confidence.reinforce(...)        │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  8. Format Response                  │
+        │     formatter.format_response(state) │
+        │     → human-readable text            │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+                ┌─────────────────┐
+                │  Return Result  │
+                └─────────────────┘
+Propagation Tick Detail
+┌─────────────────────────────────────────────────────────────┐
+│                    propagate(steps=1)                       │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 0: Apply External Input       │
+        │    A ← clip(A + I_ext, 0, 1)         │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 1: Decay                      │
+        │    A ← A × (1 - δ)                   │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 2: Matrix Propagation         │
+        │    propagated ← W @ A                │
+        │    A ← A + propagated × α            │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 3: Divisive Normalization     │
+        │    A ← A / (1 + β × ΣA)              │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 4: Sigmoid Activation         │
+        │    A ← σ(6A - 3)                     │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 5: Threshold Detection        │
+        │    F ← {i | A[i] > threshold[i]      │
+        │            ∧ R[i] = 0}               │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 6: Apply Refractory           │
+        │    R[F] ← refractory_period          │
+        │    A[F] ← 0                          │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 7: Refractory Mask            │
+        │    A ← A ⊙ (1 - R_mask)              │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 8: Decay Refractory           │
+        │    R[R>0] ← R[R>0] - 1               │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 9: Seizure Damping            │
+        │    If ΣA > θ: A ← A × damping        │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  Phase 10: Clamp & Cleanup           │
+        │    A ← clip(A, 0, 1)                 │
+        │    A[A < 0.001] ← 0                  │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+                ┌─────────────────┐
+                │ Update History  │
+                └─────────────────┘
+Learning Cycle
+┌─────────────────────────────────────────────────────────────┐
+│                  learn(reward=1.0)                          │
+└─────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  1. Calculate RPE                    │
+        │     rpe ← reward - expected_reward   │
+        │     expected ← α×reward + (1-α)×exp  │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  2. Get Active Set                   │
+        │     A ← {i | activation[i] > 0.1}    │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  3. Auto-Genesis (if rpe > 0)        │
+        │     For pairs (i,j) in A:            │
+        │       Increment co_occurrence[(i,j)] │
+        │       If count ≥ threshold:          │
+        │         Create edge(i, j)            │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  4. Hebbian Update                   │
+        │     For each edge (i→j) in A:        │
+        │       Δw ← η × rpe × a_i × a_j       │
+        │       w_ij ← clip(w_ij + Δw, 0, 1)   │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+        ┌──────────────────────────────────────┐
+        │  5. Update Confidence                │
+        │     If Δw > 0:                       │
+        │       confidence.reinforce(i, j)     │
+        └──────────────────────────────────────┘
+                           │
+                           ▼
+                ┌─────────────────┐
+                │ Return Count    │
+                └─────────────────┘
+Conclusion
+NCGN is a hybrid cognitive architecture that:
+
+Separates concerns between fast association (System 1) and deliberative reasoning (System 2)
+Optimizes for performance using data-oriented design and cache-optimal memory layouts
+Learns from experience using biologically-inspired 3-factor Hebbian plasticity
+Grounds in semantics using modern embedding models
+Verifies knowledge using confidence tracking and conflict detection
+The architecture achieves real-time performance (< 10ms per cognitive tick) while maintaining biological plausibility and interpretability.
+
