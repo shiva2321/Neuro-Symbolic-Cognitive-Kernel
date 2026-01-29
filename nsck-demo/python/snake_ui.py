@@ -17,7 +17,6 @@ class SnakeGame:
         
         self.snake = [(5, 5), (5, 6), (5, 7)]
         self.food = (2, 2)
-        self.food = (2, 2)
         self.direction = "UP"
         
         # RL Metrics
@@ -60,7 +59,6 @@ class SnakeGame:
                 "game": "snake", 
                 "session_id": self.session_id,
                 "image": b64, 
-                "state": state,
                 "state": state,
                 "score": len(self.snake) - 3, # Score = Apples Eaten
                 "reward": self.current_reward,

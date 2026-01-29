@@ -16,7 +16,7 @@ class TestBrainBasics:
     
     def test_create_brain(self):
         """Test creating a brain."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain()
         
@@ -27,7 +27,7 @@ class TestBrainBasics:
     
     def test_add_concept(self):
         """Test adding concepts."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -39,7 +39,7 @@ class TestBrainBasics:
     
     def test_remove_concept(self):
         """Test removing concepts."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -54,7 +54,7 @@ class TestBrainBasics:
     
     def test_connect_concepts(self):
         """Test connecting concepts."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -68,7 +68,7 @@ class TestBrainBasics:
     
     def test_connect_creates_nodes(self):
         """Test that connect creates nodes if needed."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -83,7 +83,7 @@ class TestBrainPropagation:
     
     def test_inject_and_think(self):
         """Test injecting energy and thinking."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -98,7 +98,7 @@ class TestBrainPropagation:
     
     def test_get_active_concepts(self):
         """Test getting active concepts."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -112,7 +112,7 @@ class TestBrainPropagation:
     
     def test_get_top_concepts(self):
         """Test getting top K concepts."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -132,7 +132,7 @@ class TestBrainLearning:
     
     def test_learn_positive_reward(self):
         """Test learning with positive reward."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -154,7 +154,7 @@ class TestBrainLearning:
     
     def test_weaken_connection(self):
         """Test weakening a connection (LTD)."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -172,7 +172,7 @@ class TestBrainProperties:
     
     def test_set_and_get_property(self):
         """Test setting and getting properties."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -183,7 +183,7 @@ class TestBrainProperties:
     
     def test_get_all_properties(self):
         """Test getting all properties for a concept."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -202,7 +202,7 @@ class TestBrainClear:
     
     def test_clear(self):
         """Test clearing the brain."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         
@@ -222,7 +222,7 @@ class TestBrainStats:
     
     def test_get_stats(self):
         """Test getting comprehensive stats."""
-        from src.brain.core.brain import Brain
+        from ncgn.brain import Brain
         
         brain = Brain(use_embeddings=False)
         

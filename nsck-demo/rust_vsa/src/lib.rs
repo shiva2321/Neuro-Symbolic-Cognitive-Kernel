@@ -87,6 +87,41 @@ impl HyperVector {
         HyperVector { bits: fused }
     }
 
+    /// Weighted bundle: Creates a vector that is `weight` similar to self and `(1-weight)` to other.
+    /// weight=1.0 -> returns self (similarity 1.0)
+    /// weight=0.5 -> standard bundle (similarity ~0.75)
+    /// weight=0.9 -> 90% of bits from self, 10% from other (similarity ~0.95)
+    #[pyo3(signature = (other, weight, seed = None))]
+    fn weighted_bundle(&self, other: &HyperVector, weight: f64, seed: Option<u64>) -> HyperVector {
+        let mut rng = match seed {
+            Some(s) => ChaCha8Rng::seed_from_u64(s),
+            None => ChaCha8Rng::seed_from_u64(0xCAFEBABE),
+        };
+        
+        // weight determines probability of picking from self vs other
+        // For each bit position, pick from self with probability `weight`
+        let fused: Vec<u64> = self.bits.iter()
+            .zip(other.bits.iter())
+            .map(|(a, b)| {
+                let mut result: u64 = 0;
+                for bit_pos in 0..64 {
+                    let self_bit = (a >> bit_pos) & 1;
+                    let other_bit = (b >> bit_pos) & 1;
+                    
+                    // Pick bit based on weight probability
+                    let chosen_bit = if rng.gen::<f64>() < weight {
+                        self_bit
+                    } else {
+                        other_bit
+                    };
+                    result |= chosen_bit << bit_pos;
+                }
+                result
+            })
+            .collect();
+        HyperVector { bits: fused }
+    }
+
     fn similarity(&self, other: &HyperVector) -> f64 {
         let mut hamming_dist: u32 = 0;
         for (a, b) in self.bits.iter().zip(other.bits.iter()) {
@@ -96,6 +131,42 @@ impl HyperVector {
         // Similarity = 1.0 - (Hamming Distance / Total Dimensions)
         // Normalized to [0, 1]
         1.0 - (hamming_dist as f64 / DIMENSION as f64)
+    }
+
+    // --- LSH Support ---
+    
+    // Project hypervector onto a set of random hypervectors to get a signature
+    // We can't pass a list of HVs easily from Python without overhead, 
+    // so let's allow generating the projection vector from a seed internally.
+    fn lsh_hash(&self, seed: u64, n_bits: usize) -> u64 {
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
+        let num_u64 = DIMENSION / 64;
+        
+        let mut signature: u64 = 0;
+        
+        for i in 0..n_bits {
+            if i >= 64 { break; } // Limit to 64-bit signature for efficient integer storage
+            
+            // Generate random projection vector
+            let mut proj_bits = Vec::with_capacity(num_u64);
+            for _ in 0..num_u64 {
+                proj_bits.push(rng.gen());
+            }
+            
+            // Dot product (XOR count)
+            let mut hamming_dist: u32 = 0;
+            for (a, b) in self.bits.iter().zip(proj_bits.iter()) {
+                hamming_dist += (a ^ b).count_ones();
+            }
+            
+            // If similarity > 0.5 (Hamming < DIM/2), set bit to 1
+            // DIM=10240, DIM/2 = 5120
+            if hamming_dist < (DIMENSION as u32 / 2) {
+                signature |= 1 << i;
+            }
+        }
+        
+        signature
     }
 
     fn __repr__(&self) -> String {

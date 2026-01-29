@@ -18,7 +18,7 @@ class TestIndexRegistry:
     
     def test_register_and_lookup(self):
         """Test basic registration and lookup."""
-        from src.brain.core.topology import IndexRegistry
+        from ncgn.topology import IndexRegistry
         
         registry = IndexRegistry()
         registry.register("dog", 0)
@@ -35,7 +35,7 @@ class TestIndexRegistry:
     
     def test_unregister_by_index(self):
         """Test removal by index."""
-        from src.brain.core.topology import IndexRegistry
+        from ncgn.topology import IndexRegistry
         
         registry = IndexRegistry()
         registry.register("dog", 0)
@@ -50,7 +50,7 @@ class TestIndexRegistry:
     
     def test_unregister_by_label(self):
         """Test removal by label."""
-        from src.brain.core.topology import IndexRegistry
+        from ncgn.topology import IndexRegistry
         
         registry = IndexRegistry()
         registry.register("dog", 0)
@@ -63,7 +63,7 @@ class TestIndexRegistry:
     
     def test_duplicate_registration_fails(self):
         """Test that duplicate labels are rejected."""
-        from src.brain.core.topology import IndexRegistry
+        from ncgn.topology import IndexRegistry
         
         registry = IndexRegistry()
         registry.register("dog", 0)
@@ -73,7 +73,7 @@ class TestIndexRegistry:
     
     def test_thread_safety(self):
         """Test concurrent access from multiple threads."""
-        from src.brain.core.topology import IndexRegistry
+        from ncgn.topology import IndexRegistry
         
         registry = IndexRegistry()
         errors = []
@@ -106,7 +106,7 @@ class TestGraphTopology:
     
     def test_add_concept(self):
         """Test adding concepts."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -121,7 +121,7 @@ class TestGraphTopology:
     
     def test_add_existing_returns_same_index(self):
         """Test that adding existing label returns same index."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -133,7 +133,7 @@ class TestGraphTopology:
     
     def test_remove_concept(self):
         """Test removing concepts."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -148,7 +148,7 @@ class TestGraphTopology:
     
     def test_add_connection(self):
         """Test adding connections."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -161,7 +161,7 @@ class TestGraphTopology:
     
     def test_connection_creates_nodes(self):
         """Test that add_connection creates nodes if needed."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -172,7 +172,7 @@ class TestGraphTopology:
     
     def test_dirty_flag(self):
         """Test that dirty flag is set on modifications."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -189,7 +189,7 @@ class TestGraphTopology:
     
     def test_get_adjacency_data(self):
         """Test extracting edge data for matrix construction."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         import numpy as np
         
         topo = GraphTopology()
@@ -211,7 +211,7 @@ class TestGraphTopology:
     
     def test_index_reuse_after_deletion(self):
         """Test that Rustworkx reuses deleted indices."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -229,7 +229,7 @@ class TestGraphTopology:
     
     def test_get_neighbors(self):
         """Test getting neighbors."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         
@@ -243,7 +243,7 @@ class TestGraphTopology:
     
     def test_clear(self):
         """Test clearing the graph."""
-        from src.brain.core.topology import GraphTopology
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         

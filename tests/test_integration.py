@@ -13,8 +13,8 @@ is doing, how, and why.
 
 import time
 from typing import Dict, List, Any
-from src.brain.core.brain import Brain
-from src.brain.core.config import Config
+from ncgn.brain import Brain
+from ncgn.config import Config
 
 # ============================================================================
 # Test Data: Large Text Corpus

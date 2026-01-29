@@ -1,101 +1,130 @@
 import numpy as np
-# Assuming hypervec_py is available, but for minimal prototype refactor, we can simulate vectors
-# or just use string constants if we are only testing the "logic" of transfer first.
-# But the plan says "HyperVector". Let's check if hypervec_py exists.
-# It does (from file listing).
-try:
-    from hypervec_py import HyperVector
-except ImportError:
-    # Fallback/Mock for testing if environment issues
-    class HyperVector:
-        def __init__(self, seed=None): pass
-        def xor(self, o): return self
-        def bundle(self, o): return self
-        def similarity(self, o): return 0.5
+from typing import List, Set
+import hypervec_rs
+from python.brain_fusion import FusedBrain, TaskBrain, Rule, ConceptType
+from python.metacognition import MetacognitiveEngine, inference_to_probs
 
-# --- CONCEPT CODEBOOK (SEEDS) ---
-SEED_GOAL = 1001
-SEED_DANGER = 1002
-SEED_SAFE = 1003
-SEED_LEFT = 2001 # Relative Left
-SEED_RIGHT = 2002
-SEED_CENTER = 2003
+# --- CONCEPT CODEBOOK (CONSTANTS) ---
+# Keeping constants for reference, though Brain handles them dynamically now.
+GLOBAL_PRIMITIVES_MAP = {
+    "ACTION_UP": 10,
+    "ACTION_DOWN": 20,
+    "ACTION_LEFT": 30,
+    "ACTION_RIGHT": 40,
+    "REL_ABOVE": 101,
+    "REL_BELOW": 102,
+    "REL_LEFT": 103,
+    "REL_RIGHT": 104
+}
 
-# --- REASONING ENGINE (BITWISE VSA) ---
-class ReasoningEngine:
+def bootstrap_metacognitive_brain() -> MetacognitiveEngine:
     """
-    Replaces coordinate math with Bitwise Hypervector logic.
-    Instead of 'if x < y', we use 'State XOR Concept' similarity.
+    Initialize FusedBrain with Ground Truth mechanics.
+    """
+    # 1. Create Task Brains
+    snake_brain = TaskBrain("snake")
+    pong_brain = TaskBrain("pong")
+    
+    # 2. Populate Snake Rules (Navigation)
+    # Mapping old 'ReasoningEngine' XOR logic to Directional Rules
+    # Note: Using full action names (ACTION_DOWN vs ACTION_DN) to match Metacognitive standards
+    
+    # Add Concepts (optional but good for context)
+    for name, seed in GLOBAL_PRIMITIVES_MAP.items():
+        snake_brain.add_concept(name, hypervec_rs.HyperVector(seed))
+        
+    # Rules: Relation -> Action
+    snake_brain.add_rule(frozenset(["REL_ABOVE"]), "ACTION_UP", priority=1)
+    snake_brain.add_rule(frozenset(["REL_BELOW"]), "ACTION_DOWN", priority=1)
+    snake_brain.add_rule(frozenset(["REL_LEFT"]), "ACTION_LEFT", priority=1)
+    snake_brain.add_rule(frozenset(["REL_RIGHT"]), "ACTION_RIGHT", priority=1)
+    
+    # 3. Populate Pong Rules
+    # Reuse primitive concepts
+    for name, seed in GLOBAL_PRIMITIVES_MAP.items():
+        pong_brain.add_concept(name, hypervec_rs.HyperVector(seed))
+        
+    # Pong also uses vertical logic
+    pong_brain.add_rule(frozenset(["REL_ABOVE"]), "ACTION_UP", priority=1)
+    pong_brain.add_rule(frozenset(["REL_BELOW"]), "ACTION_DOWN", priority=1)
+    
+    # 4. Global Layer
+    # Safety Veto Rules? (e.g. DANGER -> BLOCK)
+    # For now, relying on Simulation Veto inside MetacognitiveEngine.
+    
+    # 5. Fuse
+    from python.brain_fusion import BrainFusion
+    fusion = BrainFusion()
+    fusion.register_brain(snake_brain)
+    fusion.register_brain(pong_brain)
+    
+    fused_brain = fusion.fuse()
+    
+    # 6. Wrap
+    return MetacognitiveEngine(fused_brain)
+
+
+class MetacognitiveWrapper:
+    """
+    Shim to adapt MetacognitiveEngine to the legacy 'infer_navigation' interface.
     """
     def __init__(self):
-        # 1. Base Symbols (Random High-Dim Patterns)
-        self.codebook = {
-            "ACTION_UP": HyperVector(10),
-            "ACTION_DN": HyperVector(20),
-            "ACTION_LF": HyperVector(30),
-            "ACTION_RT": HyperVector(40),
-            "REL_ABOVE": HyperVector(101),
-            "REL_BELOW": HyperVector(102),
-            "REL_LEFT":  HyperVector(103),
-            "REL_RIGHT": HyperVector(104)
-        }
+        self.engine = bootstrap_metacognitive_brain()
+        print(">> MetacognitiveEngine Bootstrapped & Grounded.")
         
-        # 2. Bindings: Mapping Relations to Actions (This is the 'Expert Knowledge')
-        # Logic: (REL_ABOVE XOR ACTION_UP) creates a 'Concept Pair'
-        self.rules = [
-            self.codebook["REL_ABOVE"].xor(self.codebook["ACTION_UP"]),
-            self.codebook["REL_BELOW"].xor(self.codebook["ACTION_DN"]),
-            self.codebook["REL_LEFT"].xor(self.codebook["ACTION_LF"]),
-            self.codebook["REL_RIGHT"].xor(self.codebook["ACTION_RT"])
-        ]
+    def infer_navigation(self, is_above, is_below, is_left, is_right, game_type="snake", state=None):
+        # 1. Extract Facts
+        facts = []
+        if is_above: facts.append("REL_ABOVE")
+        if is_below: facts.append("REL_BELOW")
+        if is_left:  facts.append("REL_LEFT")
+        if is_right: facts.append("REL_RIGHT")
         
-        # 3. Consolidated Knowledge Base (Bundled Rules)
-        self.knowledge_base = self.rules[0]
-        for rule in self.rules[1:]:
-            self.knowledge_base = self.knowledge_base.bundle(rule)
-
-    def infer_navigation(self, is_above, is_below, is_left, is_right):
-        # Logic: If ABOVE is true, we unbind REL_ABOVE from our Knowledge Base
-        # to see what action it 'recommends'.
-        
-        active_rels = []
-        if is_above: active_rels.append(self.codebook["REL_ABOVE"])
-        if is_below: active_rels.append(self.codebook["REL_BELOW"])
-        if is_left:  active_rels.append(self.codebook["REL_LEFT"])
-        if is_right: active_rels.append(self.codebook["REL_RIGHT"])
-
-        if not active_rels:
+        if not facts:
+            # No input -> No output (or uniform logic?)
+            # Legacy returned zeros.
+            # We return uniform? Or zeros.
             return np.zeros(4, dtype=np.float32)
-
-        # Query the Knowledge Base: For each active relation, what's the recommendation?
-        # We collect all recommendations and bundle them.
-        recommendations = []
-        for rel in active_rels:
-            # UNBIND: Rule XOR Rel = Action
-            # (REL_A XOR ACTION_A) XOR REL_A = ACTION_A
-            rec = self.knowledge_base.xor(rel)
-            recommendations.append(rec)
             
-        final_rec = recommendations[0]
-        for r in recommendations[1:]:
-            final_rec = final_rec.bundle(r)
+        # 2. Metacognitive Inference (Logic Channel)
+        # We need a dummy state if not provided (SafetyGate check will fail or pass?)
+        # For now, pass empty state if None, but SafetyGate requires valid state for veto.
+        # ActionSemantics calls us... let's see where state comes from.
+        if state is None: state = {}
+        
+        result = self.engine.infer_from_facts(
+            facts=facts, 
+            task_tag=game_type, 
+            state=state, 
+            last_action="UNKNOWN" # We don't track last action in this shim yet
+        )
+        
+        # 3. Map to Probability Array
+        # Expected order: UP, DOWN, LEFT, RIGHT
+        all_actions = ["UP", "DOWN", "LEFT", "RIGHT"]
+        
+        probs = inference_to_probs(result, all_actions)
+        
+        # Legacy interface expects specific tensor shape?
+        # python_server uses: biased_probs * (1 + VSA).
+        # And it expects tensor.
+        # ReasoningEngine returned np.array([sim_up, sim_dn, sim_lf, sim_rt])
+        # These were similarities, not probs (could be > 1 or unnormalized).
+        # Logic was: biased_probs = snn_probs * (1.0 + VSA_STRENGTH * prior_tensor)
+        # So prior_tensor can be just the boost signal.
+        
+        # Probs sum to 1. If we return probs, it acts as a weight.
+        # This is fine.
+        return np.array(probs, dtype=np.float32)
 
-        # Compare result against known Motor Actions
-        results = [
-            final_rec.similarity(self.codebook["ACTION_UP"]),
-            final_rec.similarity(self.codebook["ACTION_DN"]),
-            final_rec.similarity(self.codebook["ACTION_LF"]),
-            final_rec.similarity(self.codebook["ACTION_RT"])
-        ]
-        return np.array(results, dtype=np.float32)
+# Global Instance
+kernel_engine = MetacognitiveWrapper()
 
-# Global engine instance
-kernel_engine = ReasoningEngine()
 
 class ActionSemantics:
     """
     Defines the 'Meaning' of actions in terms of abstract predicates.
-    Now optimized to use Bitwise VSA reasoning.
+    Proxies to Metacognitive Engine.
     """
     
     @staticmethod
@@ -103,18 +132,18 @@ class ActionSemantics:
         if game_type == "snake":
             hx, hy = state["head"]
             fx, fy = state["food"]
-            return kernel_engine.infer_navigation(fy < hy, fy > hy, fx < hx, fx > hx)
+            # Pass state for Safety Veto
+            return kernel_engine.infer_navigation(fy < hy, fy > hy, fx < hx, fx > hx, "snake", state)
         
         elif game_type == "pong":
             paddle_center = state["p1_y"] + 3
             ball_y = state["ball_y"]
             # Map Pong to same bitwise navigation logic as Snake
-            scores_2 = kernel_engine.infer_navigation(ball_y < paddle_center - 1, ball_y > paddle_center + 1, False, False)
-            return scores_2[:2] # Only UP/DN
+            scores_4 = kernel_engine.infer_navigation(ball_y < paddle_center - 1, ball_y > paddle_center + 1, False, False, "pong", state)
+            return scores_4[:2] # Only UP/DN
             
         return []
 
     @staticmethod
     def get_danger_alignment(game_type, state):
-        # Expandable conceptual logic
         pass

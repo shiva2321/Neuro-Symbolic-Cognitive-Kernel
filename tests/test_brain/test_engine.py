@@ -17,10 +17,10 @@ class TestPropagationEngine:
     
     def test_energy_decay(self):
         """Test that energy decays without reinforcement."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
-        from src.brain.core.config import Config
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
+        from ncgn.config import Config
         
         config = Config(decay_delta=0.1)
         topo = GraphTopology()
@@ -40,10 +40,10 @@ class TestPropagationEngine:
     
     def test_propagation_spreads_activation(self):
         """Test that activation spreads through edges."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
-        from src.brain.core.config import Config
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
+        from ncgn.config import Config
         
         config = Config()
         topo = GraphTopology()
@@ -70,9 +70,9 @@ class TestPropagationEngine:
     
     def test_inject_by_label(self):
         """Test injecting energy by label."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
         
         topo = GraphTopology()
         topo.add_concept("dog")
@@ -90,9 +90,9 @@ class TestPropagationEngine:
     
     def test_inject_unknown_label_fails(self):
         """Test that injecting into unknown label returns False."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
         
         topo = GraphTopology()
         state = CognitiveState()
@@ -104,10 +104,10 @@ class TestPropagationEngine:
     
     def test_refractory_period(self):
         """Test that nodes in refractory period don't fire."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
-        from src.brain.core.config import Config
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
+        from ncgn.config import Config
         
         config = Config(refractory_period=5)
         topo = GraphTopology()
@@ -125,9 +125,9 @@ class TestPropagationEngine:
     
     def test_get_active_concepts(self):
         """Test getting active concepts as dict."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
         
         topo = GraphTopology()
         topo.add_concept("dog")
@@ -146,9 +146,9 @@ class TestPropagationEngine:
     
     def test_get_top_k_active(self):
         """Test getting top K active concepts."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
         
         topo = GraphTopology()
         for i in range(10):
@@ -168,9 +168,9 @@ class TestPropagationEngine:
     
     def test_multiple_ticks(self):
         """Test running multiple propagation ticks."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
         
         topo = GraphTopology()
         topo.add_connection("a", "b", 0.5)
@@ -185,9 +185,9 @@ class TestPropagationEngine:
     
     def test_reset(self):
         """Test resetting the engine."""
-        from src.brain.core.topology import GraphTopology
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.engine import PropagationEngine
+        from ncgn.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.engine import PropagationEngine
         
         topo = GraphTopology()
         topo.add_concept("dog")
@@ -209,7 +209,7 @@ class TestSigmoidFunction:
     
     def test_sigmoid_range(self):
         """Test that sigmoid output is in [0, 1]."""
-        from src.brain.core.engine import sigmoid
+        from ncgn.engine import sigmoid
         
         x = np.array([-100, -10, -1, 0, 1, 10, 100])
         y = sigmoid(x)
@@ -220,7 +220,7 @@ class TestSigmoidFunction:
     
     def test_sigmoid_midpoint(self):
         """Test that sigmoid(0) = 0.5."""
-        from src.brain.core.engine import sigmoid
+        from ncgn.engine import sigmoid
         
         y = sigmoid(np.array([0.0]))
         assert abs(y[0] - 0.5) < 0.001

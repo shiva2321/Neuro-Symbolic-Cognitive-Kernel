@@ -17,8 +17,8 @@ class TestCognitiveState:
     
     def test_initial_state(self):
         """Test initial state of arrays."""
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.config import Config
+        from ncgn.state import CognitiveState
+        from ncgn.config import Config
         
         config = Config(initial_capacity=100)
         state = CognitiveState(config)
@@ -31,8 +31,8 @@ class TestCognitiveState:
     
     def test_ensure_capacity_no_resize(self):
         """Test that ensure_capacity doesn't resize unnecessarily."""
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.config import Config
+        from ncgn.state import CognitiveState
+        from ncgn.config import Config
         
         config = Config(initial_capacity=100)
         state = CognitiveState(config)
@@ -44,8 +44,8 @@ class TestCognitiveState:
     
     def test_ensure_capacity_resize(self):
         """Test that ensure_capacity doubles when needed."""
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.config import Config
+        from ncgn.state import CognitiveState
+        from ncgn.config import Config
         
         config = Config(initial_capacity=100)
         state = CognitiveState(config)
@@ -66,8 +66,8 @@ class TestCognitiveState:
     
     def test_zero_index(self):
         """Test that zero_index clears all arrays at index."""
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.config import Config
+        from ncgn.state import CognitiveState
+        from ncgn.config import Config
         
         config = Config(initial_capacity=100)
         state = CognitiveState(config)
@@ -89,7 +89,7 @@ class TestCognitiveState:
     
     def test_set_activation(self):
         """Test setting activation with clamping."""
-        from src.brain.core.state import CognitiveState
+        from ncgn.state import CognitiveState
         
         state = CognitiveState()
         
@@ -105,7 +105,7 @@ class TestCognitiveState:
     
     def test_add_activation(self):
         """Test adding to activation."""
-        from src.brain.core.state import CognitiveState
+        from ncgn.state import CognitiveState
         
         state = CognitiveState()
         
@@ -116,7 +116,7 @@ class TestCognitiveState:
     
     def test_get_active_indices(self):
         """Test getting active node indices."""
-        from src.brain.core.state import CognitiveState
+        from ncgn.state import CognitiveState
         
         state = CognitiveState()
         
@@ -131,7 +131,7 @@ class TestCognitiveState:
     
     def test_get_firing_indices(self):
         """Test getting nodes ready to fire."""
-        from src.brain.core.state import CognitiveState
+        from ncgn.state import CognitiveState
         
         state = CognitiveState()
         
@@ -149,8 +149,8 @@ class TestCognitiveState:
     
     def test_synchronize_matrix(self):
         """Test CSR matrix synchronization."""
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         topo.add_connection("a", "b", 0.3)
@@ -164,8 +164,8 @@ class TestCognitiveState:
     
     def test_matrix_not_rebuilt_when_clean(self):
         """Test that matrix isn't rebuilt when topology is clean."""
-        from src.brain.core.state import CognitiveState
-        from src.brain.core.topology import GraphTopology
+        from ncgn.state import CognitiveState
+        from ncgn.topology import GraphTopology
         
         topo = GraphTopology()
         topo.add_connection("a", "b", 0.3)
@@ -185,7 +185,7 @@ class TestCognitiveState:
     
     def test_clear_all(self):
         """Test clearing all state."""
-        from src.brain.core.state import CognitiveState
+        from ncgn.state import CognitiveState
         
         state = CognitiveState()
         

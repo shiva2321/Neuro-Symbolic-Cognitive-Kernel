@@ -30,7 +30,7 @@ class DashboardApp:
         self.root.configure(bg=BG_COLOR)
         
         # Internal State
-        self.procs = {"Server": None, "Snake": None, "Pong": None}
+        self.procs = {"Server": None, "Snake": None, "Pong": None, "Maze": None}
         self.running = True
         
         # QUEUES (Thread-Safe Communication)
@@ -54,9 +54,13 @@ class DashboardApp:
         self.data = {
             "snake": {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history)},
             "pong":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history)},
+            "maze":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history)},
             "char":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history)} 
         }
-        self.vis_data = {"snake": None, "pong": None, "char": None}
+        self.vis_data = {"snake": None, "pong": None, "maze": None, "char": None}
+        
+        # Cognitive state (for explanations)
+        self.cognitive_state = {"explanation": "", "mode": "exploit", "confidence": 0.5}
         
         # UI Setup
         self._setup_ui()
@@ -77,10 +81,12 @@ class DashboardApp:
         self.btn_server = self._make_proc_btn(control_frame, "Server", "python_server.py")
         self.btn_snake = self._make_proc_btn(control_frame, "Snake", "snake_ui.py")
         self.btn_pong = self._make_proc_btn(control_frame, "Pong", "pong_ui.py")
+        self.btn_maze = self._make_proc_btn(control_frame, "Maze", "maze_ui.py")
         
         # EXPERIMENTS
         tk.Label(control_frame, text="| EXPERIMENTS:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=20)
         tk.Button(control_frame, text="STRICT TRANSFER", command=self._run_transfer_exp, bg="#9900cc", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        tk.Button(control_frame, text="SNAKE→MAZE", command=self._run_maze_transfer, bg="#ff6600", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         
         
         tk.Label(control_frame, text="| ADMIN:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=20)
@@ -118,7 +124,10 @@ class DashboardApp:
         canvas_perf.draw()
         canvas_perf.get_tk_widget().pack(fill="both", expand=True)
         
-        # TAB 2: LETTER LAB
+        # TAB 2: COGNITIVE PANEL
+        self._setup_cognitive_panel(left_book)
+        
+        # TAB 3: LETTER LAB
         self._setup_letter_lab(left_book)
         
         # RIGHT: BRAIN INSPECTOR (SPLIT VIEW)
@@ -207,6 +216,69 @@ class DashboardApp:
             area.tag_config("INTERVENE", foreground="#ff9900")
             area.tag_config("VSA", foreground="#33ccff", font=("Consolas", 9, "italic"))
             area.tag_config("TIMESTAMP", foreground="#666666")
+            area.tag_config("TRANSFER", foreground="#ff6600")
+            area.tag_config("EXPLORE", foreground="#ff00ff")
+
+    def _setup_cognitive_panel(self, parent_book):
+        """Cognitive reasoning panel - shows explanations, transfer, exploration."""
+        frame = tk.Frame(parent_book, bg=BG_COLOR)
+        parent_book.add(frame, text="Cognitive Panel")
+        
+        # Title
+        tk.Label(frame, text="COGNITIVE STATE & EXPLANATIONS", 
+                 bg=BG_COLOR, fg="#00ccff", font=FONT_HEADER).pack(pady=10)
+        
+        # Mode Indicator
+        mode_frame = tk.Frame(frame, bg=BG_COLOR)
+        mode_frame.pack(fill="x", padx=20)
+        
+        tk.Label(mode_frame, text="MODE:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_MAIN).pack(side="left")
+        self.lbl_cog_mode = tk.Label(mode_frame, text="EXPLOIT", bg="green", fg="white", 
+                                      font=FONT_HEADER, width=12)
+        self.lbl_cog_mode.pack(side="left", padx=10)
+        
+        tk.Label(mode_frame, text="CONFIDENCE:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_MAIN).pack(side="left", padx=10)
+        self.lbl_cog_conf = tk.Label(mode_frame, text="0.50", bg="black", fg="#00ff00", 
+                                      font=FONT_HEADER, width=8)
+        self.lbl_cog_conf.pack(side="left")
+        
+        # Transfer Status
+        transfer_frame = tk.LabelFrame(frame, text="CROSS-TASK TRANSFER", 
+                                        bg=BG_COLOR, fg="#ff6600", font=FONT_HEADER)
+        transfer_frame.pack(fill="x", padx=20, pady=10)
+        
+        self.lbl_transfer_status = tk.Label(transfer_frame, 
+                                            text="No transfer active", 
+                                            bg=BG_COLOR, fg="gray", font=FONT_MAIN)
+        self.lbl_transfer_status.pack(pady=5)
+        
+        self.txt_transfer_mappings = scrolledtext.ScrolledText(transfer_frame, 
+                                                                bg="#1e1e1e", fg="#ff6600",
+                                                                font=("Consolas", 8), height=4)
+        self.txt_transfer_mappings.pack(fill="x", padx=10, pady=5)
+        
+        # Explanation Display
+        explain_frame = tk.LabelFrame(frame, text="CURRENT EXPLANATION", 
+                                       bg=BG_COLOR, fg="#00ccff", font=FONT_HEADER)
+        explain_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        self.txt_explanation = scrolledtext.ScrolledText(explain_frame, 
+                                                          bg="#1e1e1e", fg="#00ff00",
+                                                          font=("Consolas", 9), height=8)
+        self.txt_explanation.pack(fill="both", expand=True, padx=10, pady=5)
+        
+        # Query Buttons
+        query_frame = tk.Frame(explain_frame, bg=BG_COLOR)
+        query_frame.pack(fill="x", pady=5)
+        
+        tk.Button(query_frame, text="WHY?", command=self._query_why, 
+                  bg="#0066cc", fg="white", font=FONT_MAIN).pack(side="left", padx=5)
+        tk.Button(query_frame, text="WHAT IF UP?", command=lambda: self._query_counterfactual("UP"),
+                  bg="#006666", fg="white", font=FONT_MAIN).pack(side="left", padx=5)
+        tk.Button(query_frame, text="WHAT IF DOWN?", command=lambda: self._query_counterfactual("DOWN"),
+                  bg="#006666", fg="white", font=FONT_MAIN).pack(side="left", padx=5)
+        tk.Button(query_frame, text="RULES", command=self._query_rules,
+                  bg="#666600", fg="white", font=FONT_MAIN).pack(side="left", padx=5)
 
     def _setup_letter_lab(self, parent_book):
         frame = tk.Frame(parent_book, bg=BG_COLOR)
@@ -444,6 +516,69 @@ class DashboardApp:
         self.push_sock.send_json({"type": "admin", "cmd": "strict_transfer_cfg"})
         # Note: If server is not running, user must start it. 
         # If it is running, this command sets the flags.
+    
+    def _run_maze_transfer(self):
+        """Run Snake→Maze zero-shot transfer experiment."""
+        self.log_queue.put("=== SNAKE → MAZE TRANSFER EXPERIMENT ===")
+        self.log_queue.put("Applying learned Snake rules to Maze domain...")
+        
+        # Update transfer status display
+        if hasattr(self, 'lbl_transfer_status'):
+            self.lbl_transfer_status.config(text="ACTIVE: Snake → Maze", fg="#00ff00")
+        
+        if hasattr(self, 'txt_transfer_mappings'):
+            self.txt_transfer_mappings.delete("1.0", "end")
+            mappings = [
+                "SNAKE_HEAD ≈ MAZE_PLAYER via AGENT",
+                "SNAKE_FOOD ≈ MAZE_EXIT via TARGET",
+                "REL_ABOVE ≈ EXIT_ABOVE via TARGET_ABOVE",
+                "REL_BELOW ≈ EXIT_BELOW via TARGET_BELOW",
+                "ACTION_UP ≈ ACTION_UP via MOVE_UP",
+                "ACTION_DOWN ≈ ACTION_DOWN via MOVE_DOWN",
+            ]
+            self.txt_transfer_mappings.insert("end", "\n".join(mappings))
+        
+        # Send transfer command to server
+        self.push_sock.send_json({
+            "type": "admin", 
+            "cmd": "transfer_knowledge",
+            "source": "snake",
+            "target": "maze"
+        })
+        
+        self._append_brain_event("[TRANSFER] Snake → Maze transfer activated")
+    
+    def _query_why(self):
+        """Query the brain for explanation of current action."""
+        self.push_sock.send_json({"type": "admin", "cmd": "explain_action"})
+        self.log_queue.put("Sent EXPLAIN request...")
+        
+        # Show pending in explanation box
+        if hasattr(self, 'txt_explanation'):
+            self.txt_explanation.delete("1.0", "end")
+            self.txt_explanation.insert("end", "Querying brain for explanation...")
+    
+    def _query_counterfactual(self, action):
+        """Query 'what if' for alternative action."""
+        self.push_sock.send_json({
+            "type": "admin", 
+            "cmd": "counterfactual",
+            "action": action
+        })
+        self.log_queue.put(f"Sent COUNTERFACTUAL query: What if {action}?")
+        
+        if hasattr(self, 'txt_explanation'):
+            self.txt_explanation.delete("1.0", "end")
+            self.txt_explanation.insert("end", f"Simulating: What if ACTION_{action}?...")
+    
+    def _query_rules(self):
+        """Query current learned rules."""
+        self.push_sock.send_json({"type": "admin", "cmd": "list_rules"})
+        self.log_queue.put("Sent RULES query...")
+        
+        if hasattr(self, 'txt_explanation'):
+            self.txt_explanation.delete("1.0", "end")
+            self.txt_explanation.insert("end", "Retrieving learned rules...")
         
     # REMOVED AUTO SEQUENCER logic (_exp_switch_to_pong, _exp_end) as per user request to be manual.
 

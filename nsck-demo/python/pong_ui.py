@@ -22,7 +22,6 @@ class PongGame:
         self.p2_y = 10 
         self.score_p1 = 0
         self.score_p2 = 0
-        self.score_p2 = 0
         self.rally_count = 0
         
         # RL Metrics
@@ -88,7 +87,6 @@ class PongGame:
                     "game": "pong", 
                     "session_id": self.session_id,
                     "image": b64, 
-                    "state": state,
                     "state": state,
                     "score": self.rally_count, # Metric for transfer success
                     "reward": self.current_reward,
