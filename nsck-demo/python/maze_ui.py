@@ -11,6 +11,10 @@ import uuid
 import random
 import sys
 import os
+import base64
+
+import numpy as np
+import cv2
 
 # Import maze game from parent
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -151,6 +155,49 @@ class MazeUI:
         self.canvas.create_text(cx, cy, text="EXIT", fill="white", 
                                  font=("Consolas", 8, "bold"))
     
+    def _render_for_brain(self):
+        """
+        Render the maze as a 10x10 grayscale image for the SNN brain.
+        
+        ALIGNED WITH SNAKE ENCODING for transfer learning:
+        - Background/Empty: 0 (black) - same as Snake background
+        - Target (Exit): 128 (gray) - same as Snake food!
+        - Danger (Walls): 255 (white) - same as Snake body (avoid!)
+        - Player: Not shown (brain controls player, doesn't need to see itself)
+        
+        This mapping enables the Snake-trained visual cortex to interpret:
+        - Walls as "dangerous" (like snake body) -> avoid
+        - Exit as "target" (like food) -> move toward
+        
+        Returns:
+            Base64 encoded PNG image string, or empty string if no state.
+        """
+        if self.game.state is None:
+            return ""
+        
+        state = self.game.state
+        
+        # Create full-resolution image first
+        full_img = np.zeros((state.height, state.width), dtype=np.uint8)
+        
+        for y in range(state.height):
+            for x in range(state.width):
+                if state.maze[y][x] == Cell.WALL.value:
+                    full_img[y, x] = 255  # Wall = DANGER (like snake body)
+                # Empty and visited cells stay 0 (background)
+        
+        # Mark exit as TARGET (like snake food)
+        ex, ey = state.exit_pos
+        full_img[ey, ex] = 128
+        
+        # Resize to 10x10 for SNN
+        brain_img = cv2.resize(full_img, (10, 10), interpolation=cv2.INTER_AREA)
+        
+        # Encode as PNG and then base64
+        _, buffer = cv2.imencode('.png', brain_img)
+        img_bytes = buffer.tobytes()
+        return base64.b64encode(img_bytes).decode('utf-8')
+    
     def _human_move(self, action):
         """Handle human input."""
         self._execute_move(f"ACTION_{action}", is_human=True)
@@ -195,6 +242,9 @@ class MazeUI:
             state["game"] = "maze"
             state["session_id"] = self.session_id
             state["step"] = self.step_count
+            
+            # Add visual input for brain (10x10 grayscale image)
+            state["image"] = self._render_for_brain()
             
             # Send to server
             self.push_sock.send_json(state)

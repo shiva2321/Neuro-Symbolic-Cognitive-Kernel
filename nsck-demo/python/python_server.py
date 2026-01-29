@@ -14,10 +14,14 @@ import random
 from collections import defaultdict, deque
 from symbol_grounding import ActionSemantics
 from simulation import sim_snake, sim_pong
+from maze_game import sim_maze  # For maze veto logic
 from character_dataset import get_dataloader # New Import
 from concept_mapper import ConceptMapper
 import threading
 import queue
+import hypervec_rs
+from curiosity import CuriosityModule
+from symbol_grounding import GLOBAL_PRIMITIVES_MAP
 
 # --- ABLATION FLAGS (DEFAULTS) ---
 ENABLE_SNN = True
@@ -25,11 +29,12 @@ ENABLE_VSA = True
 ENABLE_SLEEP = True
 FREEZE_PONG = False
 NO_TEACHER = False # If True, we never fallback to Teacher. System must survive on its own.
+RL_CONTEXT = {} # Stores {session_id: log_prob_of_prev_action} for REINFORCE (Policy Gradient)
 
 # --- HYPERPARAMETERS ---
 SLEEP_EPOCHS = 5
 REPLAY_BATCH_SIZE = 32
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4 # Reduced from 1e-3 to prevent overfitting
 MODEL_PATH = "snn_task_aware.pth"
 SAVE_INTERVAL = 60.0
 SLEEP_INTERVAL = 10.0
@@ -103,19 +108,31 @@ class ReplayBuffer:
         # Stratified Buffers: [Game][Agreed?]
         self.buffers = {
             "snake": {True: deque(maxlen=self.capacity), False: deque(maxlen=self.capacity)},
-            "pong":  {True: deque(maxlen=self.capacity), False: deque(maxlen=self.capacity)}
+            "pong":  {True: deque(maxlen=self.capacity), False: deque(maxlen=self.capacity)},
+            "maze":  {True: deque(maxlen=self.capacity), False: deque(maxlen=self.capacity)}
         }
     
-    def push(self, state, task_id, action_idx, reward, agreed, game_type):
+    def push(self, state, task_id, action_idx, reward, agreed, game_type, compass=None):
         # Detach and move to CPU to save GPU RAM
         state_cpu = state.detach().cpu()
         
         # Store tuple
-        # We store: (State, TaskID, Action, Reward)
-        task_id = 1.0 if game_type == "snake" else 0.0
-        experience = (state_cpu, task_id, int(action_idx), float(reward))
+        # We store: (State, TaskID, Action, Reward, Compass)
+        if game_type == "snake" or game_type == "maze":
+            tid = 1.0
+        else:
+            tid = 0.0
+            
+        if compass is None:
+            compass = torch.zeros(4)
+        else:
+            compass = compass.detach().cpu()
+            
+        experience = (state_cpu, tid, int(action_idx), float(reward), compass)
         
-        # Route to correct quadrant
+        # Route to correct quadrant (fallback to snake if unknown)
+        if game_type not in self.buffers:
+            game_type = "snake"
         self.buffers[game_type][agreed].append(experience)
         
     def sample(self, batch_size):
@@ -138,27 +155,51 @@ class ReplayBuffer:
         random.shuffle(batch) # Shuffle mixed batch
         
         # Collate
-        states, task_ids, actions, rewards = zip(*batch)
+        states, task_ids, actions, rewards, compasses = zip(*batch)
         
         return (
             torch.cat(states, dim=0), 
             torch.tensor(task_ids, dtype=torch.float), 
             torch.tensor(actions, dtype=torch.long),
-            torch.tensor(rewards, dtype=torch.float)
+            torch.tensor(rewards, dtype=torch.float),
+            torch.stack(compasses, dim=0)
+        )
+    
+    def sample_game(self, batch_size, game_type):
+        """Sample from a specific game only (for sleep cycle training)."""
+        if game_type not in self.buffers:
+            return None
+        
+        batch = []
+        target_per_q = batch_size // 2
+        if target_per_q == 0: target_per_q = 1
+        
+        for agreed in [True, False]:
+            buf = self.buffers[game_type][agreed]
+            if len(buf) > 0:
+                count = min(len(buf), target_per_q)
+                batch.extend(random.sample(buf, count))
+        
+        if len(batch) == 0: return None
+        
+        random.shuffle(batch)
+        
+        # Collate
+        states, task_ids, actions, rewards, compasses = zip(*batch)
+        
+        return (
+            torch.cat(states, dim=0), 
+            torch.tensor(task_ids, dtype=torch.float), 
+            torch.tensor(actions, dtype=torch.long),
+            torch.tensor(rewards, dtype=torch.float),
+            torch.stack(compasses, dim=0)
         )
         
     def count(self):
         total = 0
         for game in self.buffers:
-            for ag in self.buffers[game]:
-                total += len(self.buffers[game][ag])
-        return total
-
-    def count(self):
-        total = 0
-        for game in self.buffers:
-            for ag in self.buffers[game]:
-                total += len(self.buffers[game][ag])
+            for agreed in self.buffers[game]:
+                total += len(self.buffers[game][agreed])
         return total
 
 def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all", epochs=SLEEP_EPOCHS):
@@ -179,60 +220,55 @@ def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all",
     steps = 0
     criterion = nn.CrossEntropyLoss()
     
-    games_to_train = ["snake", "pong"] if target_game == "all" else [target_game]
+    games_to_train = ["snake", "pong", "maze"] if target_game == "all" else [target_game]
     
     for _ in range(epochs):
         for game in games_to_train:
-            # Sample (No Lock needed for buffer read if careful, but buffer isn't thread safe either really. 
-            # We assume main thread only PUSHES, this thread only SAMPLES. Deque is thread-safe for append/pop, but sample?)
-            # Random.sample on deque is not atomic.
-            # Let's risk it or lock buffer? 
-            # Ideally strict lock, but let's try fine-grained.
+            # 1. Prepare Batch (GAME-SPECIFIC to avoid action space mismatch)
+            batch_data = buffer.sample_game(REPLAY_BATCH_SIZE, game)
+            if batch_data is None: continue
             
-            # 1. Prepare Batch (CPU work, no lock needed mostly)
-            batch = []
-            try:
-                buf_a = buffer.buffers[game][True]
-                buf_d = buffer.buffers[game][False]
-                if len(buf_a) > 0: batch.extend(random.sample(buf_a, min(len(buf_a), REPLAY_BATCH_SIZE//4)))
-                if len(buf_d) > 0: batch.extend(random.sample(buf_d, min(len(buf_d), REPLAY_BATCH_SIZE//4)))
-            except:
-                continue # dict change size during iteration?
+            x, tid_batch, y, r, comp = batch_data
+            # Fix compass dimension: buffer returns [batch, 1, 4], model expects [batch, 4]
+            if comp.dim() == 3:
+                comp = comp.squeeze(1)
+            x, y, r, comp = x.to(device), y.to(device), r.to(device), comp.to(device)
+            tid = tid_batch[0].item() # Use first task_id in batch (stratified sampling should ensure consistency here or we iterate)
 
-            if not batch: continue
-
-            obs, tasks, actions, rewards = zip(*batch)
-            inp = torch.cat(obs, dim=0).to(device)
-            a_lbl = torch.tensor(actions, dtype=torch.long).to(device)
-            r_val = torch.tensor(rewards, dtype=torch.float).to(device)
-            
-            task_id = 1 if game == "snake" else 0
-            
             # 2. Train Step (Model Mutating -> LOCK REQUIRED)
             with model_lock:
-                # Re-set training mode just in case main thread set it to Eval? 
                 model.train() 
                 optimizer.zero_grad()
-                out = model(inp, task_id)
+                
+                # Forward with Compass
+                out = model(x, tid, compass=comp)
                 
                 if NO_TEACHER:
-                     # RL Loss (Policy Gradient)
+                     # RL Loss (Policy Gradient) during sleep
                      dist = torch.distributions.Categorical(logits=out)
-                     log_probs = dist.log_prob(a_lbl)
-                     loss = -(log_probs * r_val).mean()
+                     log_probs = dist.log_prob(y)
+                     loss = -(log_probs * r).mean()
                 else:
-                     loss = criterion(out, a_lbl)
+                     # Supervised Loss
+                     loss = criterion(out, y)
                 
                 loss.backward()
                 optimizer.step()
                 total_loss += loss.item()
                 steps += 1
             
-            # Sleep tiny bit to let Main Thread breathe?
+            # Sleep tiny bit to let Main Thread breathe
             time.sleep(0.01) 
             
     if steps > 0:
-        print(f"   AVG SLEEP LOSS ({target_game.upper()}): {total_loss/steps:.4f}")
+        avg_loss = total_loss/steps
+        print(f"   AVG SLEEP LOSS ({target_game.upper()}): {avg_loss:.4f}")
+        
+        # CRITICAL: Save model after sleep to persist learned knowledge
+        with model_lock:
+            torch.save(model.state_dict(), MODEL_PATH)
+        print(f"   [DISK] MODEL SAVED: {MODEL_PATH}")
+
 
 def run_sleep_thread(model, optimizer, buffer, device, model_lock, target_game):
     t = threading.Thread(target=sleep_cycle, args=(model, optimizer, buffer, device, model_lock, target_game))
@@ -403,7 +439,7 @@ def main():
     # NEW: TaskAwareSNN (Late Fusion)
     model = TaskAwareSNN(beta=0.5).to(device)
     model_lock = threading.Lock() # Lock for model/optimizer access
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-5) # Added weight decay for regularization
     criterion = nn.CrossEntropyLoss()
     
     if os.path.exists(MODEL_PATH):
@@ -429,6 +465,18 @@ def main():
                     # Update state_dict so strict loading works (or just set them manually)
                     state_dict["head_chars.weight"] = new_weight
                     state_dict["head_chars.bias"] = new_bias
+
+            # NEW: Compass Surgery
+            if "fc_shared.weight" in state_dict:
+                saved_in = state_dict["fc_shared.weight"].shape[1]
+                current_in = model.fc_shared.weight.shape[1]
+                if saved_in == 289 and current_in == 293:
+                    print(f">> [SURGERY] Compass Migration: {saved_in} -> {current_in} inputs")
+                    new_fc_w = model.fc_shared.weight.clone()
+                    # Copy old 289 weights
+                    new_fc_w[:, :289] = state_dict["fc_shared.weight"]
+                    # Last 4 weights remain freshly initialized (or we could zero them)
+                    state_dict["fc_shared.weight"] = new_fc_w
             
             model.load_state_dict(state_dict, strict=False)
             print("loaded weights (with Surgery if needed).")
@@ -440,8 +488,9 @@ def main():
     logger = LogAggregator(zmq_pub=pub_sock_stats) # Pass socket
     concept_mapper = ConceptMapper() # Initialize Mapper
     buffer = ReplayBuffer() # Initialize Memory
+    curiosity = CuriosityModule() # Initialize Curiosity
     
-    history = {"snake": deque(maxlen=4), "pong": deque(maxlen=4)}
+    history = {"snake": deque(maxlen=4), "pong": deque(maxlen=4), "maze": deque(maxlen=4)}
     
     print(">> NEURO-SYMBOLIC SNN: DASHBOARD ENABLED (Port 5557)...")
     
@@ -452,6 +501,10 @@ def main():
         try:
             msg = pull_sock.recv_json()
             
+            # Robust check: if msg is a string, wrap it in a dummy dict or handle it
+            if isinstance(msg, str):
+                msg = {"type": "raw", "data": msg}
+                
             # --- CHECK FOR ADMIN COMMANDS ---
             if msg.get("type") == "admin":
                 cmd = msg.get("cmd")
@@ -464,6 +517,25 @@ def main():
                     run_sleep_thread(model, optimizer, buffer, device, model_lock, "all")
                 elif cmd == "reset_memory":
                      buffer = ReplayBuffer()
+                     print(">> REPLAY BUFFER CLEARED")
+                elif cmd == "full_reset":
+                     # Full brain reset: reinit weights, clear buffer, delete saved model
+                     with model_lock:
+                         # Reinitialize model with fresh random weights
+                         model.__init__(beta=0.5)
+                         model.to(device)
+                         # Reinitialize optimizer for new model params
+                         optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-5)
+                     # Clear replay buffer
+                     buffer = ReplayBuffer()
+                     # Delete saved model file
+                     if os.path.exists(MODEL_PATH):
+                         os.remove(MODEL_PATH)
+                         print(f">> DELETED SAVED MODEL: {MODEL_PATH}")
+                     # Clear frame history
+                     for key in history:
+                         history[key].clear()
+                     print(">> *** FULL BRAIN RESET COMPLETE *** - Starting from scratch!")
                 elif cmd == "toggle_teacher":
                      NO_TEACHER = not NO_TEACHER
                      print(f">> TEACHER STATUS: {'OFF' if NO_TEACHER else 'ON'}")
@@ -514,8 +586,10 @@ def main():
                     
                     # 4. Inference (Task 2)
                     with model_lock:
-                        model.eval() # Temp Eval
-                        out = model(inp, 2)
+                        model.eval()
+                        # Pass dummy compass for char recon
+                        dummy_comp = torch.zeros((1, 4), device=device)
+                        out = model(inp, 2, compass=dummy_comp)
                         model.train() # Resume Train mode default?
                         
                     probs = torch.softmax(out, dim=1).detach().cpu().numpy()[0]
@@ -558,10 +632,18 @@ def main():
             state_data = msg.get("state", {})
             reward = msg.get("reward", 0.0)
             done = msg.get("done", False)
-            img_bytes = base64.b64decode(msg["image"])
-            np_arr = np.frombuffer(img_bytes, np.uint8)
-            img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
-            if img.shape != (10, 10): img = cv2.resize(img, (10, 10))
+            
+            # Robust image handling - fallback to blank if missing
+            img_b64 = msg.get("image", "")
+            if img_b64:
+                img_bytes = base64.b64decode(img_b64)
+                np_arr = np.frombuffer(img_bytes, np.uint8)
+                img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
+                if img is None or img.shape != (10, 10):
+                    img = cv2.resize(img, (10, 10)) if img is not None else np.zeros((10, 10), dtype=np.uint8)
+            else:
+                # No image provided - create blank
+                img = np.zeros((10, 10), dtype=np.uint8)
             
             # Adversarial (Snake)
             obstacles_extra = []
@@ -585,6 +667,57 @@ def main():
             elif game_type == "pong":
                 task_id = 0
                 teacher_idx = get_pong_oracle(state_data)
+            elif game_type == "snake":
+                task_id = 1
+                # IMPROVED ORACLE: Move toward food + avoid immediate death
+                head = state_data.get("head", (0, 0))
+                food = state_data.get("food", (5, 5))
+                dx = food[0] - head[0]
+                dy = food[1] - head[1]
+                
+                # Priority: horizontal then vertical (0=UP, 1=DOWN, 2=LEFT, 3=RIGHT)
+                prefs = []
+                if abs(dx) > abs(dy):
+                    prefs = [3 if dx > 0 else 2, 1 if dy > 0 else 0, 0 if dy > 0 else 1, 2 if dx > 0 else 3]
+                else:
+                    prefs = [1 if dy > 0 else 0, 3 if dx > 0 else 2, 2 if dx > 0 else 3, 0 if dy > 0 else 1]
+                
+                # Choose the first preference that is SAFE
+                teacher_idx = prefs[0]
+                snake_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
+                for p_idx in prefs:
+                    _, dead = sim_snake(state_data, snake_act_names[p_idx])
+                    if not dead:
+                        teacher_idx = p_idx
+                        break
+                
+                if steps_total % 100 == 0:
+                    print(f"[ORACLE] Snake: {head}->{food} | dx={dx}, dy={dy} | Preferred: {snake_act_names[teacher_idx]}")
+            elif game_type == "maze":
+                task_id = 1 # Use Snake head for transfer
+                # IMPROVED ORACLE: Move toward exit + avoid walls
+                player = state_data.get("player_pos", (0, 0))
+                exit_pos = state_data.get("exit_pos", (9, 9))
+                dx = exit_pos[0] - player[0]
+                dy = exit_pos[1] - player[1]
+                
+                # Priority: horizontal then vertical
+                prefs = []
+                if abs(dx) > abs(dy):
+                    prefs = [3 if dx > 0 else 2, 1 if dy > 0 else 0, 0 if dy > 0 else 1, 2 if dx > 0 else 3]
+                else:
+                    prefs = [1 if dy > 0 else 0, 3 if dx > 0 else 2, 2 if dx > 0 else 3, 0 if dy > 0 else 1]
+                
+                teacher_idx = prefs[0]
+                maze_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
+                for p_idx in prefs:
+                    _, wall_hit = sim_maze(state_data, maze_act_names[p_idx])
+                    if not wall_hit:
+                        teacher_idx = p_idx
+                        break
+                
+                if steps_total % 100 == 0:
+                    print(f"[ORACLE] Maze: {player}->{exit_pos} | dx={dx}, dy={dy}")
 
             # Input Processing
             curr_np = img.astype(np.float32) / 255.0
@@ -603,10 +736,29 @@ def main():
             input_tensor = torch.from_numpy(stacked_np).float().to(device) 
             input_tensor = input_tensor.unsqueeze(0) # [1, 4, 10, 10]
             
+            # --- COMPASS CALCULATION ---
+            compass_bits = [0, 0, 0, 0] # Above, Below, Left, Right
+            if game_type in ["snake", "maze"]:
+                hx, hy = state_data.get("head", state_data.get("player_pos", (0, 0)))
+                fx, fy = state_data.get("food", state_data.get("exit_pos", (0, 0)))
+                if fy < hy: compass_bits[0] = 1
+                if fy > hy: compass_bits[1] = 1
+                if fx < hx: compass_bits[2] = 1
+                if fx > hx: compass_bits[3] = 1
+            elif game_type == "pong":
+                # Ball relative to paddle
+                paddle_center = state_data.get("p1_y", 0) + 3
+                ball_y = state_data.get("ball_y", 0)
+                if ball_y < paddle_center - 1: compass_bits[0] = 1
+                if ball_y > paddle_center + 1: compass_bits[1] = 1
+            
+            compass_tensor = torch.tensor([compass_bits], dtype=torch.float, device=device)
+
             # Forward (WITH LOCK)
             with model_lock:
                  optimizer.zero_grad()
-                 rate_out = model(input_tensor, task_id) 
+                 model.train() # Default to train mode
+                 rate_out = model(input_tensor, task_id, compass=compass_tensor) 
             
             # --- VSA PRIOR MASKING (GATED TRANSFER) ---
             snn_probs = torch.softmax(rate_out, dim=1)
@@ -653,14 +805,86 @@ def main():
             
             # 2. Determine Final Action (for Execution/Safety)
             # 'student_idx' will track the *executed* action (after VSA/Veto)
-            # Note: 'student_idx' variable name is kept for compatibility with existing logic below
-            _, active_idx_t = torch.max(probs, dim=1)
-            student_idx = active_idx_t.item()
+            
+            # --- CURIOSITY & EXPLORATION ---
+            # Driven by Novelty (VSA) and Stagnation
+            should_explore = False
+            exploration_reason = ""
+            
+            if NO_TEACHER: # Only explore if Teacher is OFF (Autonomy Mode)
+                # 1. Generate Situation Hypervector (Neuro-Symbolic State)
+                # We reuse primitives from symbol_grounding
+                situation_hv = hypervec_rs.HyperVector(0) # Null start
+                
+                # Goal Relations (Snake/Maze)
+                if game_type in ["snake", "maze"]:
+                    hx, hy = state_data.get("head", state_data.get("player_pos", (0, 0)))
+                    fx, fy = state_data.get("food", state_data.get("exit_pos", (0, 0)))
+                    
+                    if fy < hy: situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(GLOBAL_PRIMITIVES_MAP["REL_ABOVE"]))
+                    if fy > hy: situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(GLOBAL_PRIMITIVES_MAP["REL_BELOW"]))
+                    if fx < hx: situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(GLOBAL_PRIMITIVES_MAP["REL_LEFT"]))
+                    if fx > hx: situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(GLOBAL_PRIMITIVES_MAP["REL_RIGHT"]))
+                    
+                    # Obstacle Awareness (Wall Detection)
+                    # Check adjacent cells in 10x10 grid. 255 = Wall/Body.
+                    # Codes: 201=Blocked_UP, 202=Blocked_DN, 203=Blocked_L, 204=Blocked_R
+                    dirs = [(0, -1, 201), (0, 1, 202), (-1, 0, 203), (1, 0, 204)]
+                    for dx, dy, code in dirs:
+                        nx, ny = (hx + dx) % GRID_SIZE, (hy + dy) % GRID_SIZE
+                        # img is [y, x]
+                        if img[ny, nx] == 255:
+                            situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(code))
+                    
+                # 2. Consult Curiosity Module
+                # Confidence = (1 - Entropy) or Max Prob? 
+                # Entropy 0 = High Conf. Entropy 1.3 = Low Conf.
+                # Let's use Max Prob as confidence proxy.
+                max_conf = torch.max(probs).item()
+                
+                decision = curiosity.should_explore(situation_hv, game_type, max_conf)
+                
+                if decision.should_explore:
+                    should_explore = True
+                    exploration_reason = decision.reason
+                    
+                    # Update Prototype Memory (if novel)
+                    curiosity.update_prototype(situation_hv, game_type)
+            
+            if should_explore:
+                # Ask Curiosity Module for a recommended action (Softmax exploration)
+                # It needs probabilities to bias against best (if strictly exploring) or just sample.
+                p_list = probs[0].tolist() # Batch 0
+                act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if game_type != "pong" else ["UP", "DOWN"]
+                
+                rec_act_name = curiosity.get_exploration_action(act_names, p_list, explore_rate=0.4) # 40% temp boost
+                
+                # Map back to index
+                if rec_act_name in act_names:
+                    student_idx = act_names.index(rec_act_name)
+                    print(f"[{game_type.upper()}] CURIOSITY: {rec_act_name} ({exploration_reason})")
+                else:
+                    _, active_idx_t = torch.max(probs, dim=1)
+                    student_idx = active_idx_t.item()
+            else:
+                _, active_idx_t = torch.max(probs, dim=1)
+                student_idx = active_idx_t.item()
+                
+            # Log Outcome for Curiosity (Learning Progress)
+            # We don't know "Success" yet. We find out next frame? 
+            # Or we use Reward? 
+            # Current frame reward is for LAST action.
+            # Curiosity module tracks window.
+            # We record outcome of *this* step in the *next* loop iteration?
+            # actually, let's just feed current Reward as proxy for *previous* action success.
+            is_success = (reward > 0)
+            curiosity.record_outcome(game_type, is_success)
             
             # --- SYSTEM 2: SIMULATION & SAFETY VETO ---
             # "Reasoning": Check if proposed action is suicidal/bad, if so, override.
             reasoning_override = False
             veto_log = ""
+            original_unsafe_idx = None # Track intended action for penalty
             
             if game_type == "snake":
                 snake_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
@@ -669,6 +893,7 @@ def main():
                     _, dead = sim_snake(state_data, proposed)
                     
                     if dead:
+                        original_unsafe_idx = student_idx
                         # CRITICAL: Proposed action kills. Search for safe alternative.
                         original_idx = student_idx
                         for i, alt in enumerate(snake_act_names):
@@ -689,6 +914,7 @@ def main():
                         _, miss = sim_pong(state_data, proposed)
                         
                         if miss:
+                            original_unsafe_idx = student_idx
                             # CRITICAL: Proposed moves leads to miss. Check if other move saves.
                             original_idx = student_idx
                             other_idx = 1 - student_idx
@@ -700,8 +926,51 @@ def main():
                                 reasoning_override = True
                                 veto_log = f"VETO: Pong {proposed}->{other_act} (Reason: Predicted Miss)"
             
+            elif game_type == "maze":
+                # Maze Actions: 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
+                maze_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
+                if student_idx < 4:
+                    proposed = maze_act_names[student_idx]
+                    _, wall_hit = sim_maze(state_data, proposed)
+                    
+                    if wall_hit:
+                        original_unsafe_idx = student_idx
+                        # CRITICAL: Proposed action hits wall. Search for safe alternative.
+                        for i, alt in enumerate(maze_act_names):
+                            _, alt_wall = sim_maze(state_data, alt)
+                            if not alt_wall:
+                                student_idx = i  # OVERRIDE
+                                reasoning_override = True
+                                veto_log = f"VETO: Maze {proposed}->{alt} (Reason: Wall Collision)"
+                                break
+            
             if reasoning_override:
                 print(f"[REASONING] [SYSTEM 2] Counterfactual Analysis: {veto_log}")
+                
+                # --- SAFETY PENALTY + ACTIVE DISTILLATION ---
+                # 1. Punishment for *thinking* about doing something stupid.
+                # 2. TEACHING the brain what the *correct* (safe) action was.
+                if NO_TEACHER and not args.eval and original_unsafe_idx is not None:
+                     dist_safety = torch.distributions.Categorical(logits=rate_out)
+                     
+                     # A. Penalty for Bad Thought
+                     log_prob_unsafe = dist_safety.log_prob(torch.tensor([original_unsafe_idx], device=device))
+                     loss_penalty = -(log_prob_unsafe * -0.5) # Equivalent to maximizing negative reward
+                     
+                     # B. Reward for Safe Action (Distillation)
+                     # System 2 found 'student_idx' (the safe move). Teach it!
+                     log_prob_safe = dist_safety.log_prob(torch.tensor([student_idx], device=device))
+                     loss_teach = -(log_prob_safe * 1.0) # Maximize probability of safe move
+                     
+                     # Combined Loss: Push Bad DOWN, Push Good UP
+                     total_safety_loss = loss_penalty + loss_teach
+                     
+                     with model_lock:
+                         optimizer.zero_grad()
+                         total_safety_loss.backward(retain_graph=True) # Retain for main loop
+                         optimizer.step()
+                     print(f"[{game_type.upper()}] RL SUPER-LEARN: Punished Unsafe (-0.5) & Taught Safe (+1.0)")
+
             
             # 3. Training & Agreement Logic
             # CRITICAL FIX: Train if SNN was wrong, even if System was right.
@@ -720,47 +989,79 @@ def main():
             
             loss_val = 0.0
             
+            # --- TRAINING (HYBRID) ---
             # Gated Training Rule:
             # - If SNN is correct: No loss.
             # - If SNN is wrong: Train (unless Eval mode).
-            # - If NO_TEACHER: We can't train, because we don't have a teacher target!
+            # - If NO_TEACHER: RL Mode (Policy Gradient).
             
-            if not args.eval: # Only train if NOT in eval mode
+            if not args.eval: 
                 if NO_TEACHER:
-                     # In No-Teacher mode, we can only do Reinforcement Learning (not implemented yet)
-                     # or unsupervized Hebbian. For now, Training is OFF in No-Teacher mode.
-                     loss_val = 0.0
+                    # REINFORCE (Policy Gradient)
+                    # We use the reward from the PREVIOUS action (which led to this state)
+                    # to update the log_prob of that PREVIOUS action.
+                    # We retrieve this from RL_CONTEXT.
+                    
+                    if session_id in RL_CONTEXT:
+                         prev_log_prob = RL_CONTEXT[session_id]
+                         
+                         # --- BOREDOM PENALTY (Anti-Looping) ---
+                         # If we visited this state many times, add a small penalty.
+                         # This encourages leaving "Comfy" loops.
+                         visit_count = curiosity.get_visit_count(situation_hv, game_type)
+                         boredom_penalty = 0.0
+                         if visit_count > 4:
+                             boredom_penalty = -0.05 * (visit_count - 4)
+                             boredom_penalty = max(boredom_penalty, -0.5) # Cap penalty
+                         
+                         effective_reward = reward + boredom_penalty
+                         
+                         if effective_reward != 0.0:
+                             # Minimize Negative Reward (Maximize Reward)
+                             loss = -(prev_log_prob * effective_reward)
+                             
+                             with model_lock:
+                                 optimizer.zero_grad()
+                                 loss.backward()
+                                 optimizer.step()
+                             
+                             rl_log_msg = f"Reward {reward:+.1f}"
+                             if boredom_penalty < 0:
+                                 rl_log_msg += f" | Boredom {boredom_penalty:.2f}"
+                             print(f"[{game_type.upper()}] RL LEARN: {rl_log_msg} | Loss {loss.item():.4f}")
+                             
+                         # Clear context after use (One-step MDP for now)
+                         del RL_CONTEXT[session_id]
+                    
+                    # Store CURRENT action's log_prob for NEXT frame's reward
+                    dist = torch.distributions.Categorical(logits=rate_out)
+                    current_log_prob = dist.log_prob(torch.tensor([final_action_idx], device=device))
+                    RL_CONTEXT[session_id] = current_log_prob
+                    
+                    if done: # If episode ended, clear context
+                        if session_id in RL_CONTEXT: del RL_CONTEXT[session_id]
+
                 elif snn_agreed:
                     pass # SNN effectively mastered this state
                 else:
-                    # SNN was wrong (or confused). 
-                    # If Teacher ON: Train on Teacher.
-                    # If Teacher OFF: Train on Reward (RL) or Skip?
-                    
-                    if NO_TEACHER:
-                        # RL UPDATE (Live)
-                        # We executed 'final_action_idx' (Student).
-                        # We received 'reward'.
-                        # Loss = -log_prob(action) * reward
-                        dist = torch.distributions.Categorical(logits=rate_out)
-                        log_prob = dist.log_prob(torch.tensor([final_action_idx], device=device))
-                        loss = -(log_prob * reward)
-                    else:
-                        # IMITATION UPDATE (Live)
-                        target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
-                        loss = criterion(rate_out, target)
+                    # IMITATION LEARNING (Teacher active)
+                    target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
+                    loss = criterion(rate_out, target)
                     
                     if not (game_type == "pong" and FREEZE_PONG):
                         with model_lock:
                             if loss.requires_grad:
+                                item_loss = loss.item() # capture before backward
+                                optimizer.zero_grad() 
                                 loss.backward()
                                 optimizer.step()
+                                # print(f"[{game_type.upper()}] LEARN: Loss {item_loss:.4f}")
                         
                     loss_val = loss.item()
                 
-            # MEMORY: Store Experience
-            # We store what we *did* (final_action_idx) and the result (reward)
-            buffer.push(input_tensor, task_id, final_action_idx, reward, system_agreed, game_type)
+            # 4. Memory (Experience Replay)
+            # We push the CURRENT state and action we just calculated.
+            buffer.push(input_tensor, task_id, final_action_idx, reward, system_agreed, game_type, compass=compass_tensor)
             
             # Retrieve score from message payload
             current_score = msg.get("score", 0)
@@ -841,9 +1142,10 @@ def main():
             else:
                 final_action_idx = student_idx if system_agreed else teacher_idx
             
-            if game_type == "snake":
+            if game_type == "snake" or game_type == "maze":
+                # Both use 4-directional actions: UP, DOWN, LEFT, RIGHT
                 cmd = actions[final_action_idx] if final_action_idx < 4 else "UP"
-            else: # Pong
+            else:  # Pong
                 cmd = "UP" if final_action_idx == 0 else "DOWN"
             
             pub_sock.send_string(f"{game_type.upper()}:{cmd}")

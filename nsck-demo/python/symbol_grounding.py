@@ -1,8 +1,8 @@
 import numpy as np
 from typing import List, Set
 import hypervec_rs
-from python.brain_fusion import FusedBrain, TaskBrain, Rule, ConceptType
-from python.metacognition import MetacognitiveEngine, inference_to_probs
+from brain_fusion import FusedBrain, TaskBrain, Rule, ConceptType
+from metacognition import MetacognitiveEngine, inference_to_probs
 
 # --- CONCEPT CODEBOOK (CONSTANTS) ---
 # Keeping constants for reference, though Brain handles them dynamically now.
@@ -53,7 +53,7 @@ def bootstrap_metacognitive_brain() -> MetacognitiveEngine:
     # For now, relying on Simulation Veto inside MetacognitiveEngine.
     
     # 5. Fuse
-    from python.brain_fusion import BrainFusion
+    from brain_fusion import BrainFusion
     fusion = BrainFusion()
     fusion.register_brain(snake_brain)
     fusion.register_brain(pong_brain)
@@ -129,18 +129,33 @@ class ActionSemantics:
     
     @staticmethod
     def get_goal_alignment(game_type, state):
+        if not state: return []
+        
         if game_type == "snake":
-            hx, hy = state["head"]
-            fx, fy = state["food"]
+            head = state.get("head")
+            food = state.get("food")
+            if head is None or food is None: return []
+            hx, hy = head
+            fx, fy = food
             # Pass state for Safety Veto
             return kernel_engine.infer_navigation(fy < hy, fy > hy, fx < hx, fx > hx, "snake", state)
         
         elif game_type == "pong":
-            paddle_center = state["p1_y"] + 3
-            ball_y = state["ball_y"]
+            p1_y = state.get("p1_y")
+            ball_y = state.get("ball_y")
+            if p1_y is None or ball_y is None: return []
+            paddle_center = p1_y + 3
             # Map Pong to same bitwise navigation logic as Snake
             scores_4 = kernel_engine.infer_navigation(ball_y < paddle_center - 1, ball_y > paddle_center + 1, False, False, "pong", state)
             return scores_4[:2] # Only UP/DN
+            
+        elif game_type == "maze":
+            player = state.get("player_pos")
+            exit_pos = state.get("exit_pos")
+            if player is None or exit_pos is None: return []
+            px, py = player
+            ex, ey = exit_pos
+            return kernel_engine.infer_navigation(ey < py, ey > py, ex < px, ex > px, "maze", state)
             
         return []
 

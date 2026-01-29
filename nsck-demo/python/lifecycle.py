@@ -1,4 +1,4 @@
-from python.staged_recall import StagedRecall
+from staged_recall import StagedRecall
 import hypervec_rs
 
 class LifecycleManager:

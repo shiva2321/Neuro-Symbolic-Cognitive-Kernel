@@ -11,7 +11,7 @@ import hashlib
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Callable
 import hypervec_rs
-from python.brain_fusion import FusedBrain, QueryResult
+from brain_fusion import FusedBrain, QueryResult
 
 # --- Constants & Configuration ---
 
@@ -134,7 +134,7 @@ class SafetyGate:
         Wraps collision logic from simulation.py
         """
         # Lazy import to avoid circular dependencies if possible, or assume imports at top
-        from python.simulation import sim_snake, sim_pong
+        from simulation import sim_snake, sim_pong
         
         # Standardize action
         action_core = action.replace("ACTION_", "")

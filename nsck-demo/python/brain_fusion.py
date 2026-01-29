@@ -400,7 +400,7 @@ class BrainFusion:
                 # Promote: bundle all versions into global
                 merged_hv = hvs[0]
                 for hv in hvs[1:]:
-                    merged_hv = merged_hv.weighted_bundle(hv, 0.5)  # Equal weight
+                    merged_hv = merged_hv.bundle(hv)  # Equal weight
                     
                 result.global_codebook[concept_name] = merged_hv
                 result.provenance[concept_name] = appearances

@@ -50,8 +50,10 @@ class TaskAwareSNN(nn.Module):
         self.flatten = nn.Flatten()
         
         # Shared Latent Space (32 channels * 3x3 spatial = 288 flat)
-        # LATE FUSION: We add +1 for the Task ID injection here
-        self.fc_shared = nn.Linear((32 * 3 * 3) + 1, 64)
+        # LATE FUSION:
+        # +1 for Task ID
+        # +4 for Compass (Above, Below, Left, Right)
+        self.fc_shared = nn.Linear((32 * 3 * 3) + 1 + 4, 64)
         self.lif_shared = snn.Leaky(beta=beta, spike_grad=spike_grad, threshold=0.5)
 
         # 2. Specialized Heads (The "Task Experts")
@@ -60,7 +62,14 @@ class TaskAwareSNN(nn.Module):
         self.head_chars = nn.Linear(64, 62) # 0-9, A-Z, a-z
         self.lif_out    = snn.Leaky(beta=beta, spike_grad=spike_grad, output=True, threshold=0.5)
 
-    def forward(self, x, task_id):
+    def forward(self, x, task_id, compass=None):
+        """
+        Forward pass.
+        Args:
+            x: Visual input [Batch, 4, 10, 10]
+            task_id: Scalar task index (0=Pong, 1=Snake, 2=Chars)
+            compass: Optional 4-bit direction vector [Batch, 4] (Above, Below, Left, Right)
+        """
         # 1. APPLY TERNARY QUANTIZATION TO WEIGHTS (ON THE FLY)
         # This keeps the float weights for gradients but uses Ternary for inference
         w_conv1 = ternarize_weight(self.conv1.weight)
@@ -78,6 +87,12 @@ class TaskAwareSNN(nn.Module):
 
         spk_rec = []
         
+        # Prepare Compass Tensor
+        if compass is None:
+            compass_tensor = torch.zeros((x.size(0), 4), device=x.device)
+        else:
+            compass_tensor = compass.to(x.device).float()
+
         # Simulation Steps (T=8)
         for step in range(8):
             # Layer 1 (Functional to use quantized W)
@@ -91,9 +106,9 @@ class TaskAwareSNN(nn.Module):
             # Shared Linear + Late Fusion
             flat = self.flatten(spk2)
             
-            # Inject Context
+            # Inject Context (Task ID + Compass)
             task_tensor = torch.full((x.size(0), 1), float(task_id), device=x.device)
-            combined = torch.cat([flat, task_tensor], dim=1) 
+            combined = torch.cat([flat, task_tensor, compass_tensor], dim=1) 
             
             cur_shared = torch.nn.functional.linear(combined, w_fc_s)
             spk_shared, mem_shared = self.lif_shared(cur_shared, mem_shared)

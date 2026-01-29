@@ -94,12 +94,12 @@ class DashboardApp:
         self.btn_teacher.pack(side="left", padx=5)
         
         tk.Button(control_frame, text="EXPORT LOG", command=self._cmd_export_log, bg="#666666", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
-        tk.Button(control_frame, text="RESET", command=self._cmd_reset, bg="#cc0000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        tk.Button(control_frame, text="RESET MEM", command=self._cmd_reset, bg="#cc0000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        tk.Button(control_frame, text="FULL RESET", command=self._cmd_full_reset, bg="#990000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         
         # SLEEP CONTROLS
         tk.Label(control_frame, text="| SLEEP:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
-        tk.Button(control_frame, text="SNAKE", command=self._cmd_sleep_snake, bg="blue", fg="white", font=("Consolas", 8)).pack(side="left", padx=2)
-        tk.Button(control_frame, text="PONG", command=self._cmd_sleep_pong, bg="blue", fg="white", font=("Consolas", 8)).pack(side="left", padx=2)
+        tk.Button(control_frame, text="💤 SLEEP", command=self._cmd_universal_sleep, bg="#4400aa", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         
         self.lbl_status = tk.Label(control_frame, text="READY", bg="black", fg="#00ff00", font=FONT_MAIN, width=30)
         self.lbl_status.pack(side="right", padx=10)
@@ -582,17 +582,20 @@ class DashboardApp:
         
     # REMOVED AUTO SEQUENCER logic (_exp_switch_to_pong, _exp_end) as per user request to be manual.
 
-    def _cmd_sleep_snake(self):
-        self.push_sock.send_json({"type": "admin", "cmd": "admin_sleep_snake"})
-        self.log_queue.put("Sent FORCE SLEEP (SNAKE)")
-
-    def _cmd_sleep_pong(self):
-        self.push_sock.send_json({"type": "admin", "cmd": "admin_sleep_pong"})
-        self.log_queue.put("Sent FORCE SLEEP (PONG)")
+    def _cmd_universal_sleep(self):
+        """Universal Sleep: Consolidate ALL memories (Snake, Pong, Maze, Char)."""
+        self.push_sock.send_json({"type": "admin", "cmd": "force_sleep"})
+        self.log_queue.put("💤 UNIVERSAL SLEEP: Consolidating all memories...")
 
     def _cmd_reset(self):
         self.push_sock.send_json({"type": "admin", "cmd": "reset_memory"})
         self.log_queue.put("Sent RESET MEMORY command")
+    
+    def _cmd_full_reset(self):
+        """Full brain reset: reinit weights, clear buffer, delete saved model."""
+        if messagebox.askyesno("FULL RESET", "This will DELETE all learned knowledge!\n\nThe brain will start from scratch.\n\nAre you sure?"):
+            self.push_sock.send_json({"type": "admin", "cmd": "full_reset"})
+            self.log_queue.put(">>> FULL BRAIN RESET INITIATED <<<")
         
     def _cmd_toggle_teacher(self):
         self.push_sock.send_json({"type": "admin", "cmd": "toggle_teacher"})
@@ -915,10 +918,25 @@ class DashboardApp:
             txt_entropy.set_color('white')
 
     def on_close(self):
+        print("[Dashboard] Closing... Killing subprocesses.")
         self.running = False
+        self.log_queue.put("DASHBOARD EXITING...")
+        
         for name, p in self.procs.items():
-            if p: p.terminate()
-        self.root.destroy()
+            if p:
+                print(f"[Dashboard] Killing {name} (PID: {p.pid})...")
+                try:
+                    p.kill() # Force kill (SIGKILL/TerminateProcess)
+                    p.wait(timeout=1)
+                except Exception as e:
+                    print(f"Error killing {name}: {e}")
+        
+        try:
+            self.root.destroy()
+        except:
+            pass
+        print("[Dashboard] Bye.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     root = tk.Tk()
