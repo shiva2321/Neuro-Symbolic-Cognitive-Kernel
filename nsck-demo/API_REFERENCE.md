@@ -196,7 +196,7 @@ print(f"Similarity: {similarity:.3f}")  # ~0.98 (high match)
 **Returns**:
 - `result` (HyperVector): Bundled hypervector
 
-**Mathematical operation**: `C = A ⊕ B` (majority vote per bit)
+**Mathematical operation**: Majority vote per bit position (not XOR - that's binding)
 
 **Example**:
 ```python
@@ -211,6 +211,8 @@ fruit = apple.bundle(banana).bundle(orange)
 # Check membership
 print(f"Apple in fruit: {fruit.similarity(apple):.3f}")    # ~0.67
 print(f"Banana in fruit: {fruit.similarity(banana):.3f}")  # ~0.67
+# Note: Need to define 'car' for this example
+car = HyperVector.random()
 print(f"Car in fruit: {fruit.similarity(car):.3f}")        # ~0.50 (random)
 ```
 
@@ -423,6 +425,8 @@ for timestep in range(episode_length):
 
 # Apply Hebbian update at episode end
 reward = total_episode_reward
+# Note: In production, extract actual spike traces from SNN layers
+# This is a simplified example for illustration
 learner.update_hebbian(
     torch.stack(pre_spikes),
     torch.stack(post_spikes),

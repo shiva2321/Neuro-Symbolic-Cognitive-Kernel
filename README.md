@@ -39,7 +39,7 @@ Traditional AI has fundamental limitations:
 |----------------|---------------|---------|
 | **Catastrophic Forgetting**: Learning new tasks destroys old knowledge | Uses "Late Fusion" architecture: separate task heads share a common perception layer | **Learns multiple tasks** (Snake + Pong + Characters) without interference |
 | **Black-Box Decisions**: Can't explain why it made a choice | System 2 creates explicit symbolic rules you can read and verify | **Interpretable**: See exactly why each action was chosen |
-| **Energy Hungry**: Requires massive GPUs | Uses binary operations (XOR, AND) and event-driven spiking neurons | **74× less energy** than transformer models |
+| **Energy Hungry**: Requires massive GPUs | Uses binary operations (XOR, AND) and event-driven spiking neurons | **130× less energy** than transformer models |
 | **Unsafe Actions**: No built-in safety checks | System 2 safety gate vetoes dangerous System 1 proposals | **Guaranteed safety**: Never crashes into walls in Snake game |
 | **Requires Massive Data**: Needs millions of examples | Combines imitation learning (learn from teacher) + reinforcement learning | **Sample efficient**: Learns from dozens of examples, not millions |
 | **Can't Transfer Knowledge**: Trained for one task only | Shared visual processing + symbolic concept library | **Zero-shot transfer**: Skills from Snake help learn Pong faster |
