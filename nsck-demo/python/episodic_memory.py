@@ -9,7 +9,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple
 import hypervec_rs
-from .persistence import BrainStore, Episode
+import hypervec_rs
+from persistence import BrainStore, Episode
 
 
 @dataclass
@@ -22,6 +23,7 @@ class LiveEpisode:
     action: str
     outcome: str
     reward: float
+    impact_score: float = 0.0  # |reward| + novelty bonus for salient pruning
     
     def to_stored(self) -> Episode:
         """Convert to storage format with compressed state."""
@@ -36,7 +38,8 @@ class LiveEpisode:
             state_sketch=sketch,
             action=self.action,
             outcome=self.outcome,
-            reward=self.reward
+            reward=self.reward,
+            impact_score=self.impact_score
         )
     
     def _extract_sketch(self, state: Dict, task_tag: str) -> Dict[str, Any]:

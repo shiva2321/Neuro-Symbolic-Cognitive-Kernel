@@ -49,6 +49,7 @@ class Episode:
     action: str
     outcome: str
     reward: float
+    impact_score: float = 0.0
 
 
 class BrainStore:
@@ -120,7 +121,8 @@ class BrainStore:
                 state_sketch BLOB,
                 action TEXT,
                 outcome TEXT,
-                reward REAL
+                reward REAL,
+                impact_score REAL DEFAULT 0.0
             )
         """)
         
@@ -129,6 +131,7 @@ class BrainStore:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_concepts_task ON concepts(task_tag)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_task ON episodes(task_tag)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_time ON episodes(timestamp)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_impact ON episodes(impact_score)")
         
         conn.commit()
         conn.close()
@@ -322,11 +325,11 @@ class BrainStore:
         
         cursor.executemany("""
             INSERT INTO episodes 
-            (timestamp, task_tag, situation_hv_bytes, state_sketch, action, outcome, reward)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            (timestamp, task_tag, situation_hv_bytes, state_sketch, action, outcome, reward, impact_score)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, [
             (ep.timestamp, ep.task_tag, ep.situation_hv_bytes,
-             pickle.dumps(ep.state_sketch), ep.action, ep.outcome, ep.reward)
+             pickle.dumps(ep.state_sketch), ep.action, ep.outcome, ep.reward, ep.impact_score)
             for ep in episodes
         ])
         
@@ -350,7 +353,8 @@ class BrainStore:
         return [Episode(
             id=row[0], timestamp=row[1], task_tag=row[2],
             situation_hv_bytes=row[3], state_sketch=pickle.loads(row[4]),
-            action=row[5], outcome=row[6], reward=row[7]
+            action=row[5], outcome=row[6], reward=row[7],
+            impact_score=row[8] if len(row) > 8 else 0.0
         ) for row in rows]
     
     def count_episodes(self, task_tag: Optional[str] = None) -> int:

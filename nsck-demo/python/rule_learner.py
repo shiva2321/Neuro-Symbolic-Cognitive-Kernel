@@ -8,8 +8,9 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, FrozenSet, Optional, Tuple, Any
-from .persistence import Rule, Episode, BrainStore
-from .grounding_verifier import GroundingVerifier
+import hypervec_rs
+from persistence import BrainStore, Episode, Rule
+from grounding_verifier import GroundingVerifier
 
 
 @dataclass
@@ -63,6 +64,11 @@ class RuleLearner:
         self.min_success_rate = min_success_rate
         self.max_rules_per_task = max_rules_per_task
         
+        # Tenure thresholds for stability
+        self.tenure_support_threshold = 1000  # High-support rules get tenure
+        self.bootstrap_threshold = 0.5  # Bootstrap rules need 50%
+        self.tenured_threshold = 0.6  # Tenured rules need 60%
+        
         # Pattern tracking: task -> {(predicates, action): RuleCandidate}
         self.candidates: Dict[str, Dict[Tuple[FrozenSet[str], str], RuleCandidate]] = defaultdict(dict)
         
@@ -75,6 +81,30 @@ class RuleLearner:
             "DANGER_UP", "DANGER_DOWN", "DANGER_LEFT", "DANGER_RIGHT",
             "TARGET_NEAR", "TARGET_FAR", "SAFE_PATH"
         }
+    
+    def _get_tenure_threshold(self, rule: Rule) -> float:
+        """
+        Compute success rate threshold based on rule tenure.
+        
+        Foundational rules get relaxed thresholds to prevent deletion
+        during temporary performance dips.
+        
+        Args:
+            rule: Rule to evaluate
+            
+        Returns:
+            Minimum success rate required (0.0-1.0)
+        """
+        # Bootstrap rules: Most protected (hardcoded foundations)
+        if rule.source == "bootstrap":
+            return self.bootstrap_threshold
+        
+        # High-support learned rules: Protected (proven over time)
+        if rule.support_count >= self.tenure_support_threshold:
+            return self.tenured_threshold
+        
+        # New learned rules: Standard threshold
+        return self.min_success_rate
     
     def observe(
         self,
@@ -276,6 +306,22 @@ class RuleLearner:
             return
         
         rules = self.learned_rules[task_tag]
+        
+        # Filter out rules that fall below tenure-aware thresholds
+        filtered_rules = []
+        for rule in rules:
+            threshold = self._get_tenure_threshold(rule)
+            if rule.success_rate >= threshold:
+                filtered_rules.append(rule)
+            else:
+                # Rule fell below its tenure-specific threshold
+                if self.store and rule.id:
+                    self.store.delete_rule(rule.id)
+                print(f"[TENURE_PRUNE] Deleted rule {rule.consequence} "
+                      f"(rate={rule.success_rate:.2f} < threshold={threshold:.2f}, "
+                      f"source={rule.source}, support={rule.support_count})")
+        
+        rules = filtered_rules
         
         # Sort by success rate * log(support) to balance confidence and volume
         import math
