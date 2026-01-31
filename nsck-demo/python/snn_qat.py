@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import snntorch as snn
 from snntorch import surrogate
+from universal_encoder import UniversalEncoder
 
 # --- TERNARY QUANTIZATION LOGIC ---
 class TernaryQuantize(torch.autograd.Function):
@@ -11,123 +12,126 @@ class TernaryQuantize(torch.autograd.Function):
     """
     @staticmethod
     def forward(ctx, input, delta=0.1):
-        # Scale to max magnitude
         scale = input.abs().max() + 1e-6
         x = input / scale
-        
-        # Ternarize: -1 if < -delta, 1 if > delta, 0 otherwise
         out = torch.zeros_like(x)
         out[x > delta] = 1.0
         out[x < -delta] = -1.0
-        
-        return out * scale # Multiply back scale for magnitude preservation
+        return out * scale
 
     @staticmethod
     def backward(ctx, grad_output):
-        # STE: Pass gradient through as is
         return grad_output, None
 
 def ternarize_weight(w):
     return TernaryQuantize.apply(w)
 
-# Adapted to standard nn.Conv2d to ensure compatibility without Brevitas dependency
 class TaskAwareSNN(nn.Module):
+    """
+    NSCK v2.0: Universal Actor-Critic Brain.
+    - Decoupled from Sensor Format (uses UniversalEncoder).
+    - Decoupled from Action Space (uses DynamicHeads).
+    - Returns: (PolicyLogits, ValueEstimate)
+    """
     def __init__(self, beta=0.5):
         super().__init__()
         
         spike_grad = surrogate.fast_sigmoid(slope=25)
 
-        # 1. Shared Visual Cortex (2 Channels -> Features)
-        # Input: [Batch, 4, 10, 10] (Expanded temporal window: 4 frames)
-        self.conv1 = nn.Conv2d(4, 16, kernel_size=3, stride=2, padding=1)
-        self.bn1 = nn.BatchNorm2d(16)
-        self.lif1 = snn.Leaky(beta=beta, spike_grad=spike_grad, threshold=0.5)
+        # 1. Universal Cortex (The "Eye/Ear")
+        self.encoder = UniversalEncoder(latent_dim=256)
         
-        self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1)
-        self.bn2 = nn.BatchNorm2d(32)
-        self.lif2 = snn.Leaky(beta=beta, spike_grad=spike_grad, threshold=0.5)
-        
-        self.flatten = nn.Flatten()
-        
-        # Shared Latent Space (32 channels * 3x3 spatial = 288 flat)
-        # LATE FUSION:
-        # +1 for Task ID
-        # +8 for Compass (Goal: Up/Dn/L/R + Blocked: Up/Dn/L/R)
-        self.fc_shared = nn.Linear((32 * 3 * 3) + 1 + 8, 64)
+        # 2. Association Area (SNN Core)
+        # Input: 256 (Latent) -> Hidden: 256 -> Output: 256
+        self.fc_shared = nn.Linear(256, 256)
         self.lif_shared = snn.Leaky(beta=beta, spike_grad=spike_grad, threshold=0.5)
 
-        # 2. Specialized Heads (The "Task Experts")
-        self.head_snake = nn.Linear(64, 4) # UP, DOWN, LEFT, RIGHT
-        self.head_pong  = nn.Linear(64, 2) # UP, DOWN
-        self.head_chars = nn.Linear(64, 62) # 0-9, A-Z, a-z
-        self.lif_out    = snn.Leaky(beta=beta, spike_grad=spike_grad, output=True, threshold=0.5)
+        # 3. Dynamic Heads (The "Motor Cortex")
+        # Stores "Actor" (Policy) and "Critic" (Value) for each task
+        # Format: {"snake": nn.ModuleDict({"actor": ..., "critic": ...})}
+        self.heads = nn.ModuleDict() 
+        self.lif_out = snn.Leaky(beta=beta, spike_grad=spike_grad, output=True, threshold=0.5)
 
-    def forward(self, x, task_id, compass=None):
+    def register_task(self, task_name, num_actions):
         """
-        Forward pass.
-        Args:
-            x: Visual input [Batch, 4, 10, 10]
-            task_id: Scalar task index (0=Pong, 1=Snake, 2=Chars)
-            compass: Optional 8-bit direction vector [Batch, 8]
-                     [0-3]: Goal Direction (Above, Below, Left, Right)
-                     [4-7]: Obstacle Blocked (Above, Below, Left, Right)
+        Grow new neurons for a new task.
         """
-        # 1. APPLY TERNARY QUANTIZATION TO WEIGHTS (ON THE FLY)
-        # This keeps the float weights for gradients but uses Ternary for inference
-        w_conv1 = ternarize_weight(self.conv1.weight)
-        w_conv2 = ternarize_weight(self.conv2.weight)
-        w_fc_s  = ternarize_weight(self.fc_shared.weight)
-        w_h_sn  = ternarize_weight(self.head_snake.weight)
-        w_h_po  = ternarize_weight(self.head_pong.weight)
-        w_h_ch  = ternarize_weight(self.head_chars.weight)
+        if task_name not in self.heads:
+            print(f"[Brain] Growing new Neocortex segment for task: {task_name}")
+            self.heads[task_name] = nn.ModuleDict({
+                "actor": nn.Linear(256, num_actions),   # [Batch, Actions]
+                "critic": nn.Linear(256, 1)             # [Batch, 1] - How good is this state?
+            })
+            
+            # Send to device if model is already on GPU
+            if next(self.parameters()).is_cuda:
+                self.heads[task_name].to("cuda")
 
-        # Init State
-        mem1 = self.lif1.init_leaky()
-        mem2 = self.lif2.init_leaky()
+    def forget_task(self, task_name):
+        """
+        Synaptic Pruning: Removes a task's neural circuitry continuously.
+        Useful for forgetting obsolete tasks or freeing memory.
+        """
+        if task_name in self.heads:
+            del self.heads[task_name]
+            print(f"[Brain] Pruned Cortex segment for task: {task_name}")
+
+    def forward(self, x, task_name="snake", modality_hint=None):
+        """
+        Universal Forward Pass.
+        Returns: (Actor_Logits, Critic_Value)
+        """
+        # A. PERCEPTION (Universal Encoder)
+        # Output: [Batch, 256] (Latent Thought)
+        latent = self.encoder(x, modality_hint)
+        
+        # B. COGNITION (SNN Association Loop)
+        # We quantize weights on the fly for efficiency
+        w_shared = ternarize_weight(self.fc_shared.weight)
+        
         mem_shared = self.lif_shared.init_leaky()
         mem_out = self.lif_out.init_leaky()
-
-        spk_rec = []
         
-        # Prepare Compass Tensor (8-bit: 4 Goal + 4 Blocked)
-        if compass is None:
-            compass_tensor = torch.zeros((x.size(0), 8), device=x.device)
-        else:
-            compass_tensor = compass.to(x.device).float()
-
-        # Simulation Steps (T=8)
+        spk_rec = []
+        val_rec = []
+        
+        # Ensure we have a head for this task
+        if task_name not in self.heads:
+            # Auto-register with default 4 actions if unknown (failsafe)
+            self.register_task(task_name, 4)
+            
+        head = self.heads[task_name]
+        w_actor = ternarize_weight(head["actor"].weight)
+        # Critic is NOT quantized (needs high precision for value estimation)
+        
+        # SNN Loop (T=8)
+        # Note: Encoder run once (static perception), SNN runs over time (processing)
         for step in range(8):
-            # Layer 1 (Functional to use quantized W)
-            cur1 = torch.nn.functional.conv2d(x, w_conv1, stride=2, padding=1)
-            spk1, mem1 = self.lif1(cur1, mem1)
-            
-            # Layer 2
-            cur2 = torch.nn.functional.conv2d(spk1, w_conv2, stride=2, padding=1)
-            spk2, mem2 = self.lif2(cur2, mem2)
-            
-            # Shared Linear + Late Fusion
-            flat = self.flatten(spk2)
-            
-            # Inject Context (Task ID + Compass)
-            task_tensor = torch.full((x.size(0), 1), float(task_id), device=x.device)
-            combined = torch.cat([flat, task_tensor, compass_tensor], dim=1) 
-            
-            cur_shared = torch.nn.functional.linear(combined, w_fc_s)
+            # 1. Association
+            cur_shared = torch.nn.functional.linear(latent, w_shared, self.fc_shared.bias)
             spk_shared, mem_shared = self.lif_shared(cur_shared, mem_shared)
-
-            # Task Switching Head (Functional to use quantized W)
-            if task_id == 1: # Snake
-                cur_out = torch.nn.functional.linear(spk_shared, w_h_sn, self.head_snake.bias)
-            elif task_id == 0: # Pong
-                cur_out = torch.nn.functional.linear(spk_shared, w_h_po, self.head_pong.bias)
-            else: # Characters (Task 2)
-                cur_out = torch.nn.functional.linear(spk_shared, w_h_ch, self.head_chars.bias) 
             
-            spk_out, mem_out = self.lif_out(cur_out, mem_out)
-            spk_rec.append(spk_out)
+            # 2. Action (Actor)
+            cur_actor = torch.nn.functional.linear(spk_shared, w_actor, head["actor"].bias)
+            spk_actor, mem_out = self.lif_out(cur_actor, mem_out)
+            
+            # 3. Value (Critic) - Direct readout from spiking state
+            # No spikes for value, just continuous regression
+            value = head["critic"](spk_shared) 
+            
+            spk_rec.append(spk_actor)
+            val_rec.append(value)
 
-        return torch.stack(spk_rec, dim=0).sum(0) # Sum spikes = Rate Code
+        # Rate Coding: Sum spikes for action strength
+        action_logits = torch.stack(spk_rec, dim=0).sum(0)
+        
+        # Value: Average value estimate over time
+        value_estimate = torch.stack(val_rec, dim=0).mean(0)
+        
+        return action_logits, value_estimate
 
 if __name__ == "__main__":
     model = TaskAwareSNN()
-    print("TaskAwareSNN Initialized (Late Fusion)")
+    model.register_task("snake", 4)
+    model.register_task("chat", 5000) # Text task
+    print("Universal Actor-Critic Brain Initialized")
