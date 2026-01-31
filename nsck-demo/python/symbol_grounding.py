@@ -117,8 +117,14 @@ class MetacognitiveWrapper:
         # This is fine.
         return np.array(probs, dtype=np.float32)
 
-# Global Instance
-kernel_engine = MetacognitiveWrapper()
+# Global Instance (Lazy)
+_kernel_engine = None
+
+def get_kernel_engine():
+    global _kernel_engine
+    if _kernel_engine is None:
+        _kernel_engine = MetacognitiveWrapper()
+    return _kernel_engine
 
 
 class ActionSemantics:
@@ -129,6 +135,7 @@ class ActionSemantics:
     
     @staticmethod
     def get_goal_alignment(game_type, state):
+        engine = get_kernel_engine() # Lazy access
         if not state: return []
         
         if game_type == "snake":
@@ -138,7 +145,7 @@ class ActionSemantics:
             hx, hy = head
             fx, fy = food
             # Pass state for Safety Veto
-            return kernel_engine.infer_navigation(fy < hy, fy > hy, fx < hx, fx > hx, "snake", state)
+            return engine.infer_navigation(fy < hy, fy > hy, fx < hx, fx > hx, "snake", state)
         
         elif game_type == "pong":
             p1_y = state.get("p1_y")
@@ -146,7 +153,7 @@ class ActionSemantics:
             if p1_y is None or ball_y is None: return []
             paddle_center = p1_y + 3
             # Map Pong to same bitwise navigation logic as Snake
-            scores_4 = kernel_engine.infer_navigation(ball_y < paddle_center - 1, ball_y > paddle_center + 1, False, False, "pong", state)
+            scores_4 = engine.infer_navigation(ball_y < paddle_center - 1, ball_y > paddle_center + 1, False, False, "pong", state)
             return scores_4[:2] # Only UP/DN
             
         elif game_type == "maze":
@@ -155,7 +162,7 @@ class ActionSemantics:
             if player is None or exit_pos is None: return []
             px, py = player
             ex, ey = exit_pos
-            return kernel_engine.infer_navigation(ey < py, ey > py, ex < px, ex > px, "maze", state)
+            return engine.infer_navigation(ey < py, ey > py, ex < px, ex > px, "maze", state)
             
         return []
 

@@ -212,7 +212,9 @@ class MazeUI:
         
         if done:
             self.score = self.game.state.score
-            self.lbl_status.config(text=f"Goal reached! Score: {self.score}", fg="#00ff00")
+            self.lbl_status.config(text=f"Goal reached! Score: {self.score} (Auto-restart in 1s...)", fg="#00ff00")
+            # AUTO-RESTART: New maze after 1 second delay
+            self.root.after(1000, self._reset_game)
         
         # Update labels
         self.lbl_score.config(text=f"Score: {self.game.state.score}")

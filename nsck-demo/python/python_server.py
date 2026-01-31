@@ -28,7 +28,9 @@ ENABLE_SNN = True
 ENABLE_VSA = True
 ENABLE_SLEEP = True
 FREEZE_PONG = False
+FREEZE_ALL = False  # If True, NO weight updates for ANY game/task
 NO_TEACHER = False # If True, we never fallback to Teacher. System must survive on its own.
+AUTO_DREAM = False # If True, brain automatically sleeps to consolidate memories
 RL_CONTEXT = {} # Stores {session_id: log_prob_of_prev_action} for REINFORCE (Policy Gradient)
 
 # --- HYPERPARAMETERS ---
@@ -124,7 +126,7 @@ class ReplayBuffer:
             tid = 0.0
             
         if compass is None:
-            compass = torch.zeros(4)
+            compass = torch.zeros(8)  # 8-bit compass (4 Goal + 4 Blocked)
         else:
             compass = compass.detach().cpu()
             
@@ -364,7 +366,10 @@ def manhattan_snake_move(state, obstacles):
     min_dist = 999
     
     for i, (dx, dy) in enumerate(full_deltas):
-        nx, ny = (hx + dx) % GRID_SIZE, (hy + dy) % GRID_SIZE
+        # STRICT BOUNDARY CHECK (No Modulo)
+        nx, ny = hx + dx, hy + dy
+        if nx < 0 or nx >= GRID_SIZE or ny < 0 or ny >= GRID_SIZE: continue
+        
         if (nx, ny) in obstacles: continue 
         dist = abs(nx - fx) + abs(ny - fy)
         if dist < min_dist:
@@ -373,7 +378,8 @@ def manhattan_snake_move(state, obstacles):
             
     if min_dist == 999: # Trapped
         for i, (dx, dy) in enumerate(full_deltas):
-            nx, ny = (hx + dx) % GRID_SIZE, (hy + dy) % GRID_SIZE
+            nx, ny = hx + dx, hy + dy
+            if nx < 0 or nx >= GRID_SIZE or ny < 0 or ny >= GRID_SIZE: continue
             if (nx, ny) not in obstacles: return i
         
     return best_move
@@ -396,7 +402,7 @@ def get_pong_oracle(state):
     return 0 
 
 def main():
-    global ENABLE_SNN, ENABLE_VSA, ENABLE_SLEEP, FREEZE_PONG, NO_TEACHER
+    global ENABLE_SNN, ENABLE_VSA, ENABLE_SLEEP, FREEZE_PONG, FREEZE_ALL, NO_TEACHER, AUTO_DREAM
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval", action="store_true", help="Evaluation Mode: VSA OFF, Sleep OFF, Training OFF")
@@ -466,16 +472,17 @@ def main():
                     state_dict["head_chars.weight"] = new_weight
                     state_dict["head_chars.bias"] = new_bias
 
-            # NEW: Compass Surgery
+            # NEW: Compass Surgery (Migrate old 4-bit to new 8-bit compass)
             if "fc_shared.weight" in state_dict:
                 saved_in = state_dict["fc_shared.weight"].shape[1]
-                current_in = model.fc_shared.weight.shape[1]
-                if saved_in == 289 and current_in == 293:
+                current_in = model.fc_shared.weight.shape[1]  # Should be 297 (288+1+8)
+                if saved_in != current_in:
                     print(f">> [SURGERY] Compass Migration: {saved_in} -> {current_in} inputs")
                     new_fc_w = model.fc_shared.weight.clone()
-                    # Copy old 289 weights
-                    new_fc_w[:, :289] = state_dict["fc_shared.weight"]
-                    # Last 4 weights remain freshly initialized (or we could zero them)
+                    # Copy shared weights up to the minimum common dimension
+                    min_dim = min(saved_in, current_in)
+                    new_fc_w[:, :min_dim] = state_dict["fc_shared.weight"][:, :min_dim]
+                    # New compass bits remain freshly initialized (zero is safe)
                     state_dict["fc_shared.weight"] = new_fc_w
             
             model.load_state_dict(state_dict, strict=False)
@@ -541,8 +548,34 @@ def main():
                      print(f">> TEACHER STATUS: {'OFF' if NO_TEACHER else 'ON'}")
                 elif cmd == "strict_transfer_cfg":
                      NO_TEACHER = True
-                     FREEZE_PONG = True
-                     print(">> STRICT TRANSFER CONFIG APPLIED (Teacher=OFF, Pong=Frozen)")           
+                     FREEZE_PONG = True  # This also freezes Maze (see line ~1078)
+                     print(">> STRICT TRANSFER CONFIG APPLIED:")
+                     print("   - Teacher: OFF")
+                     print("   - Maze/Pong Learning: FROZEN (weights will NOT update)")
+                     print("   - Snake Learning: ACTIVE (can still train)")
+                elif cmd == "transfer_test":
+                     # DEFINITIVE TRANSFER TEST MODE
+                     NO_TEACHER = True
+                     FREEZE_PONG = True  # Freezes Maze weights
+                     print("="*50)
+                     print(">> TRANSFER TEST MODE ACTIVATED")
+                     print("   - Teacher: OFF (Brain on its own)")
+                     print("   - Maze Weights: FROZEN (no learning, pure transfer)")
+                     print("   - Snake Knowledge Only: What it learned STAYS")
+                     print("="*50)
+                elif cmd == "freeze_all":
+                     FREEZE_ALL = not FREEZE_ALL
+                     if FREEZE_ALL:
+                         print("="*50)
+                         print(">> WEIGHTS FROZEN: Brain is in INFERENCE-ONLY mode")
+                         print("   - NO learning will occur (any game/task)")
+                         print("   - Brain operates purely on existing knowledge")
+                         print("="*50)
+                     else:
+                         print(">> WEIGHTS UNFROZEN: Brain can learn again")
+                elif cmd == "toggle_dream":
+                     AUTO_DREAM = not AUTO_DREAM
+                     print(f">> AUTO DREAMING: {'ENABLED' if AUTO_DREAM else 'DISABLED'}")           
                 elif cmd == "train_char":
                     epochs = msg.get("epochs", 1)
                     mode = msg.get("mode", "handwritten")
@@ -587,8 +620,8 @@ def main():
                     # 4. Inference (Task 2)
                     with model_lock:
                         model.eval()
-                        # Pass dummy compass for char recon
-                        dummy_comp = torch.zeros((1, 4), device=device)
+                        # Pass dummy compass for char recon (Model expects 8-bit compass now)
+                        dummy_comp = torch.zeros((1, 8), device=device)
                         out = model(inp, 2, compass=dummy_comp)
                         model.train() # Resume Train mode default?
                         
@@ -736,15 +769,36 @@ def main():
             input_tensor = torch.from_numpy(stacked_np).float().to(device) 
             input_tensor = input_tensor.unsqueeze(0) # [1, 4, 10, 10]
             
-            # --- COMPASS CALCULATION ---
-            compass_bits = [0, 0, 0, 0] # Above, Below, Left, Right
+            # --- COMPASS CALCULATION (8-bit: 4 Goal + 4 Blocked) ---
+            # Bits 0-3: Goal Direction | Bits 4-7: Obstacle Blocked
+            compass_bits = [0, 0, 0, 0, 0, 0, 0, 0]
+            
             if game_type in ["snake", "maze"]:
                 hx, hy = state_data.get("head", state_data.get("player_pos", (0, 0)))
                 fx, fy = state_data.get("food", state_data.get("exit_pos", (0, 0)))
-                if fy < hy: compass_bits[0] = 1
-                if fy > hy: compass_bits[1] = 1
-                if fx < hx: compass_bits[2] = 1
-                if fx > hx: compass_bits[3] = 1
+                
+                # Goal Direction (bits 0-3)
+                if fy < hy: compass_bits[0] = 1  # Goal Above
+                if fy > hy: compass_bits[1] = 1  # Goal Below
+                if fx < hx: compass_bits[2] = 1  # Goal Left
+                if fx > hx: compass_bits[3] = 1  # Goal Right
+                
+                # Obstacle Awareness (bits 4-7) - Check adjacent cells in image
+                # 255 = Wall/Body (Danger in both Snake and Maze)
+                GRID_SIZE = 10
+                # UP: (hx, hy-1)
+                if hy <= 0 or (0 <= hy-1 < GRID_SIZE and 0 <= hx < GRID_SIZE and img[hy-1, hx] == 255):
+                    compass_bits[4] = 1  # Blocked UP
+                # DOWN: (hx, hy+1)
+                if hy >= GRID_SIZE-1 or (0 <= hy+1 < GRID_SIZE and 0 <= hx < GRID_SIZE and img[hy+1, hx] == 255):
+                    compass_bits[5] = 1  # Blocked DOWN
+                # LEFT: (hx-1, hy)
+                if hx <= 0 or (0 <= hy < GRID_SIZE and 0 <= hx-1 < GRID_SIZE and img[hy, hx-1] == 255):
+                    compass_bits[6] = 1  # Blocked LEFT
+                # RIGHT: (hx+1, hy)
+                if hx >= GRID_SIZE-1 or (0 <= hy < GRID_SIZE and 0 <= hx+1 < GRID_SIZE and img[hy, hx+1] == 255):
+                    compass_bits[7] = 1  # Blocked RIGHT
+                    
             elif game_type == "pong":
                 # Ball relative to paddle
                 paddle_center = state_data.get("p1_y", 0) + 3
@@ -1048,7 +1102,14 @@ def main():
                     target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
                     loss = criterion(rate_out, target)
                     
-                    if not (game_type == "pong" and FREEZE_PONG):
+                    # STRICT TRANSFER: Freeze weights for Pong AND Maze, or ALL if FREEZE_ALL
+                    should_train = True
+                    if FREEZE_ALL:
+                        should_train = False  # Complete freeze - no learning at all
+                    elif (game_type == "pong" or game_type == "maze") and FREEZE_PONG:
+                        should_train = False  # Selective freeze for transfer test
+                    
+                    if should_train:
                         with model_lock:
                             if loss.requires_grad:
                                 item_loss = loss.item() # capture before backward
@@ -1156,9 +1217,9 @@ def main():
                  torch.save(model.state_dict(), MODEL_PATH)
             
             # --- SLEEP TRIGGER: INTERVAL ---
-            # DISABLED AUTO-SLEEP (Manual Only)
-            # if ENABLE_SLEEP and steps_total % SLEEP_INTERVAL == 0:
-            #      sleep_cycle(model, optimizer, buffer, device, model_lock, "all")
+            # AUTO-SLEEP ENABLED VIA DASHBOARD
+            if AUTO_DREAM and steps_total % 1000 == 0:
+                 run_sleep_thread(model, optimizer, buffer, device, model_lock, "all")
 
         except Exception as e:
             print(f"Error: {e}")

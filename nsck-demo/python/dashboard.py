@@ -93,13 +93,20 @@ class DashboardApp:
         self.btn_teacher = tk.Button(control_frame, text="TEACHER: ON", command=self._cmd_toggle_teacher, bg="#00aa00", fg="white", font=FONT_HEADER)
         self.btn_teacher.pack(side="left", padx=5)
         
+        self.btn_freeze = tk.Button(control_frame, text="🔓 WEIGHTS: LIVE", command=self._cmd_toggle_freeze, bg="#006600", fg="white", font=FONT_HEADER)
+        self.btn_freeze.pack(side="left", padx=5)
+        
         tk.Button(control_frame, text="EXPORT LOG", command=self._cmd_export_log, bg="#666666", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         tk.Button(control_frame, text="RESET MEM", command=self._cmd_reset, bg="#cc0000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         tk.Button(control_frame, text="FULL RESET", command=self._cmd_full_reset, bg="#990000", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         
         # SLEEP CONTROLS
         tk.Label(control_frame, text="| SLEEP:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
+        # SLEEP CONTROLS
+        tk.Label(control_frame, text="| SLEEP:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
         tk.Button(control_frame, text="💤 SLEEP", command=self._cmd_universal_sleep, bg="#4400aa", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
+        self.btn_dream = tk.Button(control_frame, text="☁️ DREAM: OFF", command=self._cmd_toggle_dream, bg="#555", fg="white", font=FONT_HEADER)
+        self.btn_dream.pack(side="left", padx=5)
         
         self.lbl_status = tk.Label(control_frame, text="READY", bg="black", fg="#00ff00", font=FONT_MAIN, width=30)
         self.lbl_status.pack(side="right", padx=10)
@@ -585,7 +592,23 @@ class DashboardApp:
     def _cmd_universal_sleep(self):
         """Universal Sleep: Consolidate ALL memories (Snake, Pong, Maze, Char)."""
         self.push_sock.send_json({"type": "admin", "cmd": "force_sleep"})
+    def _cmd_universal_sleep(self):
+        """Universal Sleep: Consolidate ALL memories (Snake, Pong, Maze, Char)."""
+        self.push_sock.send_json({"type": "admin", "cmd": "force_sleep"})
         self.log_queue.put("💤 UNIVERSAL SLEEP: Consolidating all memories...")
+
+    def _cmd_toggle_dream(self):
+        """Toggle Auto-Dreaming (Sleep every 1000 steps)."""
+        self.push_sock.send_json({"type": "admin", "cmd": "toggle_dream"})
+        
+        # Toggle UI state
+        current_text = self.btn_dream.cget("text")
+        if "OFF" in current_text:
+            self.btn_dream.config(text="☁️ DREAM: ON", bg="#008800")
+            self.log_queue.put("✨ AUTO-DREAM ENABLED: Brain will sleep every 1000 steps.")
+        else:
+            self.btn_dream.config(text="☁️ DREAM: OFF", bg="#555")
+            self.log_queue.put("🛑 AUTO-DREAM DISABLED.")
 
     def _cmd_reset(self):
         self.push_sock.send_json({"type": "admin", "cmd": "reset_memory"})
@@ -607,6 +630,17 @@ class DashboardApp:
         else:
             self.btn_teacher.config(text="TEACHER: ON", bg="#00aa00")
             self.log_queue.put("TEACHER ENABLED")
+    
+    def _cmd_toggle_freeze(self):
+        self.push_sock.send_json({"type": "admin", "cmd": "freeze_all"})
+        # Toggle UI state
+        curs = self.btn_freeze.cget("text")
+        if "LIVE" in curs:
+            self.btn_freeze.config(text="🔒 WEIGHTS: FROZEN", bg="#cc0000")
+            self.log_queue.put(">>> WEIGHTS FROZEN - Brain in inference-only mode <<<")
+        else:
+            self.btn_freeze.config(text="🔓 WEIGHTS: LIVE", bg="#006600")
+            self.log_queue.put(">>> WEIGHTS UNFROZEN - Brain can learn <<<")
         
     def _cmd_export_log(self):
         timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")

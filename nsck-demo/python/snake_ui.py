@@ -71,26 +71,32 @@ class SnakeGame:
 
     def game_loop(self):
         head_x, head_y = self.snake[0]
-        if self.direction == "UP": head_y = (head_y - 1) % 10
-        elif self.direction == "DOWN": head_y = (head_y + 1) % 10
-        elif self.direction == "LEFT": head_x = (head_x - 1) % 10
-        elif self.direction == "RIGHT": head_x = (head_x + 1) % 10
+        if self.direction == "UP": head_y -= 1
+        elif self.direction == "DOWN": head_y += 1
+        elif self.direction == "LEFT": head_x -= 1
+        elif self.direction == "RIGHT": head_x += 1
         
-        new_head = (head_x, head_y)
-        self.current_reward = -0.1 # Step Penalty
-        self.done = False
-        
-        if new_head in self.snake: 
+        # WALL DEATH (Strict Transfer Mode)
+        if head_x < 0 or head_x >= 10 or head_y < 0 or head_y >= 10:
             self.current_reward = -10.0 # Death Penalty
             self.done = True
             self.snake = [(5,5)] 
         else:
-            self.snake.insert(0, new_head)
-            if new_head == self.food:
-                self.current_reward = 10.0 # Goal Reward
-                self.food = (random.randint(0,9), random.randint(0,9))
+            new_head = (head_x, head_y)
+            self.current_reward = -0.1 # Step Penalty
+            self.done = False
+            
+            if new_head in self.snake: 
+                self.current_reward = -10.0 # Death Penalty
+                self.done = True
+                self.snake = [(5,5)] 
             else:
-                self.snake.pop()
+                self.snake.insert(0, new_head)
+                if new_head == self.food:
+                    self.current_reward = 10.0 # Goal Reward
+                    self.food = (random.randint(0,9), random.randint(0,9))
+                else:
+                    self.snake.pop()
         
         self.canvas.delete("all")
         self.canvas.create_rectangle(self.food[0]*30, self.food[1]*30, (self.food[0]+1)*30, (self.food[1]+1)*30, fill="red")

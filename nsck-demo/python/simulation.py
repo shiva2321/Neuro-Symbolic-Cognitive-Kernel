@@ -37,26 +37,23 @@ def sim_snake(state, action):
     snake_body = state.get("body", []) 
     
     if action == "UP":
-        head_y = (head_y - 1) % GRID_SIZE
+        head_y -= 1
     elif action == "DOWN":
-        head_y = (head_y + 1) % GRID_SIZE
+        head_y += 1
     elif action == "LEFT":
-        head_x = (head_x - 1) % GRID_SIZE
+        head_x -= 1
     elif action == "RIGHT":
-        head_x = (head_x + 1) % GRID_SIZE
+        head_x += 1
+        
+    # STRICT BOUNDARY CHECK
+    if head_x < 0 or head_x >= GRID_SIZE or head_y < 0 or head_y >= GRID_SIZE:
+        return {"head": (head_x, head_y)}, True # Collision = True
         
     new_head = (head_x, head_y)
     
     # Check Self Collision
-    # Note: Tail moves *unless* we eat food. 
-    # Conservative safety check: Assume we don't move tail (worst case length).
-    # If new_head is in body (excluding tail if we allow following tail, but let's be strict for safety), it's death.
-    
     collision = False
     if new_head in snake_body:
-        # Special case: if new_head is exactly the tail, and we didn't eat, it's safe.
-        # But we don't know if we ate just by looking at current state without knowing previous food.
-        # Safe heuristic: Treat body as static obstacles.
         collision = True
         
     return {"head": new_head}, collision

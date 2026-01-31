@@ -1,0 +1,4 @@
+python/data_mnist/
+__pycache__/
+*.pyc
+.DS_Store

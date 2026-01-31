@@ -52,8 +52,8 @@ class TaskAwareSNN(nn.Module):
         # Shared Latent Space (32 channels * 3x3 spatial = 288 flat)
         # LATE FUSION:
         # +1 for Task ID
-        # +4 for Compass (Above, Below, Left, Right)
-        self.fc_shared = nn.Linear((32 * 3 * 3) + 1 + 4, 64)
+        # +8 for Compass (Goal: Up/Dn/L/R + Blocked: Up/Dn/L/R)
+        self.fc_shared = nn.Linear((32 * 3 * 3) + 1 + 8, 64)
         self.lif_shared = snn.Leaky(beta=beta, spike_grad=spike_grad, threshold=0.5)
 
         # 2. Specialized Heads (The "Task Experts")
@@ -68,7 +68,9 @@ class TaskAwareSNN(nn.Module):
         Args:
             x: Visual input [Batch, 4, 10, 10]
             task_id: Scalar task index (0=Pong, 1=Snake, 2=Chars)
-            compass: Optional 4-bit direction vector [Batch, 4] (Above, Below, Left, Right)
+            compass: Optional 8-bit direction vector [Batch, 8]
+                     [0-3]: Goal Direction (Above, Below, Left, Right)
+                     [4-7]: Obstacle Blocked (Above, Below, Left, Right)
         """
         # 1. APPLY TERNARY QUANTIZATION TO WEIGHTS (ON THE FLY)
         # This keeps the float weights for gradients but uses Ternary for inference
@@ -87,9 +89,9 @@ class TaskAwareSNN(nn.Module):
 
         spk_rec = []
         
-        # Prepare Compass Tensor
+        # Prepare Compass Tensor (8-bit: 4 Goal + 4 Blocked)
         if compass is None:
-            compass_tensor = torch.zeros((x.size(0), 4), device=x.device)
+            compass_tensor = torch.zeros((x.size(0), 8), device=x.device)
         else:
             compass_tensor = compass.to(x.device).float()
 
