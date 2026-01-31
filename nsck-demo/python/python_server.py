@@ -11,6 +11,17 @@ import base64
 import cv2
 import argparse
 import random
+import torch.nn.functional as F
+import torch.serialization
+
+# [CRITICAL] Fix for LazyLinear loading in Torch 2.4+
+# This allows 'weights_only=True' (default) to load UninitializedParameter
+try:
+    from torch.nn.parameter import UninitializedParameter
+    torch.serialization.add_safe_globals([UninitializedParameter])
+except (ImportError, AttributeError):
+    pass
+ # Import F
 from collections import defaultdict, deque
 from symbol_grounding import ActionSemantics
 from simulation import sim_snake, sim_pong
@@ -22,6 +33,10 @@ import queue
 import hypervec_rs
 from curiosity import CuriosityModule
 from symbol_grounding import GLOBAL_PRIMITIVES_MAP
+from intelligent_buffer import IntelligentReplayBuffer, Experience # [NEW] Import Buffer
+from saliency import SaliencyVisualizer # [NEW] Import Saliency
+
+
 
 # --- ABLATION FLAGS (DEFAULTS) ---
 ENABLE_SNN = True
@@ -102,6 +117,19 @@ class LogAggregator:
             
             self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0, "session_id": "unknown", "score": 0})
             self.last_print = time.time()
+
+# --- INTELLIGENT ARCHIVAL (GLOBAL) ---
+# Global Replay Buffer (Shared across tasks for now, but stores task_name)
+# Global Replay Buffer (Shared across tasks for now, but stores task_name)
+# RAM Limit: 10,000 transitions (~2MB for 10x10x1 states)
+REPLAY_BUFFER = IntelligentReplayBuffer(ram_capacity=10000, archival_threshold=0.5)
+
+# --- GLOBAL LOCK ---
+model_lock = threading.RLock() # Protects Model & Optimizer
+
+# --- SALIENCY ---
+SALIENCY = None # Initialized after model creation
+
 
 # --- MEMORY (REPLAY BUFFER) ---
 class ReplayBuffer:
@@ -242,17 +270,32 @@ def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all",
                 model.train() 
                 optimizer.zero_grad()
                 
-                # Forward with Compass
-                out = model(x, tid, compass=comp)
+                # Forward (Universal Signature)
+                # x is [B, 4, 10, 10], tid is scalar. Map tid to task_name.
+                # Note: sleep_cycle uses stratified samples. We need task_name.
+                t_name = "snake"
+                if game == "pong": t_name = "pong"
+                if game == "maze": t_name = "maze"
+                
+                logits, value = model(x, task_name=t_name)
                 
                 if NO_TEACHER:
-                     # RL Loss (Policy Gradient) during sleep
-                     dist = torch.distributions.Categorical(logits=out)
-                     log_probs = dist.log_prob(y)
-                     loss = -(log_probs * r).mean()
+                     # A2C Loss during Sleep (Dreaming) -> "Representation Learning"
+                     # We can't easily do A2C offline without next_state V(s').
+                     # User Plan: "Dreaming trains Critic and Encoder".
+                     # We will train Critic to match Reward (assuming terminal/sparse).
+                     # Simple: value ~ reward
+                     critic_loss = F.mse_loss(value.squeeze(), r)
+                     
+                     # Optional: Entailment/Contrastive?
+                     # For now, just train Critic.
+                     loss = critic_loss 
                 else:
-                     # Supervised Loss
-                     loss = criterion(out, y)
+                     # Supervised Loss (Actor mimics recorded actions)
+                     loss_actor = criterion(logits, y)
+                     # Critic Loss (Value predicts Reward)
+                     loss_critic = F.mse_loss(value.squeeze(), r)
+                     loss = loss_actor + 0.5 * loss_critic
                 
                 loss.backward()
                 optimizer.step()
@@ -273,9 +316,12 @@ def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all",
 
 
 def run_sleep_thread(model, optimizer, buffer, device, model_lock, target_game):
-    t = threading.Thread(target=sleep_cycle, args=(model, optimizer, buffer, device, model_lock, target_game))
-    t.daemon = True
-    t.start()
+    # BLOCKING SLEEP (Synchronous)
+    # The user requested: "while dreaming stop the game then restart when ready".
+    # Running this in the Main Thread pauses the game loop implicitly.
+    print(f">> [SLEEP] Pausing Game Loop for Dreaming Cycle ({target_game})...")
+    sleep_cycle(model, optimizer, buffer, device, model_lock, target_game)
+    print(f">> [SLEEP] Waking up. Resuming Game Loop.")
 
 # --- CHARACTER TRAINING THREAD ---
 def train_character_thread(model, optimizer_global, device, model_lock, epochs=1, mode="handwritten", text=None):
@@ -317,7 +363,8 @@ def train_character_thread(model, optimizer_global, device, model_lock, epochs=1
                 
                 with model_lock:
                     optimizer_local.zero_grad()
-                    out = model(x, task_id)
+                    # Forward returns (logits, value)
+                    out, _ = model(x, task_name="char_recognition")
                     loss = criterion(out, y)
                     loss.backward()
                     optimizer_local.step()
@@ -412,6 +459,12 @@ def main():
     parser.add_argument("--no-teacher", action="store_true", help="Disable Teacher Override (Sink or Swim Mode)")
     parser.add_argument("--check-syntax", action="store_true", help="Check syntax only")
     args = parser.parse_args()
+
+    # --- INTELLIGENT ARCHIVAL INITIALIZED GLOBALLY ---
+    # REPLAY_BUFFER = IntelligentReplayBuffer(ram_capacity=10000, archival_threshold=0.5)
+    
+    # --- ZMQ SETUP ---
+    context = zmq.Context()
     
     if args.check_syntax: return
 
@@ -442,9 +495,19 @@ def main():
     
     device = torch.device("cpu")
     
-    # NEW: TaskAwareSNN (Late Fusion)
+    # NEW: TaskAwareSNN (Universal Actor-Critic)
     model = TaskAwareSNN(beta=0.5).to(device)
-    model_lock = threading.Lock() # Lock for model/optimizer access
+    
+    # REGISTER TASKS (Grow Brain)
+    model.register_task("snake", 4)
+    model.register_task("pong", 2)
+    model.register_task("maze", 4)
+    model.register_task("char_recognition", 62)
+    
+    model.register_task("maze", 4)
+    model.register_task("char_recognition", 62)
+    
+    # model_lock is now GLOBAL
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=1e-5) # Added weight decay for regularization
     criterion = nn.CrossEntropyLoss()
     
@@ -620,9 +683,7 @@ def main():
                     # 4. Inference (Task 2)
                     with model_lock:
                         model.eval()
-                        # Pass dummy compass for char recon (Model expects 8-bit compass now)
-                        dummy_comp = torch.zeros((1, 8), device=device)
-                        out = model(inp, 2, compass=dummy_comp)
+                        out, val = model(inp, task_name="char_recognition")
                         model.train() # Resume Train mode default?
                         
                     probs = torch.softmax(out, dim=1).detach().cpu().numpy()[0]
@@ -809,14 +870,20 @@ def main():
             compass_tensor = torch.tensor([compass_bits], dtype=torch.float, device=device)
 
             # Forward (WITH LOCK)
+            # Forward (WITH LOCK)
             with model_lock:
                  optimizer.zero_grad()
                  model.train() # Default to train mode
-                 rate_out = model(input_tensor, task_id, compass=compass_tensor) 
+                 # Universal Call: No compass needed, just State + TaskName
+                 rate_out, value_out = model(input_tensor, task_name=game_type)
             
             # --- VSA PRIOR MASKING (GATED TRANSFER) ---
             snn_probs = torch.softmax(rate_out, dim=1)
             entropy = calculate_entropy(snn_probs).item()
+            
+            # ACCUMULATE LOSSES FOR SINGLE UPDATE
+            total_step_loss = 0.0
+            loss_source = []
             
             # Default to SNN
             probs = snn_probs
@@ -1005,24 +1072,29 @@ def main():
                 # 1. Punishment for *thinking* about doing something stupid.
                 # 2. TEACHING the brain what the *correct* (safe) action was.
                 if NO_TEACHER and not args.eval and original_unsafe_idx is not None:
-                     dist_safety = torch.distributions.Categorical(logits=rate_out)
-                     
-                     # A. Penalty for Bad Thought
-                     log_prob_unsafe = dist_safety.log_prob(torch.tensor([original_unsafe_idx], device=device))
-                     loss_penalty = -(log_prob_unsafe * -0.5) # Equivalent to maximizing negative reward
-                     
-                     # B. Reward for Safe Action (Distillation)
-                     # System 2 found 'student_idx' (the safe move). Teach it!
-                     log_prob_safe = dist_safety.log_prob(torch.tensor([student_idx], device=device))
-                     loss_teach = -(log_prob_safe * 1.0) # Maximize probability of safe move
-                     
-                     # Combined Loss: Push Bad DOWN, Push Good UP
-                     total_safety_loss = loss_penalty + loss_teach
-                     
+                     # RE-FORWARD TO GET FRESH GRAPH (Safe from Sleep Thread updates)
                      with model_lock:
-                         optimizer.zero_grad()
-                         total_safety_loss.backward(retain_graph=True) # Retain for main loop
-                         optimizer.step()
+                         # We need gradients, so we must re-run model on current weights
+                         safe_logits, _ = model(input_tensor, task_name=game_type)
+                         
+                         dist_safety = torch.distributions.Categorical(logits=safe_logits)
+                         
+                         # A. Penalty for Bad Thought
+                         log_prob_unsafe = dist_safety.log_prob(torch.tensor([original_unsafe_idx], device=device))
+                         loss_penalty = -(log_prob_unsafe * -0.5) # Equivalent to maximizing negative reward
+                         
+                         # B. Reward for Safe Action (Distillation)
+                         # System 2 found 'student_idx' (the safe move). Teach it!
+                         log_prob_safe = dist_safety.log_prob(torch.tensor([student_idx], device=device))
+                         loss_teach = -(log_prob_safe * 1.0) # Maximize probability of safe move
+                         
+                         # Combined Loss: Push Bad DOWN, Push Good UP
+                         total_safety_loss = loss_penalty + loss_teach
+                         
+                         # ACCUMULATE
+                         total_step_loss += total_safety_loss
+                         loss_source.append("SAFETY")
+                     
                      print(f"[{game_type.upper()}] RL SUPER-LEARN: Punished Unsafe (-0.5) & Taught Safe (+1.0)")
 
             
@@ -1050,76 +1122,124 @@ def main():
             # - If NO_TEACHER: RL Mode (Policy Gradient).
             
             if not args.eval: 
-                if NO_TEACHER:
-                    # REINFORCE (Policy Gradient)
-                    # We use the reward from the PREVIOUS action (which led to this state)
-                    # to update the log_prob of that PREVIOUS action.
-                    # We retrieve this from RL_CONTEXT.
-                    
-                    if session_id in RL_CONTEXT:
-                         prev_log_prob = RL_CONTEXT[session_id]
-                         
-                         # --- BOREDOM PENALTY (Anti-Looping) ---
-                         # If we visited this state many times, add a small penalty.
-                         # This encourages leaving "Comfy" loops.
-                         visit_count = curiosity.get_visit_count(situation_hv, game_type)
-                         boredom_penalty = 0.0
-                         if visit_count > 4:
-                             boredom_penalty = -0.05 * (visit_count - 4)
-                             boredom_penalty = max(boredom_penalty, -0.5) # Cap penalty
-                         
-                         effective_reward = reward + boredom_penalty
-                         
-                         if effective_reward != 0.0:
-                             # Minimize Negative Reward (Maximize Reward)
-                             loss = -(prev_log_prob * effective_reward)
-                             
-                             with model_lock:
-                                 optimizer.zero_grad()
-                                 loss.backward()
-                                 optimizer.step()
-                             
-                             rl_log_msg = f"Reward {reward:+.1f}"
-                             if boredom_penalty < 0:
-                                 rl_log_msg += f" | Boredom {boredom_penalty:.2f}"
-                             print(f"[{game_type.upper()}] RL LEARN: {rl_log_msg} | Loss {loss.item():.4f}")
-                             
-                         # Clear context after use (One-step MDP for now)
-                         del RL_CONTEXT[session_id]
-                    
-                    # Store CURRENT action's log_prob for NEXT frame's reward
-                    dist = torch.distributions.Categorical(logits=rate_out)
-                    current_log_prob = dist.log_prob(torch.tensor([final_action_idx], device=device))
-                    RL_CONTEXT[session_id] = current_log_prob
-                    
-                    if done: # If episode ended, clear context
-                        if session_id in RL_CONTEXT: del RL_CONTEXT[session_id]
-
-                elif snn_agreed:
-                    pass # SNN effectively mastered this state
-                else:
-                    # IMITATION LEARNING (Teacher active)
-                    target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
-                    loss = criterion(rate_out, target)
-                    
-                    # STRICT TRANSFER: Freeze weights for Pong AND Maze, or ALL if FREEZE_ALL
-                    should_train = True
-                    if FREEZE_ALL:
-                        should_train = False  # Complete freeze - no learning at all
-                    elif (game_type == "pong" or game_type == "maze") and FREEZE_PONG:
-                        should_train = False  # Selective freeze for transfer test
-                    
-                    if should_train:
-                        with model_lock:
-                            if loss.requires_grad:
-                                item_loss = loss.item() # capture before backward
-                                optimizer.zero_grad() 
-                                loss.backward()
-                                optimizer.step()
-                                # print(f"[{game_type.upper()}] LEARN: Loss {item_loss:.4f}")
+                # [LOCK CRITICAL SECTION] 
+                # We must hold the lock during the ENTIRE Forward->Backward process
+                # otherwise the Sleep Thread can update weights and invalidate our graph.
+                with model_lock:
+                    if NO_TEACHER:
+                        # A2C UPDATE (Online)
+                        # We utilize RL_CONTEXT to implement n-step or 1-step A2C.
+                        # Advantage = Reward + gamma * V(s') - V(s)
                         
-                    loss_val = loss.item()
-                
+                        # A2C UPDATE (Online with Re-Forwarding)
+                        if session_id in RL_CONTEXT:
+                             # Retrieve T-1 state info
+                             # Context stores: (state_t, task_name_t, action_t, value_t_detached)
+                             prev_state, prev_task, prev_action, prev_val_old = RL_CONTEXT[session_id]
+                             
+                             # RE-FORWARD PASS on Previous State
+                             # This generates gradients for the CURRENT weights w.r.t the previous decision
+                             # This avoids the "Inplace Operation" error because we build a NEW graph.
+                             
+                             prev_logits, prev_val_new = model(prev_state, task_name=prev_task)
+                             
+                             # 1. Critic Target
+                             # Target = Reward + Gamma * V(Current_State)
+                             # value_out is V(Current_State). We detach it as it's just a number for the target.
+                             gamma = 0.99
+                             target_value = reward + gamma * value_out.detach().squeeze()
+                             if done: target_value = torch.tensor(reward).float().to(device)
+                             
+                             # 2. Advantage
+                             # Adv = Target - V(Previous_State)
+                             # We use the detached old value for the baseline? Or the new one?
+                             # Standard A2C uses the value estimate from the graph we are training. 
+                             # So Adv = Target - prev_val_new.
+                             # Wait, we want to maximize Advantage. 
+                             advantage = target_value - prev_val_new.detach().squeeze()
+                             
+                             # 3. Actor Loss
+                             dist_prev = torch.distributions.Categorical(logits=prev_logits)
+                             log_prob_prev = dist_prev.log_prob(torch.tensor([prev_action], device=device))
+                             loss_actor = -(log_prob_prev * advantage)
+                             
+                             # 4. Critic Loss: MSE(V(prev), Target)
+                             loss_critic = F.mse_loss(prev_val_new.squeeze(), target_value)
+                             
+                             loss = loss_actor + 0.5 * loss_critic
+                             
+                             total_step_loss = total_step_loss + loss 
+                             loss_source.append(f"A2C(R={reward})")
+                             
+                             print(f"[{game_type.upper()}] A2C: R {reward:+.1f} | Val {prev_val_old:.2f}->{value_out.item():.2f} | Adv {advantage.item():.2f}")
+                                 
+                             # [NEW] STORE EXPERIENCE IN INTELLIGENT BUFFER
+                             # We store the *previous* state transition because we now know the reward and next state (current input_tensor)
+                             # Priority = |Advantage| (TD Error approximation)
+                             priority = abs(advantage.item())
+                             exp = Experience(
+                                 state=prev_state.detach().cpu(), 
+                                 action_idx=prev_action,
+                                 reward=reward,
+                                 next_state=input_tensor.detach().cpu(),
+                                 done=False, # We don't strictly track 'done' here yet, but Snake dies on -1 usually
+                                 task_name=prev_task,
+                                 priority=priority,
+                                 timestamp=time.time()
+                             )
+                             REPLAY_BUFFER.add(exp)
+    
+                             del RL_CONTEXT[session_id]
+                        
+                        # --- SALIENCY MAP GENERATION (Every 100 frames) ---
+                        # Already inside lock now
+                        if random.random() < 0.01: # 1% chance per step
+                             generate_attention_map(model, input_tensor, game_type)
+    
+                        # Store CURRENT T info for Next Step
+                        # We store input_tensor (detached? No, we need data, effectively cloned).
+                        # We store task name, actions.
+                        RL_CONTEXT[session_id] = (input_tensor.clone(), game_type, final_action_idx, value_out.item())
+                        
+                        if done: 
+                            if session_id in RL_CONTEXT: del RL_CONTEXT[session_id]
+    
+                    elif snn_agreed:
+                        pass # SNN effectively mastered this state
+                    else:
+                        # IMITATION LEARNING (Teacher active)
+                        target = torch.tensor([teacher_idx], dtype=torch.long, device=device)
+                        
+                        # RE-FORWARD (Safe from Sleep Thread)
+                        with model_lock:
+                            imit_logits, _ = model(input_tensor, task_name=game_type)
+                            # Use Actor Loss (Classification)
+                            loss_actor = criterion(imit_logits, target)
+                        
+                        # Train Critic too?
+                        # Yes, teach Critic that V(s) should be R(s)? No, in imitation we don't have R everywhere.
+                        # Let's just train Actor in Imitation mode.
+                        loss = loss_actor
+                        
+                        # STRICT TRANSFER: Freeze weights for Pong AND Maze, or ALL if FREEZE_ALL
+                        should_train = True
+                        if FREEZE_ALL:
+                            should_train = False  # Complete freeze - no learning at all
+                        elif (game_type == "pong" or game_type == "maze") and FREEZE_PONG:
+                            should_train = False  # Selective freeze for transfer test
+                        
+                        if should_train:
+                             total_step_loss += loss
+                             loss_source.append("IMITATION")
+                            
+                        loss_val = loss.item()
+                    
+                    # PERFORM SINGLE OPTIMIZER STEP FOR ALL ACCUMULATED LOSSES
+                    if isinstance(total_step_loss, torch.Tensor) and total_step_loss.requires_grad:
+                        optimizer.zero_grad()
+                        total_step_loss.backward()
+                        optimizer.step()
+            
             # 4. Memory (Experience Replay)
             # We push the CURRENT state and action we just calculated.
             buffer.push(input_tensor, task_id, final_action_idx, reward, system_agreed, game_type, compass=compass_tensor)
@@ -1224,8 +1344,99 @@ def main():
         except Exception as e:
             print(f"Error: {e}")
 
+# --- SALIENCY HELPER ---
+def generate_attention_map(model, input_tensor, task_name):
+    """
+    Generate and save generic Saliency Map for debugging.
+    """
+    global SALIENCY
+    if SALIENCY is None:
+        SALIENCY = SaliencyVisualizer(model)
+        
+    try:
+        heatmap = SALIENCY.generate_heatmap(input_tensor, task_name)
+        if heatmap is not None:
+             # Save to debug file (overwriting usually, or timestamped)
+             # debug/saliency_latest.png
+             if not os.path.exists("debug"): os.makedirs("debug")
+             cv2.imwrite("debug/saliency_latest.png", heatmap)
+    except Exception as e:
+        print(f"[SALIENCY] Error: {e}")
+
+
+# --- DREAMING FUNCTION ---
+def perform_dreaming_cycle(model, optimizer, device):
+    """
+    Deep Dreaming: Train on archived memories (Disk) to consolidate knowledge.
+    This prevents catastrophic forgetting by replaying efficient 'sketches' of the past.
+    """
+    print("\n[BRAIN] Entering REM Sleep (Deep Dreaming)...")
+    # model.train() # Already in train mode usually
+    
+    # 1. Sample from Disk (Cold Storage)
+    batch_data = REPLAY_BUFFER.sample_from_disk(batch_size=REPLAY_BATCH_SIZE)
+    
+    if batch_data is None:
+        print("[BRAIN] ...Woke up (No dreams available)")
+        return
+        
+    states, actions, rewards, next_states, dones, tasks = batch_data
+    states = states.to(device)
+    rewards = rewards.to(device)
+    
+    # 2. Dream Training
+    # We treat archived states as individual samples for reinforcement
+    with model_lock:
+        optimizer.zero_grad()
+        total_dream_loss_val = 0.0
+        
+        for i in range(len(states)):
+            s = states[i].unsqueeze(0)
+            a = actions[i].item()
+            r = rewards[i].item()
+            task = tasks[i]
+            
+            logits, val = model(s, task_name=task)
+            
+            # Critic Loss (Target = r)
+            val_loss = F.mse_loss(val, torch.tensor([[r]], device=device))
+            
+            # Actor Loss
+            probs = torch.softmax(logits, dim=1)
+            dist = torch.distributions.Categorical(probs)
+            log_prob = dist.log_prob(torch.tensor([a], device=device))
+            
+            advantage = r - val.item()
+            actor_loss = -log_prob * advantage
+            
+            loss = actor_loss + 0.5 * val_loss
+            
+            # Backward IMMEDIATELY to free graph
+            # We scale by 1.0/BatchSize if we wanted true mean, but here sum is fine (learning rate absorbs it)
+            # Actually let's normalize by batch size for stability
+            loss = loss / len(states) 
+            loss.backward()
+            
+            total_dream_loss_val += loss.item()
+            
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+            
+        print(f"[BRAIN] Dreamt {len(states)} episodes. Loss: {total_dream_loss_val:.4f}")
+        print("[BRAIN] ...Waking up refreshed.")
+
+# --- CLEANUP ---
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nSHUTDOWN REQUESTED")
+    finally:
+        if 'REPLAY_BUFFER' in globals():
+            REPLAY_BUFFER.close()
+        print("Brain Offline.")
+
+
 
 
 

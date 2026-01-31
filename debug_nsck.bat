@@ -1,3 +1,0 @@
-@echo off
-echo Launching NSCK System (Debug Mode)...
-cmd /k "run_nsck.bat"

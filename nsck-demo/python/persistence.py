@@ -370,6 +370,30 @@ class BrainStore:
         count = cursor.fetchone()[0]
         conn.close()
         return count
+
+    def sample_random_episodes(self, limit: int = 32) -> List[Episode]:
+        """
+        Sample random episodes from the database (for Deep Dreaming).
+        Uses ORDER BY RANDOM() which is sufficient for SQLite at this scale.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute("""
+            SELECT * FROM episodes 
+            ORDER BY RANDOM() 
+            LIMIT ?
+        """, (limit,))
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [Episode(
+            id=row[0], timestamp=row[1], task_tag=row[2],
+            situation_hv_bytes=row[3], state_sketch=pickle.loads(row[4]),
+            action=row[5], outcome=row[6], reward=row[7],
+            impact_score=row[8] if len(row) > 8 else 0.0
+        ) for row in rows]
     
     def prune_old_episodes(self, task_tag: str, keep_count: int = 10000):
         """Remove oldest episodes beyond capacity."""
