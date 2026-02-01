@@ -1179,6 +1179,9 @@ class ContinualLearner:
         
         # EWC parameters
         self.lambda_ewc = 10000  # Strength of importance constraint
+        
+        # Store optimal weights for each task
+        self.task_optimal_weights = {}  # task_id -> {param_name -> tensor}
     
     def compute_weight_importance(self, task_id: str, data_loader):
         """Compute Fisher Information Matrix for current task."""
@@ -1191,14 +1194,19 @@ class ContinualLearner:
             loss = self.model.compute_loss(output, batch['target'])
             
             # Backward pass
-            grads = torch.autograd.grad(loss, self.model.parameters())
+            grads = torch.autograd.grad(loss, self.model.parameters(), 
+                                       create_graph=False, retain_graph=False)
             
             # Accumulate squared gradients (diagonal FIM approximation)
-            for (name, param), grad in zip(self.model.named_parameters(), grads):
+            grad_dict = {name: grad for (name, _), grad in 
+                        zip(self.model.named_parameters(), grads)}
+            
+            for name, param in self.model.named_parameters():
                 if name not in importance:
                     importance[name] = torch.zeros_like(param)
                 
-                importance[name] += grad ** 2
+                if name in grad_dict:
+                    importance[name] += grad_dict[name] ** 2
         
         # Normalize
         for name in importance:
@@ -1361,11 +1369,14 @@ class MAMLLearner:
         # SGD on support set
         for step in range(steps):
             loss = adapted_model.compute_loss(support_set)
-            grads = torch.autograd.grad(loss, adapted_model.parameters())
+            grads = torch.autograd.grad(loss, adapted_model.parameters(),
+                                       create_graph=True)  # Need graph for meta-gradient
             
-            # Manual SGD update
-            for param, grad in zip(adapted_model.parameters(), grads):
-                param.data -= self.inner_lr * grad
+            # Manual SGD update (safe pairing)
+            params = list(adapted_model.parameters())
+            for param, grad in zip(params, grads):
+                if grad is not None:
+                    param.data -= self.inner_lr * grad
         
         return adapted_model
     
