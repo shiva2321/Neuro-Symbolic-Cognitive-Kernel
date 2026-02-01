@@ -1194,14 +1194,20 @@ class ContinualLearner:
             loss = self.model.compute_loss(output, batch['target'])
             
             # Backward pass
-            grads = torch.autograd.grad(loss, self.model.parameters(), 
+            # NOTE: Filter to parameters with requires_grad=True for production
+            trainable_params = [p for p in self.model.parameters() if p.requires_grad]
+            grads = torch.autograd.grad(loss, trainable_params, 
                                        create_graph=False, retain_graph=False)
             
             # Accumulate squared gradients (diagonal FIM approximation)
-            grad_dict = {name: grad for (name, _), grad in 
-                        zip(self.model.named_parameters(), grads)}
+            trainable_named = [(n, p) for n, p in self.model.named_parameters() 
+                              if p.requires_grad]
+            grad_dict = {name: grad for (name, _), grad in zip(trainable_named, grads)}
             
             for name, param in self.model.named_parameters():
+                if not param.requires_grad:
+                    continue
+                    
                 if name not in importance:
                     importance[name] = torch.zeros_like(param)
                 
@@ -1367,12 +1373,14 @@ class MAMLLearner:
         adapted_model = copy.deepcopy(self.model)
         
         # SGD on support set
+        # NOTE: For production MAML, use functional API (torch.func) or higher library
         for step in range(steps):
             loss = adapted_model.compute_loss(support_set)
             grads = torch.autograd.grad(loss, adapted_model.parameters(),
                                        create_graph=True)  # Need graph for meta-gradient
             
-            # Manual SGD update (safe pairing)
+            # Manual SGD update
+            # WARNING: Using .data breaks graph; for true MAML use functional updates
             params = list(adapted_model.parameters())
             for param, grad in zip(params, grads):
                 if grad is not None:
