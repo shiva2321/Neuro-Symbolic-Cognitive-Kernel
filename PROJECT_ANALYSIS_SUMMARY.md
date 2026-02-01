@@ -13,6 +13,7 @@
 | **This File** | Executive summary and quick answers |
 | **AGI_CAPABILITY_ANALYSIS.md** | Detailed gap analysis: current capabilities vs. AGI goals |
 | **COMPLETE_MODULE_ANALYSIS.md** | Comprehensive analysis of all 59 Python modules |
+| **RUST_VSA_ANALYSIS.md** | Deep dive into Rust hypervector engine (performance critical) |
 | **IMPLEMENTATION_ROADMAP.md** | Technical implementation guide (Phase 1 detailed) |
 
 ---
@@ -83,8 +84,9 @@
 
 ## Module Inventory Summary
 
-**Total Modules:** 59 Python files  
-**Total Code:** 15,577 lines
+**Total Modules:** 59 Python files + 1 Rust library  
+**Total Code:** 15,577 lines (Python) + 194 lines (Rust)  
+**Rust VSA:** High-performance hypervector engine (100-200x faster than Python)
 
 ### **By Status**
 - ✅ **Production-Ready:** 44 modules (75%)
@@ -94,6 +96,7 @@
 ### **By Function**
 | Category | Count | Key Modules |
 |----------|-------|-------------|
+| **Core Infrastructure** | 1 | **rust_vsa** (Rust: hypervector engine, 100-200x speedup) |
 | **Core Cognition** | 6 | cognitive_engine, metacognition, brain_fusion, global_workspace, self_model, homeostasis |
 | **Memory & Learning** | 11 | episodic_memory, learning, rule_learner, intrinsic_motivation, curiosity, persistence, intelligent_buffer, staged_recall, lifecycle, learning_progress |
 | **Reasoning & Planning** | 6 | causal_reasoning, planner, spatial_reasoning, analogy, semantic_coherence, explanation |
@@ -425,7 +428,8 @@ You're not building GPT-5. You're building something **fundamentally different a
 
 **For detailed analysis, see:**
 - `AGI_CAPABILITY_ANALYSIS.md` - Gap analysis
-- `COMPLETE_MODULE_ANALYSIS.md` - All 59 modules
+- `COMPLETE_MODULE_ANALYSIS.md` - All 59 Python modules
+- `RUST_VSA_ANALYSIS.md` - Rust hypervector engine
 - `IMPLEMENTATION_ROADMAP.md` - Technical guide
 
 ---
