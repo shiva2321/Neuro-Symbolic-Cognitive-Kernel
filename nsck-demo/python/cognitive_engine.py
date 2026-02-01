@@ -22,7 +22,6 @@ import hypervec_shim as hypervec_rs
 
 # Import all cognitive modules
 from config import NSCKConfig
-from perception import PerceptionEngine, calculate_entropy
 from grounding_verifier import GroundingVerifier, create_snake_verifier, create_pong_verifier, create_maze_verifier
 from rule_learner import RuleLearner
 from episodic_memory import EpisodicMemory, LiveEpisode
