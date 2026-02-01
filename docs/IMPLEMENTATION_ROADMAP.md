@@ -715,35 +715,6 @@ class EmpathyModule:
         return response
     
     def _infer_emotion(self, agent_id: str) -> str:
-        """Infer agent's emotion from their mental state.New File:** `nsck-demo/python/empathy.py`
-
-**Architecture:**
-```python
-class EmpathyModule:
-    """
-    Emotional resonance and compassionate responses.
-    """
-    def __init__(self, emotion_system, theory_of_mind):
-        self.emotions = emotion_system
-        self.tom = theory_of_mind
-        
-        # Empathy strength (configurable)
-        self.empathy_coefficient = 0.7  # How much we "feel" others' emotions
-    
-    def empathize(self, other_agent_id: str) -> str:
-        """Experience emotional resonance with another agent."""
-        # 1. Infer their emotional state from behavior/expression
-        other_emotion = self._infer_emotion(other_agent_id)
-        
-        # 2. Partially adopt their emotional state
-        self._emotional_contagion(other_emotion)
-        
-        # 3. Generate compassionate response
-        response = self._generate_compassionate_response(other_emotion)
-        
-        return response
-    
-    def _infer_emotion(self, agent_id: str) -> str:
         """Infer agent's emotion from their mental state."""
         model = self.tom.agent_models.get(agent_id)
         if not model:
@@ -1223,11 +1194,10 @@ class ContinualLearner:
             grads = torch.autograd.grad(loss, self.model.parameters())
             
             # Accumulate squared gradients (diagonal FIM approximation)
-            for name, param in self.model.named_parameters():
+            for (name, param), grad in zip(self.model.named_parameters(), grads):
                 if name not in importance:
                     importance[name] = torch.zeros_like(param)
                 
-                grad = grads[name] if name in grads else 0
                 importance[name] += grad ** 2
         
         # Normalize
