@@ -10,15 +10,13 @@ import math
 import hashlib
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Callable
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from brain_fusion import FusedBrain, QueryResult
 
 # --- Constants & Configuration ---
 
-SAFE_DEFAULTS = {
-    "pong": lambda state, last_action: "ACTION_STAY",
-    "snake": lambda state, last_action: snake_safe_fallback(state, last_action),
-}
+# SAFE_DEFAULTS must be defined *after* fallback functions exist.
+SAFE_DEFAULTS: Dict[str, Callable] = {}
 
 GRID_SIZE = 10  # Must match simulation.py
 
@@ -75,16 +73,23 @@ def snake_safe_fallback(state: dict, last_action: str) -> str:
     If last_action is safe, use it. Else, keep current heading.
     """
     current_heading = infer_heading(state["head"], state.get("body", []))
-    
+
     # Normalize action names if needed
     if not last_action.startswith("ACTION_"):
         last_action = "ACTION_" + last_action
-        
+
     forbidden = OPPOSITE.get(current_heading, "")
-    
+
     if last_action != forbidden:
         return last_action
     return current_heading
+
+
+# Now that snake_safe_fallback exists, define SAFE_DEFAULTS.
+SAFE_DEFAULTS = {
+    "pong": lambda state, last_action: "ACTION_STAY",
+    "snake": lambda state, last_action: snake_safe_fallback(state, last_action),
+}
 
 # --- Helper Utilities ---
 
@@ -303,29 +308,31 @@ class MetacognitiveEngine:
         
         # 4. Selection & Safety Veto
         action = None
-        
-        # Find best SAFE action
-        # Iterate through ranked results until one is safe
-        safe_action_found = None
-        
-        for cand in results:
-            if not cand.action: continue
-            if SafetyGate.is_safe(task_tag, state, cand.action):
-                safe_action_found = cand.action
-                break
-                
-        if safe_action_found:
-            action = safe_action_found
+
+        # If we have no credible match, we should not select a candidate action.
+        if confidence == 0.0:
+            action = None
         else:
-            # All candidates unsafe!
-            # If we had candidates but all were unsafe, this is a crisis.
-            if results:
-                 reason = "all_candidates_unsafe"
-                 # Stick with None to trigger fallback below
-        
+            # Find best SAFE action
+            # Iterate through ranked results until one is safe
+            safe_action_found = None
+
+            for cand in results:
+                if not cand.action:
+                    continue
+                if SafetyGate.is_safe(task_tag, state, cand.action):
+                    safe_action_found = cand.action
+                    break
+
+            if safe_action_found:
+                action = safe_action_found
+            else:
+                if results:
+                    reason = "all_candidates_unsafe"
+
         # Prioritize cycle breaking
         if is_cycle:
-            action = None # Force fallback
+            action = None
             reason = "cycle_detected"
 
         # Tiered Decision Matrix
@@ -334,8 +341,8 @@ class MetacognitiveEngine:
         escalation = None
 
         if is_cycle:
-             fallback_needed = True
-             
+            fallback_needed = True
+
         elif conflict:
             if conflict.severity >= 0.75:
                 should_block = True
@@ -351,9 +358,24 @@ class MetacognitiveEngine:
                     context={"conflict": conflict}
                 )
                 
-        elif confidence < 0.5:
-             fallback_needed = True
-             escalation = EscalationRequest(
+        # HARD RULE: no credible match => fallback.
+        elif confidence == 0.0:
+            fallback_needed = True
+            escalation = EscalationRequest(
+                severity="low", mode="ask_async", question_type="label_concept",
+                context={"top_result": results[0] if results else None}
+            )
+
+        # If we DIDN'T find any safe action, low confidence should force fallback.
+        # If we DID find a safe action, we keep it even when uncertain (and optionally escalate).
+        elif confidence < 0.5 and action is None:
+            fallback_needed = True
+            escalation = EscalationRequest(
+                severity="low", mode="ask_async", question_type="label_concept",
+                context={"top_result": results[0] if results else None}
+            )
+        elif confidence < 0.5 and action is not None:
+            escalation = EscalationRequest(
                 severity="low", mode="ask_async", question_type="label_concept",
                 context={"top_result": results[0] if results else None}
             )

@@ -30,13 +30,27 @@ from character_dataset import get_dataloader # New Import
 from concept_mapper import ConceptMapper
 import threading
 import queue
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from curiosity import CuriosityModule
 from symbol_grounding import GLOBAL_PRIMITIVES_MAP
 from intelligent_buffer import IntelligentReplayBuffer, Experience # [NEW] Import Buffer
 from saliency import SaliencyVisualizer # [NEW] Import Saliency
+from intrinsic_motivation import CombinedIntrinsicMotivation  # [AGI] Phase 1: Intrinsic Motivation
+from teacher_interface import TeacherInterface, HeuristicTeacher, NullTeacher # [AGI] Phase 1: Modular Teacher
+from learning_progress import LearningProgressTracker # [AGI] Phase 1.4: Self-Curriculum
+
+# [AGI] Phase 1.3: Telemetry Logging
+import csv
+import os
+LOG_FILE = "training_log.csv"
+if not os.path.exists(LOG_FILE):
+    with open(LOG_FILE, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["timestamp", "step", "task", "extrinsic", "intrinsic_icm", "intrinsic_count", "total_reward"])
 
 
+
+import sys
 
 # --- ABLATION FLAGS (DEFAULTS) ---
 ENABLE_SNN = True
@@ -44,7 +58,9 @@ ENABLE_VSA = True
 ENABLE_SLEEP = True
 FREEZE_PONG = False
 FREEZE_ALL = False  # If True, NO weight updates for ANY game/task
-NO_TEACHER = False # If True, we never fallback to Teacher. System must survive on its own.
+# Check command line args
+NO_TEACHER = True if "--no-teacher" in sys.argv else False 
+# If True, we never fallback to Teacher. System must survive on its own.
 AUTO_DREAM = False # If True, brain automatically sleeps to consolidate memories
 RL_CONTEXT = {} # Stores {session_id: log_prob_of_prev_action} for REINFORCE (Policy Gradient)
 
@@ -64,7 +80,7 @@ CONFIDENCE_THRESHOLD = 0.6 # Low Entropy = High Confidence. Threshold for "Confu
 # 0.6 is reasonably confident. 
 
 # Import SNN
-from snn_qat import TaskAwareSNN 
+from snn_qat import TaskAwareSNN, ternarize_weight
 from simulation import sim_snake, sim_pong # Import Simulation Logic
 from symbol_grounding import ActionSemantics # Import Grounding Logic
 
@@ -72,19 +88,32 @@ class LogAggregator:
     def __init__(self, interval=5.0, zmq_pub=None):
         self.interval = interval
         self.last_print = time.time()
-        self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0, "session_id": "unknown", "score": 0})
+        self.stats = defaultdict(lambda: {
+            "agreements": 0, 
+            "interventions": 0, 
+            "vetoes": 0,
+            "loss_sum": 0.0, 
+            "conf_sum": 0.0,
+            "steps": 0, 
+            "session_id": "unknown", 
+            "score": 0
+        })
         self.zmq_pub = zmq_pub
 
-    def update(self, game, agreed, loss, score, session_id="unknown"):
+    def update(self, game, agreed, loss, score, session_id="unknown", veto=False, confidence=0.5):
         self.stats[game]["session_id"] = session_id
         self.stats[game]["steps"] += 1
         self.stats[game]["loss_sum"] += loss
+        self.stats[game]["conf_sum"] += confidence
         self.stats[game]["score"] = max(self.stats[game]["score"], score) # Keep max score seen in interval
 
         if agreed:
             self.stats[game]["agreements"] += 1
         else:
             self.stats[game]["interventions"] += 1
+            
+        if veto:
+            self.stats[game]["vetoes"] += 1
 
     def check_print(self):
         if time.time() - self.last_print > self.interval:
@@ -94,10 +123,12 @@ class LogAggregator:
                 if total == 0: continue
                 agree_pct = (data["agreements"] / total) * 100
                 avg_loss = data["loss_sum"] / total
+                avg_conf = data["conf_sum"] / total
                 score = data["score"]
+                veto_pct = (data["vetoes"] / total) * 100
                 
                 # Format: SNAKE: AGREE 95.0% (Loss 0.1234) | Score: 15
-                status_strs.append(f"{game.upper()}: AGREE {agree_pct:.1f}% (Loss {avg_loss:.4f} | Score {score})")
+                status_strs.append(f"{game.upper()}: AGREE {agree_pct:.1f}% (Veto {veto_pct:.1f}%) | Score {score}")
                 
                 # Broadcast Telemetry
                 if self.zmq_pub:
@@ -105,6 +136,8 @@ class LogAggregator:
                         "game": game,
                         "session_id": data.get("session_id", "unknown"),
                         "agree_pct": float(agree_pct),
+                        "veto_pct": float(veto_pct),
+                        "avg_conf": float(avg_conf),
                         "loss": float(avg_loss),
                         "score": int(score),
                         "steps": total,
@@ -115,7 +148,16 @@ class LogAggregator:
             if status_strs:
                 print(f"[{time.strftime('%H:%M:%S')}] " + " | ".join(status_strs))
             
-            self.stats = defaultdict(lambda: {"agreements": 0, "interventions": 0, "loss_sum": 0.0, "steps": 0, "session_id": "unknown", "score": 0})
+            self.stats = defaultdict(lambda: {
+                "agreements": 0, 
+                "interventions": 0, 
+                "vetoes": 0,
+                "loss_sum": 0.0, 
+                "conf_sum": 0.0,
+                "steps": 0, 
+                "session_id": "unknown", 
+                "score": 0
+            })
             self.last_print = time.time()
 
 # --- INTELLIGENT ARCHIVAL (GLOBAL) ---
@@ -123,6 +165,16 @@ class LogAggregator:
 # Global Replay Buffer (Shared across tasks for now, but stores task_name)
 # RAM Limit: 10,000 transitions (~2MB for 10x10x1 states)
 REPLAY_BUFFER = IntelligentReplayBuffer(ram_capacity=10000, archival_threshold=0.5)
+
+# --- [AGI] INTRINSIC MOTIVATION (Phase 1) ---
+# Provides internal rewards for curiosity and exploration without teacher
+INTRINSIC_MOTIVATION = None  # Initialized in main() after device selection
+CURIOSITY_TRACKER = LearningProgressTracker(window_size=50) # [AGI] Phase 1.4
+
+# [AGI] Phase 2: Cognitive Engine
+from cognitive_engine import create_cognitive_engine
+COGNITIVE_ENGINE = create_cognitive_engine()
+
 
 # --- GLOBAL LOCK ---
 model_lock = threading.RLock() # Protects Model & Optimizer
@@ -272,7 +324,6 @@ def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all",
                 
                 # Forward (Universal Signature)
                 # x is [B, 4, 10, 10], tid is scalar. Map tid to task_name.
-                # Note: sleep_cycle uses stratified samples. We need task_name.
                 t_name = "snake"
                 if game == "pong": t_name = "pong"
                 if game == "maze": t_name = "maze"
@@ -314,13 +365,169 @@ def sleep_cycle(model, optimizer, buffer, device, model_lock, target_game="all",
             torch.save(model.state_dict(), MODEL_PATH)
         print(f"   [DISK] MODEL SAVED: {MODEL_PATH}")
 
+def generative_dream_cycle(model, optimizer, device, model_lock, task_tag="snake", num_samples=32):
+    """
+    [AGI] Phase 5.3: Generative Dreaming
+    Uses CognitiveEngine's imagination to generate synthetic training targets for the SNN.
+    """
+    print(f">> [DREAM] Starting Generative Dreaming ({task_tag.upper()})...")
+    
+    # 1. Generate Dreams from Cognitive Engine
+    with model_lock:
+        try:
+            dreams = COGNITIVE_ENGINE.dream(num_samples=num_samples, task_tag=task_tag)
+        except Exception as e:
+            print(f"[DREAM] Error generating dreams: {e}")
+            return
+            
+    if not dreams:
+        print("[DREAM] No dreams generated.")
+        return
+        
+    print(f"   [DREAM] Generated {len(dreams)} synthetic experiences.")
+    
+    # 2. Train SNN on Dreams
+    criterion = nn.CrossEntropyLoss()
+    total_loss = 0.0
+    steps = 0
+    
+    for dream in dreams:
+        if dream.get("image") is None: continue
+        
+        # 1. Prepare Input Image [1, 4, 10, 10]
+        # Since we only have one frame, we stack it for the SNN
+        img = dream["image"]
+        frames = np.stack([img]*4, axis=0)
+        x = torch.from_numpy(frames).float().to(device).unsqueeze(0)
+        
+        # 2. Prepare Target Action
+        act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if task_tag != "pong" else ["UP", "DOWN"]
+        if dream["action"] not in act_names: continue
+        y = torch.tensor([act_names.index(dream["action"])], device=device)
+        
+        # 3. Train Step
+        with model_lock:
+            model.train()
+            optimizer.zero_grad()
+            logits, val = model(x, task_name=task_tag)
+            
+            # Hybrid Loss: Imitation + Value refinement
+            loss_actor = criterion(logits, y)
+            loss_critic = F.mse_loss(val.squeeze(), torch.tensor(dream["reward"], device=device))
+            loss = loss_actor + 0.5 * loss_critic
+            
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
+            steps += 1
+
+    # [AGI] Note: To truly train the SNN, we need the 10x10 image.
+    if steps > 0:
+        print(f"   [DREAM] Phase 5.3 Distillation Complete. Avg Loss: {total_loss/steps:.4f}")
+    else:
+        print("   [DREAM] No valid imagery available for distillation.")
+
+def hypothetical_practice_cycle(model, optimizer, device, model_lock, task_tag="snake", num_anchors=10):
+    """
+    [AGI] Phase 5.4: Hypothetical Scenario Generation
+    Discovers potential death-traps or rewards through imagination and 'practices' them.
+    """
+    print(f">> [HYPO] Starting Hypothetical Practice ({task_tag.upper()})...")
+    
+    with model_lock:
+        try:
+            lessons = COGNITIVE_ENGINE.generate_hypothetical_lessons(num_anchors=num_anchors, task_tag=task_tag)
+        except Exception as e:
+            print(f"[HYPO] Error generating lessons: {e}")
+            return
+            
+    if not lessons:
+        print("[HYPO] No significant hypothetical scenarios discovered.")
+        return
+        
+    print(f"   [HYPO] Discovered {len(lessons)} high-impact scenarios.")
+    
+    # Train SNN on these lessons
+    # Since hypothetical paths can be multi-step, for now we treat the LAST step 
+    # (the one with the reward) as the primary lesson anchor.
+    # We use the anchor image if available.
+    
+    criterion = nn.CrossEntropyLoss()
+    total_loss = 0.0
+    steps = 0
+    
+    for lesson in lessons:
+        if lesson.get("anchor_image") is None: continue
+        
+        # 1. Prepare Input Image
+        img = lesson["anchor_image"]
+        frames = np.stack([img]*4, axis=0)
+        x = torch.from_numpy(frames).float().to(device).unsqueeze(0)
+        
+        # 2. Prepare Target
+        act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if task_tag != "pong" else ["UP", "DOWN"]
+        if lesson["action"] not in act_names: continue
+        y = torch.tensor([act_names.index(lesson["action"])], device=device)
+        
+        # 3. Train Step
+        with model_lock:
+            model.train()
+            optimizer.zero_grad()
+            logits, val = model(x, task_name=task_tag)
+            
+            # If it's a PENALTY (e.g. death), we want to minimize probability?
+            # Actually, standard CrossEntropy expects 'target'. 
+            # If reward is POSITIVE, we teach the action.
+            # If reward is NEGATIVE, we should ideally teach the DIFFERENT action.
+            # For now, simple Policy Refinement: only teach POSITIVE rewards, 
+            # OR use a penalty loss for negative ones.
+            
+            if lesson["reward"] > 0:
+                loss_actor = criterion(logits, y)
+                loss_critic = F.mse_loss(val.squeeze(), torch.tensor(lesson["reward"], device=device))
+                loss = loss_actor + 0.5 * loss_critic
+            else:
+                # Negative reward: Penalty to avoid this action
+                # We can use a custom loss that maximizes entropy or pushes AWAY from y.
+                log_probs = F.log_softmax(logits, dim=1)
+                loss_actor = log_probs[0, y.item()] # We want to MINIMIZE this, so maximize -loss
+                # loss_actor is negative, so adding it increases total loss? 
+                # actually, log_probs are negative. minimize probability -> maximize -log_prob.
+                # So loss = -log_probs[0, y.item()] would maximize it.
+                # We want: loss = log_probs[0, y.item()] (which is e.g. -5.0).
+                # Minimize -5.0 -> make it e.g. -10.0.
+                loss_actor = log_probs[0, y.item()] 
+                loss_critic = F.mse_loss(val.squeeze(), torch.tensor(lesson["reward"], device=device))
+                loss = loss_actor + 0.5 * loss_critic
+                
+            loss.backward()
+            optimizer.step()
+            total_loss += abs(loss.item())
+            steps += 1
+            
+    if steps > 0:
+        print(f"   [HYPO] Phase 5.4 Practice Complete. Avg Activity: {total_loss/steps:.4f}")
+
 
 def run_sleep_thread(model, optimizer, buffer, device, model_lock, target_game):
     # BLOCKING SLEEP (Synchronous)
     # The user requested: "while dreaming stop the game then restart when ready".
     # Running this in the Main Thread pauses the game loop implicitly.
     print(f">> [SLEEP] Pausing Game Loop for Dreaming Cycle ({target_game})...")
+    
+    # Standard Replay
     sleep_cycle(model, optimizer, buffer, device, model_lock, target_game)
+    
+    # [AGI] Phase 5.3: Generative Dreaming (Imagination)
+    if target_game == "all":
+        generative_dream_cycle(model, optimizer, device, model_lock, "snake")
+        # [AGI] Phase 5.4: Hypothetical Scenarios
+        hypothetical_practice_cycle(model, optimizer, device, model_lock, "snake")
+    else:
+        generative_dream_cycle(model, optimizer, device, model_lock, target_game)
+        # [AGI] Phase 5.4: Hypothetical Scenarios
+        hypothetical_practice_cycle(model, optimizer, device, model_lock, target_game)
+        
     print(f">> [SLEEP] Waking up. Resuming Game Loop.")
 
 # --- CHARACTER TRAINING THREAD ---
@@ -334,7 +541,7 @@ def train_character_thread(model, optimizer_global, device, model_lock, epochs=1
         # 1. FREEZE ALL EXCEPT CHARACTER HEAD
         with model_lock:
             for name, param in model.named_parameters():
-                if "head_chars" not in name:
+                if "heads.char_recognition" not in name:
                     param.requires_grad = False
         
         # 2. Setup Local Optimizer (Only for the Character Head)
@@ -499,11 +706,6 @@ def main():
     model = TaskAwareSNN(beta=0.5).to(device)
     
     # REGISTER TASKS (Grow Brain)
-    model.register_task("snake", 4)
-    model.register_task("pong", 2)
-    model.register_task("maze", 4)
-    model.register_task("char_recognition", 62)
-    
     model.register_task("maze", 4)
     model.register_task("char_recognition", 62)
     
@@ -516,24 +718,38 @@ def main():
             state_dict = torch.load(MODEL_PATH, weights_only=True)
             
             # --- WEIGHT SURGERY ---
-            # If the saved model has 10 outputs but current has 62, copy the 10
-            if "head_chars.weight" in state_dict:
-                saved_size = state_dict["head_chars.weight"].shape[0]
-                current_size = model.head_chars.weight.shape[0]
+            # NSCK v2 uses self.heads (ModuleDict). 
+            # We migrate old weights to the new structure if found.
+            
+            # 1. Character Head Migration
+            head_chars_key = "heads.char_recognition.actor.weight" # New Structure
+            legacy_head_key = "head_chars.weight" # Old Structure
+            
+            if legacy_head_key in state_dict or head_chars_key in state_dict:
+                # Use whichever is available
+                w_key = head_chars_key if head_chars_key in state_dict else legacy_head_key
+                b_key = w_key.replace(".weight", ".bias")
+                
+                saved_size = state_dict[w_key].shape[0]
+                current_size = model.heads["char_recognition"]["actor"].weight.shape[0]
                 
                 if saved_size == 10 and current_size == 62:
                     print(f">> [SURGERY] Migrating weights: {saved_size} -> {current_size} classes")
-                    # Create new weight/bias with current size
-                    new_weight = model.head_chars.weight.clone()
-                    new_bias = model.head_chars.bias.clone()
+                    new_weight = model.heads["char_recognition"]["actor"].weight.clone()
+                    new_bias = model.heads["char_recognition"]["actor"].bias.clone()
                     
-                    # Copy old weights into the top
-                    new_weight[:10] = state_dict["head_chars.weight"]
-                    new_bias[:10] = state_dict["head_chars.bias"]
+                    new_weight[:10] = state_dict[w_key]
+                    new_bias[:10] = state_dict[b_key]
                     
-                    # Update state_dict so strict loading works (or just set them manually)
-                    state_dict["head_chars.weight"] = new_weight
-                    state_dict["head_chars.bias"] = new_bias
+                    # Update state_dict to use NEW keys and NEW values
+                    state_dict[head_chars_key] = new_weight
+                    state_dict[head_chars_key.replace(".actor.weight", ".actor.bias")] = new_bias
+                    
+                    # Also handle Critic if it exists
+                    legacy_critic = "head_chars_value.weight"
+                    if legacy_critic in state_dict:
+                         state_dict["heads.char_recognition.critic.weight"] = state_dict[legacy_critic]
+                         state_dict["heads.char_recognition.critic.bias"] = state_dict[legacy_critic.replace(".weight", ".bias")]
 
             # NEW: Compass Surgery (Migrate old 4-bit to new 8-bit compass)
             if "fc_shared.weight" in state_dict:
@@ -559,6 +775,16 @@ def main():
     concept_mapper = ConceptMapper() # Initialize Mapper
     buffer = ReplayBuffer() # Initialize Memory
     curiosity = CuriosityModule() # Initialize Curiosity
+    
+    # [AGI] Phase 1: Initialize Intrinsic Motivation System
+    global INTRINSIC_MOTIVATION
+    INTRINSIC_MOTIVATION = CombinedIntrinsicMotivation(num_actions=4, device=str(device))
+    print(">> [AGI] Intrinsic Motivation Module ENABLED (ICM + Count-Based Exploration)")
+
+    # [AGI] Phase 1: Modular Teacher Initialization
+    # Re-check flag in case it was modified
+    current_teacher: TeacherInterface = NullTeacher() if NO_TEACHER else HeuristicTeacher()
+    print(f">> [AGI] Active Teacher: {current_teacher.name} (Flag: {NO_TEACHER})")
     
     history = {"snake": deque(maxlen=4), "pong": deque(maxlen=4), "maze": deque(maxlen=4)}
     
@@ -608,9 +834,11 @@ def main():
                      print(">> *** FULL BRAIN RESET COMPLETE *** - Starting from scratch!")
                 elif cmd == "toggle_teacher":
                      NO_TEACHER = not NO_TEACHER
-                     print(f">> TEACHER STATUS: {'OFF' if NO_TEACHER else 'ON'}")
+                     current_teacher = NullTeacher() if NO_TEACHER else HeuristicTeacher()
+                     print(f">> TEACHER STATUS: {current_teacher.name}")
                 elif cmd == "strict_transfer_cfg":
                      NO_TEACHER = True
+                     current_teacher = NullTeacher()
                      FREEZE_PONG = True  # This also freezes Maze (see line ~1078)
                      print(">> STRICT TRANSFER CONFIG APPLIED:")
                      print("   - Teacher: OFF")
@@ -636,6 +864,29 @@ def main():
                          print("="*50)
                      else:
                          print(">> WEIGHTS UNFROZEN: Brain can learn again")
+                elif cmd == "dump_causal_graph":
+                    # [AGI] Phase 4.1 Verification
+                    path = msg.get("path", "causal_dump.json")
+                    print(f">> [MISSION] Dumping Causal Graph to {path}...")
+                    try:
+                        graph_data = {}
+                        if hasattr(COGNITIVE_ENGINE, 'causal_graphs'):
+                            for task, graph in COGNITIVE_ENGINE.causal_graphs.items():
+                                edges = []
+                                for link in graph.all_links:
+                                    edges.append({
+                                        "cause": link.cause, 
+                                        "effect": link.effect, 
+                                        "strength": link.strength,
+                                        "type": link.relation.value
+                                    })
+                                graph_data[task] = edges
+                        
+                        with open(path, 'w') as f:
+                            json.dump(graph_data, f, indent=2)
+                        print(f"   [MISSION] Dumped {len(graph_data)} contexts to {path}")
+                    except Exception as e:
+                        print(f"   [MISSION] Error dumping graph: {e}")
                 elif cmd == "toggle_dream":
                      AUTO_DREAM = not AUTO_DREAM
                      print(f">> AUTO DREAMING: {'ENABLED' if AUTO_DREAM else 'DISABLED'}")           
@@ -656,11 +907,41 @@ def main():
                         with model_lock:
                             device = new_device
                             model.to(device)
+                            # Keep intrinsic motivation module on the same device
+                            try:
+                                if INTRINSIC_MOTIVATION is not None and hasattr(INTRINSIC_MOTIVATION, "set_device"):
+                                    INTRINSIC_MOTIVATION.set_device(str(device))
+                            except Exception as e:
+                                print(f">> [DEVICE] Warning: failed to move intrinsic motivation to {device}: {e}")
                             # Re-init optimizer if moving between CPU/GPU to ensure state is on correct device
                             # Actually, Adam state can be moved, but it's often safer to re-init or use a helper
                             # For SNN-QAT, re-init with same params is fine since we are mostly doing Live training
                             optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
                             print(f">> [DEVICE] Model migrated to {device}")
+                elif cmd == "assign_task":
+                    # Manually set the active task from dashboard
+                    target_task = msg.get("task", "snake")
+                    print(f">> [MISSION] Task Assigned: {target_task.upper()}")
+                    # This allows the dashboard to force the server into a specific task mode
+                    # if needed, though usually the client PULLS the task.
+                    # We can use this to bias dreaming or other background processes.
+                elif cmd == "set_goal":
+                    goal = msg.get("goal", "maximize_score")
+                    val = msg.get("value", 0)
+                    print(f">> [MISSION] Goal Set: {goal} ({val})")
+                    # Store in CognitiveEngine or local mission state
+                    if hasattr(COGNITIVE_ENGINE, 'set_mission_goal'):
+                        COGNITIVE_ENGINE.set_mission_goal(goal, val)
+                elif cmd == "toggle_teacher_for_task":
+                    task = msg.get("task", "snake")
+                    # Handle per-task teacher toggles if we want to be granular
+                    # For now, we'll just log and use the global NO_TEACHER
+                    print(f">> [MISSION] Teacher Toggle for {task}: {'OFF' if NO_TEACHER else 'ON'}")
+                elif cmd == "export_trace":
+                    # Export the last N cognitive traces for evaluation
+                    print(">> [MISSION] Exporting Cognitive Trace Logs...")
+                    # Implementation detail: CE handles the actual export
+                    COGNITIVE_ENGINE.export_traces("mission_trace.json")
                 continue # Skip game logic
 
             # --- PREDICTION REQUEST (CHARACTERS) ---
@@ -671,45 +952,140 @@ def main():
                     img_bytes = base64.b64decode(msg["image"])
                     np_arr = np.frombuffer(img_bytes, np.uint8)
                     img = cv2.imdecode(np_arr, cv2.IMREAD_GRAYSCALE)
-                    
+
+                    if img is None:
+                        raise ValueError("Decoded image is None")
+
                     # 2. Resize to 10x10
                     img_10 = cv2.resize(img, (10, 10), interpolation=cv2.INTER_AREA)
-                    
+
                     # 3. Preprocess
+                    # Normalize
                     img_float = img_10.astype(np.float32) / 255.0
-                    frames = np.stack([img_float]*4, axis=0) # [4, 10, 10]
-                    inp = torch.tensor(frames).unsqueeze(0).float().to(device) # [1, 4, 10, 10]
-                    
-                    # 4. Inference (Task 2)
+
+                    # Canvas is black ink on white background -> invert to match EMNIST-like polarity
+                    img_float = 1.0 - img_float
+
+                    # Light thresholding to keep strokes after aggressive downscale
+                    img_float = (img_float > 0.2).astype(np.float32) * img_float
+
+                    def _center_10x10(x: np.ndarray) -> np.ndarray:
+                        ys, xs = np.where(x > 0.1)
+                        if len(xs) == 0 or len(ys) == 0:
+                            return x
+                        x0, x1 = int(xs.min()), int(xs.max())
+                        y0, y1 = int(ys.min()), int(ys.max())
+                        crop = x[y0:y1 + 1, x0:x1 + 1]
+                        canvas = np.zeros((10, 10), dtype=np.float32)
+                        ch, cw = crop.shape
+                        if ch > 0 and cw > 0 and ch <= 10 and cw <= 10:
+                            oy = (10 - ch) // 2
+                            ox = (10 - cw) // 2
+                            canvas[oy:oy + ch, ox:ox + cw] = crop
+                            return canvas
+                        return x
+
+                    # Two candidate orientations:
+                    # - as-is (for UI canvases that already match training orientation)
+                    # - rotated+flipped (common EMNIST transpose/rotation mismatch)
+                    cand_a = _center_10x10(img_float)
+                    cand_b = _center_10x10(np.fliplr(np.rot90(img_float, k=1)))
+
+                    # 4. Inference
+                    # IMPORTANT:
+                    # The SNN's generic forward returns *summed output spikes*.
+                    # For char classification, that can be all-zeros early on (flat softmax).
+                    # Instead, use a raw actor linear readout for decoding.
+                    def _infer_logits(grid_10: np.ndarray) -> torch.Tensor:
+                        frames = np.stack([grid_10] * 4, axis=0)  # [4, 10, 10]
+                        inp_local = torch.tensor(frames).unsqueeze(0).float().to(device)  # [1, 4, 10, 10]
+                        latent_local = model.encoder(inp_local)
+                        w_shared_local = ternarize_weight(model.fc_shared.weight)
+                        mem_shared_local = model.lif_shared.init_leaky()
+                        cur_shared_local = torch.nn.functional.linear(latent_local, w_shared_local, model.fc_shared.bias)
+                        spk_shared_local, mem_shared_local = model.lif_shared(cur_shared_local, mem_shared_local)
+
+                        # NOTE:
+                        # Using spikes as a feature vector is often too sparse for 62-way char decoding,
+                        # especially early in training. Use the analog membrane/current instead.
+                        shared_feat = mem_shared_local
+
+                        head_local = model.heads["char_recognition"]
+                        w_actor_local = ternarize_weight(head_local["actor"].weight)
+                        out = torch.nn.functional.linear(shared_feat, w_actor_local, head_local["actor"].bias)
+
+                        # Return logits + lightweight debug stats
+                        dbg = {
+                            "cur_mean": float(cur_shared_local.detach().mean().cpu().item()),
+                            "mem_mean": float(mem_shared_local.detach().mean().cpu().item()),
+                            "spk_mean": float(spk_shared_local.detach().mean().cpu().item()),
+                            "mem_abs_mean": float(mem_shared_local.detach().abs().mean().cpu().item()),
+                        }
+                        return out, dbg
+
                     with model_lock:
                         model.eval()
-                        out, val = model(inp, task_name="char_recognition")
-                        model.train() # Resume Train mode default?
-                        
-                    probs = torch.softmax(out, dim=1).detach().cpu().numpy()[0]
-                    pred_class = int(np.argmax(probs))
-                    # Fix warning: ensure probs is treated efficiently
-                    entropy = calculate_entropy(torch.from_numpy(probs).unsqueeze(0)).item()
-                    
+                        out_a, dbg_a = _infer_logits(cand_a)
+                        out_b, dbg_b = _infer_logits(cand_b)
+                        model.train()
+
+                    probs_a = torch.softmax(out_a, dim=1).detach().cpu()[0]
+                    probs_b = torch.softmax(out_b, dim=1).detach().cpu()[0]
+
+                    # Pick the orientation with higher peak probability (more confident)
+                    a_max = float(torch.max(probs_a).item())
+                    b_max = float(torch.max(probs_b).item())
+                    if b_max > a_max:
+                        probs_t = probs_b
+                        img_float = cand_b
+                        orientation = "rot90+fliplr"
+                        dbg = dbg_b
+                    else:
+                        probs_t = probs_a
+                        img_float = cand_a
+                        orientation = "asis"
+                        dbg = dbg_a
+
+                    probs = probs_t.numpy()
+                    pred_class = int(torch.argmax(probs_t).item())
+
+                    entropy = calculate_entropy(probs_t.unsqueeze(0)).item()
                     explanation = concept_mapper.get_explanation(pred_class)
-                    
+
+                    # Debug: top-k to spot uniform outputs / dead heads
+                    topk_vals, topk_idx = torch.topk(probs_t, k=min(5, probs_t.numel()))
+                    topk = [(int(i.item()), float(v.item())) for v, i in zip(topk_vals, topk_idx)]
+
                     # 5. Send Result (VIS Channel)
                     res_payload = {
-                         "task": "char_recognition", 
-                         "grid": img_float.tolist(),
-                         "probs": probs.tolist(), 
-                         "prediction": pred_class,
-                         "explanation": explanation,
-                         "entropy": entropy,
-                         "teacher": -1, "student": pred_class, "agreed": True
+                        "task": "char_recognition",
+                        "grid": img_float.tolist(),
+                        "probs": probs.tolist(),
+                        "prediction": pred_class,
+                        "explanation": explanation,
+                        "entropy": entropy,
+                        "debug": {
+                            "img_mean": float(np.mean(img_float)),
+                            "img_min": float(np.min(img_float)),
+                            "img_max": float(np.max(img_float)),
+                            "orientation": orientation,
+                            "shared": dbg,
+                            "topk": topk,
+                        },
+                        "teacher": -1,
+                        "student": pred_class,
+                        "agreed": True,
                     }
                     pub_sock_stats.send_string(f"VIS:{json.dumps(res_payload)}")
-                    
-                    print(f"[CHAR] Predicted: {pred_class} -> {explanation} (Conf: {probs[pred_class]:.2f})")
-                    
+
+                    print(
+                        f"[CHAR] Predicted: {pred_class} -> {explanation} "
+                        f"(Conf: {probs[pred_class]:.2f}, Entropy: {entropy:.2f}, Ori: {orientation}, Top5: {topk})"
+                    )
+
                 except Exception as e:
                     print(f"Predict Error: {e}")
-                
+
                 continue
             
             game_type = msg.get("game", "unknown")
@@ -747,71 +1123,28 @@ def main():
                 mx, my = (hx+fx)//2, (hy+fy)//2
                 if (mx!=hx or my!=hy) and (mx!=fx or my!=fy): obstacles_extra.append((mx,my))
 
-            # Teacher
+            # Teacher (Modular)
             teacher_idx = 0
             task_id = 0 
             
+            # 1. Ask Teacher for Advice
+            advice = current_teacher.get_advice(state_data, game_type)
+            if advice is not None:
+                teacher_idx = advice
+            else:
+                teacher_idx = 0 # Default if teacher abstains (autonomous fallback?)
+            
+            # 2. Add Task IDs
             if game_type == "snake":
                 task_id = 1
-                snake_obs = set()
-                body = np.where(img==255)
-                for i in range(len(body[0])): snake_obs.add((body[1][i], body[0][i]))
-                for obs in obstacles_extra: snake_obs.add(obs)
-                teacher_idx = manhattan_snake_move(state_data, snake_obs)
             elif game_type == "pong":
                 task_id = 0
-                teacher_idx = get_pong_oracle(state_data)
-            elif game_type == "snake":
-                task_id = 1
-                # IMPROVED ORACLE: Move toward food + avoid immediate death
-                head = state_data.get("head", (0, 0))
-                food = state_data.get("food", (5, 5))
-                dx = food[0] - head[0]
-                dy = food[1] - head[1]
-                
-                # Priority: horizontal then vertical (0=UP, 1=DOWN, 2=LEFT, 3=RIGHT)
-                prefs = []
-                if abs(dx) > abs(dy):
-                    prefs = [3 if dx > 0 else 2, 1 if dy > 0 else 0, 0 if dy > 0 else 1, 2 if dx > 0 else 3]
-                else:
-                    prefs = [1 if dy > 0 else 0, 3 if dx > 0 else 2, 2 if dx > 0 else 3, 0 if dy > 0 else 1]
-                
-                # Choose the first preference that is SAFE
-                teacher_idx = prefs[0]
-                snake_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
-                for p_idx in prefs:
-                    _, dead = sim_snake(state_data, snake_act_names[p_idx])
-                    if not dead:
-                        teacher_idx = p_idx
-                        break
-                
-                if steps_total % 100 == 0:
-                    print(f"[ORACLE] Snake: {head}->{food} | dx={dx}, dy={dy} | Preferred: {snake_act_names[teacher_idx]}")
             elif game_type == "maze":
-                task_id = 1 # Use Snake head for transfer
-                # IMPROVED ORACLE: Move toward exit + avoid walls
-                player = state_data.get("player_pos", (0, 0))
-                exit_pos = state_data.get("exit_pos", (9, 9))
-                dx = exit_pos[0] - player[0]
-                dy = exit_pos[1] - player[1]
-                
-                # Priority: horizontal then vertical
-                prefs = []
-                if abs(dx) > abs(dy):
-                    prefs = [3 if dx > 0 else 2, 1 if dy > 0 else 0, 0 if dy > 0 else 1, 2 if dx > 0 else 3]
-                else:
-                    prefs = [1 if dy > 0 else 0, 3 if dx > 0 else 2, 2 if dx > 0 else 3, 0 if dy > 0 else 1]
-                
-                teacher_idx = prefs[0]
-                maze_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
-                for p_idx in prefs:
-                    _, wall_hit = sim_maze(state_data, maze_act_names[p_idx])
-                    if not wall_hit:
-                        teacher_idx = p_idx
-                        break
-                
-                if steps_total % 100 == 0:
-                    print(f"[ORACLE] Maze: {player}->{exit_pos} | dx={dx}, dy={dy}")
+                task_id = 1 # Transfer from snake
+            
+            # Debug Oracle (Optional logging)
+            if False and steps_total % 100 == 0 and isinstance(current_teacher, HeuristicTeacher):
+                 print(f"[TEACHER] {game_type.upper()} suggests: {teacher_idx}")
 
             # Input Processing
             curr_np = img.astype(np.float32) / 255.0
@@ -837,6 +1170,8 @@ def main():
             if game_type in ["snake", "maze"]:
                 hx, hy = state_data.get("head", state_data.get("player_pos", (0, 0)))
                 fx, fy = state_data.get("food", state_data.get("exit_pos", (0, 0)))
+                w = state_data.get("width", 10)
+                h = state_data.get("height", 10)
                 
                 # Goal Direction (bits 0-3)
                 if fy < hy: compass_bits[0] = 1  # Goal Above
@@ -845,20 +1180,22 @@ def main():
                 if fx > hx: compass_bits[3] = 1  # Goal Right
                 
                 # Obstacle Awareness (bits 4-7) - Check adjacent cells in image
-                # 255 = Wall/Body (Danger in both Snake and Maze)
-                GRID_SIZE = 10
-                # UP: (hx, hy-1)
-                if hy <= 0 or (0 <= hy-1 < GRID_SIZE and 0 <= hx < GRID_SIZE and img[hy-1, hx] == 255):
-                    compass_bits[4] = 1  # Blocked UP
-                # DOWN: (hx, hy+1)
-                if hy >= GRID_SIZE-1 or (0 <= hy+1 < GRID_SIZE and 0 <= hx < GRID_SIZE and img[hy+1, hx] == 255):
-                    compass_bits[5] = 1  # Blocked DOWN
-                # LEFT: (hx-1, hy)
-                if hx <= 0 or (0 <= hy < GRID_SIZE and 0 <= hx-1 < GRID_SIZE and img[hy, hx-1] == 255):
-                    compass_bits[6] = 1  # Blocked LEFT
-                # RIGHT: (hx+1, hy)
-                if hx >= GRID_SIZE-1 or (0 <= hy < GRID_SIZE and 0 <= hx+1 < GRID_SIZE and img[hy, hx+1] == 255):
-                    compass_bits[7] = 1  # Blocked RIGHT
+                # CRITICAL: Scale hx, hy (raw coords) to img coords (10x10)
+                img_h, img_w = img.shape
+                def is_blocked(rx, ry):
+                    if rx < 0 or rx >= w or ry < 0 or ry >= h: return True
+                    # Map raw coord to image coord
+                    ix = int(rx * img_w / w)
+                    iy = int(ry * img_h / h)
+                    # Clip just in case of rounding
+                    ix = max(0, min(img_w - 1, ix))
+                    iy = max(0, min(img_h - 1, iy))
+                    return img[iy, ix] == 255
+
+                if is_blocked(hx, hy - 1): compass_bits[4] = 1
+                if is_blocked(hx, hy + 1): compass_bits[5] = 1
+                if is_blocked(hx - 1, hy): compass_bits[6] = 1
+                if is_blocked(hx + 1, hy): compass_bits[7] = 1
                     
             elif game_type == "pong":
                 # Ball relative to paddle
@@ -887,8 +1224,9 @@ def main():
             
             # Default to SNN
             probs = snn_probs
-            prior_active = False 
-            
+            prior_active = False
+            vsa_prior = np.array([])
+
             # GATED RESCUE
             if ENABLE_VSA and entropy > CONFIDENCE_THRESHOLD:
                 # System 1 is Confused -> System 2 (VSA) Intervention
@@ -897,10 +1235,14 @@ def main():
                 if len(vsa_prior) > 0:
                     prior_tensor = torch.from_numpy(vsa_prior).to(device).unsqueeze(0) # [1, Actions]
                     
-                    # Apply Bias
-                    biased_probs = snn_probs * (1.0 + VSA_STRENGTH * prior_tensor)
-                    probs = biased_probs / biased_probs.sum(dim=1, keepdim=True)
-                    prior_active = True
+                    # Apply Bias - but only if dimensions match
+                    if prior_tensor.shape[1] == snn_probs.shape[1]:
+                        biased_probs = snn_probs * (1.0 + VSA_STRENGTH * prior_tensor)
+                        probs = biased_probs / biased_probs.sum(dim=1, keepdim=True)
+                        prior_active = True
+                    else:
+                        # Dimension mismatch - skip VSA rescue for this game
+                        pass
                     # Log internally if needed, or via 'veto' field (abusing it slightly for visualization or adding new field)
                     # We'll use a new field "vsa_rescue" in telemetry.
 
@@ -926,13 +1268,50 @@ def main():
             
             # 2. Determine Final Action (for Execution/Safety)
             # 'student_idx' will track the *executed* action (after VSA/Veto)
+            student_idx = None
+            
+            # [AGI] Phase 2: Cognitive Engine Integration
+            # We consult the Unified Engine for Reasoning/Planning/Rules/Metacognition
+            snn_conf_val = torch.max(probs).item()
+            cog_decision = COGNITIVE_ENGINE.decide(
+                state_data, 
+                game_type, 
+                {"confidence": snn_conf_val, "action": "ACTION_" + ["UP", "DOWN", "LEFT", "RIGHT"][snn_raw_idx]}
+            )
+            
+            # Extract Intent from Cognitive Engine
+            # We respect the Engine if it has a Plan, a Rule, or specific Veto logic.
+            active_mode = cog_decision.trace.get("mode", "default")
+            veto_active = cog_decision.trace.get("veto_confusion", False)
+            
+            planned_idx = None
+            
+            # Priority: Plan > Rule/Veto > SNN
+            if active_mode in ["PLANNER", "RULES", "planned_spatial_goal", "learned_rule"] or veto_active:
+                act_str = cog_decision.chosen_action.replace("ACTION_", "")
+                # Map to index
+                act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if game_type != "pong" else ["UP", "DOWN"]
+                
+                if act_str in act_names:
+                    planned_idx = act_names.index(act_str)
+                    
+                    # Log source
+                    trigger = active_mode.upper()
+                    if veto_active: trigger += " (VETO)"
+                    detail = cog_decision.explanation.details if cog_decision.explanation else ""
+                    print(f"[{game_type.upper()}] COGNITIVE OVERRIDE: {act_str} [{trigger}] {detail}")
+
             
             # --- CURIOSITY & EXPLORATION ---
             # Driven by Novelty (VSA) and Stagnation
             should_explore = False
             exploration_reason = ""
             
-            if NO_TEACHER: # Only explore if Teacher is OFF (Autonomy Mode)
+            # If Planner has a suggestion, we prioritize it (System 2 Override)
+            if planned_idx is not None:
+                student_idx = planned_idx
+                # We skip random exploration if we have a plan
+            elif NO_TEACHER: # Only explore if Teacher is OFF (Autonomy Mode)
                 # 1. Generate Situation Hypervector (Neuro-Symbolic State)
                 # We reuse primitives from symbol_grounding
                 situation_hv = hypervec_rs.HyperVector(0) # Null start
@@ -948,14 +1327,20 @@ def main():
                     if fx > hx: situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(GLOBAL_PRIMITIVES_MAP["REL_RIGHT"]))
                     
                     # Obstacle Awareness (Wall Detection)
-                    # Check adjacent cells in 10x10 grid. 255 = Wall/Body.
-                    # Codes: 201=Blocked_UP, 202=Blocked_DN, 203=Blocked_L, 204=Blocked_R
+                    # Check adjacent cells using scaled coordinates
+                    img_h, img_w = img.shape
+                    w = state_data.get("width", 10)
+                    h = state_data.get("height", 10)
                     dirs = [(0, -1, 201), (0, 1, 202), (-1, 0, 203), (1, 0, 204)]
                     for dx, dy, code in dirs:
-                        nx, ny = (hx + dx) % GRID_SIZE, (hy + dy) % GRID_SIZE
-                        # img is [y, x]
-                        if img[ny, nx] == 255:
+                        nx, ny = hx + dx, hy + dy
+                        if nx < 0 or nx >= w or ny < 0 or ny >= h:
                             situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(code))
+                        else:
+                            ix = max(0, min(img_w - 1, int(nx * img_w / w)))
+                            iy = max(0, min(img_h - 1, int(ny * img_h / h)))
+                            if img[iy, ix] == 255:
+                                situation_hv = situation_hv.bundle(hypervec_rs.HyperVector(code))
                     
                 # 2. Consult Curiosity Module
                 # Confidence = (1 - Entropy) or Max Prob? 
@@ -984,12 +1369,29 @@ def main():
                 if rec_act_name in act_names:
                     student_idx = act_names.index(rec_act_name)
                     print(f"[{game_type.upper()}] CURIOSITY: {rec_act_name} ({exploration_reason})")
+                    trace_mode = "CURIOSITY"
                 else:
+                    # Fallback to SNN if curiosity couldn't recommend a valid action
                     _, active_idx_t = torch.max(probs, dim=1)
                     student_idx = active_idx_t.item()
+                    trace_mode = "SNN_FALLBACK"
             else:
-                _, active_idx_t = torch.max(probs, dim=1)
-                student_idx = active_idx_t.item()
+                # Standard SNN prediction
+                if game_type == "char_recognition":
+                    _, active_idx_t = torch.max(probs, dim=1)
+                    if student_idx is None:
+                        student_idx = active_idx_t.item()
+                    trace_mode = "SNN"
+                else:
+                    _, active_idx_t = torch.max(probs, dim=1)
+                    snn_idx = active_idx_t.item()
+                    if student_idx is None:
+                        student_idx = snn_idx
+                        trace_mode = "SNN"
+                    else:
+                        # Keep existing student_idx (from Planner or Curiosity)
+                        # but we still log the SNN's opinion for the dashboard
+                        pass
                 
             # Log Outcome for Curiosity (Learning Progress)
             # We don't know "Success" yet. We find out next frame? 
@@ -1001,103 +1403,38 @@ def main():
             is_success = (reward > 0)
             curiosity.record_outcome(game_type, is_success)
             
-            # --- SYSTEM 2: SIMULATION & SAFETY VETO ---
-            # "Reasoning": Check if proposed action is suicidal/bad, if so, override.
-            reasoning_override = False
-            veto_log = ""
-            original_unsafe_idx = None # Track intended action for penalty
+            # --- [AGI 6.2] COGNITIVE VETO & SUPER-LEARN ---
+            # Replace hardcoded simulations with Unified Engine's vetoes (World Model Simulation)
+            vetoed_actions = cog_decision.trace.get("vetoes", [])
+            reasoning_override = (student_idx != snn_raw_idx)
             
-            if game_type == "snake":
-                snake_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
-                if student_idx < 4:
-                    proposed = snake_act_names[student_idx]
-                    _, dead = sim_snake(state_data, proposed)
+            if vetoed_actions and NO_TEACHER and not args.eval:
+                with model_lock:
+                    # RE-FORWARD TO GET FRESH GRAPH
+                    safe_logits, _ = model(input_tensor, task_name=game_type)
+                    dist_safety = torch.distributions.Categorical(logits=safe_logits)
                     
-                    if dead:
-                        original_unsafe_idx = student_idx
-                        # CRITICAL: Proposed action kills. Search for safe alternative.
-                        original_idx = student_idx
-                        for i, alt in enumerate(snake_act_names):
-                            _, alt_dead = sim_snake(state_data, alt)
-                            if not alt_dead:
-                                student_idx = i # OVERRIDE
-                                reasoning_override = True
-                                veto_log = f"VETO: Snake {proposed}->{alt} (Reason: Predicted Self-Collision)"
-                                break
-            
-            elif game_type == "pong":
-                # Pong Actions: 0=UP, 1=DOWN
-                pong_act_names = ["UP", "DOWN"]
-                if student_idx < 2:
-                    proposed = pong_act_names[student_idx]
-                    # We need ball_x for simulation to be accurate.
-                    if "ball_x" in state_data:
-                        _, miss = sim_pong(state_data, proposed)
-                        
-                        if miss:
-                            original_unsafe_idx = student_idx
-                            # CRITICAL: Proposed moves leads to miss. Check if other move saves.
-                            original_idx = student_idx
-                            other_idx = 1 - student_idx
-                            other_act = pong_act_names[other_idx]
-                            _, other_miss = sim_pong(state_data, other_act)
+                    for vetoed_act in vetoed_actions:
+                        act_name = vetoed_act.replace("ACTION_", "")
+                        if act_name in act_names:
+                            unsafe_idx = act_names.index(act_name)
+                            # A. Penalty for Bad Thought (Imagined Death/Failure)
+                            log_prob_unsafe = dist_safety.log_prob(torch.tensor([unsafe_idx], device=device))
+                            loss_penalty = -(log_prob_unsafe * -0.5) 
+                            total_step_loss += loss_penalty
+                            loss_source.append("COG_VETO")
                             
-                            if not other_miss:
-                                student_idx = other_idx # OVERRIDE
-                                reasoning_override = True
-                                veto_log = f"VETO: Pong {proposed}->{other_act} (Reason: Predicted Miss)"
-            
-            elif game_type == "maze":
-                # Maze Actions: 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
-                maze_act_names = ["UP", "DOWN", "LEFT", "RIGHT"]
-                if student_idx < 4:
-                    proposed = maze_act_names[student_idx]
-                    _, wall_hit = sim_maze(state_data, proposed)
-                    
-                    if wall_hit:
-                        original_unsafe_idx = student_idx
-                        # CRITICAL: Proposed action hits wall. Search for safe alternative.
-                        for i, alt in enumerate(maze_act_names):
-                            _, alt_wall = sim_maze(state_data, alt)
-                            if not alt_wall:
-                                student_idx = i  # OVERRIDE
-                                reasoning_override = True
-                                veto_log = f"VETO: Maze {proposed}->{alt} (Reason: Wall Collision)"
-                                break
-            
-            if reasoning_override:
-                print(f"[REASONING] [SYSTEM 2] Counterfactual Analysis: {veto_log}")
-                
-                # --- SAFETY PENALTY + ACTIVE DISTILLATION ---
-                # 1. Punishment for *thinking* about doing something stupid.
-                # 2. TEACHING the brain what the *correct* (safe) action was.
-                if NO_TEACHER and not args.eval and original_unsafe_idx is not None:
-                     # RE-FORWARD TO GET FRESH GRAPH (Safe from Sleep Thread updates)
-                     with model_lock:
-                         # We need gradients, so we must re-run model on current weights
-                         safe_logits, _ = model(input_tensor, task_name=game_type)
-                         
-                         dist_safety = torch.distributions.Categorical(logits=safe_logits)
-                         
-                         # A. Penalty for Bad Thought
-                         log_prob_unsafe = dist_safety.log_prob(torch.tensor([original_unsafe_idx], device=device))
-                         loss_penalty = -(log_prob_unsafe * -0.5) # Equivalent to maximizing negative reward
-                         
-                         # B. Reward for Safe Action (Distillation)
-                         # System 2 found 'student_idx' (the safe move). Teach it!
-                         log_prob_safe = dist_safety.log_prob(torch.tensor([student_idx], device=device))
-                         loss_teach = -(log_prob_safe * 1.0) # Maximize probability of safe move
-                         
-                         # Combined Loss: Push Bad DOWN, Push Good UP
-                         total_safety_loss = loss_penalty + loss_teach
-                         
-                         # ACCUMULATE
-                         total_step_loss += total_safety_loss
-                         loss_source.append("SAFETY")
-                     
-                     print(f"[{game_type.upper()}] RL SUPER-LEARN: Punished Unsafe (-0.5) & Taught Safe (+1.0)")
+                    # B. Reward for Safe Action (Winner of Global Workspace)
+                    if reasoning_override:
+                        log_prob_safe = dist_safety.log_prob(torch.tensor([student_idx], device=device))
+                        loss_teach = -(log_prob_safe * 1.0)
+                        total_step_loss += loss_teach
+                        loss_source.append("COG_TEACH")
+                        
+                feedback_msg = f"Vetoed: {vetoed_actions}" if vetoed_actions else ""
+                if reasoning_override: feedback_msg += f" Taught: {act_names[student_idx]}"
+                print(f"[{game_type.upper()}] CROSS-MODULE FEEDBACK: {feedback_msg}")
 
-            
             # 3. Training & Agreement Logic
             # CRITICAL FIX: Train if SNN was wrong, even if System was right.
             
@@ -1108,8 +1445,13 @@ def main():
             system_agreed = (student_idx == teacher_idx)
             
             # DEFINE FINAL ACTION (Moved up for RL Training)
-            if NO_TEACHER:
+            # [AGI] Safety: If teacher is requested but none provided by client, act independently
+            # This is critical for Maze as it currently has no UI-based AI teacher.
+            frame_no_teacher = NO_TEACHER or (teacher_idx == -1)
+            
+            if frame_no_teacher:
                 final_action_idx = student_idx
+                system_agreed = True # Effectively agree with self when alone
             else:
                 final_action_idx = student_idx if system_agreed else teacher_idx
             
@@ -1126,83 +1468,128 @@ def main():
                 # We must hold the lock during the ENTIRE Forward->Backward process
                 # otherwise the Sleep Thread can update weights and invalidate our graph.
                 with model_lock:
+                    # [AGI] Universal Learning (Causal Discovery)
+                    # We now have the complete transition: State(t-1) -> Action(t-1) -> Reward(t)
+                    if session_id in RL_CONTEXT:
+                        prev_state, prev_task, prev_action, prev_val_old, prev_state_data, prev_img = RL_CONTEXT[session_id]
+                        
+                        act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if prev_task != "pong" else ["UP", "DOWN"]
+                        act_str = "ACTION_" + act_names[prev_action] if prev_action < len(act_names) else "ACTION_STAY"
+                        
+                        COGNITIVE_ENGINE.learn(
+                            state=prev_state_data,
+                            action=act_str,
+                            reward=reward,
+                            task_tag=prev_task,
+                            outcome="success" if reward > 0 else ("failure" if reward < 0 else "neutral"),
+                            next_state=state_data,
+                            image=prev_img 
+                        )
+
                     if NO_TEACHER:
                         # A2C UPDATE (Online)
-                        # We utilize RL_CONTEXT to implement n-step or 1-step A2C.
-                        # Advantage = Reward + gamma * V(s') - V(s)
-                        
-                        # A2C UPDATE (Online with Re-Forwarding)
                         if session_id in RL_CONTEXT:
-                             # Retrieve T-1 state info
-                             # Context stores: (state_t, task_name_t, action_t, value_t_detached)
-                             prev_state, prev_task, prev_action, prev_val_old = RL_CONTEXT[session_id]
-                             
-                             # RE-FORWARD PASS on Previous State
-                             # This generates gradients for the CURRENT weights w.r.t the previous decision
-                             # This avoids the "Inplace Operation" error because we build a NEW graph.
-                             
-                             prev_logits, prev_val_new = model(prev_state, task_name=prev_task)
-                             
-                             # 1. Critic Target
-                             # Target = Reward + Gamma * V(Current_State)
-                             # value_out is V(Current_State). We detach it as it's just a number for the target.
-                             gamma = 0.99
-                             target_value = reward + gamma * value_out.detach().squeeze()
-                             if done: target_value = torch.tensor(reward).float().to(device)
-                             
-                             # 2. Advantage
-                             # Adv = Target - V(Previous_State)
-                             # We use the detached old value for the baseline? Or the new one?
-                             # Standard A2C uses the value estimate from the graph we are training. 
-                             # So Adv = Target - prev_val_new.
-                             # Wait, we want to maximize Advantage. 
-                             advantage = target_value - prev_val_new.detach().squeeze()
-                             
-                             # 3. Actor Loss
-                             dist_prev = torch.distributions.Categorical(logits=prev_logits)
-                             log_prob_prev = dist_prev.log_prob(torch.tensor([prev_action], device=device))
-                             loss_actor = -(log_prob_prev * advantage)
-                             
-                             # 4. Critic Loss: MSE(V(prev), Target)
-                             loss_critic = F.mse_loss(prev_val_new.squeeze(), target_value)
-                             
-                             loss = loss_actor + 0.5 * loss_critic
-                             
-                             total_step_loss = total_step_loss + loss 
-                             loss_source.append(f"A2C(R={reward})")
-                             
-                             print(f"[{game_type.upper()}] A2C: R {reward:+.1f} | Val {prev_val_old:.2f}->{value_out.item():.2f} | Adv {advantage.item():.2f}")
-                                 
-                             # [NEW] STORE EXPERIENCE IN INTELLIGENT BUFFER
-                             # We store the *previous* state transition because we now know the reward and next state (current input_tensor)
-                             # Priority = |Advantage| (TD Error approximation)
-                             priority = abs(advantage.item())
-                             exp = Experience(
-                                 state=prev_state.detach().cpu(), 
-                                 action_idx=prev_action,
-                                 reward=reward,
-                                 next_state=input_tensor.detach().cpu(),
-                                 done=False, # We don't strictly track 'done' here yet, but Snake dies on -1 usually
-                                 task_name=prev_task,
-                                 priority=priority,
-                                 timestamp=time.time()
-                             )
-                             REPLAY_BUFFER.add(exp)
+                            # Re-use already unpacked variables
+                            pass # Actual A2C logic follows below in the file
+
+                            # This generates gradients for the CURRENT weights w.r.t the previous decision
+                            # This avoids the "Inplace Operation" error because we build a NEW graph.
+                            
+                            prev_logits, prev_val_new = model(prev_state, task_name=prev_task)
+                            
+                            # [AGI] Phase 1: Compute Intrinsic Motivation Reward
+                            # Augments extrinsic reward with curiosity bonus for autonomous learning
+                            total_reward = reward  # Start with extrinsic
+                            if INTRINSIC_MOTIVATION is not None and NO_TEACHER:
+                                # Compute intrinsic reward from state transition
+                                intrinsic_r, breakdown = INTRINSIC_MOTIVATION.compute_reward(
+                                    prev_state.squeeze(0),  # Previous state
+                                    prev_action,             # Action taken
+                                    input_tensor.squeeze(0), # Current state (next state)
+                                    extrinsic_reward=reward
+                                )
+                                total_reward = intrinsic_r
+                               # Log occasionally
+                                if steps_total % 50 == 0:
+                                    print(f"[AGI] Intrinsic: ext={reward:.2f} icm={breakdown['icm_bonus']:.4f} count={breakdown['count_bonus']:.4f} total={total_reward:.2f}")
+                                
+                                # [AGI] Log to CSV
+                                with open(LOG_FILE, "a", newline="") as f:
+                                    writer = csv.writer(f)
+                                    writer.writerow([
+                                        time.time(), 
+                                        steps_total, 
+                                        game_type, 
+                                        reward, 
+                                        breakdown['icm_bonus'], 
+                                        breakdown['count_bonus'], 
+                                        total_reward
+                                    ])
+                                    
+                                # [AGI] Phase 1.4: Update Learning Progress
+                                CURIOSITY_TRACKER.update(game_type, total_reward)
+                                
+                                # Check for Plateau (Self-Curriculum)
+                                # For Phase 1, we just LOG it. In Phase 2, we switch tasks.
+                                lp = CURIOSITY_TRACKER.get_progress(game_type)
+                                if steps_total % 200 == 0:
+                                    is_bored = CURIOSITY_TRACKER.is_plateaued(game_type)
+                                    note = " [BORED]" if is_bored else ""
+                                    print(f"[AGI] Learning Progress ({game_type}): {lp:.4f}{note}")
+
+                            
+                            # 1. Critic Target
+                            # Target = Reward + Gamma * V(Current_State)
+                            # value_out is V(Current_State). We detach it as it's just a number for the target.
+                            gamma = 0.99
+                            target_value = total_reward + gamma * value_out.detach().squeeze()
+                            if done: target_value = torch.tensor(total_reward).float().to(device)
+                            
+                            # 2. Advantage
+                            # Adv = Target - V(Previous_State)
+                            # We use the detached old value for the baseline? Or the new one?
+                            # Standard A2C uses the value estimate from the graph we are training. 
+                            # So Adv = Target - prev_val_new.
+                            # Wait, we want to maximize Advantage. 
+                            advantage = target_value - prev_val_new.detach().squeeze()
+                            
+                            # 3. Actor Loss
+                            dist_prev = torch.distributions.Categorical(logits=prev_logits)
+                            log_prob_prev = dist_prev.log_prob(torch.tensor([prev_action], device=device))
+                            loss_actor = -(log_prob_prev * advantage)
+                            
+                            # 4. Critic Loss: MSE(V(prev), Target)
+                            loss_critic = F.mse_loss(prev_val_new.squeeze(), target_value)
+                            
+                            loss = loss_actor + 0.5 * loss_critic
+                            
+                            total_step_loss = total_step_loss + loss 
+                            loss_source.append(f"A2C(R={reward})")
+                            
+                            print(f"[{game_type.upper()}] A2C: R {reward:+.1f} | Val {prev_val_old:.2f}->{value_out.item():.2f} | Adv {advantage.item():.2f}")
+                                
+                            # [NEW] STORE EXPERIENCE IN INTELLIGENT BUFFER
+                            # We store the *previous* state transition because we now know the reward and next state (current input_tensor)
+                            # Priority = |Advantage| (TD Error approximation)
+                            priority_val = float(abs(advantage).detach().cpu().item())
+                            exp = Experience(
+                                state=prev_state.detach().cpu(),
+                                action_idx=prev_action,
+                                reward=reward,
+                                next_state=input_tensor.detach().cpu(),
+                                done=False, # We don't strictly track 'done' here yet, but Snake dies on -1 usually
+                                task_name=prev_task,
+                                priority=priority_val,
+                                timestamp=time.time()
+                            )
+                            REPLAY_BUFFER.add(exp)
     
-                             del RL_CONTEXT[session_id]
+                            del RL_CONTEXT[session_id]
                         
                         # --- SALIENCY MAP GENERATION (Every 100 frames) ---
                         # Already inside lock now
                         if random.random() < 0.01: # 1% chance per step
                              generate_attention_map(model, input_tensor, game_type)
-    
-                        # Store CURRENT T info for Next Step
-                        # We store input_tensor (detached? No, we need data, effectively cloned).
-                        # We store task name, actions.
-                        RL_CONTEXT[session_id] = (input_tensor.clone(), game_type, final_action_idx, value_out.item())
-                        
-                        if done: 
-                            if session_id in RL_CONTEXT: del RL_CONTEXT[session_id]
     
                     elif snn_agreed:
                         pass # SNN effectively mastered this state
@@ -1231,14 +1618,18 @@ def main():
                         if should_train:
                              total_step_loss += loss
                              loss_source.append("IMITATION")
-                            
-                        loss_val = loss.item()
-                    
+
                     # PERFORM SINGLE OPTIMIZER STEP FOR ALL ACCUMULATED LOSSES
                     if isinstance(total_step_loss, torch.Tensor) and total_step_loss.requires_grad:
                         optimizer.zero_grad()
                         total_step_loss.backward()
                         optimizer.step()
+
+                    # [AGI] Universal Context Update: Store T info for T+1 transition
+                    # This enables Causal Discovery to learn from Teacher observations too!
+                    RL_CONTEXT[session_id] = (input_tensor.clone(), game_type, final_action_idx, value_out.item(), state_data, curr_np)
+                    if done:
+                        if session_id in RL_CONTEXT: del RL_CONTEXT[session_id]
             
             # 4. Memory (Experience Replay)
             # We push the CURRENT state and action we just calculated.
@@ -1246,12 +1637,30 @@ def main():
             
             # Retrieve score from message payload
             current_score = msg.get("score", 0)
-            logger.update(game_type, system_agreed, loss_val, current_score, session_id)
+            
+            # Extract metrics for detailed logging
+            is_veto = False
+            conf_val = 0.5
+            if cog_decision:
+                conf_val = cog_decision.confidence
+                if cog_decision.explanation and "VETO" in cog_decision.explanation.summary:
+                    is_veto = True
+            
+            logger.update(game_type, system_agreed, loss_val, current_score, session_id, veto=is_veto, confidence=conf_val)
             logger.check_print()
             
-            # --- VISUALIZATION TELEMETRY (Every 10 Steps) ---
+            # --- MISSION TELEMETRY (Every 10 Steps) ---
             if steps_total % 10 == 0:
-                # 1. Prepare Telemetry Payload
+                # 1. Global Workspace Competition
+                workspace_data = COGNITIVE_ENGINE.get_workspace_telemetry()
+                pub_sock_stats.send_string(f"WORKSPACE:{json.dumps(workspace_data)}")
+                
+                # 2. Causal Graph States
+                causal_data = COGNITIVE_ENGINE.get_causal_telemetry(game_type)
+                pub_sock_stats.send_string(f"CAUSAL:{json.dumps(causal_data)}")
+                
+                # 3. Vision & Prediction (Already existed, but ensuring veto_log is safe)
+                veto_log = cog_decision.explanation.summary if cog_decision.explanation else "VETO"
                 grid_list = curr_np.tolist()
                 probs_list = probs[0].tolist()
                 vis_payload = {
@@ -1281,7 +1690,7 @@ def main():
                 
                 if game_type == "char_recognition":
                      label_map = [str(i) for i in range(10)]
-                elif game_type == "snake":
+                elif game_type == "snake" or game_type == "maze":
                      label_map = ["UP", "DN", "LF", "RT"]
                 else: # Pong
                      label_map = ["UP", "DN"]
@@ -1307,7 +1716,7 @@ def main():
             # Standard imitation learning: You drive, but if you fail, I reset you?
             # Here: We broadcast the executed action.
             # If !system_agreed, it usually means SNN+VSA both failed compared to Oracle.
-            # If we want to behave nicely, we should arguably output the Teacher Action if we are training?
+            # If we want to be behaved nicely, we should arguably output the Teacher Action if we are training?
             # BUT: We want to see the failure.
             # Let's execute the System's Decision (student_idx), even if wrong.
             # UNLESS: It causes instant death? No, sim_snake handles veto.
@@ -1318,6 +1727,8 @@ def main():
             # Let's keep Student Forcing for stability.
             # UNLESS: --no-teacher is set. Then we MUST execute student_idx.
             
+            if student_idx is None: student_idx = 0 # Fallback safety
+
             if NO_TEACHER:
                 final_action_idx = student_idx
             else:
@@ -1342,6 +1753,8 @@ def main():
                  run_sleep_thread(model, optimizer, buffer, device, model_lock, "all")
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             print(f"Error: {e}")
 
 # --- SALIENCY HELPER ---
@@ -1435,9 +1848,5 @@ if __name__ == "__main__":
         if 'REPLAY_BUFFER' in globals():
             REPLAY_BUFFER.close()
         print("Brain Offline.")
-
-
-
-
 
 

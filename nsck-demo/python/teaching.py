@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional, Any, Union
 from enum import Enum
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from .persistence import BrainStore, Rule, Concept
 from .rule_learner import RuleLearner
 from .grounding_verifier import GroundingVerifier

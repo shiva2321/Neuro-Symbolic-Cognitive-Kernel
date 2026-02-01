@@ -1,0 +1,10 @@
+[project]
+name = "nsck-demo"
+version = "0.0.0"
+description = "NSCK demo (symbolic + spiking + VSA)"
+requires-python = ">=3.11"
+
+[tool.pytest.ini_options]
+pythonpath = ["nsck-demo"]
+testpaths = ["nsck-demo/tests", "nsck-demo/python"]
+addopts = "-ra"

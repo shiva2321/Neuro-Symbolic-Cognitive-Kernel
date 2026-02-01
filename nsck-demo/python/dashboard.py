@@ -52,12 +52,16 @@ class DashboardApp:
         # Data Buffers (Only accessed by Main Thread)
         self.max_history = 100
         self.data = {
-            "snake": {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history)},
-            "pong":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history)},
-            "maze":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history)},
+            "snake": {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history), "veto": deque(maxlen=self.max_history), "conf": deque(maxlen=self.max_history)},
+            "pong":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history), "veto": deque(maxlen=self.max_history), "conf": deque(maxlen=self.max_history)},
+            "maze":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history), "score": deque(maxlen=self.max_history), "reward": deque(maxlen=self.max_history), "veto": deque(maxlen=self.max_history), "conf": deque(maxlen=self.max_history)},
             "char":  {"agree": deque(maxlen=self.max_history), "loss": deque(maxlen=self.max_history)} 
         }
         self.vis_data = {"snake": None, "pong": None, "maze": None, "char": None}
+        
+        # [AGI] Phase 7 Telemetry Buffers
+        self.workspace_data = {} # Latest competition results
+        self.causal_data = {}    # Latest graph structure
         
         # Cognitive state (for explanations)
         self.cognitive_state = {"explanation": "", "mode": "exploit", "confidence": 0.5}
@@ -102,49 +106,97 @@ class DashboardApp:
         
         # SLEEP CONTROLS
         tk.Label(control_frame, text="| SLEEP:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
-        # SLEEP CONTROLS
-        tk.Label(control_frame, text="| SLEEP:", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(side="left", padx=10)
         tk.Button(control_frame, text="💤 SLEEP", command=self._cmd_universal_sleep, bg="#4400aa", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
         self.btn_dream = tk.Button(control_frame, text="☁️ DREAM: OFF", command=self._cmd_toggle_dream, bg="#555", fg="white", font=FONT_HEADER)
         self.btn_dream.pack(side="left", padx=5)
         
-        self.lbl_status = tk.Label(control_frame, text="READY", bg="black", fg="#00ff00", font=FONT_MAIN, width=30)
+        self.lbl_status = tk.Label(control_frame, text="NSCK SYSTEM: ONLINE", bg="black", fg="#00ff00", font=FONT_MAIN, width=30)
         self.lbl_status.pack(side="right", padx=10)
 
-        # 2. MAIN LAYOUT
-        main_pane = tk.PanedWindow(self.root, orient=tk.HORIZONTAL, bg=BG_COLOR)
-        main_pane.pack(fill="both", expand=True, padx=10, pady=10)
+        # Configure Styles
+        style = ttk.Style()
+        style.theme_use('default')
+        style.configure("TNotebook", background=BG_COLOR, borderwidth=0)
+        style.configure("TNotebook.Tab", background="#333333", foreground="white", padding=[15, 5], font=("Segoe UI", 10, "bold"))
+        style.map("TNotebook.Tab", background=[("selected", "#007acc")], foreground=[("selected", "white")])
         
-        # LEFT: NOTEBOOK (Performance + Letter Lab)
-        left_book = ttk.Notebook(main_pane)
-        main_pane.add(left_book, width=800)
+        # Main Layout: Vertical PanedWindow
+        self.main_pane = tk.PanedWindow(self.root, orient=tk.VERTICAL, bg=BG_COLOR, sashwidth=4, sashrelief=tk.RAISED)
+        self.main_pane.pack(fill="both", expand=True, padx=5, pady=5)
         
-        # TAB 1: PERF
-        perf_frame = tk.Frame(left_book, bg=BG_COLOR)
-        left_book.add(perf_frame, text="System Monitor")
+        # Top: Tabbed Content
+        self.notebook = ttk.Notebook(self.main_pane)
+        self.main_pane.add(self.notebook, height=700)
         
-        self.fig_perf, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(6, 8), facecolor=BG_COLOR)
+        # Tabs
+        self.tab_monitor = tk.Frame(self.notebook, bg=BG_COLOR)
+        self.tab_brain = tk.Frame(self.notebook, bg=BG_COLOR)
+        self.tab_mission = tk.Frame(self.notebook, bg=BG_COLOR)
+        self.tab_reasoning = tk.Frame(self.notebook, bg=BG_COLOR)
+        self.tab_logs = tk.Frame(self.notebook, bg=BG_COLOR) # Keep for Semantic/Filtered logs
+        
+        self.notebook.add(self.tab_monitor, text=" 🛰️ MONITOR ")
+        self.notebook.add(self.tab_brain, text=" 🧠 BRAIN ")
+        self.notebook.add(self.tab_mission, text=" 🎯 MISSION ")
+        self.notebook.add(self.tab_reasoning, text=" 🌿 REASONING ")
+        self.notebook.add(self.tab_logs, text=" 📜 INSIGHTS ")
+        
+        # 3. POPULATE TABS
+        self._setup_monitor_tab()
+        self._setup_brain_tab()
+        self._setup_mission_tab()
+        self._setup_reasoning_tab()
+        self._setup_logs_tab()
+
+        # Bottom: Global System Console
+        self.console_frame = tk.Frame(self.main_pane, bg="black")
+        self.main_pane.add(self.console_frame, height=200)
+        
+        tk.Label(self.console_frame, text="SYSTEM TERMINAL", bg="black", fg="gray", font=("Consolas", 8)).pack(anchor="w", padx=5)
+        self.log_area = scrolledtext.ScrolledText(self.console_frame, bg="#111111", fg="#cccccc", font=("Consolas", 9))
+        self.log_area.pack(fill="both", expand=True)
+        
+        # Tag configs for system console
+        self.log_area.tag_config("SERVER", foreground="#00e5ff") 
+        self.log_area.tag_config("ERROR", foreground="#ff3333", font=("Consolas", 9, "bold"))
+        self.log_area.tag_config("TIMESTAMP", foreground="#666666")
+        
+    def _setup_monitor_tab(self):
+        """Populate the Monitor tab with performance plots."""
+        self.fig_perf, (self.ax1, self.ax2, self.ax3) = plt.subplots(3, 1, figsize=(10, 8), facecolor=BG_COLOR)
         self.fig_perf.tight_layout(pad=3.0)
+        # Placeholder for actual plot setup, assuming _setup_perf_plots will be defined
+        # For now, just set titles to avoid errors if _setup_perf_plots is not yet implemented
+        self.ax1.set_title("Agreement", color=FG_COLOR)
+        self.ax2.set_title("Loss", color=FG_COLOR)
+        self.ax3.set_title("Score/Reward", color=FG_COLOR)
+        for ax in [self.ax1, self.ax2, self.ax3]:
+            ax.set_facecolor(BG_COLOR)
+            ax.tick_params(colors=FG_COLOR)
+            ax.spines['bottom'].set_color(FG_COLOR)
+            ax.spines['left'].set_color(FG_COLOR)
+            ax.spines['top'].set_color(BG_COLOR)
+            ax.spines['right'].set_color(BG_COLOR)
+        
+        # Initialize actual lines and data structures
         self._setup_perf_plots()
         
-        canvas_perf = FigureCanvasTkAgg(self.fig_perf, master=perf_frame)
+        canvas_perf = FigureCanvasTkAgg(self.fig_perf, master=self.tab_monitor)
         canvas_perf.draw()
-        canvas_perf.get_tk_widget().pack(fill="both", expand=True)
+        canvas_perf.get_tk_widget().pack(fill="both", expand=True, padx=20, pady=20)
+
+    def _setup_brain_tab(self):
+        """Populate the Brain tab with visualizers and Letter Lab."""
+        # Top-Level Layout for Brain Tab
+        pane = tk.PanedWindow(self.tab_brain, orient=tk.HORIZONTAL, bg=BG_COLOR)
+        pane.pack(fill="both", expand=True)
         
-        # TAB 2: COGNITIVE PANEL
-        self._setup_cognitive_panel(left_book)
+        # Left: Visualizers (Existing 2x2 Brain Inspector)
+        vis_frame = tk.Frame(pane, bg=BG_COLOR)
+        pane.add(vis_frame, width=800)
         
-        # TAB 3: LETTER LAB
-        self._setup_letter_lab(left_book)
+        tk.Label(vis_frame, text="BRAIN ATTENTION & MOTOR INTENT", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(pady=5)
         
-        # RIGHT: BRAIN INSPECTOR (SPLIT VIEW)
-        right_frame = tk.Frame(main_pane, bg=BG_COLOR)
-        main_pane.add(right_frame)
-        
-        tk.Label(right_frame, text="BRAIN INSPECTOR (Parallel Attention)", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(pady=5)
-        
-        # 2x2 Grid: [Snake Vis, Pong Vis]
-        #           [Snake Mot, Pong Mot]
         self.fig_brain, self.axs_brain = plt.subplots(2, 2, figsize=(8, 6), facecolor=BG_COLOR)
         self.fig_brain.tight_layout(pad=3.0)
         
@@ -183,13 +235,205 @@ class DashboardApp:
         self.ind_sys2_pong = self.fig_brain.text(0.7, 0.52, "SYS2: IDLE", ha='center', va='center', 
                                          color='gray', weight='bold', fontsize=8, bbox=dict(facecolor='black', alpha=0.5))
 
-        canvas_brain = FigureCanvasTkAgg(self.fig_brain, master=right_frame)
+        canvas_brain = FigureCanvasTkAgg(self.fig_brain, master=vis_frame)
         canvas_brain.draw()
         canvas_brain.get_tk_widget().pack(fill="both", expand=True)
+        
+        # Right: Letter Lab (Existing functionality)
+        lab_frame = tk.Frame(pane, bg=BG_COLOR)
+        pane.add(lab_frame)
+        self._setup_letter_lab(lab_frame)
 
-        # 3. BOTTOM: LOGS (Enhanced & Organized)
-        log_container = tk.Frame(self.root, bg=BG_COLOR)
-        log_container.pack(fill="both", expand=True, padx=10, pady=5)
+    def _setup_letter_lab(self, parent):
+        """Re-implementing Letter Lab as a sub-component."""
+        tk.Label(parent, text="🔠 LETTER RECOGNITION LAB", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(pady=10)
+        
+        self.cv_size = 280 # Keep original size for consistency with image1
+        self.canvas_draw = tk.Canvas(parent, width=self.cv_size, height=self.cv_size, bg="black", cursor="cross")
+        self.canvas_draw.pack(pady=10)
+        self.canvas_draw.bind("<B1-Motion>", self._draw_kv) # Re-use existing draw method
+        
+        # Pillow Image for export (Black bg, white ink)
+        self.image1 = Image.new("L", (self.cv_size, self.cv_size), 0)
+        self.draw = ImageDraw.Draw(self.image1)
+
+        btn_frame = tk.Frame(parent, bg=BG_COLOR)
+        btn_frame.pack(fill="x", padx=50)
+        
+        tk.Button(btn_frame, text="CLEAR", command=self._clear_canvas, bg="#cc0000", fg="white", font=FONT_MAIN).pack(side="left", expand=True, fill="x", padx=5)
+        tk.Button(btn_frame, text="PREDICT", command=self._predict_char, bg="#007acc", fg="white", font=FONT_MAIN).pack(side="left", expand=True, fill="x", padx=5)
+        
+        self.lbl_pred = tk.Label(parent, text="PREDICTION: ---", bg=BG_COLOR, fg="#00ff00", font=FONT_HEADER)
+        self.lbl_pred.pack(pady=10)
+        
+        # Explanation box (This was part of _setup_cognitive_panel, but the instruction puts it here. I'll assume it's a new explanation box for the letter lab.)
+        tk.Label(parent, text="Cognitive Rationale:", bg=BG_COLOR, fg="gray", font=FONT_MAIN).pack()
+        self.txt_explanation_char = tk.Text(parent, height=5, width=40, bg="#1a1a1a", fg="white", font=FONT_MAIN) # Renamed to avoid conflict
+        self.txt_explanation_char.pack(padx=10, pady=5)
+
+        # Controls for training (moved from original _setup_letter_lab)
+        ctrl_frame = tk.Frame(parent, bg=BG_COLOR)
+        ctrl_frame.pack(pady=10)
+        
+        tk.Button(ctrl_frame, text="TRAIN (HANDWRITING)", command=self._train_handwritten, bg="green", fg="white").pack(side="left", padx=5)
+        
+        # GPU Toggle
+        self.gpu_var = tk.BooleanVar(value=False)
+        self.btn_gpu = tk.Checkbutton(ctrl_frame, text="GPU ACCEL", variable=self.gpu_var, 
+                                      command=self._cmd_toggle_gpu, 
+                                      bg=BG_COLOR, fg="yellow", selectcolor="black", activebackground=BG_COLOR)
+        self.btn_gpu.pack(side="left", padx=10)
+        
+        # Sessions Input
+        tk.Label(ctrl_frame, text="SESSIONS:", bg=BG_COLOR, fg=FG_COLOR).pack(side="left", padx=5)
+        self.ent_sessions = tk.Entry(ctrl_frame, width=5, bg="black", fg="white", insertbackground="white")
+        self.ent_sessions.insert(0, "1")
+        self.ent_sessions.pack(side="left", padx=5)
+
+        # --- NEW SECTION: TYPED TEXT TRAINING ---
+        typed_frame = tk.LabelFrame(parent, text="TYPED TEXT TRAINING (Generate Machine Data)", bg=BG_COLOR, fg="yellow", font=("Consolas", 10, "bold"), pady=10)
+        typed_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(typed_frame, text="Enter text/words to teach the Brain:", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
+        self.ent_typed_text = tk.Entry(typed_frame, width=50, bg="black", fg="white", insertbackground="white")
+        self.ent_typed_text.insert(0, "The quick brown fox jumps over the lazy dog 1234567890")
+        self.ent_typed_text.pack(pady=5)
+        
+        tk.Button(typed_frame, text="TRAIN BRAIN ON THIS TEXT", command=self._train_typed_text, bg="#cc6600", fg="white", font=FONT_HEADER).pack(pady=10)
+        
+        tk.Label(typed_frame, text="(Generates perfect 10x10 typed characters for fast learning)", bg=BG_COLOR, fg="gray", font=("Consolas", 8)).pack()
+
+    def _setup_mission_tab(self):
+        """Mission Orchestrator: Assign tasks, set goals, control teachers."""
+        tk.Label(self.tab_mission, text="🎯 MISSION ORCHESTRATOR", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(pady=10)
+        
+        # Task Assignment Panel
+        task_frame = tk.LabelFrame(self.tab_mission, text="TASK ASSIGNMENT", bg=BG_COLOR, fg="#00ff00", font=FONT_HEADER)
+        task_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(task_frame, text="Assign Active Task:", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
+        task_btn_frame = tk.Frame(task_frame, bg=BG_COLOR)
+        task_btn_frame.pack(pady=10)
+        
+        tk.Button(task_btn_frame, text="🐍 SNAKE", command=lambda: self._assign_task("snake"), 
+                 bg="#00aa00", fg="white", font=FONT_MAIN, width=12).pack(side="left", padx=5)
+        tk.Button(task_btn_frame, text="🏓 PONG", command=lambda: self._assign_task("pong"), 
+                 bg="#0088cc", fg="white", font=FONT_MAIN, width=12).pack(side="left", padx=5)
+        tk.Button(task_btn_frame, text="🧩 MAZE", command=lambda: self._assign_task("maze"), 
+                 bg="#cc6600", fg="white", font=FONT_MAIN, width=12).pack(side="left", padx=5)
+        
+        # Goal Setting Panel
+        goal_frame = tk.LabelFrame(self.tab_mission, text="SESSION GOALS", bg=BG_COLOR, fg="#ffaa00", font=FONT_HEADER)
+        goal_frame.pack(fill="x", padx=20, pady=10)
+        
+        goal_opt_frame = tk.Frame(goal_frame, bg=BG_COLOR)
+        goal_opt_frame.pack(pady=10)
+        
+        tk.Label(goal_opt_frame, text="Goal Type:", bg=BG_COLOR, fg=FG_COLOR).pack(side="left", padx=5)
+        self.goal_var = tk.StringVar(value="maximize_score")
+        tk.OptionMenu(goal_opt_frame, self.goal_var, "maximize_score", "explore", "survive").pack(side="left", padx=5)
+        
+        tk.Label(goal_opt_frame, text="Threshold:", bg=BG_COLOR, fg=FG_COLOR).pack(side="left", padx=10)
+        self.goal_threshold = tk.Entry(goal_opt_frame, width=8, bg="black", fg="white")
+        self.goal_threshold.insert(0, "100")
+        self.goal_threshold.pack(side="left", padx=5)
+        
+        tk.Button(goal_opt_frame, text="SET GOAL", command=self._set_mission_goal, 
+                 bg="#cc8800", fg="white", font=FONT_MAIN).pack(side="left", padx=10)
+        
+        # Teacher Control Panel
+        teacher_frame = tk.LabelFrame(self.tab_mission, text="TEACHER OVERRIDE", bg=BG_COLOR, fg="#ff6600", font=FONT_HEADER)
+        teacher_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(teacher_frame, text="Per-Task Teacher Control (Global for now):", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
+        self.btn_mission_teacher = tk.Button(teacher_frame, text="TEACHER: ON", command=self._cmd_toggle_teacher, 
+                                            bg="#00aa00", fg="white", font=FONT_HEADER, width=20)
+        self.btn_mission_teacher.pack(pady=10)
+        
+        # Trace Export Panel
+        export_frame = tk.LabelFrame(self.tab_mission, text="COGNITIVE TRACE EXPORT", bg=BG_COLOR, fg="#aa00ff", font=FONT_HEADER)
+        export_frame.pack(fill="x", padx=20, pady=10)
+        
+        tk.Label(export_frame, text="Export detailed decision traces for offline analysis:", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
+        tk.Button(export_frame, text="📤 EXPORT TRACES", command=self._export_traces, 
+                 bg="#8800cc", fg="white", font=FONT_HEADER).pack(pady=10)
+
+    def _setup_reasoning_tab(self):
+        """Causal & Planning Oversight: View graphs and plans."""
+        tk.Label(self.tab_reasoning, text="🌿 REASONING & PLANNING OVERSIGHT", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(pady=10)
+        
+        # Workspace Competition Panel
+        workspace_frame = tk.LabelFrame(self.tab_reasoning, text="GLOBAL WORKSPACE COMPETITION", bg=BG_COLOR, fg="#00ffaa", font=FONT_HEADER)
+        workspace_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        tk.Label(workspace_frame, text="Real-time salience of competing modules:", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
+        
+        # Table for workspace data
+        self.workspace_text = tk.Text(workspace_frame, height=10, bg="#1a1a1a", fg="#00ffaa", font=("Consolas", 10))
+        self.workspace_text.pack(fill="both", expand=True, padx=10, pady=10)
+        self.workspace_text.insert("1.0", "Waiting for workspace telemetry...")
+        
+        # Causal Graph Panel
+        causal_frame = tk.LabelFrame(self.tab_reasoning, text="CAUSAL GRAPH VIEWER", bg=BG_COLOR, fg="#ffaa00", font=FONT_HEADER)
+        causal_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        
+        tk.Label(causal_frame, text="Discovered causal links:", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
+        
+        self.causal_text = tk.Text(causal_frame, height=12, bg="#1a1a1a", fg="#ffcc00", font=("Consolas", 9))
+        self.causal_text.pack(fill="both", expand=True, padx=10, pady=10)
+        self.causal_text.insert("1.0", "Waiting for causal telemetry...")
+
+    def _setup_logs_tab(self):
+        """Structured Insight Logging: Semantic, filterable console."""
+        tk.Label(self.tab_logs, text="📜 COGNITIVE EVENT STREAM", bg=BG_COLOR, fg=FG_COLOR, font=FONT_HEADER).pack(pady=10)
+        
+        # Filter Panel
+        filter_frame = tk.Frame(self.tab_logs, bg=BG_COLOR)
+        filter_frame.pack(fill="x", padx=20, pady=5)
+        
+        tk.Label(filter_frame, text="Filter:", bg=BG_COLOR, fg=FG_COLOR).pack(side="left", padx=5)
+        self.log_filter_var = tk.StringVar(value="ALL")
+        for filt in ["ALL", "LOGIC", "NEURAL", "CAUSAL", "SYSTEM"]:
+            tk.Radiobutton(filter_frame, text=filt, variable=self.log_filter_var, value=filt,
+                          bg=BG_COLOR, fg=FG_COLOR, selectcolor="black", activebackground=BG_COLOR).pack(side="left", padx=5)
+        
+        # Multi-Pane Logs
+        log_container = tk.Frame(self.tab_logs, bg=BG_COLOR)
+        log_container.pack(fill="both", expand=True, padx=20, pady=5)
+        
+        # Brain Event Log (Semantic)
+        self.brain_log_area = scrolledtext.ScrolledText(log_container, bg="#0a0a0a", fg="#00ff00", font=("Consolas", 9), height=20)
+        self.brain_log_area.pack(fill="both", expand=True)
+        
+        # Tag configurations for semantic coloring
+        self.brain_log_area.tag_config("VETO", foreground="#ff0000", font=("Consolas", 9, "bold"))
+        self.brain_log_area.tag_config("AGREE", foreground="#00ff00")
+        self.brain_log_area.tag_config("INTERVENE", foreground="#ffaa00")
+        self.brain_log_area.tag_config("VSA", foreground="#00ccff")
+        self.brain_log_area.tag_config("PLANNER", foreground="#ff00ff")
+        self.brain_log_area.tag_config("TIMESTAMP", foreground="#666666")
+        
+        # System Console is now global at the bottom, removed from here
+
+    # --- Mission Control Command Methods ---
+    
+    def _assign_task(self, task_name):
+        """Assign a specific task to the brain."""
+        self.push_sock.send_json({"type": "admin", "cmd": "assign_task", "task": task_name})
+        self.log_queue.put(f"[MISSION] Assigned task: {task_name.upper()}")
+    
+    def _set_mission_goal(self):
+        """Set a high-level mission goal."""
+        goal_type = self.goal_var.get()
+        threshold = float(self.goal_threshold.get() or 0)
+        self.push_sock.send_json({"type": "admin", "cmd": "set_goal", "goal": goal_type, "value": threshold})
+        self.log_queue.put(f"[MISSION] Goal set: {goal_type} (threshold: {threshold})")
+    
+    def _export_traces(self):
+        """Request cognitive trace export."""
+        self.push_sock.send_json({"type": "admin", "cmd": "export_trace"})
+        self.log_queue.put("[MISSION] Requesting trace export...")
+        messagebox.showinfo("Trace Export", "Cognitive traces will be exported to mission_trace.json")
         
         # Notebook for categorized logs
         self.log_notebook = ttk.Notebook(log_container)
@@ -287,70 +531,15 @@ class DashboardApp:
         tk.Button(query_frame, text="RULES", command=self._query_rules,
                   bg="#666600", fg="white", font=FONT_MAIN).pack(side="left", padx=5)
 
-    def _setup_letter_lab(self, parent_book):
-        frame = tk.Frame(parent_book, bg=BG_COLOR)
-        parent_book.add(frame, text="Letter Lab (Handwriting)")
-        
-        # Grid Layout
-        # Top: Controls
-        # Center: Canvas
-        
-        ctrl_frame = tk.Frame(frame, bg=BG_COLOR)
-        ctrl_frame.pack(pady=10)
-        
-        tk.Button(ctrl_frame, text="CLEAR", command=self._clear_canvas, bg="red", fg="white").pack(side="left", padx=5)
-        tk.Button(ctrl_frame, text="PREDICT", command=self._predict_char, bg="blue", fg="white", font=FONT_HEADER).pack(side="left", padx=5)
-        tk.Button(ctrl_frame, text="TRAIN (HANDWRITING)", command=self._train_handwritten, bg="green", fg="white").pack(side="left", padx=5)
-        
-        # GPU Toggle
-        self.gpu_var = tk.BooleanVar(value=False)
-        self.btn_gpu = tk.Checkbutton(ctrl_frame, text="GPU ACCEL", variable=self.gpu_var, 
-                                      command=self._cmd_toggle_gpu, 
-                                      bg=BG_COLOR, fg="yellow", selectcolor="black", activebackground=BG_COLOR)
-        self.btn_gpu.pack(side="left", padx=10)
-        
-        # Sessions Input
-        tk.Label(ctrl_frame, text="SESSIONS:", bg=BG_COLOR, fg=FG_COLOR).pack(side="left", padx=5)
-        self.ent_sessions = tk.Entry(ctrl_frame, width=5, bg="black", fg="white", insertbackground="white")
-        self.ent_sessions.insert(0, "1")
-        self.ent_sessions.pack(side="left", padx=5)
-        
-        # Canvas
-        self.cv_size = 280
-        self.cv = tk.Canvas(frame, width=self.cv_size, height=self.cv_size, bg="black", cursor="cross")
-        self.cv.pack(pady=10)
-        self.cv.bind("<B1-Motion>", self._draw_kv)
-        
-        # Pillow Image for export (Black bg, white ink)
-        self.image1 = Image.new("L", (self.cv_size, self.cv_size), 0)
-        self.draw = ImageDraw.Draw(self.image1)
-        
-        tk.Label(frame, text="Draw a digit (0-9)", bg=BG_COLOR, fg="gray").pack()
-        
-        self.lbl_pred = tk.Label(frame, text="PREDICTION: ?", bg=BG_COLOR, fg="#00ccff", font=("Consolas", 24, "bold"))
-        self.lbl_pred.pack(pady=10)
-
-        # --- NEW SECTION: TYPED TEXT TRAINING ---
-        typed_frame = tk.LabelFrame(frame, text="TYPED TEXT TRAINING (Generate Machine Data)", bg=BG_COLOR, fg="yellow", font=("Consolas", 10, "bold"), pady=10)
-        typed_frame.pack(fill="x", padx=20, pady=10)
-        
-        tk.Label(typed_frame, text="Enter text/words to teach the Brain:", bg=BG_COLOR, fg=FG_COLOR).pack(pady=5)
-        self.ent_typed_text = tk.Entry(typed_frame, width=50, bg="black", fg="white", insertbackground="white")
-        self.ent_typed_text.insert(0, "The quick brown fox jumps over the lazy dog 1234567890")
-        self.ent_typed_text.pack(pady=5)
-        
-        tk.Button(typed_frame, text="TRAIN BRAIN ON THIS TEXT", command=self._train_typed_text, bg="#cc6600", fg="white", font=FONT_HEADER).pack(pady=10)
-        
-        tk.Label(typed_frame, text="(Generates perfect 10x10 typed characters for fast learning)", bg=BG_COLOR, fg="gray", font=("Consolas", 8)).pack()
 
     def _draw_kv(self, event):
         x, y = event.x, event.y
         r = 10
-        self.cv.create_oval(x-r, y-r, x+r, y+r, fill="white", outline="white")
+        self.canvas_draw.create_oval(x-r, y-r, x+r, y+r, fill="white", outline="white")
         self.draw.ellipse([x-r, y-r, x+r, y+r], fill=255, outline=255)
         
     def _clear_canvas(self):
-        self.cv.delete("all")
+        self.canvas_draw.delete("all")
         self.image1 = Image.new("L", (self.cv_size, self.cv_size), 0)
         self.draw = ImageDraw.Draw(self.image1)
         self.lbl_pred.config(text="PREDICTION: ?")
@@ -460,9 +649,14 @@ class DashboardApp:
                      log_path = os.path.join(self.exp_dir, f"{name.lower()}.log")
                      log_file = open(log_path, "w", buffering=1)
                 
+                # Prepare Environment (Add CWD to PYTHONPATH)
+                env = os.environ.copy()
+                env["PYTHONPATH"] = base_dir + os.pathsep + env.get("PYTHONPATH", "")
+                
                 p = subprocess.Popen(
                     cmd, 
                     cwd=base_dir,
+                    env=env,
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE,
                     text=True,
@@ -744,6 +938,11 @@ class DashboardApp:
                         self.data[game]["loss"].append(payload["loss"])
                         self.data[game]["score"].append(payload.get("score", 0)) 
                         self.data[game]["reward"].append(payload.get("reward", 0.0)) # RL Reward
+                        
+                        # [AGI] Phase 7.2 Analytics
+                        self.data[game]["veto"].append(payload.get("veto_pct", 0.0))
+                        self.data[game]["conf"].append(payload.get("avg_conf", 0.5))
+                        
                         perf_updated = True
                 elif msg.startswith("VIS:"):
                     payload = json.loads(msg[4:])
@@ -787,6 +986,18 @@ class DashboardApp:
                     self.event_log.append(f"[{ts}] {log_line}")
                     self._append_brain_event(log_line)
                     
+                elif msg.startswith("WORKSPACE:"):
+                    # Handle Global Workspace competition data
+                    payload = json.loads(msg[10:])
+                    self.workspace_data = payload
+                    self._update_workspace_display()
+                    
+                elif msg.startswith("CAUSAL:"):
+                    # Handle Causal graph data
+                    payload = json.loads(msg[7:])
+                    self.causal_data = payload
+                    self._update_causal_display()
+                    
                 msgs_processed += 1
             except Exception:
                 pass
@@ -799,41 +1010,65 @@ class DashboardApp:
             
         if vis_updated:
             self._update_vis_plot()
-            
-        # Schedule next tick (50ms = 20fps)
         self.root.after(50, self._main_update_loop)
 
+    def _setup_perf_plots(self):
+        """Initialize plots for Cognitive Harmony, Metacognition, and Performance."""
+        # Ax1: Cognitive Harmony (Agreement & Vetoes)
+        self.ax1.set_title("COGNITIVE HARMONY (Sys1 vs Sys2)", color=FG_COLOR, fontsize=10, fontweight='bold')
+        self.line_snake_agree, = self.ax1.plot([], [], color='#00ff00', label='Snake Agree%')
+        self.line_pong_agree, = self.ax1.plot([], [], color='#00ccff', label='Pong Agree%')
+        # Veto lines (dashed)
+        self.line_snake_veto, = self.ax1.plot([], [], color='#ff0000', linestyle='--', label='Snake Veto%')
+        self.line_pong_veto, = self.ax1.plot([], [], color='#ff00ff', linestyle='--', label='Pong Veto%')
+        
+        self.ax1.set_ylim(0, 105)
+        self.ax1.legend(loc='upper right', fontsize=8, facecolor=BG_COLOR, labelcolor='white')
+        self.ax1.grid(True, color='#444', linestyle=':', alpha=0.5)
+
+        # Ax2: Metacognitive Calibration (Confidence)
+        self.ax2.set_title("METACOGNITION (Confidence)", color=FG_COLOR, fontsize=10, fontweight='bold')
+        self.line_snake_conf, = self.ax2.plot([], [], color='#aa00ff', label='Snake Conf')
+        self.line_pong_conf, = self.ax2.plot([], [], color='#ffaa00', label='Pong Conf')
+        
+        self.ax2.set_ylim(0, 1.1)
+        self.ax2.legend(loc='upper right', fontsize=8, facecolor=BG_COLOR, labelcolor='white')
+        self.ax2.grid(True, color='#444', linestyle=':', alpha=0.5)
+
+        # Ax3: Task Performance (Score)
+        self.ax3.set_title("TASK PERFORMANCE (Score)", color=FG_COLOR, fontsize=10, fontweight='bold')
+        self.line_snake_score, = self.ax3.plot([], [], color='yellow', label='Snake Score')
+        self.line_pong_score, = self.ax3.plot([], [], color='white', label='Pong Score')
+        
+        self.ax3.legend(loc='upper left', fontsize=8, facecolor=BG_COLOR, labelcolor='white')
+        self.ax3.grid(True, color='#444', linestyle=':', alpha=0.5)
+        
     def _update_perf_plots(self):
-        # Using list() to be thread-safe copy if needed, though we are now single threaded here.
+        # Update Harmony (Ax1)
         x_snake = range(len(self.data["snake"]["agree"]))
         self.line_snake_agree.set_data(x_snake, self.data["snake"]["agree"])
+        self.line_snake_veto.set_data(x_snake, self.data["snake"]["veto"])
         
         x_pong = range(len(self.data["pong"]["agree"]))
         self.line_pong_agree.set_data(x_pong, self.data["pong"]["agree"])
+        self.line_pong_veto.set_data(x_pong, self.data["pong"]["veto"])
         
-        # Loss Lines (Ax2 Left)
-        self.line_snake_loss.set_data(range(len(self.data["snake"]["loss"])), self.data["snake"]["loss"])
-        self.line_pong_loss.set_data(range(len(self.data["pong"]["loss"])), self.data["pong"]["loss"])
+        # Update Metacognition (Ax2)
+        self.line_snake_conf.set_data(range(len(self.data["snake"]["conf"])), self.data["snake"]["conf"])
+        self.line_pong_conf.set_data(range(len(self.data["pong"]["conf"])), self.data["pong"]["conf"])
         
-        # Reward Lines (Ax2 Right)
-        # Note: reward list might be shorter than others if just added, ensure alignment? 
-        # Actually append/append/append usually keeps them synced.
-        self.line_snake_reward.set_data(range(len(self.data["snake"]["reward"])), self.data["snake"]["reward"])
-        self.line_pong_reward.set_data(range(len(self.data["pong"]["reward"])), self.data["pong"]["reward"])
-        
-        if len(self.data.get("char", {}).get("loss", [])) > 0:
-             # Just debug char loss on title
-             self.ax2.set_title(f"Loss | CharLoss: {self.data['char']['loss'][-1]:.4f}", color=FG_COLOR)
-        
+        # Update Score (Ax3)
         self.line_snake_score.set_data(range(len(self.data["snake"]["score"])), self.data["snake"]["score"])
         self.line_pong_score.set_data(range(len(self.data["pong"]["score"])), self.data["pong"]["score"])
         
         max_len = max(len(self.data["snake"]["agree"]), len(self.data["pong"]["agree"]), 1)
+        
         self.ax1.set_xlim(0, max_len)
         self.ax2.set_xlim(0, max_len)
-        self.ax3.set_xlim(0, max_len) # Autoscale limit?
+        self.ax3.set_xlim(0, max_len)
         self.ax3.relim()
         self.ax3.autoscale_view()
+        
         self.fig_perf.canvas.draw_idle()
 
     def _update_vis_plot(self):
@@ -971,6 +1206,63 @@ class DashboardApp:
             pass
         print("[Dashboard] Bye.")
         sys.exit(0)
+
+    def _update_workspace_display(self):
+        """Update the Global Workspace competition display."""
+        if not hasattr(self, 'workspace_text'):
+            return
+            
+        self.workspace_text.delete("1.0", "end")
+        
+        if not self.workspace_data:
+            self.workspace_text.insert("end", "No workspace data yet...")
+            return
+        
+        # Format the competition results
+        header = f"{'MODULE':<15} {'ACTION':<15} {'SALIENCE':<10}\n"
+        self.workspace_text.insert("end", header, "HEADER")
+        self.workspace_text.insert("end", "-" * 40 + "\n")
+        
+        # Sort by salience (descending)
+        items = sorted(self.workspace_data.items(), key=lambda x: x[1].get('salience', 0), reverse=True)
+        
+        for module, data in items:
+            action = data.get('action', 'N/A')
+            salience = data.get('salience', 0.0)
+            line = f"{module:<15} {action:<15} {salience:<10.3f}\n"
+            self.workspace_text.insert("end", line)
+    
+    def _update_causal_display(self):
+        """Update the Causal Graph viewer."""
+        if not hasattr(self, 'causal_text'):
+            return
+            
+        self.causal_text.delete("1.0", "end")
+        
+        if not self.causal_data:
+            self.causal_text.insert("end", "No causal data yet...")
+            return
+        
+        task = self.causal_data.get('task', 'unknown')
+        links = self.causal_data.get('links', [])
+        count = self.causal_data.get('discovery_count', 0)
+        
+        header = f"Task: {task.upper()} | Total Links Discovered: {count}\n"
+        self.workspace_text.insert("end", "="*50 + "\n")
+        self.causal_text.insert("end", header)
+        self.causal_text.insert("end", "="*50 + "\n\n")
+        
+        if not links:
+            self.causal_text.insert("end", "No causal links in current view.")
+            return
+        
+        # Display links
+        for i, link in enumerate(links[:30], 1):  # Show top 30
+            cause = link.get('source', '?')
+            effect = link.get('target', '?')
+            weight = link.get('weight', 0.0)
+            line = f"{i:2d}. {cause:<20} -> {effect:<20} [{weight:.3f}]\n"
+            self.causal_text.insert("end", line)
 
 if __name__ == "__main__":
     root = tk.Tk()

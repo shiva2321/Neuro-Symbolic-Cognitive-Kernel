@@ -1,6 +1,6 @@
 import numpy as np
 from collections import OrderedDict, defaultdict
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 
 class StagedRecall:
     """
@@ -23,23 +23,38 @@ class StagedRecall:
         # At 10k concepts: ~40 items per bucket on average
         self.n_lsh_bits = 8
         self.lsh_tables = [defaultdict(list) for _ in range(32)]
-        self.lsh_seeds = [np.random.randint(0, 2**32) for _ in range(32)]
-        
-        # Populate LSH if codebook exists
-        for name, hv in self.codebook.items():
-            self._lsh_insert(name, hv)
-        
+
+        # NOTE: On some platforms NumPy's legacy RandomState.randint uses int32 bounds.
+        # 2**32 can overflow and raise ValueError. We generate uint32 seeds instead.
+        self.lsh_seeds = [int(np.random.randint(0, np.iinfo(np.uint32).max, dtype=np.uint32)) for _ in range(32)]
+
+        # Only enable LSH if the HyperVector implementation supports it.
+        # Older builds of the Rust extension expose only xor/bundle/similarity.
+        self.lsh_enabled = False
+        if self.codebook:
+            any_hv = next(iter(self.codebook.values()))
+            self.lsh_enabled = hasattr(any_hv, "lsh_hash")
+
+        # Populate LSH if codebook exists and LSH is supported
+        if self.lsh_enabled:
+            for name, hv in self.codebook.items():
+                self._lsh_insert(name, hv)
+
         # Stats
         self.stats = {"l0_hits": 0, "l1_hits": 0, "l2_hits": 0, "l3_hits": 0, "queries": 0}
 
     def _lsh_insert(self, name, hv):
         """Insert concept into all LSH tables"""
+        if not getattr(self, "lsh_enabled", False):
+            return
         for i, seed in enumerate(self.lsh_seeds):
             sig = hv.lsh_hash(int(seed), self.n_lsh_bits)
             self.lsh_tables[i][sig].append(name)
 
     def _lsh_remove(self, name):
         """Remove concept from all LSH tables"""
+        if not getattr(self, "lsh_enabled", False):
+            return
         for table in self.lsh_tables:
             for sig, names in table.items():
                 if name in names:
@@ -79,26 +94,27 @@ class StagedRecall:
         # 2. L1: Graph Neighborhood (Not implemented yet - requires topology access)
         
         # 3. L2: LSH Index (Approximate Retrieval)
-        candidates = set()
-        for i, seed in enumerate(self.lsh_seeds):
-            sig = query_hv.lsh_hash(int(seed), self.n_lsh_bits)
-            candidates.update(self.lsh_tables[i].get(sig, []))
-            if len(candidates) > 200: # Max candidates cap
-                break
-        
-        if candidates:
-            l2_results = []
-            for name in candidates:
-                hv = self.codebook[name]
-                sim = query_hv.similarity(hv)
-                if sim > threshold:
-                    l2_results.append((name, sim))
-            
-            l2_results.sort(key=lambda x: x[1], reverse=True)
-            if l2_results:
-                self.stats["l2_hits"] += 1
-                self.update_cache(l2_results[0][0], self.codebook[l2_results[0][0]])
-                return l2_results[:top_k]
+        if getattr(self, "lsh_enabled", False) and hasattr(query_hv, "lsh_hash"):
+            candidates = set()
+            for i, seed in enumerate(self.lsh_seeds):
+                sig = query_hv.lsh_hash(int(seed), self.n_lsh_bits)
+                candidates.update(self.lsh_tables[i].get(sig, []))
+                if len(candidates) > 200: # Max candidates cap
+                    break
+
+            if candidates:
+                l2_results = []
+                for name in candidates:
+                    hv = self.codebook[name]
+                    sim = query_hv.similarity(hv)
+                    if sim > threshold:
+                        l2_results.append((name, sim))
+
+                l2_results.sort(key=lambda x: x[1], reverse=True)
+                if l2_results:
+                    self.stats["l2_hits"] += 1
+                    self.update_cache(l2_results[0][0], self.codebook[l2_results[0][0]])
+                    return l2_results[:top_k]
 
         # 4. L3: Brute-Force Fallback (Current Baseline)
         self.stats["l3_hits"] += 1

@@ -26,6 +26,7 @@ class NSCKConfig:
     # === VSA ===
     vsa_strength: float = 5.0
     confidence_threshold: float = 0.6  # Entropy threshold for VSA rescue
+    novelty_threshold: float = 0.5 # [AGI] Curiosity threshold
     
     # === Game ===
     grid_size: int = 10
@@ -50,6 +51,12 @@ class NSCKConfig:
     # === Episode Memory (Phase 2) ===
     episode_capacity: int = 10000
     full_state_capacity: int = 1000
+    memory_capacity: int = 2500 # [AGI] Recent memory capacity
+    
+    # === Rule Learning ===
+    min_rule_support: int = 5
+    min_rule_confidence: float = 0.7
+    min_success_rate: float = 0.6  # [AGI] Added for consistency
     
     @classmethod
     def from_env(cls) -> "NSCKConfig":

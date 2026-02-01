@@ -112,6 +112,8 @@ class ExplanationGenerator:
     
     def _readable_action(self, action: str) -> str:
         """Convert action name to readable form."""
+        if not action:
+            return "stay"
         return self.action_names.get(action, action.lower().replace("action_", ""))
     
     def _readable_relation(self, relation: str) -> str:
@@ -179,6 +181,13 @@ class ExplanationGenerator:
         task_tag: str
     ) -> Optional[str]:
         """Determine if action is aligned with goal direction."""
+        if not action:
+            return None # Changed from "STAY" to None as "STAY" is an action, not a relation.
+                        # If action is None, it means the agent chose to stay.
+                        # The function's purpose is to return a *relation* (e.g., "above me")
+                        # if the action aligns with a goal direction.
+                        # If no directional action is taken, or if "stay" doesn't align with a specific
+                        # directional goal, returning None is appropriate.
         action_core = action.replace("ACTION_", "").upper()
         
         if task_tag == "snake":
@@ -368,4 +377,57 @@ class ExplanationGenerator:
             confidence=1.0,
             supporting_facts=[primary],
             trace={"task": task_tag}
+        )
+
+    def explain_contrastive(
+        self,
+        action_taken: str,
+        hypothetical_action: str,
+        counterfactual: Dict[str, Any],
+        task_tag: str
+    ) -> Explanation:
+        """
+        Explain why one action was chosen instead of another.
+        
+        Args:
+            action_taken: Chosen action
+            hypothetical_action: Rejected action to compare against
+            counterfactual: Diff from CausalReasoner.simulate_counterfactual
+            task_tag: Context
+        """
+        action_readable = self._readable_action(action_taken)
+        hypo_readable = self._readable_action(hypothetical_action)
+        
+        added = counterfactual.get("diff_added", [])
+        removed = counterfactual.get("diff_removed", [])
+        
+        # Determine summary sentiment
+        if any(e in added for e in ["DEATH", "FAILURE", "REWARD_NEG"]):
+            summary = f"I chose {action_readable} instead of {hypo_readable} to avoid {added[0].lower()}."
+        elif any(e in removed for e in ["SUCCESS", "REWARD_POS"]):
+            summary = f"I chose {action_readable} over {hypo_readable} because {hypo_readable} would have missed a positive outcome."
+        else:
+            summary = f"I chose {action_readable} over {hypo_readable} based on predicted outcomes."
+
+        details = f"Contrastive Analysis:\n"
+        details += f"  • Taken: {action_readable}\n"
+        details += f"  • Hypothetical: {hypo_readable}\n"
+        
+        if added:
+            details += f"\nIf I had {hypo_readable}, I predict it would have ALSO caused:\n"
+            for e in added:
+                details += f"  • {e.lower()}"
+                
+        if removed:
+            details += f"\nIf I had {hypo_readable}, I predict I would have MISSED these effects:\n"
+            for e in removed:
+                details += f"  • {e.lower()}"
+
+        return Explanation(
+            type=ExplanationType.COMPARISON,
+            summary=summary,
+            details=details,
+            confidence=0.9,
+            supporting_facts=added + removed,
+            trace=counterfactual
         )

@@ -5,12 +5,14 @@ Experience storage and retrieval using VSA for similarity search.
 NO ATTENTION MECHANISMS - uses LSH and Hamming similarity only.
 """
 import time
+import numpy as np
 from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple
-import hypervec_rs
-import hypervec_rs
+import hypervec_shim as hypervec_rs
+import hypervec_shim as hypervec_rs
 from persistence import BrainStore, Episode
+import random
 
 
 @dataclass
@@ -23,6 +25,7 @@ class LiveEpisode:
     action: str
     outcome: str
     reward: float
+    image: Optional[np.ndarray] = None # [AGI] Added for SNN generative dreaming
     impact_score: float = 0.0  # |reward| + novelty bonus for salient pruning
     
     def to_stored(self) -> Episode:
@@ -171,6 +174,25 @@ class EpisodicMemory:
         
         print(f"[MEMORY] Consolidated {len(to_store)} episodes for {task_tag}")
     
+    def sample(self, task_tag: str, n: int = 32) -> List[LiveEpisode]:
+        """
+        Get random episodes for dreaming/replay.
+        
+        Args:
+            task_tag: Task to sample from
+            n: Number of samples, defaults to 32
+            
+        Returns:
+            List of random episodes
+        """
+        recent = self.recent.get(task_tag, deque())
+        if not recent:
+            return []
+            
+        candidates = list(recent)
+        k = min(n, len(candidates))
+        return random.sample(candidates, k)
+
     def recall_similar(
         self,
         query_hv: hypervec_rs.HyperVector,

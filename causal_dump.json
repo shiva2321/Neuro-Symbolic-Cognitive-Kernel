@@ -1,0 +1,54 @@
+{
+  "snake": [],
+  "pong": [],
+  "maze": [
+    {
+      "cause": "ACTION_RIGHT",
+      "effect": "maze::REL_RIGHT",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "maze::REL_RIGHT",
+      "effect": "maze::REL_BELOW",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "ACTION_RIGHT",
+      "effect": "maze::REL_BELOW",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "ACTION_DOWN",
+      "effect": "maze::REL_RIGHT",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "maze::REL_BELOW",
+      "effect": "maze::REL_RIGHT",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "ACTION_DOWN",
+      "effect": "maze::REL_BELOW",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "maze::REL_BELOW",
+      "effect": "maze::REL_BELOW",
+      "strength": 1.0,
+      "type": "causes"
+    },
+    {
+      "cause": "maze::REL_RIGHT",
+      "effect": "maze::REL_RIGHT",
+      "strength": 1.0,
+      "type": "causes"
+    }
+  ]
+}

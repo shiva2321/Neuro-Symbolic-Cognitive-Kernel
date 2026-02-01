@@ -38,9 +38,19 @@ class MazeState:
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dict for ZMQ transmission."""
+        # Extract wall positions for spatial reasoning
+        walls = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.maze[y][x] == Cell.WALL.value:
+                    walls.append((x, y))
+
         return {
             "player_pos": self.player_pos,
             "exit_pos": self.exit_pos,
+            "head": self.player_pos,   # Alias for Snake/Planner compatibility
+            "target": self.exit_pos,   # Alias for Snake/Planner compatibility
+            "walls": walls,            # Obstacles for Planner
             "width": self.width,
             "height": self.height,
             "steps": self.steps,
@@ -221,7 +231,9 @@ class MazeGame:
             return self.state, 0.0, True
         
         # Parse action
+        print(f"[MAZE_GAME] Received action: {action}")
         action = action.upper().replace("ACTION_", "")
+        print(f"[MAZE_GAME] Processed action: {action}")
         
         dx, dy = 0, 0
         if action == "UP":
@@ -251,6 +263,7 @@ class MazeGame:
         old_pos = self.state.player_pos
         self.state.player_pos = (nx, ny)
         self.state.steps += 1
+        print(f"[MAZE_GAME] Moved from {old_pos} to {self.state.player_pos}")
         
         # Track visited
         if (nx, ny) not in self.state.visited:
@@ -275,6 +288,13 @@ class MazeGame:
         if self.state is None:
             return {}
         
+        # Extract wall positions for spatial reasoning
+        walls = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.state.maze[y][x] == Cell.WALL.value:
+                    walls.append((x, y))
+
         return {
             "player_pos": self.state.player_pos,
             "exit_pos": self.state.exit_pos,
@@ -282,10 +302,12 @@ class MazeGame:
             "height": self.height,
             "steps": self.state.steps,
             "visited": self.state.visited,
+            "walls": walls,
             # Similar to Snake's state for transfer
             "head": self.state.player_pos,
             "food": self.state.exit_pos,
-            "body": self.state.visited[:-1] if len(self.state.visited) > 1 else [],
+            "target": self.state.exit_pos, # Common alias
+            "body": [], # DO NOT treat visited as body/obstacles in Maze
         }
     
     def render_ascii(self) -> str:

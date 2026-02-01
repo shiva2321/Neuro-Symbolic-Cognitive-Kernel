@@ -2,7 +2,7 @@
 Brain Fusion Module for NSGA
 Strategy: tagged_conservative (task-specific isolated, primitives merged)
 """
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Set, Optional
@@ -250,6 +250,42 @@ class FusedBrain:
             
         results.sort(key=lambda x: x.similarity, reverse=True)
         return results[:top_k]
+
+    def forward_chain_multi(self, facts: Set[str], max_steps: int = 5) -> Tuple[Set[str], List[Set[str]]]:
+        """
+        [AGI] Phase 2.1: Forward Chaining Engine
+        Fire rules until fixed point or max steps.
+        
+        Allows deducing new facts from existing facts using available rules.
+        """
+        current_facts = set(facts)
+        all_inferred = []
+        
+        # Combine all rules for inference
+        all_rules = self.global_rules
+        for rules in self.task_rules.values():
+            all_rules.extend(rules)
+            
+        for step in range(max_steps):
+            new_facts = set()
+            
+            for rule in all_rules:
+                # Only check rules that produce FACTS (not ACTIONS)
+                # We identify actions by "ACTION_" prefix
+                if rule.consequence.startswith("ACTION_"):
+                    continue
+                    
+                if rule.condition.issubset(current_facts):
+                    if rule.consequence not in current_facts:
+                        new_facts.add(rule.consequence)
+            
+            if not new_facts:
+                break  # Fixed point
+                
+            current_facts.update(new_facts)
+            all_inferred.append(new_facts)
+            
+        return current_facts, all_inferred
 
 
 class BrainFusion:

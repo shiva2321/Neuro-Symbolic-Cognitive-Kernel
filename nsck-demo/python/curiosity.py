@@ -6,9 +6,9 @@ NO NEURAL NETWORKS for curiosity - uses VSA similarity and counting.
 """
 import time
 from collections import defaultdict, deque
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Any
-import hypervec_rs
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Any, Tuple
+import hypervec_shim as hypervec_rs
 
 
 @dataclass
@@ -18,6 +18,7 @@ class ExplorationDecision:
     novelty_score: float
     learning_progress: float
     reason: str
+    testable_hypotheses: List[Tuple[str, str]] = field(default_factory=list)
 
 
 class CuriosityModule:
@@ -62,6 +63,9 @@ class CuriosityModule:
         
         # Visit counts for state hashing
         self.visit_counts: Dict[str, Dict[int, int]] = defaultdict(lambda: defaultdict(int))
+        
+        # [AGI 6.2] Sub-goal tracking for Planner-Guided ICM
+        self.active_subgoals: Dict[str, List[hypervec_rs.HyperVector]] = defaultdict(list)
     
     def compute_novelty(
         self,
@@ -184,29 +188,64 @@ class CuriosityModule:
         
         return self.visit_counts[task_tag].get(state_hash, 0)
     
+    def set_subgoals(self, task_tag: str, subgoals: List[hypervec_rs.HyperVector]):
+        """[AGI 6.2] Set active sub-goals to bias exploration."""
+        self.active_subgoals[task_tag] = subgoals
+
+    def _get_subgoal_bonus(self, situation_hv: hypervec_rs.HyperVector, task_tag: str) -> float:
+        """[AGI 6.2] Calculate bonus based on proximity to active sub-goals."""
+        subgoals = self.active_subgoals.get(task_tag, [])
+        if not subgoals:
+            return 0.0
+            
+        max_sim = 0.0
+        for goal in subgoals:
+            sim = situation_hv.similarity(goal)
+            max_sim = max(max_sim, sim)
+            
+        # Bonus is significant if we are close to a sub-goal
+        return max_sim * 0.5 
+
     def should_explore(
         self,
         situation_hv: hypervec_rs.HyperVector,
         task_tag: str,
-        confidence: float
+        confidence: float,
+        hypotheses: Optional[List[Tuple[str, str]]] = None,
+        active_predicates: Optional[List[str]] = None
     ) -> ExplorationDecision:
         """
         Decide whether to explore or exploit.
         
-        Explore when:
-        1. High novelty AND low confidence
-        2. OR learning is stagnant
-        3. OR rarely visited state
-        
-        Args:
-            situation_hv: Current situation vector
-            task_tag: Which task
-            confidence: Metacognitive confidence in best action
-            
-        Returns:
-            ExplorationDecision with recommendation and scores
+        Now includes 'Causal Curiosity': if a hypothesis (cause->effect) can be tested
+        in the current state, increase exploration drive.
         """
         novelty = self.compute_novelty(situation_hv, task_tag)
+        
+        # [AGI 6.2] Planner-Guided Bonus
+        subgoal_bonus = self._get_subgoal_bonus(situation_hv, task_tag)
+        novelty = min(1.0, novelty + subgoal_bonus)
+        
+        # Causal Hypothesis Boost
+        causal_boost = 0.0
+        testable_hypotheses = []
+        if hypotheses and active_predicates:
+            preds_set = set(active_predicates)
+            for cause, effect in hypotheses:
+                # If the cause (predicate or action) is 'testable'
+                # For predicates, we check if they are currently TRUE.
+                # For actions, they are ALWAYS testable (but we bias selection later).
+                if cause.startswith("PRED_"):
+                    pure_pred = cause.replace("PRED_", "")
+                    if pure_pred in preds_set:
+                        causal_boost += 0.2
+                        testable_hypotheses.append((cause, effect))
+                else:
+                    # Action hypothesis - always testable if we reach here
+                    testable_hypotheses.append((cause, effect))
+        
+        novelty = min(1.0, novelty + causal_boost)
+        
         progress = self.compute_learning_progress(task_tag)
         visit_count = self.get_visit_count(situation_hv, task_tag)
         
@@ -236,7 +275,8 @@ class CuriosityModule:
             should_explore=explore,
             novelty_score=novelty,
             learning_progress=progress,
-            reason=reason
+            reason=reason,
+            testable_hypotheses=testable_hypotheses
         )
     
     def get_exploration_action(

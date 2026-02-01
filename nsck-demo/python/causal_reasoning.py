@@ -25,8 +25,9 @@ class CausalLink:
     cause: str
     effect: str
     relation: CausalRelation
-    strength: float = 1.0  # 0.0 to 1.0
+    strength: float = 1.0  # 0.0 to 1.0 (Probability of Effect given Cause)
     context: Optional[str] = None  # Task-specific context
+    evidence_count: int = 0  # [AGI] Phase 4.1: Number of observations
     
     def __hash__(self):
         return hash((self.cause, self.effect, self.relation.value))
@@ -65,6 +66,120 @@ class CounterfactualResult:
     affected_states: List[str]
     confidence: float
     explanation: str
+
+
+class CausalDiscovery:
+    """
+    [AGI] Phase 4.1: Causal Discovery Module
+    
+    Learns causal structure from experience streams using
+    statistical contingency (Delta-P) and temporal precedence.
+    """
+    
+    def __init__(self):
+        # Counts for contingency tables:
+        # N(Cause, Effect), N(Cause, ~Effect), N(~Cause, Effect), N(~Cause, ~Effect)
+        # Stored as: self.counts[context][(cause, effect)] = { 'c_e': 0, 'c_ne': 0, 'nc_e': 0 }
+        self.stats = defaultdict(lambda: defaultdict(lambda: {
+            'c_e': 0,   # Cause and Effect
+            'c_ne': 0,  # Cause and No Effect
+            'nc_e': 0,  # No Cause and Effect (Spontaneous?)
+            'nc_ne': 0  # No Cause and No Effect
+        }))
+        
+        # Track all observed events per context to calculate "Not Cause"
+        self.observed_causes = defaultdict(set)
+        self.observed_effects = defaultdict(set)
+
+    def observe(self, context: str, causes: List[str], effects: List[str]):
+        """
+        Record a single time-step (transition).
+        
+        Args:
+            context: Task tag (e.g., 'snake')
+            causes: List of events at T (Action, State Conditions)
+            effects: List of events at T+1 (State Changes, Rewards)
+        """
+        self.observed_causes[context].update(causes)
+        self.observed_effects[context].update(effects)
+        
+        cause_set = set(causes)
+        effect_set = set(effects)
+        
+        # 1. Update pairings for ALL known candidates (slow but thorough)
+        all_known_causes = self.observed_causes[context]
+        all_known_effects = self.observed_effects[context]
+        
+        for c in all_known_causes:
+            is_c = c in cause_set
+            
+            for e in all_known_effects:
+                is_e = e in effect_set
+                
+                # Retrieve stats dict
+                s = self.stats[context][(c, e)]
+                
+                if is_c and is_e:
+                    s['c_e'] += 1
+                elif is_c and not is_e:
+                    s['c_ne'] += 1
+                elif not is_c and is_e:
+                    s['nc_e'] += 1
+                else:
+                    s['nc_ne'] += 1
+
+    def induce_graph(self, context: str, min_confidence: float = 0.5, min_evidence: int = 5) -> "CausalGraph":
+        """
+        Generate a CausalGraph from collected statistics.
+        """
+        graph = CausalGraph()
+        
+        for (c, e), s in self.stats[context].items():
+            total_c = s['c_e'] + s['c_ne']
+            total_nc = s['nc_e'] + s['nc_ne']
+            
+            if total_c < min_evidence:
+                continue
+                
+            # Calclate P(E|C)
+            p_e_given_c = s['c_e'] / total_c
+            
+            # Calculate P(E|~C)
+            p_e_given_nc = 0.0
+            if total_nc > 0:
+                p_e_given_nc = s['nc_e'] / total_nc
+            
+            # Delta-P: Causal Power
+            delta_p = p_e_given_c - p_e_given_nc
+            
+            if delta_p > min_confidence:
+                graph.add_causes(
+                    cause=c,
+                    effect=e,
+                    strength=delta_p,
+                    context=context
+                )
+                
+        return graph
+
+    def get_hypotheses(self, context: str, max_confidence: float = 0.5, min_evidence: int = 2) -> List[Tuple[str, str]]:
+        """
+        Return a list of (cause, effect) pairs that have some evidence but low confidence.
+        These are 'hypotheses' that interventional learning should target.
+        """
+        hypotheses = []
+        for (c, e), s in self.stats[context].items():
+            total_c = s['c_e'] + s['c_ne']
+            if min_evidence <= total_c:
+                # Calculate current Delta-P
+                p_e_given_c = s['c_e'] / total_c
+                total_nc = s['nc_e'] + s['nc_ne']
+                p_e_given_nc = s['nc_e'] / total_nc if total_nc > 0 else 0.0
+                delta_p = p_e_given_c - p_e_given_nc
+                # If Delta-P is positive, it's a hypothesis
+                if delta_p > 0.1:
+                    hypotheses.append((c, e))
+        return hypotheses
 
 
 class CausalGraph:
@@ -322,6 +437,33 @@ class CausalReasoner:
                 pass
         
         return list(set(effects))
+
+    def simulate_counterfactual(
+        self,
+        state: Dict[str, Any],
+        action_taken: str,
+        hypothetical_action: str,
+        task_tag: str
+    ) -> Dict[str, Any]:
+        """
+        Reason about 'What if' - what would have happened if a different action were taken?
+        
+        Returns a dict describing the difference in predicted outcome.
+        """
+        outcome_actual = self.predict_effects(state, action_taken, task_tag)
+        outcome_hypothetical = self.predict_effects(state, hypothetical_action, task_tag)
+        
+        # Find differences
+        added = [e for e in outcome_hypothetical if e not in outcome_actual]
+        removed = [e for e in outcome_actual if e not in outcome_hypothetical]
+        
+        return {
+            "action_taken": action_taken,
+            "hypothetical_action": hypothetical_action,
+            "predicted_outcome": outcome_hypothetical,
+            "diff_added": added,
+            "diff_removed": removed
+        }
     
     def explain_why(
         self,
@@ -513,3 +655,114 @@ def create_pong_causal_graph() -> CausalGraph:
     graph.add_causes("BALL_MISS", "POINT_LOST", context="pong")
     
     return graph
+
+
+def create_maze_causal_graph() -> CausalGraph:
+    """Create a pre-populated causal graph for Maze."""
+    graph = CausalGraph()
+    
+    # Movement causes position changes
+    graph.add_causes("ACTION_UP", "MOVED_UP", context="maze")
+    graph.add_causes("ACTION_DOWN", "MOVED_DOWN", context="maze")
+    graph.add_causes("ACTION_LEFT", "MOVED_LEFT", context="maze")
+    graph.add_causes("ACTION_RIGHT", "MOVED_RIGHT", context="maze")
+    
+    # Position changes can cause wall hits
+    graph.add_causes("MOVED_UP", "WALL_HIT", strength=0.2, context="maze")
+    graph.add_causes("MOVED_DOWN", "WALL_HIT", strength=0.2, context="maze")
+    graph.add_causes("MOVED_LEFT", "WALL_HIT", strength=0.2, context="maze")
+    graph.add_causes("MOVED_RIGHT", "WALL_HIT", strength=0.2, context="maze")
+    
+    # Targeting
+    graph.add_causes("HEAD_AT_TARGET", "GOAL_REACHED", context="maze")
+    graph.add_causes("GOAL_REACHED", "SCORE_UP", context="maze")
+    
+    # Prevention
+    graph.add_prevents("WALL_AT_UP", "ACTION_UP", strength=0.9, context="maze")
+    graph.add_prevents("WALL_AT_DOWN", "ACTION_DOWN", strength=0.9, context="maze")
+    graph.add_prevents("WALL_AT_LEFT", "ACTION_LEFT", strength=0.9, context="maze")
+    graph.add_prevents("WALL_AT_RIGHT", "ACTION_RIGHT", strength=0.9, context="maze")
+
+    return graph
+
+
+@dataclass
+class CausalSchema:
+    """An abstracted causal relationship (Theory)."""
+    cause_type: str  # e.g., 'MOVEMENT', 'ACTION'
+    effect_type: str # e.g., 'COLLISION', 'REWARD'
+    template: str    # e.g., "{cause} leads to {effect}"
+    confidence: float = 0.0
+    examples: List[Tuple[str, str]] = field(default_factory=list)
+
+class TheoryModule:
+    """
+    Generalizes context-specific causal links into universal theories.
+    """
+    def __init__(self):
+        self.theories: List[CausalSchema] = []
+        
+        # Primitive abstractions
+        self.abstractions = {
+            "ACTION_UP": "MOVEMENT",
+            "ACTION_DOWN": "MOVEMENT",
+            "ACTION_LEFT": "MOVEMENT",
+            "ACTION_RIGHT": "MOVEMENT",
+            "WALL_COLLISION": "COLLIDER",
+            "BODY_COLLISION": "COLLIDER",
+            "DEATH": "FAILURE",
+            "GAME_OVER": "FAILURE",
+            "REWARD_POS": "SUCCESS",
+            "REWARD_NEG": "FAILURE"
+        }
+
+    def abstract_term(self, term: str) -> str:
+        """Map a specific term to an abstract type."""
+        for key, val in self.abstractions.items():
+            if key in term:
+                return val
+        return "UNKNOWN"
+
+    def form_theories(self, links: List[CausalLink]) -> List[CausalSchema]:
+        """
+        Identify recurring patterns across links and form schemas.
+        """
+        from collections import defaultdict
+        patterns = defaultdict(list)
+        for link in links:
+            c_type = self.abstract_term(link.cause)
+            e_type = self.abstract_term(link.effect)
+            
+            if c_type != "UNKNOWN" and e_type != "UNKNOWN":
+                patterns[(c_type, e_type)].append((link.cause, link.effect))
+
+        new_theories = []
+        for (c_type, e_type), examples in patterns.items():
+            # If we have multiple examples of the same pattern, it's a theory
+            if len(set(examples)) >= 2:
+                # Check if exists
+                existing = next((t for t in self.theories if t.cause_type == c_type and t.effect_type == e_type), None)
+                if not existing:
+                    theory = CausalSchema(
+                        cause_type=c_type,
+                        effect_type=e_type,
+                        template=f"{c_type} leads to {e_type}",
+                        confidence=0.8,
+                        examples=list(set(examples))
+                    )
+                    self.theories.append(theory)
+                    new_theories.append(theory)
+                    print(f"[THEORY] Formed Theory: {theory.template} (from {len(theory.examples)} examples)")
+                else:
+                    existing.examples = list(set(existing.examples + examples))
+        
+        return new_theories
+
+    def predict_from_theory(self, cause: str) -> List[str]:
+        """Predict abstract effects based on theories."""
+        c_type = self.abstract_term(cause)
+        predictions = []
+        for theory in self.theories:
+            if theory.cause_type == c_type:
+                predictions.append(theory.effect_type)
+        return predictions

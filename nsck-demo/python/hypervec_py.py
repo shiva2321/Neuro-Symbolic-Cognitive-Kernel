@@ -70,10 +70,14 @@ class HyperVectorPy:
 try:
     # Rename to avoid name collision if the module was named the same, 
     # but we renamed the crate to hypervec_rs so it's clean.
-    from hypervec_rs import HyperVector
-    print(">> [VSA] Using Rust Accelerator (hypervec_rs)")
+    from hypervec_shim import HyperVector
+    import multiprocessing
+    if multiprocessing.current_process().name == 'MainProcess':
+        print(">> [VSA] Using Rust Accelerator (hypervec_rs)")
 except ImportError:
-    print(">> [VSA] Using Python Fallback")
+    import multiprocessing
+    if multiprocessing.current_process().name == 'MainProcess':
+        print(">> [VSA] Using Python Fallback")
     HyperVector = HyperVectorPy
 
 # Module level exposure

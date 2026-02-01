@@ -84,17 +84,17 @@ class TaskAwareSNN(nn.Module):
         # A. PERCEPTION (Universal Encoder)
         # Output: [Batch, 256] (Latent Thought)
         latent = self.encoder(x, modality_hint)
-        
+
         # B. COGNITION (SNN Association Loop)
         # We quantize weights on the fly for efficiency
         w_shared = ternarize_weight(self.fc_shared.weight)
-        
+
         mem_shared = self.lif_shared.init_leaky()
         mem_out = self.lif_out.init_leaky()
-        
+
         spk_rec = []
         val_rec = []
-        
+
         # Ensure we have a head for this task
         if task_name not in self.heads:
             # Auto-register with default 4 actions if unknown (failsafe)
@@ -104,21 +104,29 @@ class TaskAwareSNN(nn.Module):
         w_actor = ternarize_weight(head["actor"].weight)
         # Critic is NOT quantized (needs high precision for value estimation)
         
+        # Use analog readout for char recognition (62-way) to avoid dead/flat spike codes.
+        use_analog_readout = (task_name == "char_recognition")
+
         # SNN Loop (T=8)
         # Note: Encoder run once (static perception), SNN runs over time (processing)
         for step in range(8):
             # 1. Association
             cur_shared = torch.nn.functional.linear(latent, w_shared, self.fc_shared.bias)
             spk_shared, mem_shared = self.lif_shared(cur_shared, mem_shared)
-            
-            # 2. Action (Actor)
-            cur_actor = torch.nn.functional.linear(spk_shared, w_actor, head["actor"].bias)
-            spk_actor, mem_out = self.lif_out(cur_actor, mem_out)
-            
-            # 3. Value (Critic) - Direct readout from spiking state
-            # No spikes for value, just continuous regression
-            value = head["critic"](spk_shared) 
-            
+
+            if use_analog_readout:
+                # Actor/Critic read out from membrane (dense analog feature)
+                feat = mem_shared
+                cur_actor = torch.nn.functional.linear(feat, w_actor, head["actor"].bias)
+                # Still pass through lif_out so the rest of the system expectations stay intact
+                spk_actor, mem_out = self.lif_out(cur_actor, mem_out)
+                value = head["critic"](feat)
+            else:
+                # Default spiking readout (works well for low-action tasks like snake/pong/maze)
+                cur_actor = torch.nn.functional.linear(spk_shared, w_actor, head["actor"].bias)
+                spk_actor, mem_out = self.lif_out(cur_actor, mem_out)
+                value = head["critic"](spk_shared)
+
             spk_rec.append(spk_actor)
             val_rec.append(value)
 

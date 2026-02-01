@@ -345,3 +345,70 @@ def create_pong_verifier() -> GroundingVerifier:
     )
     
     return verifier
+
+
+def create_maze_verifier() -> GroundingVerifier:
+    """
+    Create a grounding verifier with Maze-specific predicates.
+    
+    Returns:
+        Configured GroundingVerifier for Maze game
+    """
+    verifier = GroundingVerifier()
+    
+    # Target relative positions
+    verifier.register_predicate(
+        "REL_ABOVE",
+        lambda s: s.get("target", (0, 0))[1] < s.get("head", (0, 0))[1],
+        context="maze"
+    )
+    verifier.register_predicate(
+        "REL_BELOW",
+        lambda s: s.get("target", (0, 0))[1] > s.get("head", (0, 0))[1],
+        context="maze"
+    )
+    verifier.register_predicate(
+        "REL_LEFT",
+        lambda s: s.get("target", (0, 0))[0] < s.get("head", (0, 0))[0],
+        context="maze"
+    )
+    verifier.register_predicate(
+        "REL_RIGHT",
+        lambda s: s.get("target", (0, 0))[0] > s.get("head", (0, 0))[0],
+        context="maze"
+    )
+    
+    # Wall detection
+    def _is_wall(state, dx, dy):
+        head = state.get("head", (5,5))
+        walls = set(state.get("walls", []))
+        return (head[0]+dx, head[1]+dy) in walls
+
+    verifier.register_predicate("WALL_AT_UP", lambda s: _is_wall(s, 0, -1), context="maze")
+    verifier.register_predicate("WALL_AT_DOWN", lambda s: _is_wall(s, 0, 1), context="maze")
+    verifier.register_predicate("WALL_AT_LEFT", lambda s: _is_wall(s, -1, 0), context="maze")
+    verifier.register_predicate("WALL_AT_RIGHT", lambda s: _is_wall(s, 1, 0), context="maze")
+    
+    # Action effects
+    verifier.register_action(
+        "ACTION_UP", 
+        lambda b, a: a.get("head", (0, 0))[1] < b.get("head", (0, 0))[1],
+        context="maze"
+    )
+    verifier.register_action(
+        "ACTION_DOWN",
+        lambda b, a: a.get("head", (0, 0))[1] > b.get("head", (0, 0))[1],
+        context="maze"
+    )
+    verifier.register_action(
+        "ACTION_LEFT",
+        lambda b, a: a.get("head", (0, 0))[0] < b.get("head", (0, 0))[0],
+        context="maze"
+    )
+    verifier.register_action(
+        "ACTION_RIGHT",
+        lambda b, a: a.get("head", (0, 0))[0] > b.get("head", (0, 0))[0],
+        context="maze"
+    )
+    
+    return verifier

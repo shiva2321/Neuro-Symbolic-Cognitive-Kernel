@@ -240,16 +240,19 @@ class MazeUI:
         """Main game loop - send state to brain and receive commands."""
         if self.game.state and not self.game.state.done:
             # Get state for brain
-            state = self.game.get_state_dict()
-            state["game"] = "maze"
-            state["session_id"] = self.session_id
-            state["step"] = self.step_count
+            game_state = self.game.get_state_dict()
             
-            # Add visual input for brain (10x10 grayscale image)
-            state["image"] = self._render_for_brain()
+            # Construct message payload
+            payload = {
+                "game": "maze",
+                "session_id": self.session_id,
+                "step": self.step_count,
+                "state": game_state,
+                "image": self._render_for_brain()
+            }
             
             # Send to server
-            self.push_sock.send_json(state)
+            self.push_sock.send_json(payload)
             
             # Check for brain response
             try:
@@ -257,6 +260,7 @@ class MazeUI:
                     msg = self.sub_sock.recv_string()
                     if msg.startswith("MAZE:"):
                         cmd = msg[5:]
+                        print(f"[MAZE_UI] Received from brain: {cmd}")
                         self._execute_move(f"ACTION_{cmd}", is_human=False)
                         self.lbl_status.config(text=f"Brain: {cmd}", fg="#00ccff")
             except zmq.ZMQError:

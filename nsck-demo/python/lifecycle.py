@@ -1,5 +1,5 @@
 from staged_recall import StagedRecall
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 
 class LifecycleManager:
     """
@@ -121,39 +121,44 @@ class LifecycleManager:
         """
         Gradually update a concept's hypervector based on new observations.
         This allows concepts to drift/evolve over time.
-        
+
         DANGER: Can cause semantic blur if used carelessly.
         Only enabled when `enable=True` (feature flag).
-        
-        Args:
-            concept_name: Name of concept to update
-            observation_hv: New observation to incorporate
-            learning_rate: How much to weight the new observation (0.0-1.0)
-            enable: Feature flag - must be True to actually update
-            
-        Returns:
-            New similarity between old and updated concept (measure of drift)
         """
         if not enable:
             return 1.0  # No change
-            
+
         if concept_name not in self.codebook:
             return None
-            
+
         old_hv = self.codebook[concept_name]
-        
-        # Use weighted_bundle: (1 - learning_rate) weight on old, learning_rate on new
-        # learning_rate=0.1 -> 90% old, 10% new -> similarity ~0.95
-        # learning_rate=0.5 -> 50% old, 50% new -> similarity ~0.75
+
         retention = 1.0 - learning_rate
-        new_hv = old_hv.weighted_bundle(observation_hv, retention)
+
+        # Preferred: true weighted bundling if available
+        if hasattr(old_hv, "weighted_bundle"):
+            new_hv = old_hv.weighted_bundle(observation_hv, retention)
+        else:
+            # Fallback approximation for older hypervec_rs:
+            # Build a bundle mostly composed of old_hv plus a little observation_hv.
+            # Keep iteration count small to avoid CPU blowup.
+            k = 7
+            old_n = max(1, int(round(retention * k)))
+            obs_n = max(1, k - old_n)
+
+            new_hv = old_hv
+            for _ in range(old_n - 1):
+                new_hv = new_hv.bundle(old_hv)
+            for _ in range(obs_n):
+                new_hv = new_hv.bundle(observation_hv)
+
         drift = old_hv.similarity(new_hv)
-        
+
         # Update codebook and LSH
         self.codebook[concept_name] = new_hv
         self.sr._lsh_remove(concept_name)
         self.sr._lsh_insert(concept_name, new_hv)
-        
+
         print(f"[Accretion] {concept_name} drifted by {1-drift:.4f}")
         return drift
 

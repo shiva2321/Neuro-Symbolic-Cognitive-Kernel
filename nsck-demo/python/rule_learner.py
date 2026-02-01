@@ -8,7 +8,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, FrozenSet, Optional, Tuple, Any
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from persistence import BrainStore, Episode, Rule
 from grounding_verifier import GroundingVerifier
 
@@ -217,7 +217,7 @@ class RuleLearner:
                 if self.store:
                     self.store.save_rule(rule)
                 
-                print(f"[LEARN] New rule: {set(cand.condition)} → {cand.action} "
+                print(f"[LEARN] New rule: {set(cand.condition)} -> {cand.action} "
                       f"(support={cand.support}, rate={success_rate:.2f})")
         
         return new_rules
@@ -350,25 +350,30 @@ class RuleLearner:
     
     def get_applicable_rules(
         self,
-        state: Dict[str, Any],
+        active_preds: List[str],
         task_tag: str
     ) -> List[Tuple[Rule, float]]:
         """
         Get rules whose conditions match current state.
         
         Args:
-            state: Current game state
+            active_preds: ALready extracted active predicates
             task_tag: Which task
             
         Returns:
             List of (rule, match_score) tuples, sorted by score
         """
-        active = self.verifier.get_active_predicates(state, context=task_tag)
-        active_set = set(active)
+        active_set = set(active_preds)
         
         matches = []
         
-        for rule in self.learned_rules.get(task_tag, []):
+        # Check task-local rules
+        local_rules = self.learned_rules.get(task_tag, [])
+        
+        # [AGI 6.3] Check global rules for transfer
+        global_rules = self.learned_rules.get("global", [])
+        
+        for rule in local_rules + global_rules:
             if rule.condition.issubset(active_set):
                 # Score based on specificity and success rate
                 specificity = len(rule.condition) / max(len(active_set), 1)
