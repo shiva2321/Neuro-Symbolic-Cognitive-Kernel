@@ -1,153 +1,100 @@
 """
-NSCK Perception Module
-Handles SNN inference, frame processing, and entropy calculation.
+NSCK Perception Engine (Phase 2.2)
+==================================
+Handles Sensor Fusion and Cross-Modal Retrieval.
+
+Components:
+- CleanupMemory: Associative memory for restoring noisy vectors.
+- FusionEngine: Binds Audio + Visual into a single Percept.
+
+Math:
+- Fusion = Majority( (Audio XOR Role_Audio) + (Visual XOR Role_Visual) )
+- Retrieval = Cleanup( Fusion XOR Role_Audio )
 """
-import torch
+
 import numpy as np
-from typing import Tuple, Optional, List
-from collections import deque
+from typing import Dict, Tuple, Optional, List
 
+# Constants
+HV_DIM = 10000
 
-def calculate_entropy(probs_tensor: torch.Tensor) -> torch.Tensor:
+class CleanupMemory:
     """
-    Calculate entropy of probability distribution.
-    
-    H(p) = -sum(p * log(p))
-    
-    Args:
-        probs_tensor: Probability distribution [batch, classes]
+    Associative Memory (Nearest Neighbor).
+    Stores <Label, Hypervector> pairs.
+    """
+    def __init__(self):
+        self.memory: Dict[str, np.ndarray] = {}
         
-    Returns:
-        Entropy per sample [batch]
-    """
-    p = torch.clamp(probs_tensor, 1e-6, 1.0)
-    entropy = -torch.sum(p * torch.log(p), dim=1)
-    return entropy
-
-
-def preprocess_frame(img: np.ndarray, target_size: Tuple[int, int] = (10, 10)) -> np.ndarray:
-    """
-    Preprocess a game frame for SNN input.
-    
-    Args:
-        img: Grayscale image (any size)
-        target_size: Target dimensions (width, height)
+    def learn(self, label: str, hv: np.ndarray):
+        """Store a canonical vector."""
+        self.memory[label] = hv
         
-    Returns:
-        Normalized float32 array [H, W]
-    """
-    import cv2
-    
-    if img.shape != target_size:
-        img = cv2.resize(img, target_size, interpolation=cv2.INTER_AREA)
-    
-    return img.astype(np.float32) / 255.0
-
-
-def stack_frames(
-    current_frame: np.ndarray,
-    history: deque,
-    num_frames: int = 4
-) -> np.ndarray:
-    """
-    Stack frames for temporal input to SNN.
-    
-    Args:
-        current_frame: Current preprocessed frame [H, W]
-        history: Deque of previous frames
-        num_frames: Number of frames to stack
-        
-    Returns:
-        Stacked frames [num_frames, H, W]
-    """
-    # Bootstrap history if empty
-    if len(history) == 0:
-        for _ in range(num_frames - 1):
-            history.append(current_frame)
-    
-    history.append(current_frame)
-    
-    frames_list = list(history)
-    while len(frames_list) < num_frames:
-        frames_list.insert(0, frames_list[0])
-    
-    return np.stack(frames_list[-num_frames:], axis=0)
-
-
-class PerceptionEngine:
-    """
-    Handles SNN-based perception for NSCK.
-    
-    Encapsulates:
-    - Frame preprocessing
-    - Frame stacking
-    - SNN forward pass
-    - Entropy calculation
-    """
-    
-    def __init__(self, model, device: str = "cpu"):
+    def query(self, noisy_hv: np.ndarray) -> Tuple[str, float]:
         """
-        Initialize perception engine.
-        
-        Args:
-            model: TaskAwareSNN model
-            device: Torch device string
+        Find closest match.
+        Returns (Label, Similarity).
         """
-        self.model = model
-        self.device = torch.device(device)
-        self.frame_histories = {
-            "snake": deque(maxlen=4),
-            "pong": deque(maxlen=4),
-        }
-    
-    def infer(
-        self,
-        frame: np.ndarray,
-        task_id: int,
-        game_type: str,
-        model_lock=None
-    ) -> Tuple[torch.Tensor, torch.Tensor, float]:
-        """
-        Run SNN inference on a frame.
+        best_sim = -1.0
+        best_label = "None"
         
-        Args:
-            frame: Preprocessed frame [H, W]
-            task_id: Task ID (0=pong, 1=snake, 2=chars)
-            game_type: Game type string for frame history
-            model_lock: Optional threading lock
+        for label, stored_hv in self.memory.items():
+            # Hamming Similarity
+            diffs = np.logical_xor(noisy_hv, stored_hv)
+            sim = 1.0 - np.mean(diffs)
             
-        Returns:
-            Tuple of (logits, probabilities, entropy)
+            if sim > best_sim:
+                best_sim = sim
+                best_label = label
+                
+        return best_label, best_sim
+
+class FusionEngine:
+    def __init__(self, seed: int = 42):
+        self.rng = np.random.RandomState(seed)
+        
+        # Generate Role Vectors
+        self.role_audio = self._gen_hv()
+        self.role_visual = self._gen_hv()
+        
+    def _gen_hv(self) -> np.ndarray:
+        return self.rng.randint(0, 2, size=HV_DIM).astype(bool)
+        
+    def fuse(self, audio: np.ndarray, visual: np.ndarray) -> np.ndarray:
         """
-        # Stack frames
-        history = self.frame_histories.get(game_type, deque(maxlen=4))
-        stacked = stack_frames(frame, history)
+        Fuse Audio and Visual modalities.
+        F = Majority( (A ^ Ra), (V ^ Rv) )
+        """
+        # Bind with roles
+        bound_a = np.logical_xor(audio, self.role_audio)
+        bound_v = np.logical_xor(visual, self.role_visual)
         
-        # Convert to tensor
-        input_tensor = torch.from_numpy(stacked).float().to(self.device)
-        input_tensor = input_tensor.unsqueeze(0)  # [1, 4, H, W]
+        # Bundle (Majority Limit of 2 items -> Random Tie Break)
+        # We can implement 2-item majority by:
+        # bit = a if rand() < 0.5 else v
+        # Effectively 50% mix.
         
-        # Forward pass
-        if model_lock:
-            with model_lock:
-                self.model.eval()
-                with torch.no_grad():
-                    logits = self.model(input_tensor, task_id)
+        mask = self.rng.rand(HV_DIM) < 0.5
+        fused = np.where(mask, bound_a, bound_v)
+        
+        return fused
+        
+    def retrieve(self, fused: np.ndarray, modality: str, memory: CleanupMemory) -> Tuple[str, float]:
+        """
+        Query the fused vector for a specific modality.
+        modality: "audio" or "visual"
+        """
+        if modality == "audio":
+            # Q = F ^ Ra
+            #   = (0.5(A^Ra) + 0.5(V^Rv)) ^ Ra
+            #   = 0.5(A^Ra^Ra) + 0.5(V^Rv^Ra)
+            #   = 0.5(A) + 0.5(Noise)
+            query_vec = np.logical_xor(fused, self.role_audio)
+            
+        elif modality == "visual":
+            query_vec = np.logical_xor(fused, self.role_visual)
         else:
-            self.model.eval()
-            with torch.no_grad():
-                logits = self.model(input_tensor, task_id)
-        
-        probs = torch.softmax(logits, dim=1)
-        entropy = calculate_entropy(probs).item()
-        
-        return logits, probs, entropy
-    
-    def get_action(self, probs: torch.Tensor) -> int:
-        """Get argmax action from probabilities."""
-        return probs.argmax(dim=1).item()
-    
-    def reset_history(self, game_type: str):
-        """Clear frame history for a game."""
-        if game_type in self.frame_histories:
-            self.frame_histories[game_type].clear()
+            return "Error", 0.0
+            
+        return memory.query(query_vec)
+

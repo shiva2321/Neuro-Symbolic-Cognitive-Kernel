@@ -7,6 +7,7 @@ compete for access to a global broadcast channel (consciousness).
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, Optional, List
+from dataclasses import dataclass
 import logging
 
 # Configure logging
@@ -20,14 +21,23 @@ class WorkspaceModule(ABC):
         """Receive content broadcast from the global workspace."""
         pass
 
+@dataclass
+class Coalition:
+    """A bundle of information competing for consciousness."""
+    source: str
+    content: Any
+    base_salience: float      # Intrinsic loudness (0.0 - 1.0)
+    relevance: float = 0.0    # Match with current context/goal
+    affect_match: float = 0.0 # Match with current Drives (e.g. "Food" matches "Hunger")
+    
+    @property
+    def activation(self) -> float:
+        return self.base_salience + self.relevance + self.affect_match
+
 class GlobalWorkspace:
     """
     The central executive that manages the 'stream of consciousness'.
-    
-    Mechanism:
-    1. Specialized modules propose content with a 'salience' (importance) score.
-    2. Winner-take-all competition selects the most salient content.
-    3. Winner's content is 'broadcast' to ALL modules.
+    Implementation: LIDA-Lite.
     """
     
     def __init__(self, attention_threshold: float = 0.5):
@@ -35,56 +45,44 @@ class GlobalWorkspace:
         self.workspace_content: Optional[Any] = None
         self.current_winner: Optional[str] = None
         self.attention_threshold = attention_threshold
-        self.history: List[Tuple[str, Any, float]] = [] # (source, content, salience)
+        self.history: List[Tuple[str, Any, float]] = [] 
         
     def register_module(self, name: str, module: WorkspaceModule):
-        """Register a module to participate in the workspace."""
         self.modules[name] = module
         logger.info(f"[GWT] Registered module: {name}")
         
-    def compete(self, proposals: Dict[str, Tuple[Any, float]]) -> Optional[str]:
+    def compete(self, proposals: List[Coalition]) -> Optional[Coalition]:
         """
-        Modules compete for workspace access.
-        
-        Args:
-            proposals: Dict maps 'module_name' -> (content, salience_score)
-            
-        Returns:
-            Name of the winning module, or None if no one crossed threshold.
+        LIDA Competition Cycle.
+        Calculates Activation = Salience + Relevance + Affect.
         """
         if not proposals:
             return None
             
-        # 1. Find winner (highest salience)
-        winner_name, (content, salience) = max(
-            proposals.items(), 
-            key=lambda item: item[1][1]
-        )
+        # 1. Score all coalitions
+        ranked = sorted(proposals, key=lambda c: c.activation, reverse=True)
+        winner = ranked[0]
         
         # 2. Check threshold
-        if salience >= self.attention_threshold:
-            self.workspace_content = content
-            self.current_winner = winner_name
+        if winner.activation < self.attention_threshold:
+            return None
             
-            # Record history
-            self.history.append((winner_name, content, salience))
-            if len(self.history) > 100:
-                self.history.pop(0)
-                
-            # 3. Broadcast
-            self.broadcast()
-            return winner_name
+        # 3. Broadcast
+        self.current_winner = winner.source
+        self.workspace_content = winner.content
+        self.broadcast(winner.content)
+        
+        # Log history
+        self.history.append((winner.source, winner.content, winner.activation))
+        if len(self.history) > 100: self.history.pop(0)
             
-        return None
-    
-    def broadcast(self):
-        """Broadcast current workspace content to all registered modules."""
-        if self.workspace_content is None:
-            return
-            
+        return winner
+        
+    def broadcast(self, content: Any):
+        """Send content to all registered modules."""
         for name, module in self.modules.items():
             try:
-                module.receive_broadcast(self.workspace_content)
+                module.receive_broadcast(content)
             except Exception as e:
                 logger.error(f"[GWT] Error broadcasting to {name}: {e}")
 
@@ -95,3 +93,5 @@ class GlobalWorkspace:
             "current_content_type": type(self.workspace_content).__name__ if self.workspace_content else "None",
             "history_len": len(self.history)
         }
+
+
