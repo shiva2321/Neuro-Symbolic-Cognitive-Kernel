@@ -4,6 +4,13 @@
 **Audience:** Developers, researchers, contributors  
 **Timeline:** 24-60 months (2-5 years)
 
+> [!IMPORTANT]
+> **Development Workflow:**
+> Before starting any work, you **MUST**:
+> 1. Read [Agent Instructions](AGENT_INSTRUCTIONS.md) for governance rules.
+> 2. Check [Session Handoff](SESSION_HANDOFF.md) for the active task and context.
+> 3. Update [Session Handoff](SESSION_HANDOFF.md) when finishing a session.
+
 ---
 
 ## Table of Contents

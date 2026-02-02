@@ -38,6 +38,7 @@ from saliency import SaliencyVisualizer # [NEW] Import Saliency
 from intrinsic_motivation import CombinedIntrinsicMotivation  # [AGI] Phase 1: Intrinsic Motivation
 from teacher_interface import TeacherInterface, HeuristicTeacher, NullTeacher # [AGI] Phase 1: Modular Teacher
 from learning_progress import LearningProgressTracker # [AGI] Phase 1.4: Self-Curriculum
+from logger_service import get_logger # [AGI] Phase 1.5: Central Logging
 
 # [AGI] Phase 1.3: Telemetry Logging
 import csv
@@ -140,10 +141,9 @@ class LogAggregator:
                         "avg_conf": float(avg_conf),
                         "loss": float(avg_loss),
                         "score": int(score),
-                        "steps": total,
                         "timestamp": time.time()
                     }
-                    self.zmq_pub.send_string(f"STATS:{json.dumps(telemetry)}")
+                    self.zmq_pub.send_string(f"TELEMETRY:{json.dumps(telemetry)}")
             
             if status_strs:
                 print(f"[{time.strftime('%H:%M:%S')}] " + " | ".join(status_strs))
@@ -174,6 +174,9 @@ CURIOSITY_TRACKER = LearningProgressTracker(window_size=50) # [AGI] Phase 1.4
 # [AGI] Phase 2: Cognitive Engine
 from cognitive_engine import create_cognitive_engine
 COGNITIVE_ENGINE = create_cognitive_engine()
+
+# [AGI] Phase 3: Dashboard Broadcasting
+# Moved to main() to access ZMQ and Logger
 
 
 # --- GLOBAL LOCK ---
@@ -671,6 +674,9 @@ def main():
     # REPLAY_BUFFER = IntelligentReplayBuffer(ram_capacity=10000, archival_threshold=0.5)
     
     # --- ZMQ SETUP ---
+    # 5565: INPUT (PULL)
+    # 5566: VISUALS (PUB)
+    # 5567: DATA/LOGS (PUB)
     context = zmq.Context()
     
     if args.check_syntax: return
@@ -695,10 +701,31 @@ def main():
     pub_sock.setsockopt(zmq.LINGER, 0)
     pub_sock.bind("tcp://127.0.0.1:5566")
     
-    # New: Telemetry Socket
+    # New: Telemetry & Logs Socket
     pub_sock_stats = context.socket(zmq.PUB)
     pub_sock_stats.setsockopt(zmq.LINGER, 0)
     pub_sock_stats.bind("tcp://127.0.0.1:5567")
+    
+    # Initialize Logger
+    logger = get_logger()
+    logger.log("SERVER", "NSCK Brain Online. Listening on 5565...", level="INFO")
+
+    # [AGI] Phase 3: Dashboard Broadcasting Setup
+    def broadcast_brain_state(msg_dict):
+        try:
+            pub_sock_stats.send_string(f"BRAIN_STATE:{json.dumps(msg_dict)}")
+        except Exception as e:
+            print(f"Broadcast Error: {e}")
+            
+    COGNITIVE_ENGINE.register_broadcaster(broadcast_brain_state)
+    logger.log("SERVER", "Brain Broadcaster Registered", level="INFO")
+    
+    # Startup Broadcast (Must be after socket bind)
+    try:
+        startup_msg = {'source': 'SERVER', 'message': 'System Online', 'level': 'INFO', 'timestamp': time.time()}
+        pub_sock_stats.send_string(f"LOG:{json.dumps(startup_msg)}")
+    except Exception: pass
+    
     
     device = torch.device("cpu")
     
@@ -801,6 +828,24 @@ def main():
             if isinstance(msg, str):
                 msg = {"type": "raw", "data": msg}
                 
+            # check message type if dict
+            # Standard inputs: {'x':.., 'type':..}
+            # New Chat input: {'type': 'CHAT_INPUT', 'text': 'Hello'}
+            
+            msg_type = msg.get("type", "game_state") or "game_state" # handle empty type
+            
+            if msg_type == "CHAT_INPUT":
+                user_text = msg.get("text", "")
+                if user_text:
+                    teach_mode = msg.get("teach_mode", False)
+                    print(f"[{time.strftime('%H:%M:%S')}] [CHAT] USER: {user_text} (Teach: {teach_mode})")
+                    reply = COGNITIVE_ENGINE.process_dialogue(user_text, teach_mode=teach_mode)
+                    print(f"[{time.strftime('%H:%M:%S')}] [CHAT] AGENT: {reply}")
+                    
+                    # Broadcast reply to dashboard
+                    pub_sock_stats.send_string(f"CHAT_RESPONSE:{json.dumps({'text': reply})}")
+                continue
+            
             # --- CHECK FOR ADMIN COMMANDS ---
             if msg.get("type") == "admin":
                 cmd = msg.get("cmd")
@@ -1679,9 +1724,10 @@ def main():
                     "entropy": entropy,
                     "session_id": session_id,
                     "teacher_active": not NO_TEACHER,
-                    "score": msg.get("score", 0)
+                    "score": msg.get("score", 0),
+                    "image": msg.get("image") # Pass through base64 image for dashboard
                 }
-                pub_sock_stats.send_string(f"VIS:{json.dumps(vis_payload)}")
+                pub_sock.send_string(f"VIS:{json.dumps(vis_payload)}")
 
                 # 2. Prepare Console Output
                 ts = time.strftime('%H:%M:%S')

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSCK AGI :: Mission Control</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="js/app.js" defer></script>
+</head>
+
+<body>
+    <div class="container">
+        <!-- HEADER -->
+        <header>
+            <h1>NSCK <span class="highlight">AGI</span> SYSTEM</h1>
+            <div class="status-bar">
+                <span id="conn-status">OFFLINE</span> |
+                CPU: <span id="cpu-load">--%</span> |
+                MEM: <span id="mem-load">-- MB</span>
+            </div>
+        </header>
+
+        <!-- MAIN GRID -->
+        <main>
+            <!-- LEFT PANEL: CONTROLS -->
+            <section class="panel control-panel">
+                <h2>CORE CONTROLS</h2>
+                <div class="btn-group">
+                    <button class="btn btn-neon" onclick="sendCommand('start_game', {game: 'snake'})">LAUNCH
+                        SNAKE</button>
+                    <button class="btn btn-neon" onclick="sendCommand('start_game', {game: 'pong'})">LAUNCH
+                        PONG</button>
+                    <button class="btn btn-neon" onclick="sendCommand('start_game', {game: 'maze'})">LAUNCH
+                        MAZE</button>
+                    <button class="btn btn-warn" onclick="sendCommand('stop_game')">STOP GAME</button>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-warn" onclick="sendCommand('system_command', {cmd: 'sleep'})">FORCE
+                        SLEEP</button>
+                    <button class="btn btn-success" onclick="sendCommand('system_command', {cmd: 'wake'})">WAKE
+                        SYSTEM</button>
+                </div>
+
+                <h3>Active Modules</h3>
+                <ul id="module-list">
+                    <li class="active">CognitiveEngine</li>
+                    <li>GlobalWorkspace</li>
+                    <li>SNN (Vision)</li>
+                    <li>ActiveInference</li>
+                </ul>
+            </section>
+
+            <!-- CENTER PANEL: VISUAL CORTEX -->
+            <section class="panel visual-panel">
+                <h2>VISUAL CORTEX</h2>
+                <div class="canvas-container">
+                    <canvas id="gameCanvas" width="300" height="300"></canvas>
+                    <div class="overlay" id="overlay-text">WAITING_FOR_SENSORY_INPUT...</div>
+                </div>
+                <div class="telemetry-bar">
+                    <div>SCORE: <span id="score">0</span></div>
+                    <div>REWARD: <span id="reward">0.0</span></div>
+                    <div>SURPRISE: <span id="entropy">0.0</span></div>
+                </div>
+            </section>
+
+            <!-- RIGHT PANEL: THOUGHT STREAM -->
+            <section class="panel thought-panel">
+                <h2>GLOBAL WORKSPACE</h2>
+                <div id="workspace-stream" class="terminal-view">
+                    <!-- Stream of consciousness goes here -->
+                    <div class="log-entry">[SYSTEM] Initializing Neural Link...</div>
+                </div>
+
+                <h2>DIALOGUE</h2>
+                <div id="chat-history" class="terminal-view chat-view">
+                </div>
+                <div class="chat-input-area">
+                    <input type="text" id="chat-input" placeholder="Ask the brain..." onkeypress="handleChatKey(event)">
+                    <button class="btn btn-small" onclick="sendChat()">SEND</button>
+                </div>
+                <!-- Teach Mode Toggle -->
+                <div style="margin-top: 5px; font-size: 0.8em;">
+                    <input type="checkbox" id="teach-mode"> <label for="teach-mode">Teach Mode (Learn from Text)</label>
+                </div>
+
+                <h2>SYSTEM LOGS</h2>
+                <div id="log-stream" class="terminal-view small-text">
+                    <!-- Tech logs -->
+                </div>
+            </section>
+        </main>
+
+        <!-- BOTTOM: CHARTS -->
+        <section class="panel bottom-panel">
+            <div class="chart-container">
+                <canvas id="perfChart"></canvas>
+            </div>
+        </section>
+    </div>
+</body>
+
+</html>

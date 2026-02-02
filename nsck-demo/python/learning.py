@@ -291,3 +291,51 @@ class LiveTrainer:
                 self.optimizer.step()
             
             return loss.item()
+
+
+class SleepConsolidator:
+    """
+    Consolidates episodic experiences into semantic knowledge.
+    Extracts stable patterns and causal relationships.
+    """
+    def __init__(self, episodic_memory, semantic_memory):
+        self.episodic = episodic_memory
+        self.semantic = semantic_memory
+        
+    def consolidate_during_sleep(self, task_tag: str):
+        """Perform semantic consolidation."""
+        print(f">> [SLEEP] Extracting Semantic Knowledge for {task_tag}...")
+        
+        # 1. Retrieve salient episodes
+        episodes = self.episodic.retrieve_salient(task_tag, limit=100)
+        if not episodes: return
+        
+        # 2. Extract Causal Patterns
+        # Pattern: (Situation, Action) -> Reward > 0
+        patterns: Dict[Tuple[str, str], int] = {}
+        for ep in episodes:
+            if ep.reward > 0.05:
+                # Use task_tag and emotion as a rough situation key for now
+                # In more advanced versions, we'd use predicates.
+                key = (f"{task_tag}_{ep.emotion}", ep.action)
+                patterns[key] = patterns.get(key, 0) + 1
+                
+        # 3. Promote stable patterns to Semantic Memory
+        for (situation, action), count in patterns.items():
+            if count >= 3:  # Rule of three
+                # "Action X in Situation Y causes Reward"
+                effect = f"reward_{task_tag}"
+                
+                # Ensure concepts exist
+                if situation not in self.semantic.concept_graph:
+                    self.semantic.add_concept(situation, {"type": "context"})
+                if action not in self.semantic.concept_graph:
+                    self.semantic.add_concept(action, {"type": "action"})
+                if effect not in self.semantic.concept_graph:
+                    self.semantic.add_concept(effect, {"type": "outcome"})
+                    
+                # Add causal link
+                # (Situation, Action) -> Outcome
+                # For simplicity in graph, we just link Action -> Outcome in Situation
+                self.semantic.add_relation(action, "causes", effect)
+                print(f"   [SEMANTIC] Discovered: {action} causes {effect} in {situation}")

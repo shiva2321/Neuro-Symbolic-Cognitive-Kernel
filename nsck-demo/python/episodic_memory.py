@@ -25,6 +25,10 @@ class LiveEpisode:
     action: str
     outcome: str
     reward: float
+    
+    # Phase 3.1 Upgrade: Context
+    emotion: str = "neutral"
+    tom_beliefs: Optional[Dict[str, Any]] = None # Snapshot of ToM beliefs
     image: Optional[np.ndarray] = None # [AGI] Added for SNN generative dreaming
     impact_score: float = 0.0  # |reward| + novelty bonus for salient pruning
     
@@ -32,6 +36,11 @@ class LiveEpisode:
         """Convert to storage format with compressed state."""
         # Compress state to sketch (task-specific key fields only)
         sketch = self._extract_sketch(self.state, self.task_tag)
+        
+        # [Phase 3.1] Store emotion/ToM in sketch
+        sketch["emotion"] = self.emotion
+        if self.tom_beliefs:
+            sketch["tom_beliefs"] = self.tom_beliefs
         
         return Episode(
             id=None,
@@ -52,6 +61,7 @@ class LiveEpisode:
                 "head": state.get("head"),
                 "food": state.get("food"),
                 "body_len": len(state.get("body", [])),
+                "emotion": self.emotion, # Redundant but safe
             }
         elif task_tag == "pong":
             return {
@@ -254,6 +264,13 @@ class EpisodicMemory:
         """Get most recent episodes."""
         recent = self.recent.get(task_tag, deque())
         return list(recent)[-n:]
+
+    def retrieve_salient(self, task_tag: str, limit: int = 100) -> List[LiveEpisode]:
+        """Retrieve high-impact episodes (high absolute reward or novelty)."""
+        recent = list(self.recent.get(task_tag, deque()))
+        # Sort by absolute reward + novelty (simplified)
+        recent.sort(key=lambda ep: abs(ep.reward) + ep.impact_score, reverse=True)
+        return recent[:limit]
     
     def recall_by_outcome(
         self,

@@ -39,6 +39,16 @@ from causal_reasoning import (
     CausalGraph, CausalReasoner, create_snake_causal_graph, 
     create_pong_causal_graph, create_maze_causal_graph, CausalDiscovery # [AGI] Phase 4.1
 )
+from homeostasis import HomeostaticMonitor
+from emotion_system import EmotionSystem
+from theory_of_mind import TheoryOfMind
+from semantic_memory import SemanticMemory
+import os
+from agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
+from consciousness_metrics import GlobalWorkspaceMetrics
+from logger_service import get_logger
+from language_module import LanguageModule
+from dialogue_manager import DialogueManager
 
 
 @dataclass
@@ -61,6 +71,7 @@ class CognitiveState:
     exploration_mode: bool = False
     explanation: Optional[Explanation] = None
     imagined_reward: float = 0.0 # [AGI] Phase 5.2
+    emotion: str = "neutral"
     
     # Trace for debugging
     trace: Dict[str, Any] = field(default_factory=dict)
@@ -118,27 +129,71 @@ class CognitiveEngine:
             novelty_threshold=self.config.novelty_threshold
         )
         
+        # [AGI] Phase 2.1: Affective Computing
+        self.homeostasis = HomeostaticMonitor()
+        self.emotion_system = EmotionSystem()
+        
+        # [AGI] Phase 2.2: Theory of Mind
+        self.theory_of_mind = TheoryOfMind()
+        
+        # [AGI] Phase 3.1: Semantic Memory
+        self.semantic_memory = SemanticMemory()
+        
         # [AGI] Phase 3.2: Self-Model
         self.self_model = SelfModel()
         
         # [AGI] Phase 3.1: Global Workspace
         self.global_workspace = GlobalWorkspace()
         
+        # [AGI] Phase 2.4: Active Inference (Curiosity Agent)
+        self.active_agent = ActiveAgent(w=10, h=10, horizon=3)
+        self.logger = get_logger()
+        self.msg_broadcaster = None
+        
+        # [AGI] Phase 4: Language Center
+        self.language = LanguageModule() # MOCK if no model found
+        self.dialogue = DialogueManager(self, self.language)
+        
         # [AGI] Phase 4.1: Causal Discovery
         self.causal_discovery = CausalDiscovery()
         # [AGI] Phase 4.4: Theory Formation
-        try:
-            from causal_reasoning import TheoryModule
-            self.theory_module = TheoryModule()
-        except ImportError:
+        if not hasattr(self, 'theory_module'):
             self.theory_module = None
-        
-        # [AGI] Phase 5.1: World Model
+            
+        # [AGI] Phase 4: Continual Learning (EWC & Meta-Learning)
+        try:
+            from continual_learning import ContinualLearner
+            from meta_learning import MAMLLearner
+            from curriculum import CurriculumDesigner
+            # We assume self.snn is part of self.perception or similar
+            # For now, if we have an snn, we use it. 
+            self.continual_learner = ContinualLearner(self.snn) if hasattr(self, 'snn') else None
+            self.meta_learner = MAMLLearner(self.snn) if hasattr(self, 'snn') else None
+            self.curriculum = CurriculumDesigner()
+            print("[AGI] Phase 4 modules initialized.")
+        except ImportError:
+            print("[WARN] Phase 4 modules missing.")
+
+        # [AGI] Phase 5: Consciousness & Self-Evolution
+        try:
+            from consciousness_metrics import ConsciousnessMonitor
+            from self_modifier import SelfModifier
+            from value_alignment import ValueAlignmentSystem
+            self.consciousness = ConsciousnessMonitor(self.global_workspace)
+            self.self_modifier = SelfModifier(os.getcwd())
+            self.value_alignment = ValueAlignmentSystem()
+            print("[AGI] Phase 5 modules initialized.")
+        except ImportError:
+            print("[WARN] Phase 5 modules missing.")
+
+        # [AGI] Phase 5.1 (Legacy): World Model (Imagination)
         try:
             from world_model import WorldModel
             self.world_model = WorldModel()
+            print("[AGI] WorldModel Initialized.")
         except ImportError:
             self.world_model = None
+        
         
         # Causal graphs per task
         # [VERIFICATION] Tabula Rasa Mode: Start with EMPTY graphs to prove learning.
@@ -188,6 +243,10 @@ class CognitiveEngine:
         
         self.current_state = CognitiveState(task_tag="unknown")
 
+    def get_concept_hv(self, concept: str) -> hypervec_rs.HyperVector:
+        """Generate a stable VSA hypervector for a string concept."""
+        return hypervec_rs.HyperVector(hash(concept) % (2**32))
+
     def decide(
         self,
         state: Dict[str, Any],
@@ -206,6 +265,7 @@ class CognitiveEngine:
             CognitiveState with decision and explanation
         """
         self.stats["decisions"] += 1
+        imagined_r = 0.0
         
         # 1. Get verifier for this task
         verifier = self.verifiers.get(task_tag, GroundingVerifier())
@@ -227,105 +287,211 @@ class CognitiveEngine:
         explore_decision = self.curiosity.should_explore(
             situation_hv, task_tag, confidence
         )
+
+        # [AGI] Phase 2.4: Synchronize Active Agent
+        # We need to update the ActiveAgent's beliefs based on 'active_predicates' or raw state
+        # Simplified: If we assume 10x10 grid (snake/maze)
+        if task_tag in ["snake", "maze"]:
+            head = state.get("head", (0,0))
+            self.active_agent.pos = head
+            
+            # Map Homeostasis to Preferences
+            # If hungry -> Food is valuable. If satiated -> Exploration (Unknown) is valuable.
+            if self.homeostasis.drives["hunger"] > 0.4:
+                self.active_agent.preferences[TILE_FOOD] = 20.0
+                self.active_agent.preferences[TILE_UNKNOWN] = 2.0
+            else:
+                self.active_agent.preferences[TILE_FOOD] = 0.0
+                self.active_agent.preferences[TILE_UNKNOWN] = 10.0 # High curiosity
+            
+            # Update beliefs from state (simplified visibility)
+            if "food" in state:
+                fx, fy = state["food"]
+                self.active_agent.update_belief(fx, fy, TILE_FOOD)
+            
+            # Run Active Inference
+            # Returns (dx, dy)
+            act_dx, act_dy = self.active_agent.get_action(head)
+            
+            # Convert to Action String
+            active_inf_action = "ACTION_STAY"
+            if act_dx == 0 and act_dy == -1: active_inf_action = "ACTION_UP"
+            elif act_dx == 0 and act_dy == 1: active_inf_action = "ACTION_DOWN"
+            elif act_dx == -1 and act_dy == 0: active_inf_action = "ACTION_LEFT"
+            elif act_dx == 1 and act_dy == 0: active_inf_action = "ACTION_RIGHT"
         
         # [AGI] Phase 3.1: Global Workspace Competition
-        # We broadcast proposals from different modules to the Global Workspace
-        # Format: Dict[module_name, Tuple[Content, Salience]]
-        proposals: Dict[str, Tuple[Proposal, float]] = {}
+        from global_workspace import Coalition
+        coalitions: List[Coalition] = []
         
         # A. SNN Proposal (Fast System)
         if metacognition_result and metacognition_result.get("action"):
             salience = confidence
-            p = Proposal(
-                module="SNN",
-                action=metacognition_result["action"],
-                salience=salience,
-                content="Pattern match from visual input"
-            )
-            proposals["SNN"] = (p, salience)
+            coalitions.append(Coalition(
+                source="SNN",
+                content=metacognition_result["action"],
+                base_salience=salience,
+                relevance=0.0,
+                sender_confidence=self.self_model.get_confidence(task_tag)
+            ))
             
         # B. Rule Proposal (Symbolic System)
         applicable = self.rule_learner.get_applicable_rules(state, task_tag)
         if applicable:
             rule, score = applicable[0]
-            p = Proposal(
-                module="RULES",
-                action=rule.consequence,
-                salience=score,
-                content=f"Rule: {rule}"
-            )
-            proposals["RULES"] = (p, score)
+            # Rule confidence is high if it exists
+            coalitions.append(Coalition(
+                source="RULES",
+                content=rule.consequence,
+                base_salience=score,
+                relevance=0.2,
+                sender_confidence=0.9 
+            ))
             
         # C. Exploration Proposal (Curiosity)
         if explore_decision.should_explore:
             explore_act = self._get_exploration_action(state, task_tag, active_preds)
             salience = 0.6 + (0.2 if "stagnant" in explore_decision.reason else 0.0)
-            p = Proposal(
-                module="EXPLORATION",
-                action=explore_act,
-                salience=salience,
-                content=explore_decision.reason
-            )
-            proposals["EXPLORATION"] = (p, salience)
+            coalitions.append(Coalition(
+                source="EXPLORATION",
+                content=explore_act,
+                base_salience=salience,
+                relevance=0.0,
+                sender_confidence=0.5 # Curiosity is by definition uncertain
+            ))
+
+        # D. Active Inference Proposal (Curiosity/Drive)
+        if task_tag in ["snake", "maze"]:
+             # Calculate salience based on drive urgency or curiosity
+             ai_salience = 0.7
+             if self.homeostasis.drives["hunger"] > 0.6: ai_salience = 0.9
+             
+             coalitions.append(Coalition(
+                source="ACTIVE_INFERENCE",
+                content=active_inf_action,
+                base_salience=ai_salience,
+                relevance=0.3,
+                sender_confidence=0.8
+             ))
             
         # D. Planner Proposal (Goal-Directed)
-        # Check if we have a plan active or need one
         plan_action = None
         if task_tag == "snake" or task_tag == "maze":
              plan_action = self.grid_planner.get_next_action(state, task_tag)
         
         if plan_action:
-             salience = 0.85
-             p = Proposal(
-                module="PLANNER",
-                action=plan_action,
-                salience=salience,
-                content="Strategic spatial plan"
-             )
-             proposals["PLANNER"] = (p, salience)
+             coalitions.append(Coalition(
+                source="PLANNER",
+                content=plan_action,
+                base_salience=0.85,
+                relevance=0.1,
+                sender_confidence=0.95 # Planner is usually very confident
+             ))
+             
+        # E. Mental Simulation (Imagination)
+        if self.world_model and self.world_model.is_ready(task_tag):
+             # Sample possible actions (usually UP, DOWN, LEFT, RIGHT)
+             possible_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"]
+             action_hvs = [self.get_concept_hv(a) for a in possible_actions]
+             
+             if action_hvs:
+                 paths = self.world_model.sample_hypothetical_trajectories(
+                     initial_hv=situation_hv,
+                     action_hvs=action_hvs,
+                     horizon=5,
+                     num_paths=8
+                 )
+                 
+                 # Score paths by cumulative reward
+                 best_action = None
+                 max_reward = -999
+                 
+                 for path in paths:
+                     if not path: continue
+                     cum_reward = sum(step["reward"] for step in path)
+                     if cum_reward > max_reward:
+                         max_reward = cum_reward
+                         # Find which action this was (action_hv is in step)
+                         first_step_hv = path[0]["action_hv"]
+                         # Reverse mapping (heuristic)
+                         for a in possible_actions:
+                             # Note: comparing HVs requires looking at their bits or hash
+                             if self.get_concept_hv(a) == first_step_hv:
+                                 best_action = a
+                                 break
+                 
+                 if best_action and max_reward > 0.1:
+                     coalitions.append(Coalition(
+                         source="IMAGINATION",
+                         content=best_action,
+                         base_salience=0.7,
+                         relevance=0.2,
+                         sender_confidence=0.6 # Neural simulation has some noise
+                     ))
+
+        # [AGI] Phase 2.1 Integration: Affective Match
+        # If the agent is "Hungry", actions that lead to "Food" get a boost.
+        for c in coalitions:
+            if self.homeostasis.drives["hunger"] > 0.5:
+                # Basic heuristic: if planner/rules suggest moving toward food, boost affect match
+                if "food" in str(c.content).lower() or c.source == "PLANNER":
+                    c.affect_match = 0.2
 
         # Run competition
-        # compete returns module name (str)
-        winner_name = self.global_workspace.compete(proposals)
+        winner_coalition = self.global_workspace.compete(coalitions)
         
         # 5. Determine Final Action
-        trace = {"proposals": len(proposals)}
+        trace = {"proposals": len(coalitions)}
         
-        winner = None
-        if winner_name and winner_name in proposals:
-            winner = proposals[winner_name][0]
-            action = winner.action
-            trace["mode"] = winner.module
-            trace["reason"] = winner.content
+        if winner_coalition:
+            action = winner_coalition.content
+            winner_name = winner_coalition.source
+            trace["mode"] = winner_name
+            trace["reason"] = f"Winner: {winner_name} (Activation: {winner_coalition.activation:.2f})"
+            
+            winner = Proposal(module=winner_name, action=action, content=trace["reason"], salience=winner_coalition.base_salience)
+            
+            # Log Thought
+            self.logger.log("BRAIN", f"WON: {winner_name} -> {action} ({trace['reason']})", level="THOUGHT")
+            if self.msg_broadcaster:
+                self.msg_broadcaster({"message": f"WON: {winner_name} -> {action}", "detail": trace['reason']})
             
             # [AGI] Phase 3.2: Self-Model Context
             # Update self-confidence based on winning module
-            if winner.module == "SNN":
+            if winner_name == "SNN":
                 self.self_model.update_confidence(task_tag, confidence)
-            elif winner.module == "PLANNER":
-                 self.self_model.update_confidence(task_tag, 0.9) # Trust plans
-                 
+            elif winner_name == "PLANNER":
+                  self.self_model.update_confidence(task_tag, 0.9) # Trust plans
         else:
             # Fallback
             action = self._default_action(state, task_tag)
             trace["mode"] = "default"
             winner = Proposal(module="DEFAULT", action=action, content="Fallback", salience=0.0)
 
-        # [AGI] Phase 5.2: Mental Simulation (Veto Check)
-        # If we have a World Model, simulate the chosen action to check for disaster
-        imagined_r = 0.0
+        # [AGI] Phase 5.3: Value Alignment
         veto = False
-        if self.world_model and self.world_model.is_ready(task_tag):
-             imagined_r = self.imagine_rollout(situation_hv, [action.replace("ACTION_", "")], task_tag)
-             trace["imagined_reward"] = imagined_r
+        if hasattr(self, 'value_alignment'):
+             # Predict effects for assessment (simplified: using causal reasoner)
+             reasoner = self.causal_reasoners.get(task_tag)
+             future = reasoner.predict_effects(state, action, task_tag) if reasoner else []
+             alignment_score = self.value_alignment.evaluate_proposal(action, future)
              
-             # Veto if disaster predicted
-             if imagined_r < -0.8: # Death
-                 veto = True
-                 trace["veto"] = True
-                 trace["veto_reason"] = "Predicted death"
-                 # Attempt rescue? For now, just flag it. 
-                 # In advanced mode, we'd loop back to pick 2nd best.
+             if alignment_score < 0:
+                  print(f"[AGI] Value Alignment VETO for action {action}")
+                  veto = True
+                  trace["alignment_veto"] = True
+
+        # [AGI] Phase 5.1: Consciousness Monitor
+        if hasattr(self, 'consciousness'):
+             # Extract system graph for Phi calculation
+             system_graph = GlobalWorkspaceMetrics.extract_influence_graph(coalitions)
+             phi = self.consciousness.compute_phi(system_graph)
+             trace["phi"] = phi
+             
+             # Attention Schema
+             self.consciousness.update_attention_schema(action, winner_coalition.activation if winner_coalition else 0.0)
+
+        # 6. Generate explanation
 
         # 6. Generate explanation
         trace["confidence"] = confidence
@@ -348,7 +514,7 @@ class CognitiveEngine:
             "winner": winner.module if winner else "NONE",
             "action": action,
             "veto": veto,
-            "proposals": [p.module for p in [v[0] for v in proposals.values()]] # Simplify for JSON
+            "proposals": [c.source for c in coalitions] 
         }
         self.trace_history.append(full_trace)
         if len(self.trace_history) > self.max_trace_history:
@@ -365,6 +531,7 @@ class CognitiveEngine:
             exploration_mode=explore_decision.should_explore,
             explanation=explanation,
             imagined_reward=imagined_r,
+            emotion=self.emotion_system.current_emotion,
             trace=trace
         )
         
@@ -431,11 +598,26 @@ class CognitiveEngine:
         """
         Learn from experience.
         """
+        # 0. Update Homeostasis and Emotions
+        if task_tag == "snake" and outcome == "success":
+            self.homeostasis.consume("energy", 0.2)
+        elif outcome == "death":
+            self.homeostasis.integrity -= 0.5
+            
+        self.homeostasis.update()
+        self.emotion_system.update_from_drives(self.homeostasis.drives, reward)
+
         # 1. Record observation for rule learning
         self.rule_learner.observe(state, action, reward, task_tag, outcome)
         
         # 2. Record episode in memory
         if self.current_state.situation_hv:
+            # Get current ToM snapshot for the first agent present (simplified)
+            tom_snapshot = {}
+            if self.theory_of_mind.agent_models:
+                primary_agent = next(iter(self.theory_of_mind.agent_models))
+                tom_snapshot = self.theory_of_mind.agent_models[primary_agent].beliefs.copy()
+
             episode = LiveEpisode(
                 timestamp=time.time(),
                 task_tag=task_tag,
@@ -444,13 +626,23 @@ class CognitiveEngine:
                 action=action,
                 outcome=outcome,
                 reward=reward,
+                emotion=self.emotion_system.current_emotion,
+                tom_beliefs=tom_snapshot,
                 image=image # [AGI] Save image for dreaming
             )
             self.episodic_memory.record(episode)
             self.stats["episodes_recorded"] += 1
         
-        # 3. Update curiosity
+        # 3. Update curiosity and Self-Model
+        actual_success = (outcome == "success")
         self.curiosity.record_outcome(task_tag, reward > 0)
+        self.self_model.update(
+            task_tag=task_tag, 
+            action=action, 
+            predicted_confidence=self.current_state.confidence,
+            actual_success=actual_success,
+            reward=reward
+        )
         
         # 4. Periodically induce rules
         if self.stats["episodes_recorded"] % 50 == 0:
@@ -514,14 +706,26 @@ class CognitiveEngine:
 
         # [AGI] Phase 5.1: World Model Update
         # Train world model on transition (s, a) -> (s', r)
-        # We need HVs for s and s'
         if self.world_model and self.current_state.situation_hv and next_state:
-             # Re-generate HV for next state? simpler to just pass numpy bits if we had them.
-             # For now, simplistic update:
-             if hasattr(self.current_state.situation_hv, 'bits'):
-                  obs_bits = np.packbits(self.current_state.situation_hv.bits)
-                  # We'd need next_hv ... let's skip rigorous training in this snip
-                  pass
+             # 1. Get Action HV
+             action_hv = self.get_concept_hv(action)
+             
+             # 2. Get Next State HV
+             verifier = self.verifiers.get(task_tag, GroundingVerifier())
+             next_preds = verifier.get_active_predicates(next_state, context=task_tag)
+             next_hv = self.episodic_memory.create_situation_hv(next_state, task_tag, next_preds)
+             
+             if action_hv and next_hv:
+                 self.world_model.update(
+                     state=self.current_state.situation_hv,
+                     action_hv=action_hv,
+                     next_hv=next_hv,
+                     reward=reward
+                 )
+        
+        # [AGI] Phase 4.3: Curriculum Mastery
+        if hasattr(self, 'curriculum'):
+             self.curriculum.update_mastery(task_tag, 1.0 if reward > 0 else (0.5 if reward == 0 else 0.0))
     
     def transfer(
         self,
@@ -600,6 +804,38 @@ class CognitiveEngine:
             self.causal_graphs[task_tag] = causal_graph
     # --- [AGI] Phase 5: Generative Imagination ---
     
+    # [AGI] Phase 4: Dialogue Interaction
+    def process_dialogue(self, user_text: str, teach_mode: bool = False) -> str:
+        """Process user text input via Dialogue Manager."""
+        
+        # Log the conversation
+        self.logger.log("USER", f"{user_text} (Teach: {teach_mode})", level="CHAT")
+        
+        if teach_mode:
+            # [AGI] Phase 4.2: One-Shot Learning from Text
+            # Simple Heuristic Parser for "Subject relation Object"
+            # e.g. "Food is good" -> (Food, is, good)
+            # This is a placeholder for LLM-based extraction
+            words = user_text.split()
+            if len(words) >= 3:
+                subj, rel, obj = words[0], words[1], " ".join(words[2:])
+                
+                # Add to Semantic Memory
+                self.semantic_memory.add_concept(subj, {"source": "user"})
+                self.semantic_memory.add_concept(obj, {"source": "user"})
+                self.semantic_memory.add_relation(subj, rel, obj)
+                
+                response = f"I have learned that {subj} {rel} {obj}."
+                self.logger.log("BRAIN", f"Learned Fact: {subj} -> {rel} -> {obj}", level="LEARNING")
+            else:
+                response = "I couldn't extract a fact. Please use 'Subject Relation Object' format."
+        else:
+            response = self.dialogue.process_turn(user_text)
+        
+        self.logger.log("AGENT", response, level="CHAT")
+        
+        return response
+
     def dream(self, num_samples: int = 10, task_tag: str = "snake") -> List[Dict[str, Any]]:
         """
         Perform 'Generative Dreaming' to consolidate knowledge.
@@ -646,6 +882,9 @@ class CognitiveEngine:
             dreams.append(dream)
             
         return dreams
+        
+    def register_broadcaster(self, callback):
+        self.msg_broadcaster = callback
 
     def generate_hypothetical_lessons(self, num_anchors: int = 5, task_tag: str = "snake") -> List[Dict[str, Any]]:
         """

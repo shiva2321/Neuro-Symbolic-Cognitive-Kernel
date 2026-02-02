@@ -18,6 +18,13 @@ import hashlib
 from typing import List, Dict, Tuple, Set, Optional
 import pickle
 import os
+from collections import Counter, defaultdict
+try:
+    from sklearn.manifold import TSNE
+    from sklearn.feature_extraction.text import CountVectorizer
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 
 # --- CONSTANTS ---
 GRID_SIZE = 128        # 128x128 = 16,384 bits
@@ -158,6 +165,90 @@ class SemanticMap:
         if os.path.exists(filepath):
             with open(filepath, 'rb') as f:
                 self.vocab = pickle.load(f)
+
+
+class SemanticFoldingTrainer:
+    """
+    Phase 1.1 Trainer: Generates Semantic Map using Statistical Co-occurrence and t-SNE.
+    """
+    def __init__(self, semantic_map: SemanticMap, grid_size: int = GRID_SIZE):
+        self.map = semantic_map
+        self.grid_size = grid_size
+        
+        if not SKLEARN_AVAILABLE:
+            print("WARNING: scikit-learn not found. SemanticFoldingTrainer will not function.")
+
+    def train_on_corpus(self, corpus: List[str], max_words: int = 1000):
+        """
+        Train the map using a corpus of text.
+        1. Build Co-occurrence matrix
+        2. Reduce to 2D using t-SNE
+        3. Generate fingerprints at 2D coordinates
+        """
+        if not SKLEARN_AVAILABLE:
+            raise ImportError("scikit-learn is required for training.")
+
+        print(f"Training on {len(corpus)} documents...")
+        
+        # 1. Vectorize and get Co-occurrence
+        # We use a simple window-based approach or document-co-occurrence
+        # For efficiency, we'll use document-level co-occurrence via CountVectorizer
+        vectorizer = CountVectorizer(max_features=max_words, stop_words='english')
+        X = vectorizer.fit_transform(corpus) # (Docs, Words)
+        
+        # Transpose to get (Words, Docs) -> Words are features of docs? 
+        # No, we want word-word similarity.
+        # Co-occurrence matrix = X.T * X
+        co_occurrence = (X.T * X) # (Words, Words)
+        
+        vocab_list = vectorizer.get_feature_names_out()
+        
+        print(f"Computed co-occurrence for {len(vocab_list)} words.")
+        
+        # 2. t-SNE Dimensionality Reduction (Words -> 2D)
+        # Using a metric like 'cosine' on the co-occurrence vectors is usually better
+        tsne = TSNE(n_components=2, metric='cosine', init='random', learning_rate='auto', random_state=42)
+        
+        # We transform the sparse co-occurrence matrix directly (or dense version if small)
+        # For strict correctness, we should normalize rows first.
+        embeddings_2d = tsne.fit_transform(co_occurrence.toarray())
+        
+        # 3. Normalize to Grid Coordinates
+        # Scale to [0, grid_size)
+        x_min, x_max = embeddings_2d[:, 0].min(), embeddings_2d[:, 0].max()
+        y_min, y_max = embeddings_2d[:, 1].min(), embeddings_2d[:, 1].max()
+        
+        print("Generating fingerprints...")
+        for i, word in enumerate(vocab_list):
+            if not word.isalnum(): continue
+            
+            # Normalize
+            x_norm = (embeddings_2d[i, 0] - x_min) / (x_max - x_min + 1e-9)
+            y_norm = (embeddings_2d[i, 1] - y_min) / (y_max - y_min + 1e-9)
+            
+            cx = int(x_norm * (self.grid_size - 1))
+            cy = int(y_norm * (self.grid_size - 1))
+            
+            # Generate fingerprint at this location
+            # Using the same scattering logic as learn_text_snippet
+            fp = self._generate_fingerprint_at(cx, cy)
+            self.map.vocab[word] = fp
+            
+        print(f"Training complete. Vocab size: {len(self.map.vocab)}")
+
+    def _generate_fingerprint_at(self, cx: int, cy: int) -> SemanticFingerprint:
+        """Generate a sparse fingerprint centered at (cx, cy)."""
+        bits = np.zeros((self.grid_size, self.grid_size), dtype=bool)
+        np.random.seed((cx * self.grid_size + cy) % (2**32))
+        
+        for _ in range(ON_BITS):
+            dx = int(np.random.normal(0, 5))
+            dy = int(np.random.normal(0, 5))
+            x = (cx + dx) % self.grid_size
+            y = (cy + dy) % self.grid_size
+            bits[y, x] = True
+            
+        return SemanticFingerprint(bits)
 
 # --- Singleton ---
 _cortex = None

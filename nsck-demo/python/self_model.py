@@ -12,6 +12,8 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
+import hypervec_shim as hypervec_rs
+
 class SelfModel:
     """
     Maintains a statistical model of the agent's own performance.
@@ -20,6 +22,7 @@ class SelfModel:
     1. Metacognition: "Am I likely to succeed at this?"
     2. Curriculum: "Which task do I need to practice?"
     3. Calibration: Tracking difference between confidence and reality.
+    4. Identity: VSA representation of Self.
     """
     
     def __init__(self):
@@ -31,6 +34,14 @@ class SelfModel:
             "confidence_errors": []  # List of (predicted, actual_outcome_float)
         })
         self.current_confidence = defaultdict(lambda: 0.5)
+        
+        # [Phase 3.2] Identity HVe
+        self.identity_hv = hypervec_rs.HyperVector(hash("SELF_NSCK_V1") % (2**32))
+        
+        # [Phase 3.2] Capability Map: action -> success_score
+        self.capabilities: Dict[str, float] = defaultdict(lambda: 0.0)
+        
+        print("SelfModel Initialized with Identity HV.")
 
     def update_confidence(self, task_tag: str, confidence: float):
         """Update current confidence level based on active module."""
@@ -61,12 +72,13 @@ class SelfModel:
         # TODO Phase 3.3: Use 'state' for contextual prediction (e.g., "I'm bad at corners")
         return stats["successes"] / stats["attempts"]
     
-    def update(self, task_tag: str, predicted_confidence: float, actual_success: bool, reward: float = 0.0):
+    def update(self, task_tag: str, action: str, predicted_confidence: float, actual_success: bool, reward: float = 0.0):
         """
         Update model with new experience.
         
         Args:
             task_tag: Task identifier
+            action: Action taken
             predicted_confidence: What the agent THOUGHT would happen (0.0-1.0)
             actual_success: Did it actually succeed?
             reward: Reward received
@@ -78,6 +90,11 @@ class SelfModel:
         
         if actual_success:
             stats["successes"] += 1
+            # Boost capability for this action
+            self.capabilities[action] = min(1.0, self.capabilities[action] + 0.1)
+        else:
+            # Drop capability slightly
+            self.capabilities[action] = max(0.0, self.capabilities[action] - 0.05)
             
         # Record calibration error
         actual_val = 1.0 if actual_success else 0.0
@@ -86,6 +103,14 @@ class SelfModel:
         # Keep history finite
         if len(stats["confidence_errors"]) > 1000:
             stats["confidence_errors"].pop(0)
+
+    def get_identity(self) -> hypervec_rs.HyperVector:
+        """Get VSA identity of self."""
+        return self.identity_hv
+
+    def get_capability(self, action: str) -> float:
+        """Get current proficiency estimate for an action."""
+        return self.capabilities[action]
 
     def get_calibration_error(self, task_tag: str) -> float:
         """

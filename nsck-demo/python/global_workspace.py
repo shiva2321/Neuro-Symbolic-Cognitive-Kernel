@@ -29,10 +29,11 @@ class Coalition:
     base_salience: float      # Intrinsic loudness (0.0 - 1.0)
     relevance: float = 0.0    # Match with current context/goal
     affect_match: float = 0.0 # Match with current Drives (e.g. "Food" matches "Hunger")
+    sender_confidence: float = 0.5 # [Phase 3.3] Metadata from module
     
     @property
     def activation(self) -> float:
-        return self.base_salience + self.relevance + self.affect_match
+        return self.base_salience + self.relevance + self.affect_match + (self.sender_confidence * 0.5)
 
 class GlobalWorkspace:
     """
@@ -46,6 +47,7 @@ class GlobalWorkspace:
         self.current_winner: Optional[str] = None
         self.attention_threshold = attention_threshold
         self.history: List[Tuple[str, Any, float]] = [] 
+        self.mission_focus: Optional[str] = None # e.g. "EXPLORATION"
         
     def register_module(self, name: str, module: WorkspaceModule):
         self.modules[name] = module
@@ -59,7 +61,13 @@ class GlobalWorkspace:
         if not proposals:
             return None
             
-        # 1. Score all coalitions
+        # 1. Apply Mission Focus Bias
+        if self.mission_focus:
+             for c in proposals:
+                 if c.source == self.mission_focus:
+                     c.base_salience += 0.2 # Priority boost
+
+        # 2. Score all coalitions
         ranked = sorted(proposals, key=lambda c: c.activation, reverse=True)
         winner = ranked[0]
         

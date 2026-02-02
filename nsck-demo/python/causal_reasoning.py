@@ -77,56 +77,59 @@ class CausalDiscovery:
     """
     
     def __init__(self):
-        # Counts for contingency tables:
-        # N(Cause, Effect), N(Cause, ~Effect), N(~Cause, Effect), N(~Cause, ~Effect)
-        # Stored as: self.counts[context][(cause, effect)] = { 'c_e': 0, 'c_ne': 0, 'nc_e': 0 }
-        self.stats = defaultdict(lambda: defaultdict(lambda: {
-            'c_e': 0,   # Cause and Effect
-            'c_ne': 0,  # Cause and No Effect
-            'nc_e': 0,  # No Cause and Effect (Spontaneous?)
-            'nc_ne': 0  # No Cause and No Effect
-        }))
+        # Optimized Stats:
+        # total_steps[context]
+        self.total_steps = defaultdict(int)
+        # count_c[context][cause]
+        self.count_c = defaultdict(lambda: defaultdict(int))
+        # count_e[context][effect]
+        self.count_e = defaultdict(lambda: defaultdict(int))
+        # count_ce[context][(cause, effect)]
+        self.count_ce = defaultdict(lambda: defaultdict(int))
         
-        # Track all observed events per context to calculate "Not Cause"
         self.observed_causes = defaultdict(set)
         self.observed_effects = defaultdict(set)
 
     def observe(self, context: str, causes: List[str], effects: List[str]):
         """
         Record a single time-step (transition).
-        
-        Args:
-            context: Task tag (e.g., 'snake')
-            causes: List of events at T (Action, State Conditions)
-            effects: List of events at T+1 (State Changes, Rewards)
+        O(len(causes) + len(effects) + len(causes)*len(effects))
+        Much faster than O(total_causes * total_effects)
         """
-        self.observed_causes[context].update(causes)
-        self.observed_effects[context].update(effects)
+        self.total_steps[context] += 1
         
         cause_set = set(causes)
         effect_set = set(effects)
         
-        # 1. Update pairings for ALL known candidates (slow but thorough)
-        all_known_causes = self.observed_causes[context]
-        all_known_effects = self.observed_effects[context]
+        self.observed_causes[context].update(causes)
+        self.observed_effects[context].update(effects)
         
-        for c in all_known_causes:
-            is_c = c in cause_set
+        # Increment individual counts
+        for c in cause_set:
+            self.count_c[context][c] += 1
+        for e in effect_set:
+            self.count_e[context][e] += 1
             
-            for e in all_known_effects:
-                is_e = e in effect_set
-                
-                # Retrieve stats dict
-                s = self.stats[context][(c, e)]
-                
-                if is_c and is_e:
-                    s['c_e'] += 1
-                elif is_c and not is_e:
-                    s['c_ne'] += 1
-                elif not is_c and is_e:
-                    s['nc_e'] += 1
-                else:
-                    s['nc_ne'] += 1
+        # Increment pair counts
+        for c in cause_set:
+            for e in effect_set:
+                self.count_ce[context][(c, e)] += 1
+
+    def _calculate_delta_p(self, context: str, c: str, e: str) -> Tuple[float, int]:
+        """Internal helper for Delta-P contingency calculation."""
+        t = self.total_steps[context]
+        nc = self.count_c[context][c]
+        ne = self.count_e[context][e]
+        nce = self.count_ce[context][(c, e)]
+        
+        if nc == 0 or nc == t: return 0.0, 0
+        
+        # P(E|C)
+        p_e_c = nce / nc
+        # P(E|~C)
+        p_e_nc = (ne - nce) / (t - nc)
+        
+        return p_e_c - p_e_nc, nc
 
     def induce_graph(self, context: str, min_confidence: float = 0.5, min_evidence: int = 5) -> "CausalGraph":
         """
@@ -134,25 +137,10 @@ class CausalDiscovery:
         """
         graph = CausalGraph()
         
-        for (c, e), s in self.stats[context].items():
-            total_c = s['c_e'] + s['c_ne']
-            total_nc = s['nc_e'] + s['nc_ne']
+        for (c, e) in self.count_ce[context].keys():
+            delta_p, evidence = self._calculate_delta_p(context, c, e)
             
-            if total_c < min_evidence:
-                continue
-                
-            # Calclate P(E|C)
-            p_e_given_c = s['c_e'] / total_c
-            
-            # Calculate P(E|~C)
-            p_e_given_nc = 0.0
-            if total_nc > 0:
-                p_e_given_nc = s['nc_e'] / total_nc
-            
-            # Delta-P: Causal Power
-            delta_p = p_e_given_c - p_e_given_nc
-            
-            if delta_p > min_confidence:
+            if evidence >= min_evidence and delta_p > min_confidence:
                 graph.add_causes(
                     cause=c,
                     effect=e,
@@ -165,21 +153,23 @@ class CausalDiscovery:
     def get_hypotheses(self, context: str, max_confidence: float = 0.5, min_evidence: int = 2) -> List[Tuple[str, str]]:
         """
         Return a list of (cause, effect) pairs that have some evidence but low confidence.
-        These are 'hypotheses' that interventional learning should target.
         """
         hypotheses = []
-        for (c, e), s in self.stats[context].items():
-            total_c = s['c_e'] + s['c_ne']
-            if min_evidence <= total_c:
-                # Calculate current Delta-P
-                p_e_given_c = s['c_e'] / total_c
-                total_nc = s['nc_e'] + s['nc_ne']
-                p_e_given_nc = s['nc_e'] / total_nc if total_nc > 0 else 0.0
-                delta_p = p_e_given_c - p_e_given_nc
-                # If Delta-P is positive, it's a hypothesis
-                if delta_p > 0.1:
-                    hypotheses.append((c, e))
+        for (c, e) in self.count_ce[context].keys():
+            delta_p, evidence = self._calculate_delta_p(context, c, e)
+            if evidence >= min_evidence and 0.1 <= delta_p <= max_confidence:
+                hypotheses.append((c, e))
         return hypotheses
+
+    def update_strengths(self, context: str, graph: "CausalGraph"):
+        """
+        Update the strengths of existing links in a graph based on latest stats.
+        Dynamic induction without changing structure.
+        """
+        for link in graph.all_links:
+            if link.context == context:
+                delta_p, _ = self._calculate_delta_p(context, link.cause, link.effect)
+                link.strength = max(0.0, delta_p)
 
 
 class CausalGraph:
@@ -370,6 +360,33 @@ class CausalGraph:
         """Get direct causes of an effect."""
         return [cause for cause, _ in self.backward.get(effect, [])]
 
+    def prune_redundant(self, context: Optional[str] = None):
+        """
+        Transitive Reduction: Remove direct links A->C if there's a path A->...->C.
+        Only removes links if the indirect path is at least as strong.
+        """
+        to_remove = []
+        for link in list(self.all_links):
+            if context and link.context != context:
+                continue
+                
+            # Temporarily remove this link to see if path still exists
+            # (Simplification: check if there's an indirect path of depth >= 2)
+            chains = self.forward_chain(link.cause, max_depth=3, context=link.context)
+            for chain in chains:
+                if chain.end == link.effect and len(chain) >= 2:
+                    if chain.total_strength >= link.strength * 0.8:
+                        to_remove.append(link)
+                        break
+        
+        for link in to_remove:
+            # Full removal
+            self.all_links.remove(link)
+            if link.context: self.context_links[link.context].discard(link)
+            self.forward[link.cause] = [(e, l) for e, l in self.forward[link.cause] if l != link]
+            self.backward[link.effect] = [(c, l) for c, l in self.backward[link.effect] if l != link]
+            print(f"[CAUSAL] Pruned redundant link: {link.cause} -> {link.effect}")
+
 
 class CausalReasoner:
     """
@@ -499,6 +516,15 @@ class CausalReasoner:
         
         return chains
     
+    def predict_outcome_from_graph(self, starting_cause: str, context: str) -> List[str]:
+        """Predict terminal outcomes by traversing the causal graph."""
+        chains = self.graph.forward_chain(starting_cause, max_depth=4, context=context)
+        outcomes = []
+        for chain in chains:
+            # We are interested in 'end' nodes that are typically outcomes (REWARD, DEATH, etc)
+            outcomes.append(chain.end)
+        return list(set(outcomes))
+
     def counterfactual(
         self,
         actual_action: str,
@@ -507,20 +533,12 @@ class CausalReasoner:
         task_tag: str
     ) -> CounterfactualResult:
         """
-        Answer "What if I did Y instead of X?"
-        
-        Args:
-            actual_action: What was actually done
-            alternative_action: What could have been done
-            state: State when action was taken
-            task_tag: Task context
-            
-        Returns:
-            CounterfactualResult with comparison
+        Answer "What if I did Y instead of X?" using simulator or Causal Graph.
         """
         original_outcome = "unknown"
         counterfactual_outcome = "unknown"
         affected = []
+        confidence = 0.5
         
         if self.simulator:
             try:
@@ -535,27 +553,43 @@ class CausalReasoner:
                     state, alternative_action.replace("ACTION_", "")
                 )
                 counterfactual_outcome = "TERMINAL" if alt_terminal else "CONTINUE"
+                confidence = 0.9
                 
                 # Find differences
                 for key in set(actual_next.keys()) | set(alt_next.keys()):
                     if actual_next.get(key) != alt_next.get(key):
                         affected.append(key)
-                        
-            except Exception as e:
+            except Exception:
                 pass
-        
+
+        # Fallback/Augment with Causal Graph
+        if original_outcome == "unknown" or counterfactual_outcome == "unknown":
+            actual_effects = self.predict_outcome_from_graph(actual_action, task_tag)
+            alt_effects = self.predict_outcome_from_graph(alternative_action, task_tag)
+            
+            # Simple heuristic: what's the most 'significant' effect?
+            def summarize(effects):
+                if any("DEATH" in e or "FAIL" in e for e in effects): return "FAILURE"
+                if any("REWARD" in e or "SUCCESS" in e for e in effects): return "SUCCESS"
+                return "NEUTRAL"
+
+            original_outcome = summarize(actual_effects)
+            counterfactual_outcome = summarize(alt_effects)
+            affected = list(set(actual_effects) ^ set(alt_effects))
+            confidence = 0.4 # Graph induction is probabilistic
+
         # Generate explanation
         if original_outcome == counterfactual_outcome:
-            explanation = f"No difference: both {actual_action} and {alternative_action} lead to {original_outcome}"
+            explanation = f"Likely no difference: both {actual_action} and {alternative_action} seem to lead to {original_outcome}"
         else:
-            explanation = f"Different outcomes: {actual_action}→{original_outcome}, {alternative_action}→{counterfactual_outcome}"
+            explanation = f"Causal simulation suggests: {actual_action} -> {original_outcome}, but {alternative_action} -> {counterfactual_outcome}"
         
         return CounterfactualResult(
             query=f"What if {alternative_action} instead of {actual_action}?",
             original_outcome=original_outcome,
             counterfactual_outcome=counterfactual_outcome,
             affected_states=affected,
-            confidence=0.8 if self.simulator else 0.3,
+            confidence=confidence,
             explanation=explanation
         )
     
