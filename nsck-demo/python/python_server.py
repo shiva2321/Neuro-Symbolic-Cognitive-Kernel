@@ -58,7 +58,8 @@ ENABLE_SNN = True
 ENABLE_VSA = True
 ENABLE_SLEEP = True
 FREEZE_PONG = False
-FREEZE_ALL = False  # If True, NO weight updates for ANY game/task
+FREEZE_ALL = False
+GAME_ACTIVE = True # Track if a game is currently running  # If True, NO weight updates for ANY game/task
 # Check command line args
 NO_TEACHER = True if "--no-teacher" in sys.argv else False 
 # If True, we never fallback to Teacher. System must survive on its own.
@@ -899,6 +900,9 @@ def main():
                      print("   - Maze Weights: FROZEN (no learning, pure transfer)")
                      print("   - Snake Knowledge Only: What it learned STAYS")
                      print("="*50)
+                elif cmd == "stop_game":
+                     GAME_ACTIVE = False
+                     print(">> GAME STOPPED: Entering Dormant State")
                 elif cmd == "freeze_all":
                      FREEZE_ALL = not FREEZE_ALL
                      if FREEZE_ALL:
@@ -1555,7 +1559,7 @@ def main():
                                 )
                                 total_reward = intrinsic_r
                                # Log occasionally
-                                if steps_total % 50 == 0:
+                                if steps_total % 50 == 0 and GAME_ACTIVE:
                                     print(f"[AGI] Intrinsic: ext={reward:.2f} icm={breakdown['icm_bonus']:.4f} count={breakdown['count_bonus']:.4f} total={total_reward:.2f}")
                                 
                                 # [AGI] Log to CSV
@@ -1678,6 +1682,7 @@ def main():
             
             # 4. Memory (Experience Replay)
             # We push the CURRENT state and action we just calculated.
+            GAME_ACTIVE = True # We received data, so game is active
             buffer.push(input_tensor, task_id, final_action_idx, reward, system_agreed, game_type, compass=compass_tensor)
             
             # Retrieve score from message payload
@@ -1694,8 +1699,8 @@ def main():
             logger.update(game_type, system_agreed, loss_val, current_score, session_id, veto=is_veto, confidence=conf_val)
             logger.check_print()
             
-            # --- MISSION TELEMETRY (Every 10 Steps) ---
-            if steps_total % 10 == 0:
+            # --- MISSION TELEMETRY (Every Step) ---
+            if steps_total % 1 == 0 and GAME_ACTIVE:
                 # 1. Global Workspace Competition
                 workspace_data = COGNITIVE_ENGINE.get_workspace_telemetry()
                 pub_sock_stats.send_string(f"WORKSPACE:{json.dumps(workspace_data)}")
@@ -1727,7 +1732,12 @@ def main():
                     "score": msg.get("score", 0),
                     "image": msg.get("image") # Pass through base64 image for dashboard
                 }
-                pub_sock.send_string(f"VIS:{json.dumps(vis_payload)}")
+                # Send to stats socket (5567) which dashboard listens to for 'game_update' as well?
+                # Actually dashboard listens to VIS on 5566.
+                # Let's send to pub_sock_stats (5567) to be safe as char_recog uses it.
+                # OR send to BOTH? No, that's wasteful.
+                # Let's align with Char Recog -> 5567
+                pub_sock_stats.send_string(f"VIS:{json.dumps(vis_payload)}")
 
                 # 2. Prepare Console Output
                 ts = time.strftime('%H:%M:%S')

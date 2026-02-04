@@ -1,106 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NSCK AGI :: Mission Control</title>
+    <title>NSCK AGENTIC CORE :: MISSION CONTROL</title>
     <link rel="stylesheet" href="css/style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/app.js" defer></script>
 </head>
-
 <body>
-    <div class="container">
-        <!-- HEADER -->
-        <header>
-            <h1>NSCK <span class="highlight">AGI</span> SYSTEM</h1>
-            <div class="status-bar">
-                <span id="conn-status">OFFLINE</span> |
-                CPU: <span id="cpu-load">--%</span> |
-                MEM: <span id="mem-load">-- MB</span>
+    <div class="grid-container">
+        <!-- HEADER: System Status -->
+        <header class="header">
+            <div class="logo">NSCK <span class="neon-text">v2.0</span> CORE</div>
+            <div class="sys-stats">
+                <div class="stat-item">STATUS: <span id="conn-status">OFFLINE</span></div>
+                <div class="stat-item">DEVICE: <span id="device-stat">CPU</span></div>
+                <div class="stat-item">FRAME: <span id="frame-count">0</span></div>
+            </div>
+            <div class="header-controls">
+                <label class="toggle-switch">
+                    <input type="checkbox" id="device-toggle" onchange="toggleDevice()">
+                    <span class="slider"></span>
+                    <span class="label">GPU ACCEL</span>
+                </label>
+                <button class="btn btn-danger btn-small" onclick="fullReset()">⚠ RESET BRAIN</button>
             </div>
         </header>
 
-        <!-- MAIN GRID -->
-        <main>
-            <!-- LEFT PANEL: CONTROLS -->
-            <section class="panel control-panel">
-                <h2>CORE CONTROLS</h2>
-                <div class="btn-group">
-                    <button class="btn btn-neon" onclick="sendCommand('start_game', {game: 'snake'})">LAUNCH
-                        SNAKE</button>
-                    <button class="btn btn-neon" onclick="sendCommand('start_game', {game: 'pong'})">LAUNCH
-                        PONG</button>
-                    <button class="btn btn-neon" onclick="sendCommand('start_game', {game: 'maze'})">LAUNCH
-                        MAZE</button>
-                    <button class="btn btn-warn" onclick="sendCommand('stop_game')">STOP GAME</button>
+        <!-- LEFT COL: CONTROLS & MODULES -->
+        <aside class="sidebar-left">
+            <!-- CONTROL DECK -->
+            <section class="panel control-deck">
+                <h2><i class="icon">🎮</i> SIMULATION CONTROL</h2>
+                <div class="launch-pad">
+                    <button class="btn btn-game" onclick="sendCommand('start_game', {game: 'snake'})">SNAKE</button>
+                    <button class="btn btn-game" onclick="sendCommand('start_game', {game: 'pong'})">PONG</button>
+                    <button class="btn btn-game" onclick="sendCommand('start_game', {game: 'maze'})">MAZE</button>
+                    <button class="btn btn-stop" onclick="sendCommand('stop_game')">TERMINATE</button>
                 </div>
-                <div class="btn-group">
-                    <button class="btn btn-warn" onclick="sendCommand('system_command', {cmd: 'sleep'})">FORCE
-                        SLEEP</button>
-                    <button class="btn btn-success" onclick="sendCommand('system_command', {cmd: 'wake'})">WAKE
-                        SYSTEM</button>
+                
+                <h3>SYSTEM MODES</h3>
+                <div class="mode-toggles">
+                    <button class="btn btn-mode" id="btn-dream" onclick="toggleAdmin('toggle_dream')">DREAM MODE</button>
+                    <button class="btn btn-mode" id="btn-teacher" onclick="toggleAdmin('toggle_teacher')">TEACHER</button>
+                    <button class="btn btn-mode" id="btn-sleep" onclick="toggleAdmin('force_sleep')">FORCE SLEEP</button>
                 </div>
+            </section>
 
-                <h3>Active Modules</h3>
-                <ul id="module-list">
-                    <li class="active">CognitiveEngine</li>
-                    <li>GlobalWorkspace</li>
-                    <li>SNN (Vision)</li>
-                    <li>ActiveInference</li>
+            <!-- MODULE STATUS -->
+            <section class="panel module-status">
+                <h2><i class="icon">🧩</i> ACTIVE MODULES</h2>
+                <ul id="module-list" class="module-grid">
+                    <li class="mod-active" id="mod-snn">SNN (Vision) <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-rules">Rule Engine <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-global">Global Workspace <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-causal">Causal Reasoner <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-emotion">Emotion System <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-planner">Planner <span class="activity-dot"></span></li>
                 </ul>
             </section>
+        </aside>
 
-            <!-- CENTER PANEL: VISUAL CORTEX -->
-            <section class="panel visual-panel">
-                <h2>VISUAL CORTEX</h2>
-                <div class="canvas-container">
-                    <canvas id="gameCanvas" width="300" height="300"></canvas>
-                    <div class="overlay" id="overlay-text">WAITING_FOR_SENSORY_INPUT...</div>
+        <!-- CENTER COL: VISUALIZATION & THOUGHTS -->
+        <main class="main-view">
+            <!-- VISUAL CORTEX -->
+            <section class="panel visual-cortex">
+                <div class="panel-header">
+                    <h2><i class="icon">👁</i> VISUAL CORTEX</h2>
+                    <span class="sub-info">INPUT STREAM: 10x10 TENSOR</span>
                 </div>
-                <div class="telemetry-bar">
-                    <div>SCORE: <span id="score">0</span></div>
-                    <div>REWARD: <span id="reward">0.0</span></div>
-                    <div>SURPRISE: <span id="entropy">0.0</span></div>
+                <div class="cortex-display">
+                    <canvas id="gameCanvas" width="400" height="400"></canvas>
+                    <div id="visual-overlay">Waiting for input stream...</div>
+                </div>
+                <div class="visual-metrics">
+                    <div class="metric">CONFIDENCE: <span id="conf-val">0.0%</span></div>
+                    <div class="metric">ENTROPY: <span id="entropy-val">0.0</span></div>
+                    <div class="metric">SALIENCY: <span id="saliency-status">ACTIVE</span></div>
                 </div>
             </section>
 
-            <!-- RIGHT PANEL: THOUGHT STREAM -->
-            <section class="panel thought-panel">
-                <h2>GLOBAL WORKSPACE</h2>
-                <div id="workspace-stream" class="terminal-view">
-                    <!-- Stream of consciousness goes here -->
-                    <div class="log-entry">[SYSTEM] Initializing Neural Link...</div>
-                </div>
-
-                <h2>DIALOGUE</h2>
-                <div id="chat-history" class="terminal-view chat-view">
-                </div>
-                <div class="chat-input-area">
-                    <input type="text" id="chat-input" placeholder="Ask the brain..." onkeypress="handleChatKey(event)">
-                    <button class="btn btn-small" onclick="sendChat()">SEND</button>
-                </div>
-                <!-- Teach Mode Toggle -->
-                <div style="margin-top: 5px; font-size: 0.8em;">
-                    <input type="checkbox" id="teach-mode"> <label for="teach-mode">Teach Mode (Learn from Text)</label>
-                </div>
-
-                <h2>SYSTEM LOGS</h2>
-                <div id="log-stream" class="terminal-view small-text">
-                    <!-- Tech logs -->
+            <!-- GLOBAL WORKSPACE (THOUGHTS) -->
+            <section class="panel global-workspace">
+                <h2><i class="icon">🧠</i> STREAM OF CONSCIOUSNESS</h2>
+                <div id="workspace-stream" class="stream-container">
+                    <div class="thought-entry system">[SYSTEM] Neural Link Initialized.</div>
                 </div>
             </section>
         </main>
 
-        <!-- BOTTOM: CHARTS -->
-        <section class="panel bottom-panel">
-            <div class="chart-container">
-                <canvas id="perfChart"></canvas>
-            </div>
-        </section>
+        <!-- RIGHT COL: TELEMETRY & COMMS -->
+        <aside class="sidebar-right">
+            <!-- TELEMETRY DECK -->
+            <section class="panel telemetry-deck">
+                <h2><i class="icon">📊</i> PERFORMANCE</h2>
+                <div class="chart-wrapper">
+                    <canvas id="scoreChart"></canvas>
+                </div>
+                <div class="mini-metrics">
+                    <div class="mm-box">
+                        <label>REWARD</label>
+                        <span id="metric-reward">0.0</span>
+                    </div>
+                    <div class="mm-box">
+                        <label>SCORE</label>
+                        <span id="metric-score">0</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TRAINING INTERFACE -->
+            <section class="panel training-deck">
+                <h2><i class="icon">✍</i> CONCEPT TRAINING</h2>
+                <div class="train-controls">
+                    <input type="text" id="train-text" placeholder="Type text to learn...">
+                    <button class="btn btn-action" onclick="trainText()">TRAIN</button>
+                    <!-- Future: Canvas for handwriting -->
+                </div>
+            </section>
+
+            <!-- COMMS & LOGS -->
+            <section class="panel comms-deck">
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('chat')">DIALOGUE</button>
+                    <button class="tab-btn" onclick="switchTab('logs')">SYSTEM LOGS</button>
+                </div>
+                
+                <div id="tab-chat" class="tab-content active">
+                    <div id="chat-history" class="scroll-view"></div>
+                    <div class="input-bar">
+                        <input type="text" id="chat-input" placeholder="Query the Brain...">
+                        <button class="btn btn-send" onclick="sendChat()">➤</button>
+                    </div>
+                </div>
+
+                <div id="tab-logs" class="tab-content">
+                    <div id="log-stream" class="scroll-view monospaced"></div>
+                    <button class="btn btn-small btn-export" onclick="window.location.href='/export_logs'">⬇ EXPORT LOGS</button>
+                </div>
+            </section>
+        </aside>
     </div>
 </body>
-
 </html>

@@ -991,9 +991,17 @@ class CognitiveEngine:
             
     def get_workspace_telemetry(self) -> Dict:
         """Get telemetry for dashboard visualizer."""
+        # Dynamic active module set based on recent usage
+        active = ["SNN"] # Vision always active
+        if self.rule_learner and any(len(rules) > 0 for rules in self.rule_learner.learned_rules.values()): active.append("RULES")
+        if self.causal_graphs and any(len(g.all_links)>0 for g in self.causal_graphs.values()): active.append("CAUSAL")
+        if self.planner: active.append("PLANNER")
+        if self.emotion_system: active.append("EMOTION")
+        if self.global_workspace: active.append("GLOBAL")
+        
         return {
             "winner": self.trace_history[-1]["winner"] if self.trace_history else "NONE",
-            "active_modules": ["SNN", "RULES", "EXPLORATION", "PLANNER"], 
+            "active_modules": active, 
         }
     
     def get_causal_telemetry(self, task_tag: str) -> Dict:
