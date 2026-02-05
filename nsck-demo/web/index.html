@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +10,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="js/app.js" defer></script>
 </head>
+
 <body>
     <div class="grid-container">
         <!-- HEADER: System Status -->
@@ -29,119 +31,107 @@
             </div>
         </header>
 
-        <!-- LEFT COL: CONTROLS & MODULES -->
+        <!-- LEFT COL: GLOBAL CONTROLS & MODULES -->
         <aside class="sidebar-left">
             <!-- CONTROL DECK -->
             <section class="panel control-deck">
-                <h2><i class="icon">🎮</i> SIMULATION CONTROL</h2>
+                <h2><i class="icon">🎮</i> TASK ORCHESTRATION</h2>
                 <div class="launch-pad">
-                    <button class="btn btn-game" onclick="sendCommand('start_game', {game: 'snake'})">SNAKE</button>
-                    <button class="btn btn-game" onclick="sendCommand('start_game', {game: 'pong'})">PONG</button>
-                    <button class="btn btn-game" onclick="sendCommand('start_game', {game: 'maze'})">MAZE</button>
-                    <button class="btn btn-stop" onclick="sendCommand('stop_game')">TERMINATE</button>
+                    <button class="btn btn-game" onclick="startTask('snake')">SNAKE</button>
+                    <button class="btn btn-game" onclick="startTask('pong')">PONG</button>
+                    <button class="btn btn-game" onclick="startTask('maze')">MAZE</button>
+                    <button class="btn btn-stop" style="grid-column: span 3; background: #ff0055;"
+                        onclick="sendCommand('stop_game', {})">TERMINATE ALL TASKS</button>
                 </div>
-                
+
                 <h3>SYSTEM MODES</h3>
                 <div class="mode-toggles">
-                    <button class="btn btn-mode" id="btn-dream" onclick="toggleAdmin('toggle_dream')">DREAM MODE</button>
-                    <button class="btn btn-mode" id="btn-teacher" onclick="toggleAdmin('toggle_teacher')">TEACHER</button>
-                    <button class="btn btn-mode" id="btn-sleep" onclick="toggleAdmin('force_sleep')">FORCE SLEEP</button>
+                    <button class="btn btn-mode" id="btn-dream" onclick="toggleAdmin('toggle_dream')">DREAM
+                        MODE</button>
+                    <button class="btn btn-mode" id="btn-teacher"
+                        onclick="toggleAdmin('toggle_teacher')">TEACHER</button>
+                    <button class="btn btn-mode" id="btn-sleep" onclick="toggleAdmin('force_sleep')">FORCE
+                        SLEEP</button>
                 </div>
             </section>
 
             <!-- MODULE STATUS -->
             <section class="panel module-status">
-                <h2><i class="icon">🧩</i> ACTIVE MODULES</h2>
+                <h2><i class="icon">🧩</i> COGNITIVE PULSE</h2>
                 <ul id="module-list" class="module-grid">
-                    <li class="mod-active" id="mod-snn">SNN (Vision) <span class="activity-dot"></span></li>
-                    <li class="mod-inactive" id="mod-rules">Rule Engine <span class="activity-dot"></span></li>
-                    <li class="mod-inactive" id="mod-global">Global Workspace <span class="activity-dot"></span></li>
-                    <li class="mod-inactive" id="mod-causal">Causal Reasoner <span class="activity-dot"></span></li>
-                    <li class="mod-inactive" id="mod-emotion">Emotion System <span class="activity-dot"></span></li>
-                    <li class="mod-inactive" id="mod-planner">Planner <span class="activity-dot"></span></li>
+                    <li class="mod-active" id="mod-snn">SNN <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-rules">RULES <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-global">CORE <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-causal">CAUSAL <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-emotion">EMOTE <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-planner">PLAN <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-episodic">MEM <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-self_model">SELF <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-vsa">VSA <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-curiosity">CURI <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-value">VALUE <span class="activity-dot"></span></li>
+                    <li class="mod-inactive" id="mod-dream">DREAM <span class="activity-dot"></span></li>
                 </ul>
             </section>
         </aside>
 
-        <!-- CENTER COL: VISUALIZATION & THOUGHTS -->
+        <!-- CENTER COL: GLOBAL GRID & DIALOGUE -->
         <main class="main-view">
-            <!-- VISUAL CORTEX -->
+            <!-- GLOBAL VISUAL CORTEX (TASK GRID) -->
             <section class="panel visual-cortex">
                 <div class="panel-header">
-                    <h2><i class="icon">👁</i> VISUAL CORTEX</h2>
-                    <span class="sub-info">INPUT STREAM: 10x10 TENSOR</span>
+                    <h2><i class="icon">👁</i> GLOBAL TASK CORTEX</h2>
+                    <span class="sub-info" id="active-tasks-count">TASKS: 0</span>
                 </div>
-                <div class="cortex-display">
-                    <canvas id="gameCanvas" width="400" height="400"></canvas>
-                    <div id="visual-overlay">Waiting for input stream...</div>
-                </div>
-                <div class="visual-metrics">
-                    <div class="metric">CONFIDENCE: <span id="conf-val">0.0%</span></div>
-                    <div class="metric">ENTROPY: <span id="entropy-val">0.0</span></div>
-                    <div class="metric">SALIENCY: <span id="saliency-status">ACTIVE</span></div>
+                <div id="task-grid" class="multi-canvas-container">
+                    <div id="visual-overlay">Waiting for neural activity...</div>
+                    <!-- Mini previews added dynamically here -->
                 </div>
             </section>
 
-            <!-- GLOBAL WORKSPACE (THOUGHTS) -->
-            <section class="panel global-workspace">
-                <h2><i class="icon">🧠</i> STREAM OF CONSCIOUSNESS</h2>
-                <div id="workspace-stream" class="stream-container">
-                    <div class="thought-entry system">[SYSTEM] Neural Link Initialized.</div>
+            <!-- GLOBAL DIALOGUE -->
+            <section class="panel global-dialogue">
+                <h2><i class="icon">💬</i> BRAIN COMMUNICATION</h2>
+                <div id="chat-history" class="scroll-view" style="height: 300px;"></div>
+                <div class="input-bar">
+                    <input type="text" id="chat-input" placeholder="Query the Brain...">
+                    <button class="btn btn-send" onclick="sendChat()">➤</button>
                 </div>
             </section>
         </main>
 
-        <!-- RIGHT COL: TELEMETRY & COMMS -->
+        <!-- RIGHT COL: GLOBAL ANALYTICS -->
         <aside class="sidebar-right">
-            <!-- TELEMETRY DECK -->
+            <!-- PERFORMANCE DECK -->
             <section class="panel telemetry-deck">
-                <h2><i class="icon">📊</i> PERFORMANCE</h2>
+                <h2><i class="icon">📊</i> SYSTEM COMPETENCE</h2>
                 <div class="chart-wrapper">
-                    <canvas id="scoreChart"></canvas>
+                    <canvas id="performanceChart"></canvas>
                 </div>
                 <div class="mini-metrics">
                     <div class="mm-box">
-                        <label>REWARD</label>
+                        <label>AVG REWARD</label>
                         <span id="metric-reward">0.0</span>
                     </div>
                     <div class="mm-box">
-                        <label>SCORE</label>
-                        <span id="metric-score">0</span>
+                        <label>TOTAL AGREE</label>
+                        <span id="metric-agree">0%</span>
                     </div>
                 </div>
             </section>
 
-            <!-- TRAINING INTERFACE -->
-            <section class="panel training-deck">
-                <h2><i class="icon">✍</i> CONCEPT TRAINING</h2>
-                <div class="train-controls">
-                    <input type="text" id="train-text" placeholder="Type text to learn...">
-                    <button class="btn btn-action" onclick="trainText()">TRAIN</button>
-                    <!-- Future: Canvas for handwriting -->
+            <!-- GLOBAL LOGS -->
+            <section class="panel global-logs" style="flex: 2;">
+                <div class="panel-header" style="display:flex; justify-content:space-between; align-items:center;">
+                    <h2><i class="icon">📜</i> SYSTEM LOGS</h2>
+                    <button class="btn btn-small" onclick="window.open('/export_logs', '_blank')">💾 EXPORT</button>
                 </div>
-            </section>
-
-            <!-- COMMS & LOGS -->
-            <section class="panel comms-deck">
-                <div class="tabs">
-                    <button class="tab-btn active" onclick="switchTab('chat')">DIALOGUE</button>
-                    <button class="tab-btn" onclick="switchTab('logs')">SYSTEM LOGS</button>
-                </div>
-                
-                <div id="tab-chat" class="tab-content active">
-                    <div id="chat-history" class="scroll-view"></div>
-                    <div class="input-bar">
-                        <input type="text" id="chat-input" placeholder="Query the Brain...">
-                        <button class="btn btn-send" onclick="sendChat()">➤</button>
-                    </div>
-                </div>
-
-                <div id="tab-logs" class="tab-content">
-                    <div id="log-stream" class="scroll-view monospaced"></div>
-                    <button class="btn btn-small btn-export" onclick="window.location.href='/export_logs'">⬇ EXPORT LOGS</button>
+                <div id="workspace-stream" class="stream-container scroll-view monospaced">
+                    <div class="thought-entry system">[SYSTEM] Shared Neural Workspace Initialized.</div>
                 </div>
             </section>
         </aside>
     </div>
 </body>
+
 </html>

@@ -7,6 +7,7 @@ import time
 import os
 import threading
 import json
+import signal
 import base64
 import cv2
 import argparse
@@ -66,14 +67,29 @@ NO_TEACHER = True if "--no-teacher" in sys.argv else False
 AUTO_DREAM = False # If True, brain automatically sleeps to consolidate memories
 RL_CONTEXT = {} # Stores {session_id: log_prob_of_prev_action} for REINFORCE (Policy Gradient)
 
+# --- GLOBAL STATE ---
+GAME_ACTIVE = True 
+STOP_EVENT = threading.Event()
+
+def signal_handler(sig, frame):
+    print(f"\n[BRAIN] Signal {sig} received. Shutting down...")
+    STOP_EVENT.set()
+    # Give threads a moment to catch the stop event
+    time.sleep(0.5)
+    sys.exit(0)
+
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
+
 # --- HYPERPARAMETERS ---
+DEBUG_MODE = False # Suppress verbose logs
 SLEEP_EPOCHS = 5
 REPLAY_BATCH_SIZE = 32
 LEARNING_RATE = 1e-4 # Reduced from 1e-3 to prevent overfitting
 MODEL_PATH = "snn_task_aware.pth"
 SAVE_INTERVAL = 60.0
 SLEEP_INTERVAL = 10.0
-ADVERSARIAL_RATE = 0.05
+ADVERSARIAL_RATE = 0.0
 GRID_SIZE = 10
 VSA_STRENGTH = 5.0 
 CONFIDENCE_THRESHOLD = 0.6 # Low Entropy = High Confidence. Threshold for "Confusion".
@@ -117,7 +133,7 @@ class LogAggregator:
         if veto:
             self.stats[game]["vetoes"] += 1
 
-    def check_print(self):
+    def check_print(self, steps_total=0):
         if time.time() - self.last_print > self.interval:
             status_strs = []
             for game, data in self.stats.items():
@@ -129,10 +145,38 @@ class LogAggregator:
                 score = data["score"]
                 veto_pct = (data["vetoes"] / total) * 100
                 
-                # Format: SNAKE: AGREE 95.0% (Loss 0.1234) | Score: 15
+                # Format: SNAKE: AGREE 95.0% (Veto 0.1234) | Score: 15
                 status_strs.append(f"{game.upper()}: AGREE {agree_pct:.1f}% (Veto {veto_pct:.1f}%) | Score {score}")
                 
-                # Broadcast Telemetry
+                # [AGI] Phase 1.3/1.5: Central Telemetry Logging (CSV + SQLite)
+                # This records current per-game metrics periodically
+                # [AGI] Phase 1.3/1.5: Central Telemetry Logging (CSV + SQLite)
+                # This records current per-game metrics periodically
+                try:
+                    import csv
+                    LOG_FILE = "training_log.csv"
+                    with open(LOG_FILE, "a", newline="") as f:
+                        writer = csv.writer(f)
+                        writer.writerow([
+                            time.time(), 
+                            steps_total, 
+                            game, 
+                            0.0, # Placeholder for extrinsic in summary
+                            float(avg_loss), # Use loss as generic quality metric
+                            float(avg_conf), 
+                            float(score)
+                        ])
+                    
+                    # Also log to SQLite via StructuredLogger (if available)
+                    from logger_service import get_logger
+                    sql_logger = get_logger()
+                    sql_logger.telemetry(game, "agree_pct", agree_pct, step=steps_total)
+                    sql_logger.telemetry(game, "score", score, step=steps_total)
+                    sql_logger.telemetry(game, "loss", avg_loss, step=steps_total)
+                except Exception as e:
+                    print(f"[ERROR] Failed to write telemetry: {e}")
+
+                # Broadcast Telemetry (for Dashboard Live View)
                 if self.zmq_pub:
                     telemetry = {
                         "game": game,
@@ -660,7 +704,7 @@ def get_pong_oracle(state):
     return 0 
 
 def main():
-    global ENABLE_SNN, ENABLE_VSA, ENABLE_SLEEP, FREEZE_PONG, FREEZE_ALL, NO_TEACHER, AUTO_DREAM
+    global ENABLE_SNN, ENABLE_VSA, ENABLE_SLEEP, FREEZE_PONG, FREEZE_ALL, NO_TEACHER, AUTO_DREAM, GAME_ACTIVE, STOP_EVENT
     
     parser = argparse.ArgumentParser()
     parser.add_argument("--eval", action="store_true", help="Evaluation Mode: VSA OFF, Sleep OFF, Training OFF")
@@ -799,7 +843,7 @@ def main():
     else:
          print("Starting fresh.")
     
-    logger = LogAggregator(zmq_pub=pub_sock_stats) # Pass socket
+    aggregator = LogAggregator(zmq_pub=pub_sock_stats) # Pass socket
     concept_mapper = ConceptMapper() # Initialize Mapper
     buffer = ReplayBuffer() # Initialize Memory
     curiosity = CuriosityModule() # Initialize Curiosity
@@ -821,9 +865,19 @@ def main():
     steps_total = 0
     last_game_type = None
 
-    while True:
+    # Handle recv timeout to allow checking STOP_EVENT
+    pull_sock.setsockopt(zmq.RCVTIMEO, 1000) # 1s timeout
+
+    while not STOP_EVENT.is_set():
         try:
-            msg = pull_sock.recv_json()
+            try:
+                msg = pull_sock.recv_json()
+            except zmq.Again:
+                if not GAME_ACTIVE:
+                    if steps_total % 5 == 0: # Periodic heartbeat
+                        print(f"[{time.strftime('%H:%M:%S')}] [AGI] BRAIN DORMANT: Waiting for Start Task command...")
+                    steps_total += 1
+                continue
             
             # Robust check: if msg is a string, wrap it in a dummy dict or handle it
             if isinstance(msg, str):
@@ -902,7 +956,14 @@ def main():
                      print("="*50)
                 elif cmd == "stop_game":
                      GAME_ACTIVE = False
-                     print(">> GAME STOPPED: Entering Dormant State")
+                     print("="*50)
+                     print(">> BRAIN DORMANT: Processing Gated (System 2 Monitoring Only)")
+                     print("   - Game states will be ignored for learning/action")
+                     print("   - SNN Neocortex segments remain loaded")
+                     print("="*50)
+                elif cmd == "start_game":
+                     GAME_ACTIVE = True
+                     print(">> BRAIN ACTIVE: Resuming Real-time Processing")
                 elif cmd == "freeze_all":
                      FREEZE_ALL = not FREEZE_ALL
                      if FREEZE_ALL:
@@ -1025,8 +1086,8 @@ def main():
                         x0, x1 = int(xs.min()), int(xs.max())
                         y0, y1 = int(ys.min()), int(ys.max())
                         crop = x[y0:y1 + 1, x0:x1 + 1]
-                        canvas = np.zeros((10, 10), dtype=np.float32)
                         ch, cw = crop.shape
+                        canvas = np.zeros((10, 10), dtype=np.float32)
                         if ch > 0 and cw > 0 and ch <= 10 and cw <= 10:
                             oy = (10 - ch) // 2
                             ox = (10 - cw) // 2
@@ -1137,20 +1198,34 @@ def main():
 
                 continue
             
+            # --- GLOBAL GATE: Check if Brain is active ---
+            if not GAME_ACTIVE:
+                # Silently ignore game states but respond to admin
+                continue
+
             game_type = msg.get("game", "unknown")
             session_id = msg.get("session_id", "unknown")
             
-            # --- SLEEP TRIGGER: TASK SWITCH ---
-            # DISABLED AUTO-SLEEP AS PER USER REQUEST ("after sessions i will start sleep")
-            # We only sleep when manually requested via dashboard.
-            # if ENABLE_SLEEP and last_game_type is not None and game_type != last_game_type:
-            #     pass 
+            # Defensive check for game_type
+            if game_type not in history and game_type != "unknown":
+                history[game_type] = deque(maxlen=4)
+            elif game_type == "unknown":
+                # Skip processing for unknown game states to prevent crashes
+                continue
             
             last_game_type = game_type
             
             state_data = msg.get("state", {})
             reward = msg.get("reward", 0.0)
             done = msg.get("done", False)
+
+            if done:
+                # [AGI] Phase 1.6: Fix Restart Performance
+                # When a game ends/restarts, the 'state' usually contains the START state of the new game (or restart).
+                # We must clear the history so the SNN doesn't see [Dead, Dead, Dead, Start] which looks like "teleportation".
+                # By clearing, we force the history filler (below) to pad the buffer with 4 copies of the NEW Start Frame.
+                if game_type in history:
+                    history[game_type].clear()
             
             # Robust image handling - fallback to blank if missing
             img_b64 = msg.get("image", "")
@@ -1172,16 +1247,40 @@ def main():
                 mx, my = (hx+fx)//2, (hy+fy)//2
                 if (mx!=hx or my!=hy) and (mx!=fx or my!=fy): obstacles_extra.append((mx,my))
 
-            # Teacher (Modular)
+            # Teacher (Modular/Manual)
             teacher_idx = 0
             task_id = 0 
+            manual_override = False
             
-            # 1. Ask Teacher for Advice
-            advice = current_teacher.get_advice(state_data, game_type)
-            if advice is not None:
-                teacher_idx = advice
-            else:
-                teacher_idx = 0 # Default if teacher abstains (autonomous fallback?)
+            # [FIX] Ensure correct teacher is used based on current NO_TEACHER flag
+            # Previously 'current_teacher' was static, ignoring runtime toggles of NO_TEACHER
+            active_teacher = NullTeacher() if NO_TEACHER else HeuristicTeacher()
+            
+            # 0. Check Manual Override First
+            manual_voice = msg.get("teacher_voice")
+            if manual_voice is not None:
+                # Map voice string to index
+                acts = ["UP", "DOWN", "LEFT", "RIGHT"] if game_type != "pong" else ["UP", "DOWN"]
+                if manual_voice in acts:
+                    teacher_idx = acts.index(manual_voice)
+                    manual_override = True
+                    # If manual input exists, force Teacher ON logic temporarily
+                    NO_TEACHER = False 
+                    active_teacher = HeuristicTeacher()
+            
+            # 1. Ask Automated Teacher (if no manual override)
+            if not manual_override:
+                advice = active_teacher.get_advice(state_data, game_type)
+                if advice is not None:
+                    teacher_idx = advice
+                    if game_type == "snake" and steps_total % 20 == 0:
+                        try:
+                            with open("debug_snake.log", "a") as f:
+                                # Start fresh log line if needed or just append
+                                f.write(f"[DEBUG-SNAKE] Steps={steps_total} NO_TEACHER={NO_TEACHER} Advice={advice} Head={state_data.get('head')} Food={state_data.get('food')} BodyLen={len(state_data.get('body', []))} Teacher={active_teacher.name}\n")
+                        except: pass
+                else:
+                    teacher_idx = 0 
             
             # 2. Add Task IDs
             if game_type == "snake":
@@ -1191,7 +1290,7 @@ def main():
             elif game_type == "maze":
                 task_id = 1 # Transfer from snake
             
-            # Debug Oracle (Optional logging)
+            # Debug Oracle
             if False and steps_total % 100 == 0 and isinstance(current_teacher, HeuristicTeacher):
                  print(f"[TEACHER] {game_type.upper()} suggests: {teacher_idx}")
 
@@ -1348,7 +1447,8 @@ def main():
                     trigger = active_mode.upper()
                     if veto_active: trigger += " (VETO)"
                     detail = cog_decision.explanation.details if cog_decision.explanation else ""
-                    print(f"[{game_type.upper()}] COGNITIVE OVERRIDE: {act_str} [{trigger}] {detail}")
+                    if DEBUG_MODE:
+                        print(f"[{game_type.upper()}] COGNITIVE OVERRIDE: {act_str} [{trigger}] {detail}")
 
             
             # --- CURIOSITY & EXPLORATION ---
@@ -1417,7 +1517,8 @@ def main():
                 # Map back to index
                 if rec_act_name in act_names:
                     student_idx = act_names.index(rec_act_name)
-                    print(f"[{game_type.upper()}] CURIOSITY: {rec_act_name} ({exploration_reason})")
+                    if DEBUG_MODE:
+                        print(f"[{game_type.upper()}] CURIOSITY: {rec_act_name} ({exploration_reason})")
                     trace_mode = "CURIOSITY"
                 else:
                     # Fallback to SNN if curiosity couldn't recommend a valid action
@@ -1482,7 +1583,8 @@ def main():
                         
                 feedback_msg = f"Vetoed: {vetoed_actions}" if vetoed_actions else ""
                 if reasoning_override: feedback_msg += f" Taught: {act_names[student_idx]}"
-                print(f"[{game_type.upper()}] CROSS-MODULE FEEDBACK: {feedback_msg}")
+                if DEBUG_MODE and feedback_msg:
+                    print(f"[{game_type.upper()}] CROSS-MODULE FEEDBACK: {feedback_msg}")
 
             # 3. Training & Agreement Logic
             # CRITICAL FIX: Train if SNN was wrong, even if System was right.
@@ -1502,7 +1604,10 @@ def main():
                 final_action_idx = student_idx
                 system_agreed = True # Effectively agree with self when alone
             else:
-                final_action_idx = student_idx if system_agreed else teacher_idx
+                # USER FEEDBACK: Follow teacher strictly when on.
+                # Brain still shows its intent via snn_raw_idx/student_idx in telemetry.
+                final_action_idx = teacher_idx 
+                system_agreed = (student_idx == teacher_idx)
             
             loss_val = 0.0
             
@@ -1559,22 +1664,9 @@ def main():
                                 )
                                 total_reward = intrinsic_r
                                # Log occasionally
-                                if steps_total % 50 == 0 and GAME_ACTIVE:
+                                if steps_total % 50 == 0 and GAME_ACTIVE and DEBUG_MODE:
                                     print(f"[AGI] Intrinsic: ext={reward:.2f} icm={breakdown['icm_bonus']:.4f} count={breakdown['count_bonus']:.4f} total={total_reward:.2f}")
                                 
-                                # [AGI] Log to CSV
-                                with open(LOG_FILE, "a", newline="") as f:
-                                    writer = csv.writer(f)
-                                    writer.writerow([
-                                        time.time(), 
-                                        steps_total, 
-                                        game_type, 
-                                        reward, 
-                                        breakdown['icm_bonus'], 
-                                        breakdown['count_bonus'], 
-                                        total_reward
-                                    ])
-                                    
                                 # [AGI] Phase 1.4: Update Learning Progress
                                 CURIOSITY_TRACKER.update(game_type, total_reward)
                                 
@@ -1584,7 +1676,8 @@ def main():
                                 if steps_total % 200 == 0:
                                     is_bored = CURIOSITY_TRACKER.is_plateaued(game_type)
                                     note = " [BORED]" if is_bored else ""
-                                    print(f"[AGI] Learning Progress ({game_type}): {lp:.4f}{note}")
+                                    if DEBUG_MODE:
+                                        print(f"[AGI] Learning Progress ({game_type}): {lp:.4f}{note}")
 
                             
                             # 1. Critic Target
@@ -1615,7 +1708,8 @@ def main():
                             total_step_loss = total_step_loss + loss 
                             loss_source.append(f"A2C(R={reward})")
                             
-                            print(f"[{game_type.upper()}] A2C: R {reward:+.1f} | Val {prev_val_old:.2f}->{value_out.item():.2f} | Adv {advantage.item():.2f}")
+                            if DEBUG_MODE:
+                                print(f"[{game_type.upper()}] A2C: R {reward:+.1f} | Val {prev_val_old:.2f}->{value_out.item():.2f} | Adv {advantage.item():.2f}")
                                 
                             # [NEW] STORE EXPERIENCE IN INTELLIGENT BUFFER
                             # We store the *previous* state transition because we now know the reward and next state (current input_tensor)
@@ -1696,8 +1790,8 @@ def main():
                 if cog_decision.explanation and "VETO" in cog_decision.explanation.summary:
                     is_veto = True
             
-            logger.update(game_type, system_agreed, loss_val, current_score, session_id, veto=is_veto, confidence=conf_val)
-            logger.check_print()
+            aggregator.update(game_type, system_agreed, loss_val, current_score, session_id, veto=is_veto, confidence=conf_val)
+            aggregator.check_print(steps_total)
             
             # --- MISSION TELEMETRY (Every Step) ---
             if steps_total % 1 == 0 and GAME_ACTIVE:
@@ -1730,7 +1824,8 @@ def main():
                     "session_id": session_id,
                     "teacher_active": not NO_TEACHER,
                     "score": msg.get("score", 0),
-                    "image": msg.get("image") # Pass through base64 image for dashboard
+                    "image": msg.get("image"), # Pass through base64 image for dashboard
+                    "state": msg.get("state") # Pass through raw game state for Reality View
                 }
                 # Send to stats socket (5567) which dashboard listens to for 'game_update' as well?
                 # Actually dashboard listens to VIS on 5566.
@@ -1749,7 +1844,7 @@ def main():
                 elif game_type == "snake" or game_type == "maze":
                      label_map = ["UP", "DN", "LF", "RT"]
                 else: # Pong
-                     label_map = ["UP", "DN"]
+                     label_map = ["UP", "DN", "STAY"]
                 
                 t_str = label_map[t_act] if 0 <= t_act < len(label_map) else f"UNK({t_act})"
                 s_str = label_map[s_act] if 0 <= s_act < len(label_map) else f"UNK({s_act})"
@@ -1762,39 +1857,62 @@ def main():
                     explanation = concept_mapper.get_explanation(s_act)
                     print(f"[{ts}] {game_type.upper()} | {status} | Brain: {s_str} ({explanation}) {probs_str} (H={vis_payload['entropy']:.2f})")
                 else:
-                    print(f"[{ts}] {game_type.upper()} | {status} | Brain: {s_str} {probs_str} (H={vis_payload['entropy']:.2f})")
+                    exec_str_log = f" [TEACHER EXECUTING: {t_str}]" if not NO_TEACHER else ""
+                    # Only print if debug is on OR if we want to confirm life pulse every 10 frames?
+                    # User asked to hide logs. Let's hide it unless DEBUG_MODE or significant event.
+                    if DEBUG_MODE:
+                        print(f"[{ts}] {game_type.upper()} | {status} | Brain Proposed: {s_str} {probs_str} (H={vis_payload['entropy']:.2f}){exec_str_log}")
 
             actions = ["UP", "DOWN", "LEFT", "RIGHT"]
-            cmd = "UP"
-            # Use action_idx which is the TEACHER's advice if SNN failed, or SNN's active choice if agreed.
-            # Actually, we should execute 'student_idx' (the System's final choice).
-            # Wait, if !system_agreed, we might want to broadcast the TEACHER's correction?
-            # Standard imitation learning: You drive, but if you fail, I reset you?
-            # Here: We broadcast the executed action.
-            # If !system_agreed, it usually means SNN+VSA both failed compared to Oracle.
-            # If we want to be behaved nicely, we should arguably output the Teacher Action if we are training?
-            # BUT: We want to see the failure.
-            # Let's execute the System's Decision (student_idx), even if wrong.
-            # UNLESS: It causes instant death? No, sim_snake handles veto.
-            
-            # Correction: Previously we used:
-            # if agreed: action_idx = student_idx; else: action_idx = teacher_idx
-            # This means we forced the Teacher action on failure. This is "Student Forcing".
-            # Let's keep Student Forcing for stability.
-            # UNLESS: --no-teacher is set. Then we MUST execute student_idx.
-            
-            if student_idx is None: student_idx = 0 # Fallback safety
 
+            # Determine Control Source
+            decision_source = "BRAIN"
+            decision_reason = "Autonomous SNN prediction"
+            
             if NO_TEACHER:
                 final_action_idx = student_idx
+                if reasoning_override:
+                     decision_source = "VETO"
+                     decision_reason = f"Cognitive Veto: {veto_log}"
             else:
-                final_action_idx = student_idx if system_agreed else teacher_idx
+                # STRICT TEACHER PRIORITY
+                if manual_override:
+                    final_action_idx = teacher_idx
+                    decision_source = "USER"
+                    decision_reason = f"Manual Override: {manual_voice}"
+                else: 
+                    final_action_idx = teacher_idx
+                    decision_source = "TEACHER"
+                    decision_reason = f"Algorithmic Guidance ({current_teacher.__class__.__name__})"
             
+            # [LOGGING FIX] Ensure rich thoughts are written to the structured log file
+            # The 'print' statements are redirected to the log file by the launcher,
+            # but StructuredLogger ensures they are formatted and persistent.
+            log_msg = f"[DECISION] Task: {game_type.upper()} | Source: {decision_source} | Reason: {decision_reason}"
+            print(log_msg)
+            get_logger().log(f"DAEMON:{game_type.upper()}", log_msg)
+            if veto_log:
+                # Cleanup veto_log for Pong: if it suggests horizontal movement, suppress it as 'noise'
+                if game_type == "pong" and ("left" in veto_log.lower() or "right" in veto_log.lower()):
+                    pass 
+                else:
+                    print(f"[{game_type.upper()}] THOUGHT: {veto_log}")
+            
+            # Update VIS payload with Decision Info
+            vis_payload["decision_source"] = decision_source
+            vis_payload["decision_reason"] = decision_reason
+            vis_payload["final_action"] = final_action_idx
+
+            # Re-broadcast updated VIS payload with decision info
+            pub_sock_stats.send_string(f"VIS:{json.dumps(vis_payload)}")
+
             if game_type == "snake" or game_type == "maze":
                 # Both use 4-directional actions: UP, DOWN, LEFT, RIGHT
                 cmd = actions[final_action_idx] if final_action_idx < 4 else "UP"
             else:  # Pong
-                cmd = "UP" if final_action_idx == 0 else "DOWN"
+                if final_action_idx == 0: cmd = "UP"
+                elif final_action_idx == 1: cmd = "DOWN"
+                else: cmd = "STAY"
             
             pub_sock.send_string(f"{game_type.upper()}:{cmd}")
             
@@ -1833,66 +1951,98 @@ def generate_attention_map(model, input_tensor, task_name):
         print(f"[SALIENCY] Error: {e}")
 
 
-# --- DREAMING FUNCTION ---
 def perform_dreaming_cycle(model, optimizer, device):
     """
-    Deep Dreaming: Train on archived memories (Disk) to consolidate knowledge.
-    This prevents catastrophic forgetting by replaying efficient 'sketches' of the past.
+    REM Sleep (Generative Dreaming): Consolidate real and imagined scenarios.
     """
-    print("\n[BRAIN] Entering REM Sleep (Deep Dreaming)...")
-    # model.train() # Already in train mode usually
+    print("\n[BRAIN] Entering REM Sleep (Generative Dreaming)...")
     
-    # 1. Sample from Disk (Cold Storage)
-    batch_data = REPLAY_BUFFER.sample_from_disk(batch_size=REPLAY_BATCH_SIZE)
+    # 1. Gather Real & Imagined Episodes
+    # Hybrid Approach: Replay some real data + Imagine new scenarios
+    real_batch = REPLAY_BUFFER.sample_from_disk(batch_size=REPLAY_BATCH_SIZE // 2)
     
-    if batch_data is None:
-        print("[BRAIN] ...Woke up (No dreams available)")
+    # Generate Synthetic Episodes via Cognitive Engine System 2
+    synthetic_dreams = []
+    for game in ["snake", "pong", "maze"]:
+        try:
+            synthetic_dreams.extend(COGNITIVE_ENGINE.dream(num_samples=5, task_tag=game))
+        except: pass
+    
+    if not real_batch and not synthetic_dreams:
+        print("[BRAIN] ...Woke up (No memories or imagination available)")
         return
         
-    states, actions, rewards, next_states, dones, tasks = batch_data
-    states = states.to(device)
-    rewards = rewards.to(device)
+    combined_samples = []
     
-    # 2. Dream Training
-    # We treat archived states as individual samples for reinforcement
+    # Process Real
+    if real_batch:
+        states, actions, rewards, next_states, dones, tasks = real_batch
+        for i in range(len(states)):
+            combined_samples.append({
+                "state": states[i].unsqueeze(0),
+                "action": actions[i].item(),
+                "reward": rewards[i].item(),
+                "task": tasks[i],
+                "type": "REAL"
+            })
+            
+    # Process Synthetic
+    for d in synthetic_dreams:
+        combined_samples.append({
+            "state": d["state"].to(device) if hasattr(d["state"], 'to') else d["state"],
+            "action": d["action"], # This might be action string, covert to idx
+            "reward": d["reward"],
+            "task": d["task_tag"],
+            "type": "IMAGINED"
+        })
+
+    # 2. Dream Training Loop
     with model_lock:
         optimizer.zero_grad()
         total_dream_loss_val = 0.0
         
-        for i in range(len(states)):
-            s = states[i].unsqueeze(0)
-            a = actions[i].item()
-            r = rewards[i].item()
-            task = tasks[i]
+        for sample in combined_samples:
+            s = sample["state"]
+            if not isinstance(s, torch.Tensor): 
+                # Handle raw images/states if needed, usually we need the stacked tensor
+                continue
             
-            logits, val = model(s, task_name=task)
+            # Action Mapping
+            act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if sample["task"] != "pong" else ["UP", "DOWN"]
+            a_idx = sample["action"]
+            if isinstance(a_idx, str):
+                try:
+                    a_idx = act_names.index(a_idx)
+                except ValueError:
+                    a_idx = 0
+            
+            r = sample["reward"]
+            task = sample["task"]
+            
+            logits, val = model(s.to(device), task_name=task)
             
             # Critic Loss (Target = r)
-            val_loss = F.mse_loss(val, torch.tensor([[r]], device=device))
+            val_loss = F.mse_loss(val, torch.tensor([[r]], device=device).float())
             
             # Actor Loss
             probs = torch.softmax(logits, dim=1)
             dist = torch.distributions.Categorical(probs)
-            log_prob = dist.log_prob(torch.tensor([a], device=device))
+            log_prob = dist.log_prob(torch.tensor([a_idx], device=device))
             
             advantage = r - val.item()
             actor_loss = -log_prob * advantage
             
-            loss = actor_loss + 0.5 * val_loss
-            
-            # Backward IMMEDIATELY to free graph
-            # We scale by 1.0/BatchSize if we wanted true mean, but here sum is fine (learning rate absorbs it)
-            # Actually let's normalize by batch size for stability
-            loss = loss / len(states) 
+            loss = (actor_loss + 0.5 * val_loss) / len(combined_samples)
             loss.backward()
-            
             total_dream_loss_val += loss.item()
             
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
         optimizer.step()
             
-        print(f"[BRAIN] Dreamt {len(states)} episodes. Loss: {total_dream_loss_val:.4f}")
-        print("[BRAIN] ...Waking up refreshed.")
+        real_count = len([s for s in combined_samples if s["type"] == "REAL"])
+        imag_count = len([s for s in combined_samples if s["type"] == "IMAGINED"])
+        print(f"[BRAIN] Dreamt {real_count} real + {imag_count} imagined episodes. Loss: {total_dream_loss_val:.4f}")
+        print("[BRAIN] ...Waking up with refined connections.")
 
 # --- CLEANUP ---
 if __name__ == "__main__":

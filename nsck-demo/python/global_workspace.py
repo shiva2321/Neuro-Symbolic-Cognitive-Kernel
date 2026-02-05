@@ -48,6 +48,7 @@ class GlobalWorkspace:
         self.attention_threshold = attention_threshold
         self.history: List[Tuple[str, Any, float]] = [] 
         self.mission_focus: Optional[str] = None # e.g. "EXPLORATION"
+        self.latest_coalitions: List[Coalition] = [] # For telemetry
         
     def register_module(self, name: str, module: WorkspaceModule):
         self.modules[name] = module
@@ -58,6 +59,7 @@ class GlobalWorkspace:
         LIDA Competition Cycle.
         Calculates Activation = Salience + Relevance + Affect.
         """
+        self.latest_coalitions = proposals # Save for telemetry
         if not proposals:
             return None
             

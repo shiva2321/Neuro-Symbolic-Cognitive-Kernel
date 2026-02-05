@@ -273,6 +273,13 @@ class CognitiveEngine:
         # 2. Extract active predicates
         active_preds = verifier.get_active_predicates(state, context=task_tag)
         
+        # [LOGGING] Log symbolic state (Environment Context)
+        self.logger.log(f"BRAIN:{task_tag.upper()}", f"[STATE] Active Predicates: {', '.join(active_preds)}", level="THOUGHT")
+        
+        # [LOGGING] Log internal drives
+        drives_str = ", ".join([f"{k}: {v:.2f}" for k, v in self.homeostasis.drives.items()])
+        self.logger.log(f"BRAIN:{task_tag.upper()}", f"[DRIVES] Homeostasis: {drives_str}", level="THOUGHT")
+        
         # Support sampling from episodic memory
         num_samples = 5 
         sampled_episodes = self.episodic_memory.sample(task_tag, num_samples)
@@ -388,10 +395,10 @@ class CognitiveEngine:
                 sender_confidence=0.95 # Planner is usually very confident
              ))
              
-        # E. Mental Simulation (Imagination)
+              # E. Mental Simulation (Imagination)
         if self.world_model and self.world_model.is_ready(task_tag):
-             # Sample possible actions (usually UP, DOWN, LEFT, RIGHT)
-             possible_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"]
+             # Sample possible actions (Constraint by task)
+             possible_actions = self.get_allowed_actions(task_tag)
              action_hvs = [self.get_concept_hv(a) for a in possible_actions]
              
              if action_hvs:
@@ -437,6 +444,10 @@ class CognitiveEngine:
                 if "food" in str(c.content).lower() or c.source == "PLANNER":
                     c.affect_match = 0.2
 
+        # [LOGGING] Log Competition Proposals
+        proposal_summary = " | ".join([f"{c.source}({c.content}):{c.activation:.2f}" for c in coalitions])
+        self.logger.log(f"BRAIN:{task_tag.upper()}", f"[COMPETITION] Proposals: {proposal_summary}", level="THOUGHT")
+
         # Run competition
         winner_coalition = self.global_workspace.compete(coalitions)
         
@@ -452,7 +463,7 @@ class CognitiveEngine:
             winner = Proposal(module=winner_name, action=action, content=trace["reason"], salience=winner_coalition.base_salience)
             
             # Log Thought
-            self.logger.log("BRAIN", f"WON: {winner_name} -> {action} ({trace['reason']})", level="THOUGHT")
+            self.logger.log(f"BRAIN:{task_tag.upper()}", f"WON: {winner_name} -> {action} ({trace['reason']})", level="THOUGHT")
             if self.msg_broadcaster:
                 self.msg_broadcaster({"message": f"WON: {winner_name} -> {action}", "detail": trace['reason']})
             
@@ -536,7 +547,13 @@ class CognitiveEngine:
         )
         
         return self.current_state
-    
+
+    def get_allowed_actions(self, task_tag: str) -> List[str]:
+        """Get list of symbolic actions allowed for a specific task."""
+        if task_tag == "pong":
+            return ["ACTION_UP", "ACTION_DOWN", "ACTION_STAY"]
+        return ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"]
+
     def _get_exploration_action(
         self,
         state: Dict[str, Any],
@@ -545,10 +562,11 @@ class CognitiveEngine:
     ) -> str:
         """Get an exploratory action."""
         # Get actions with low visit counts
-        possible_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"]
+        possible_actions = self.get_allowed_actions(task_tag)
         
         # Use curiosity module to select
-        probs = [0.25, 0.25, 0.25, 0.25]
+        # Use uniform probs for the selection size
+        probs = [1.0 / len(possible_actions)] * len(possible_actions)
         return self.curiosity.get_exploration_action(possible_actions, probs, explore_rate=0.7)
     
     def _default_action(self, state: Dict[str, Any], task_tag: str) -> str:
@@ -848,7 +866,7 @@ class CognitiveEngine:
         episodes = self.episodic_memory.sample(task_tag, num_samples)
         
         # Get verifier for action mapping
-        act_names = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"] if task_tag != "pong" else ["ACTION_UP", "ACTION_DOWN"]
+        act_names = self.get_allowed_actions(task_tag)
         
         for ep in episodes:
             initial_hv = ep.situation_hv
@@ -896,7 +914,7 @@ class CognitiveEngine:
         anchors = self.episodic_memory.sample(task_tag, num_anchors)
         
         # 2. Define possible action HVs
-        act_names = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"] if task_tag != "pong" else ["ACTION_UP", "ACTION_DOWN"]
+        act_names = self.get_allowed_actions(task_tag)
         act_hvs = [self._get_action_hv(name) for name in act_names]
         
         for anchor in anchors:
@@ -990,25 +1008,54 @@ class CognitiveEngine:
             print(f"[COGNITION] Export failed: {e}")
             
     def get_workspace_telemetry(self) -> Dict:
-        """Get telemetry for dashboard visualizer."""
+        """Get telemetry for dashboard visualizer showing the full competition."""
         # Dynamic active module set based on recent usage
-        active = ["SNN"] # Vision always active
-        if self.rule_learner and any(len(rules) > 0 for rules in self.rule_learner.learned_rules.values()): active.append("RULES")
-        if self.causal_graphs and any(len(g.all_links)>0 for g in self.causal_graphs.values()): active.append("CAUSAL")
-        if self.planner: active.append("PLANNER")
-        if self.emotion_system: active.append("EMOTION")
-        if self.global_workspace: active.append("GLOBAL")
+        active_modules = ["SNN"] # Vision always active
+        if self.rule_learner and any(len(rules) > 0 for rules in self.rule_learner.learned_rules.values()): active_modules.append("RULES")
+        if self.causal_graphs and any(len(g.all_links)>0 for g in self.causal_graphs.values()): active_modules.append("CAUSAL")
+        if self.planner: active_modules.append("PLANNER")
+        if self.emotion_system: active_modules.append("EMOTION")
+        if self.global_workspace: active_modules.append("GLOBAL")
+        if self.episodic_memory: active_modules.append("EPISODIC")
+        if self.self_model: active_modules.append("SELF_MODEL")
         
+        # Get latest competition data from Global Workspace
+        coalitions_data = []
+        if self.global_workspace and hasattr(self.global_workspace, 'latest_coalitions') and self.global_workspace.latest_coalitions:
+            for c in self.global_workspace.latest_coalitions:
+                coalitions_data.append({
+                    "source": c.source,
+                    "content": str(c.content),
+                    "activation": float(c.activation),
+                    "salience": float(c.base_salience),
+                    "confidence": float(c.sender_confidence)
+                })
+
         return {
             "winner": self.trace_history[-1]["winner"] if self.trace_history else "NONE",
-            "active_modules": active, 
+            "active_modules": active_modules,
+            "competition": coalitions_data,
+            "phi": self.trace_history[-1].get("phi", 0.0) if self.trace_history else 0.0
         }
     
     def get_causal_telemetry(self, task_tag: str) -> Dict:
-        """Get causal graph stats."""
+        """Get causal graph details for real-time dashboard updates."""
         graph = self.causal_graphs.get(task_tag)
+        if not graph: return {"link_count": 0, "links": []}
+        
+        links = []
+        # Return top links by strength
+        sorted_links = sorted(graph.all_links, key=lambda x: x.strength, reverse=True)
+        for link in sorted_links[:20]: # Show top 20
+            links.append({
+                "cause": link.cause,
+                "effect": link.effect,
+                "strength": float(link.strength)
+            })
+
         return {
-            "link_count": len(graph.all_links) if graph else 0,
+            "link_count": len(graph.all_links),
+            "links": links
         }
 
 

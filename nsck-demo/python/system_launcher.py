@@ -22,12 +22,18 @@ def signal_handler(sig, frame):
 def cleanup():
     for p in processes:
         if p.poll() is None: # If running
-            print(f"[LAUNCHER] Killing PID {p.pid}")
-            p.terminate()
+            print(f"[LAUNCHER] Terminating PID {p.pid}")
+            if sys.platform == "win32":
+                # Robust tree kill for Windows to prevent orphans
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(p.pid)], capture_output=True)
+            else:
+                p.terminate()
+            
             try:
                 p.wait(timeout=2)
             except subprocess.TimeoutExpired:
-                p.kill()
+                if sys.platform != "win32": # taskkill already forced it
+                    p.kill()
 
 def main():
     signal.signal(signal.SIGINT, signal_handler)

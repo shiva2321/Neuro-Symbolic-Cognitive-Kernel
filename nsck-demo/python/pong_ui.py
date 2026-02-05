@@ -7,6 +7,7 @@ import base64
 import json
 import random
 import uuid
+import time
 
 class PongGame:
     def __init__(self, root):
@@ -37,8 +38,17 @@ class PongGame:
         self.sub.setsockopt_string(zmq.SUBSCRIBE, "PONG:")
         self.sub.setsockopt(zmq.RCVTIMEO, 100) # 100ms Timeout (Frame is ~30ms, so 3 frames dropped max)
         
+        self.last_key = None
+        
+        # Bind Keys for Manual Teacher Override
+        self.root.bind("<Up>", lambda e: self.set_key("UP"))
+        self.root.bind("<Down>", lambda e: self.set_key("DOWN"))
+        
         threading.Thread(target=self.network_loop, daemon=True).start()
         self.game_loop()
+
+    def set_key(self, key):
+        self.last_key = key
 
     def reset_ball(self):
         self.ball_x = 15
@@ -79,6 +89,7 @@ class PongGame:
                     "ball_y": self.ball_y,
                     "ball_dy": self.ball_dy,
                     "p1_y": self.p1_y,
+                    "p2_y": self.p2_y, # Opponent paddle
                     "ball_x": self.ball_x,
                     "ball_dx": self.ball_dx
                 }
@@ -90,9 +101,11 @@ class PongGame:
                     "state": state,
                     "score": self.rally_count, # Metric for transfer success
                     "reward": self.current_reward,
-                    "done": self.done
+                    "done": self.done,
+                    "teacher_voice": self.last_key # Manual Override
                 }
                 self.push.send_json(payload)
+                self.last_key = None
                 
                 # Receive with Timeout
                 try:
@@ -128,6 +141,9 @@ class PongGame:
         # Reset params
         self.current_reward = 0.0
         self.done = False
+        
+        # AI Opponent Move
+        self.move_ai_paddle()
 
         if self.ball_x <= 1:
             if self.p1_y <= self.ball_y <= self.p1_y + self.paddle_h:
@@ -164,5 +180,6 @@ class PongGame:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.withdraw() # Hide the redundant engine window
     game = PongGame(root)
     root.mainloop()

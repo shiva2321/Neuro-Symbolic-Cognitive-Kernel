@@ -28,7 +28,7 @@ except ImportError:
 from lingua_cortex import get_lingua_cortex, SemanticFingerprint
 
 # Fallback config
-DEFAULT_MODEL_PATH = "models/phi-3-mini-4k-instruct.Q4_K_M.gguf"
+DEFAULT_MODEL_PATH = "models\phi-3-mini-4k-instruct.Q4_K_M.gguf"
 
 class LanguageModule:
     """
@@ -45,10 +45,26 @@ class LanguageModule:
             self.mock_mode = True
             return
 
-        if not os.path.exists(model_path):
-            print(f"WARNING: Model file not found at {model_path}. LanguageModule running in MOCK mode.")
+        # Path resolution: check potential locations
+        resolved_path = None
+        candidates = [
+            model_path,                                           # 1. As provided (CWD-relative)
+            os.path.join(os.path.dirname(__file__), model_path), # 2. Script-relative (nsck-demo/python/models/...)
+            os.path.join(os.path.dirname(__file__), "..", "..", model_path) # 3. Project root (models/...)
+        ]
+        
+        for cand in candidates:
+            if os.path.exists(cand):
+                resolved_path = cand
+                break
+
+        if not resolved_path:
+            print(f"WARNING: Model file not found at any of {candidates}. LanguageModule running in MOCK mode.")
             self.mock_mode = True
             return
+
+        model_path = resolved_path
+
 
         # Initialize LLM only if available and file exists
         print(f"Loading LLM from {model_path}...")

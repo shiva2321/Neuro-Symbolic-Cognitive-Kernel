@@ -272,6 +272,7 @@ class MazeUI:
 
 def main():
     root = tk.Tk()
+    root.withdraw() # Hide the redundant engine window
     app = MazeUI(root)
     root.mainloop()
 

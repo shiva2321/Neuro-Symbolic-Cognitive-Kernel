@@ -6,6 +6,7 @@ import cv2
 import base64
 import random
 import uuid
+import time
 
 class SnakeGame:
     def __init__(self, root):
@@ -31,8 +32,19 @@ class SnakeGame:
         self.sub.connect("tcp://127.0.0.1:5566")
         self.sub.setsockopt_string(zmq.SUBSCRIBE, "SNAKE:")
         
+        self.last_key = None
+        
+        # Bind Keys for Manual Teacher Override
+        self.root.bind("<Up>", lambda e: self.set_key("UP"))
+        self.root.bind("<Down>", lambda e: self.set_key("DOWN"))
+        self.root.bind("<Left>", lambda e: self.set_key("LEFT"))
+        self.root.bind("<Right>", lambda e: self.set_key("RIGHT"))
+        
         threading.Thread(target=self.network_loop, daemon=True).start()
         self.game_loop()
+
+    def set_key(self, key):
+        self.last_key = key
 
     def get_frame(self):
         img = np.zeros((10, 10), dtype=np.uint8)
@@ -62,9 +74,11 @@ class SnakeGame:
                 "state": state,
                 "score": len(self.snake) - 3, # Score = Apples Eaten
                 "reward": self.current_reward,
-                "done": self.done
+                "done": self.done,
+                "teacher_voice": self.last_key # Manual Override
             }
             self.push.send_json(payload)
+            self.last_key = None # Reset after sending
             
             msg = self.sub.recv_string() 
             self.direction = msg.split(":")[1]
@@ -107,5 +121,6 @@ class SnakeGame:
 
 if __name__ == "__main__":
     root = tk.Tk()
+    root.withdraw() # Hide the redundant engine window
     SnakeGame(root)
     root.mainloop()
