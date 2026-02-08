@@ -42,12 +42,13 @@ class SemanticMemory:
             # Generate base hypervector for concept name
             hv = hypervec_rs.HyperVector(hash(concept_name) % (2**32))
             
-            # Bind properties into concept HV if any
+            # Bind properties into concept HV
             for prop, value in properties.items():
-                # prop_hv = hypervec_rs.HyperVector(hash(prop) % (2**32))
-                # value_hv = hypervec_rs.HyperVector(hash(str(value)) % (2**32))
-                # hv = hv.bind(prop_hv.bind(value_hv))
-                pass # [AGI] Simplified for initial phase
+                prop_hv = hypervec_rs.HyperVector(hash(prop) % (2**32))
+                value_hv = hypervec_rs.HyperVector(hash(str(value)) % (2**32))
+                # Role-filler binding: XOR the property role with value, then bundle into concept
+                bound = prop_hv.xor(value_hv)
+                hv = hv.bundle(bound)
         
         self.concept_hvs[concept_name] = hv
         self.concept_graph.add_node(concept_name, **properties)

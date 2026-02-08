@@ -89,11 +89,36 @@ class TaskBrain:
     
     def get_concept_context(self, concept_name: str, top_k: int = 5) -> Optional[hypervec_rs.HyperVector]:
         """
-        Compute context signature stub. 
-        Legacy logical unbinding relies on Rule Channel now. 
-        Context binding for similarity is secondary.
+        Compute context signature by bundling HVs of concepts that co-occur
+        with this concept in rules (as conditions or consequences).
         """
-        return None  # Placeholder if needed, or re-implement if Context Signature is vital for fusion.
+        if concept_name not in self.codebook:
+            return None
+        
+        # Gather co-occurring concepts from rules
+        related_names = set()
+        for rule in self.rules:
+            if concept_name in rule.condition or concept_name == rule.consequence:
+                related_names.update(rule.condition)
+                related_names.add(rule.consequence)
+        related_names.discard(concept_name)
+        
+        if not related_names:
+            return None
+        
+        # Bundle HVs of related concepts (up to top_k)
+        related_hvs = []
+        for name in list(related_names)[:top_k]:
+            if name in self.codebook:
+                related_hvs.append(self.codebook[name])
+        
+        if not related_hvs:
+            return None
+        
+        ctx = related_hvs[0]
+        for hv in related_hvs[1:]:
+            ctx = ctx.bundle(hv)
+        return ctx
 
 
 @dataclass
@@ -261,8 +286,8 @@ class FusedBrain:
         current_facts = set(facts)
         all_inferred = []
         
-        # Combine all rules for inference
-        all_rules = self.global_rules
+        # Combine all rules for inference (copy to avoid mutating global_rules)
+        all_rules = list(self.global_rules)
         for rules in self.task_rules.values():
             all_rules.extend(rules)
             

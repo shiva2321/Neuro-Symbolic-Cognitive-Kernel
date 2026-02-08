@@ -83,8 +83,9 @@ class EmotionSystem:
         # High hunger/pain = High arousal
         max_drive = max(drives.values()) if drives else 0
         
-        # Arousal also decays but is propped up by drives
-        self.arousal = max_drive
+        # Arousal blends towards max_drive with smooth EMA; decays when drives drop
+        blend = 0.3  # how fast arousal tracks the current drive level
+        self.arousal = (1.0 - blend) * self.arousal + blend * max_drive
         
         # Map (valence, arousal) -> discrete emotion
         self.current_emotion = self._map_to_basic_emotion()
