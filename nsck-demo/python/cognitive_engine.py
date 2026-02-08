@@ -356,7 +356,7 @@ class CognitiveEngine:
             ))
             
         # B. Rule Proposal (Symbolic System)
-        applicable = self.rule_learner.get_applicable_rules(state, task_tag)
+        applicable = self.rule_learner.get_applicable_rules(active_preds, task_tag)
         if applicable:
             rule, score = applicable[0]
             # Rule confidence is high if it exists
@@ -472,6 +472,7 @@ class CognitiveEngine:
             action = winner_coalition.content
             winner_name = winner_coalition.source
             trace["mode"] = winner_name
+            trace["winner"] = winner_name
             trace["reason"] = f"Winner: {winner_name} (Activation: {winner_coalition.activation:.2f})"
             
             winner = Proposal(module=winner_name, action=action, content=trace["reason"], salience=winner_coalition.base_salience)
@@ -491,6 +492,7 @@ class CognitiveEngine:
             # Fallback
             action = self._default_action(state, task_tag)
             trace["mode"] = "default"
+            trace["winner"] = "DEFAULT"
             winner = Proposal(module="DEFAULT", action=action, content="Fallback", salience=0.0)
 
         # [AGI] Phase 5.3: Value Alignment
@@ -768,24 +770,57 @@ class CognitiveEngine:
     ) -> Optional[str]:
         """
         Transfer knowledge from source to target task (zero-shot).
+        
+        Combines three knowledge sources:
+        1. Source task-specific rules (transferred via analogy)
+        2. Global rules (directly applicable across domains)
+        3. Semantically similar experiences from episodic memory
         """
-        # Get rules from source task
+        active_set = set(active_predicates)
+        
+        # 1. Try global rules first (directly applicable across domains)
+        global_rules = self.rule_learner.get_rules("global")
+        for rule in global_rules:
+            if rule.condition.issubset(active_set):
+                return rule.consequence
+        
+        # 2. Try source task rules transferred via analogy
         source_rules = [
             (rule.condition, rule.consequence)
             for rule in self.rule_learner.get_rules(source_task)
         ]
         
-        if not source_rules:
-            return None
+        if source_rules:
+            result = self.analogy.zero_shot_action(
+                state=state,
+                known_domain=source_task,
+                new_domain=target_task,
+                learned_rules=source_rules,
+                active_predicates=active_set
+            )
+            if result:
+                return result
         
-        # Use analogy engine for transfer
-        return self.analogy.zero_shot_action(
-            state=state,
-            known_domain=source_task,
-            new_domain=target_task,
-            learned_rules=source_rules,
-            active_predicates=set(active_predicates)
-        )
+        # 3. Try all other known domains via analogy
+        for domain in list(self.rule_learner.learned_rules.keys()):
+            if domain in (source_task, target_task, "global"):
+                continue
+            domain_rules = [
+                (rule.condition, rule.consequence)
+                for rule in self.rule_learner.get_rules(domain)
+            ]
+            if domain_rules:
+                result = self.analogy.zero_shot_action(
+                    state=state,
+                    known_domain=domain,
+                    new_domain=target_task,
+                    learned_rules=domain_rules,
+                    active_predicates=active_set
+                )
+                if result:
+                    return result
+        
+        return None
     
     def explain(self, query_type: str = "action") -> str:
         """Get explanation for current decision."""

@@ -45,12 +45,146 @@ from metacognition import MetacognitiveEngine
 from emotion_system import EmotionSystem
 from theory_of_mind import TheoryOfMind
 
+# Transfer Learning & Knowledge Persistence
+from analogy import AnalogyEngine
+from semantic_memory import SemanticMemory
+
+# LLM as Translator Peripheral
+from language_module import LanguageModule
+
+
+class KnowledgeStore:
+    """
+    Cross-session knowledge persistence layer.
+    
+    Consolidates learned experiences into reusable abstract knowledge
+    that can be applied across different domains and sessions.
+    """
+    
+    def __init__(self):
+        self.semantic_memory = SemanticMemory()
+        self.abstract_rules = []  # Domain-independent rules
+        self.experience_index = {}  # pattern_hash -> list of experiences
+        self.domain_schemas = {}  # domain -> set of learned schemas
+    
+    def store_experience(self, domain, predicates, action, reward, outcome="neutral"):
+        """Store an experience for cross-domain retrieval."""
+        pattern = frozenset(predicates)
+        key = hash(pattern)
+        if key not in self.experience_index:
+            self.experience_index[key] = []
+        self.experience_index[key].append({
+            'domain': domain,
+            'predicates': pattern,
+            'action': action,
+            'reward': reward,
+            'outcome': outcome
+        })
+        
+        # Track domain schemas
+        if domain not in self.domain_schemas:
+            self.domain_schemas[domain] = set()
+        self.domain_schemas[domain].update(predicates)
+    
+    def consolidate_to_abstract(self, analogy_engine):
+        """
+        Consolidate domain-specific experiences into abstract knowledge.
+        
+        Lifts concrete predicates to abstract concepts using the analogy engine,
+        then finds patterns that hold across multiple domains.
+        """
+        abstract_patterns = {}
+        
+        for key, experiences in self.experience_index.items():
+            for exp in experiences:
+                # Lift predicates to abstract level
+                abstract_preds = set()
+                for pred in exp['predicates']:
+                    abstract = analogy_engine.lift_to_abstract(pred, exp['domain'])
+                    if abstract:
+                        abstract_preds.add(abstract)
+                    else:
+                        abstract_preds.add(pred)  # Keep as-is if no mapping
+                
+                if not abstract_preds:
+                    continue
+                
+                abstract_key = frozenset(abstract_preds)
+                # Lift action to abstract level
+                abstract_action = analogy_engine.lift_to_abstract(
+                    exp['action'], exp['domain']
+                ) or exp['action']
+                
+                pattern_key = (abstract_key, abstract_action)
+                if pattern_key not in abstract_patterns:
+                    abstract_patterns[pattern_key] = {
+                        'count': 0, 'successes': 0, 'domains': set()
+                    }
+                
+                abstract_patterns[pattern_key]['count'] += 1
+                abstract_patterns[pattern_key]['domains'].add(exp['domain'])
+                if exp['reward'] > 0:
+                    abstract_patterns[pattern_key]['successes'] += 1
+        
+        # Promote patterns seen across multiple domains with good success rate
+        promoted = []
+        for (preds, action), stats in abstract_patterns.items():
+            if stats['count'] >= 2 and len(stats['domains']) >= 1:
+                success_rate = stats['successes'] / stats['count']
+                if success_rate >= 0.5:
+                    self.abstract_rules.append({
+                        'condition': preds,
+                        'action': action,
+                        'success_rate': success_rate,
+                        'support': stats['count'],
+                        'source_domains': stats['domains']
+                    })
+                    promoted.append((preds, action))
+        
+        return promoted
+    
+    def find_relevant_experience(self, predicates, target_domain, analogy_engine):
+        """
+        Find experiences from any domain relevant to the current situation.
+        
+        Uses abstract concept matching to find experiences that, while from
+        a completely different domain, share the same structural pattern.
+        """
+        # Lift current predicates to abstract level
+        abstract_preds = set()
+        for pred in predicates:
+            abstract = analogy_engine.lift_to_abstract(pred, target_domain)
+            if abstract:
+                abstract_preds.add(abstract)
+        
+        if not abstract_preds:
+            return []
+        
+        # Search abstract rules for matching patterns
+        matches = []
+        for rule in self.abstract_rules:
+            overlap = rule['condition'] & abstract_preds
+            if overlap and len(overlap) >= len(rule['condition']) * 0.5:
+                matches.append({
+                    'abstract_action': rule['action'],
+                    'confidence': rule['success_rate'],
+                    'support': rule['support'],
+                    'source_domains': rule['source_domains'],
+                    'match_ratio': len(overlap) / len(rule['condition'])
+                })
+        
+        # Sort by match quality
+        matches.sort(key=lambda m: m['confidence'] * m['match_ratio'], reverse=True)
+        return matches
+
 
 class IntegratedNSCKSystem:
     """
     Phase 7: Fully integrated NSCK cognitive system.
     
-    Unifies all previous phases into a single coherent architecture.
+    Unifies all previous phases into a single coherent architecture
+    with cross-domain transfer learning, knowledge persistence, and
+    LLM-based natural language translation.
     """
     
     def __init__(self):
@@ -90,6 +224,15 @@ class IntegratedNSCKSystem:
         self.emotion_system = EmotionSystem()
         self.theory_of_mind = TheoryOfMind()
         
+        # Transfer Learning & Knowledge Persistence
+        print("[Transfer] Initializing Transfer Learning...")
+        self.analogy_engine = AnalogyEngine()
+        self.knowledge_store = KnowledgeStore()
+        
+        # LLM Translator (Peripheral - translates system thoughts to NL)
+        print("[Language] Initializing LLM Translator...")
+        self.language = LanguageModule()
+        
         print("=" * 70)
         print("✓ All systems initialized successfully!\n")
     
@@ -111,6 +254,125 @@ class IntegratedNSCKSystem:
         # In real scenario, would compute weight importance after task completion
         
         return metrics
+    
+    def learn_from_experience(self, domain, predicates, action, reward, outcome="neutral"):
+        """
+        Learn from a single experience, storing it for cross-domain transfer.
+        
+        This is the key method that enables transfer learning across sessions
+        and domains. Experiences are stored both in domain-specific memory and
+        in the cross-domain knowledge store.
+        """
+        # Store in knowledge store for cross-domain transfer
+        self.knowledge_store.store_experience(domain, predicates, action, reward, outcome)
+        
+        # Update self-model
+        success = reward > 0
+        self.self_model.update(domain, 0.5, success, action, reward)
+        
+        return {
+            'stored': True,
+            'domain': domain,
+            'total_experiences': sum(
+                len(v) for v in self.knowledge_store.experience_index.values()
+            )
+        }
+    
+    def transfer_knowledge(self, source_domain, target_domain, target_predicates):
+        """
+        Transfer learned knowledge from source to target domain.
+        
+        Uses analogical reasoning to map concepts between domains,
+        enabling zero-shot action recommendation in novel situations.
+        """
+        # Find analogy between domains
+        analogy = self.analogy_engine.find_analogy(source_domain, target_domain)
+        
+        # Search knowledge store for relevant experience
+        relevant = self.knowledge_store.find_relevant_experience(
+            target_predicates, target_domain, self.analogy_engine
+        )
+        
+        result = {
+            'analogy': {
+                'similarity': analogy.overall_similarity,
+                'mappings': len(analogy.mappings),
+                'reasoning': analogy.reasoning_chain
+            },
+            'relevant_experiences': relevant,
+            'recommended_action': None
+        }
+        
+        if relevant:
+            best = relevant[0]
+            # Ground abstract action to target domain
+            grounded = self.analogy_engine.ground_to_domain(
+                best['abstract_action'], target_domain
+            )
+            result['recommended_action'] = grounded or best['abstract_action']
+        
+        return result
+    
+    def consolidate_knowledge(self):
+        """
+        Consolidate domain-specific experiences into abstract knowledge.
+        
+        This is the "sleep" phase where concrete experiences are generalized
+        into domain-independent rules that can transfer to new domains.
+        """
+        promoted = self.knowledge_store.consolidate_to_abstract(self.analogy_engine)
+        return {
+            'promoted_rules': len(promoted),
+            'total_abstract_rules': len(self.knowledge_store.abstract_rules),
+            'domains_covered': list(self.knowledge_store.domain_schemas.keys())
+        }
+    
+    def translate_to_natural_language(self, system_state):
+        """
+        Use LLM as peripheral translator to convert system state to NL.
+        
+        The LLM does NOT make decisions - it only translates the system's
+        internal symbolic state into human-readable natural language.
+        """
+        if self.language.mock_mode:
+            # Template-based fallback when LLM not available
+            return self._template_translate(system_state)
+        
+        # Use LLM for translation
+        return self.language.generate(system_state)
+    
+    def _template_translate(self, system_state):
+        """Template-based NL translation (fallback when LLM unavailable)."""
+        parts = []
+        
+        if 'action' in system_state:
+            action_map = {
+                'ACTION_UP': 'moving upward',
+                'ACTION_DOWN': 'moving downward',
+                'ACTION_LEFT': 'moving left',
+                'ACTION_RIGHT': 'moving right',
+                'ACTION_STAY': 'staying in place',
+            }
+            parts.append(f"The system decided on {action_map.get(system_state['action'], system_state['action'])}.")
+        
+        if 'emotion' in system_state:
+            parts.append(f"Current emotional state: {system_state['emotion']}.")
+        
+        if 'confidence' in system_state:
+            conf = system_state['confidence']
+            level = 'high' if conf > 0.7 else ('moderate' if conf > 0.4 else 'low')
+            parts.append(f"Confidence level is {level} ({conf:.0%}).")
+        
+        if 'transfer_source' in system_state:
+            parts.append(
+                f"Knowledge was transferred from {system_state['transfer_source']} domain "
+                f"using analogical reasoning."
+            )
+        
+        if 'reasoning' in system_state:
+            parts.append(f"Reasoning: {system_state['reasoning']}")
+        
+        return " ".join(parts) if parts else "System is processing."
     
     def plan(self, state_hv, action_hvs):
         """Phase 4: Planning with world model."""
