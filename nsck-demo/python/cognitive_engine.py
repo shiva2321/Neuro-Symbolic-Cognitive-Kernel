@@ -802,7 +802,7 @@ class CognitiveEngine:
                 return result
         
         # 3. Try all other known domains via analogy
-        for domain in list(self.rule_learner.learned_rules.keys()):
+        for domain in self.rule_learner.learned_rules:
             if domain in (source_task, target_task, "global"):
                 continue
             domain_rules = [

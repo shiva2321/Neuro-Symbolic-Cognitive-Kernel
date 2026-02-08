@@ -61,6 +61,11 @@ class KnowledgeStore:
     that can be applied across different domains and sessions.
     """
     
+    MIN_PATTERN_COUNT = 2   # Minimum observations before promoting a pattern
+    MIN_DOMAIN_COUNT = 1    # Minimum domains a pattern must appear in
+    MIN_SUCCESS_RATE = 0.5  # Minimum success rate for promotion
+    MIN_MATCH_RATIO = 0.5   # Minimum overlap ratio for relevance matching
+    
     def __init__(self):
         self.semantic_memory = SemanticMemory()
         self.abstract_rules = []  # Domain-independent rules
@@ -129,9 +134,10 @@ class KnowledgeStore:
         # Promote patterns seen across multiple domains with good success rate
         promoted = []
         for (preds, action), stats in abstract_patterns.items():
-            if stats['count'] >= 2 and len(stats['domains']) >= 1:
+            if (stats['count'] >= self.MIN_PATTERN_COUNT
+                    and len(stats['domains']) >= self.MIN_DOMAIN_COUNT):
                 success_rate = stats['successes'] / stats['count']
-                if success_rate >= 0.5:
+                if success_rate >= self.MIN_SUCCESS_RATE:
                     self.abstract_rules.append({
                         'condition': preds,
                         'action': action,
@@ -164,7 +170,7 @@ class KnowledgeStore:
         matches = []
         for rule in self.abstract_rules:
             overlap = rule['condition'] & abstract_preds
-            if overlap and len(overlap) >= len(rule['condition']) * 0.5:
+            if overlap and len(overlap) >= len(rule['condition']) * self.MIN_MATCH_RATIO:
                 matches.append({
                     'abstract_action': rule['action'],
                     'confidence': rule['success_rate'],
