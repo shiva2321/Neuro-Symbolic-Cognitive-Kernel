@@ -1,0 +1,40 @@
+# NSCK Continuous Integration Pipeline
+# Phase 0.3: Infrastructure — CI/CD (ROADMAP_TO_AGI.md)
+name: NSCK CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install numpy scipy scikit-learn pydantic pytest rustworkx rich
+
+      - name: Run tests
+        run: |
+          python -m pytest nsck-demo/tests/ -v \
+            --ignore=nsck-demo/tests/test_dashboard.py \
+            --ignore=nsck-demo/tests/test_deep_dreaming.py \
+            --ignore=nsck-demo/tests/test_dynamic_brain.py \
+            --ignore=nsck-demo/tests/test_saliency.py \
+            --ignore=nsck-demo/tests/test_transfer.py \
+            --ignore=nsck-demo/tests/test_server_a2c.py \
+            --tb=short
