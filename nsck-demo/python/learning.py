@@ -101,7 +101,7 @@ class ReplayBuffer:
         states, task_ids, actions, rewards = zip(*batch)
         
         return (
-            torch.cat(states, dim=0),
+            torch.stack(states, dim=0),
             torch.tensor(task_ids, dtype=torch.float),
             torch.tensor(actions, dtype=torch.long),
             torch.tensor(rewards, dtype=torch.float),

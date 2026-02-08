@@ -422,8 +422,9 @@ class CognitiveEngine:
                          first_step_hv = path[0]["action_hv"]
                          # Reverse mapping (heuristic)
                          for a in possible_actions:
-                             # Note: comparing HVs requires looking at their bits or hash
-                             if self.get_concept_hv(a) == first_step_hv:
+                             # Compare HVs using similarity (>0.99 = match)
+                             concept_hv = self.get_concept_hv(a)
+                             if concept_hv is not None and concept_hv.similarity(first_step_hv) > 0.99:
                                  best_action = a
                                  break
                  

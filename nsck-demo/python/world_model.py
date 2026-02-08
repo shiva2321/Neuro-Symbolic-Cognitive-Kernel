@@ -183,11 +183,15 @@ class WorldModel:
         """Convert HyperVector or numpy bit-vector to float32 numpy."""
         if isinstance(hv, np.ndarray):
             return hv.astype(np.float32)
+        # Python fallback HyperVector stores .bits as np.ndarray
+        if hasattr(hv, 'bits'):
+            bits = hv.bits
+            if isinstance(bits, np.ndarray):
+                return bits.astype(np.float32)
         if hasattr(hv, "__getstate__"):
             state = hv.__getstate__()
             arr = np.array(state, dtype=np.uint64)
             bits = np.unpackbits(arr.view(np.uint8))
-            return bits.astype(np.float32)
-        else:
-            # Fallback if object is not an HV
-            return np.zeros(self.config.hv_dim, dtype=np.float32)
+            return bits.astype(np.float32)[:self.config.hv_dim]
+        # Fallback if object is not an HV
+        return np.zeros(self.config.hv_dim, dtype=np.float32)

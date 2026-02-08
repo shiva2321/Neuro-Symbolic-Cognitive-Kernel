@@ -51,11 +51,13 @@ class UniversalEncoder(nn.Module):
             # Check channel count, project if not 4
             if x.shape[1] != 4:
                 # Dynamic Channel Adaptation
-                if not hasattr(self, 'adapt_conv'):
-                    # Create a 1x1 conv to map [Available Channels] -> 4
-                    # We send to device same as input
-                    self.adapt_conv = nn.Conv2d(x.shape[1], 4, kernel_size=1).to(x.device)
-                x = self.adapt_conv(x)
+                # Use a separate registered module to avoid stale adapt_conv from prior runs
+                adapt_key = f'_adapt_conv_{x.shape[1]}'
+                if not hasattr(self, adapt_key):
+                    adapt = nn.Conv2d(x.shape[1], 4, kernel_size=1)
+                    setattr(self, adapt_key, adapt)
+                adapt_conv = getattr(self, adapt_key).to(x.device)
+                x = adapt_conv(x)
             
             h = F.relu(self.visual_conv1(x))
             h = F.relu(self.visual_conv2(h))
