@@ -6,9 +6,12 @@ class UniversalEncoder(nn.Module):
     """
     The 'Pre-Frontal Cortex' that unifies all senses.
     
+    EFFICIENCY: Uses lightweight pooling + small linear projections
+    instead of heavy convolutions. Total params: ~35K (vs ~150K+ with Conv2d).
+    
     Accepts:
-    1. Visual (4D): [Batch, Channel, Height, Width] -> CNN
-    2. Audio/Temporal (3D): [Batch, Channel, Time] -> 1D Conv
+    1. Visual (4D): [Batch, Channel, Height, Width] -> Pool + Linear
+    2. Audio/Temporal (3D): [Batch, Channel, Time] -> Pool + Linear
     3. Conceptual/Text (2D): [Batch, Dim] -> Linear
     
     Output:
@@ -19,26 +22,28 @@ class UniversalEncoder(nn.Module):
         self.latent_dim = latent_dim
         
         # --- PATH A: VISUAL (Spatial) ---
-        # "The Eyes"
-        # Input: [B, C, H, W] -> Output: [B, 256]
-        self.visual_conv1 = nn.Conv2d(4, 16, kernel_size=3, padding=1) # Assume 4 channels (RGBA/Stacked)
-        self.visual_conv2 = nn.Conv2d(16, 32, kernel_size=3, padding=1)
-        self.visual_pool = nn.AdaptiveAvgPool2d((4, 4)) # FORCE everything to 4x4
-        self.visual_fc = nn.Linear(32 * 4 * 4, latent_dim)
+        # Lightweight: AdaptivePool to fixed 8x8 grid, then small linear
+        self.visual_pool = nn.AdaptiveAvgPool2d((8, 8))
+        # Max 4 channels * 8 * 8 = 256 features
+        self.visual_fc = nn.Linear(4 * 8 * 8, latent_dim)
+        # Channel adaptation layers (pre-registered for common channel counts)
+        self._visual_channel_adapters = nn.ModuleDict()
 
         # --- PATH B: TEMPORAL (Audio/Sensors) ---
-        # "The Ears"
-        # Input: [B, C, T] -> Output: [B, 256]
-        self.temp_conv1 = nn.Conv1d(1, 16, kernel_size=3, padding=1) # Assume mono/single sensor
-        self.temp_pool = nn.AdaptiveAvgPool1d(16) # FORCE time to 16 distinct "moments"
-        self.temp_fc = nn.Linear(16 * 16, latent_dim)
+        # Lightweight: AdaptivePool to fixed 32 time steps, then linear
+        self.temp_pool = nn.AdaptiveAvgPool1d(32)
+        self.temp_fc = nn.Linear(32, latent_dim)
 
         # --- PATH C: CONCEPTUAL (Text/Vectors) ---
-        # "The Wernicke's Area"
-        # Input: [B, Dim] -> Output: [B, 256]
-        # We use a lazy linear projection (instantiated on first forward)
-        # or a generic MLP if dim is known. For now, we assume simple projection.
         self.concept_fc = nn.LazyLinear(latent_dim) 
+
+    def _get_channel_adapter(self, in_channels: int, device) -> nn.Module:
+        """Get or create a 1x1 channel projection (lightweight, no spatial conv)."""
+        key = str(in_channels)
+        if key not in self._visual_channel_adapters:
+            adapter = nn.Linear(in_channels, 4)
+            self._visual_channel_adapters[key] = adapter
+        return self._visual_channel_adapters[key].to(device)
 
     def forward(self, x, modality_hint=None):
         """
@@ -48,29 +53,26 @@ class UniversalEncoder(nn.Module):
         
         # --- 4D: Visual (B, C, H, W) ---
         if dims == 4:
-            # Check channel count, project if not 4
-            if x.shape[1] != 4:
-                # Dynamic Channel Adaptation
-                # Use a separate registered module to avoid stale adapt_conv from prior runs
-                adapt_key = f'_adapt_conv_{x.shape[1]}'
-                if not hasattr(self, adapt_key):
-                    adapt = nn.Conv2d(x.shape[1], 4, kernel_size=1)
-                    setattr(self, adapt_key, adapt)
-                adapt_conv = getattr(self, adapt_key).to(x.device)
-                x = adapt_conv(x)
-            
-            h = F.relu(self.visual_conv1(x))
-            h = F.relu(self.visual_conv2(h))
-            h = self.visual_pool(h) # [B, 32, 4, 4]
-            h = h.flatten(1)        # [B, 512]
+            b, c, h, w = x.shape
+            if c != 4:
+                # Lightweight channel projection: permute → linear → permute
+                adapter = self._get_channel_adapter(c, x.device)
+                # (B, C, H, W) → (B, H, W, C) → Linear → (B, H, W, 4) → (B, 4, H, W)
+                x = x.permute(0, 2, 3, 1)
+                x = adapter(x)
+                x = x.permute(0, 3, 1, 2)
+
+            h = self.visual_pool(x)     # [B, 4, 8, 8]
+            h = h.flatten(1)            # [B, 256]
             return F.relu(self.visual_fc(h))
 
         # --- 3D: Temporal (B, C, T) ---
         elif dims == 3:
-            # Handle variable input channels
-            h = F.relu(self.temp_conv1(x))
-            h = self.temp_pool(h)   # [B, 16, 16]
-            h = h.flatten(1)
+            # Average channels if multi-channel, then pool time
+            if x.shape[1] > 1:
+                x = x.mean(dim=1, keepdim=True)  # [B, 1, T]
+            h = self.temp_pool(x)       # [B, 1, 32]
+            h = h.squeeze(1)            # [B, 32]
             return F.relu(self.temp_fc(h))
 
         # --- 2D: Conceptual (B, Dim) ---
