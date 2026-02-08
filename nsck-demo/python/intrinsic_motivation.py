@@ -49,7 +49,10 @@ class FeatureNetwork(nn.Module):
     def __init__(self, latent_dim: int = 64):
         super().__init__()
         
-        # Lightweight pathway: pool to fixed 4×4 then project
+        # Lightweight pathway: pool to fixed 4×4 then project.
+        # Input channels are normalized to exactly 4 before pooling:
+        #   c < 4 → channels are repeated (e.g. 1-ch → repeat to 4-ch)
+        #   c > 4 → only first 4 channels are kept
         self.pool = nn.AdaptiveAvgPool2d((4, 4))
         # 4 channels × 4 × 4 = 64 features → latent_dim
         self.fc = nn.Linear(4 * 4 * 4, latent_dim)

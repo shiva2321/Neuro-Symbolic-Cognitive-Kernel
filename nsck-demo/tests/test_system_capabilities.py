@@ -1004,8 +1004,11 @@ class TestKnownLimitations:
 
         # "dog" and "puppy" are semantically similar in natural language
         # but will be orthogonal in NSCK because they're different hash seeds
-        dog = hypervec_rs.HyperVector(hash("dog") % (2 ** 32))
-        puppy = hypervec_rs.HyperVector(hash("puppy") % (2 ** 32))
+        import hashlib
+        dog_seed = int(hashlib.sha256(b"dog").hexdigest(), 16) % (2 ** 32)
+        puppy_seed = int(hashlib.sha256(b"puppy").hexdigest(), 16) % (2 ** 32)
+        dog = hypervec_rs.HyperVector(dog_seed)
+        puppy = hypervec_rs.HyperVector(puppy_seed)
 
         sim = dog.similarity(puppy)
         # For real NLU, sim should be > 0.7. In NSCK it will be ~0.5 (random).
@@ -1028,8 +1031,11 @@ class TestKnownLimitations:
         img_cat_rotated = np.rot90(img_cat)
 
         # System has no way to create HVs from images that capture visual content
-        hv1 = hypervec_rs.HyperVector(hash(img_cat.tobytes()) % (2 ** 32))
-        hv2 = hypervec_rs.HyperVector(hash(img_cat_rotated.tobytes()) % (2 ** 32))
+        import hashlib
+        hv1_seed = int(hashlib.blake2b(img_cat.tobytes(), digest_size=4).hexdigest(), 16)
+        hv2_seed = int(hashlib.blake2b(img_cat_rotated.tobytes(), digest_size=4).hexdigest(), 16)
+        hv1 = hypervec_rs.HyperVector(hv1_seed)
+        hv2 = hypervec_rs.HyperVector(hv2_seed)
 
         sim = hv1.similarity(hv2)
         # Real vision: rotated cat should still be recognized as cat (sim > 0.7)
