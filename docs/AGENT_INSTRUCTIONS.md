@@ -1,39 +1,37 @@
-# NSCK AGI: Agent Instructions & Development Guidelines
+# NSCK: Development Guidelines
 
-This document serves as the "constitution" for all AI agents and human developers working on the NSCK (Neuro-Symbolic Cognitive Kernel) project. Its purpose is to ensure consistency, safety, and adherence to the architectural vision across multiple sessions.
+This document defines development conventions for the NSCK (Neuro-Symbolic Cognitive Kernel) project.
 
 ## 1. Primary Directives
 
-*   **Stick to the Roadmap:** All work must align with `docs/IMPLEMENTATION_ROADMAP.md`. Do not invent new features or diverge from the plan without explicit user approval.
-*   **Consult Session Handoff:** Always start by reading `docs/SESSION_HANDOFF.md` to understand the immediate context, active tasks, and recent changes.
-*   **Update Session Handoff:** Before finishing your session, you MUST update `docs/SESSION_HANDOFF.md` with your progress, next steps, and any open issues.
+*   **Stick to the Roadmap:** All work must align with `ROADMAP_TO_AGI.md` and `docs/IMPLEMENTATION_ROADMAP.md`. Do not invent new features or diverge from the plan without explicit user approval.
+*   **Accuracy:** Documentation must reflect the actual state of the codebase. Do not claim capabilities that are not implemented and tested.
 
 ## 2. Architectural Principles
 
-*   **Neuro-Symbolic Hybrid:** The system MUST combine neural networks (SNNs/PyTorch) with symbolic reasoning (VSA/Rust). Do not replace symbolic components with pure deep learning unless specified.
-*   **Biological Inspiration:** Maintain the homeostatic/biological drive model. Agents are not just state machines; they have "needs" (hunger, energy, etc.).
-*   **Local & Efficient:** The system targets consumer hardware ("Tiny 11" specs). Optimize for CPU/Memory efficiency. Avoid massive dependencies where lightweight alternatives exist.
-*   **LLM Isolation:** The LLM is a *peripheral* for communication, NOT the brain. Core logic (decisions, planning) must remain in the Neuro-Symbolic kernel. The LLM should never directly drive motor actions or bypass the Global Workspace.
+*   **Neuro-Symbolic Hybrid:** The system combines spiking neural networks (SNNs/PyTorch) with symbolic reasoning (VSA). Do not replace symbolic components with pure deep learning.
+*   **Efficiency First:** The system targets consumer hardware (CPU-only, 4GB+ RAM). Use O(n) VSA operations instead of O(n²) matrix multiplications. Avoid large dense layers (keep dims ≤ 128 for shared layers).
+*   **LLM Isolation:** Any LLM integration is a peripheral for communication, NOT the brain. Core logic (decisions, planning) must remain in the Neuro-Symbolic kernel.
 
 ## 3. Coding Standards
 
-*   **Language:** Python 3.9+ (Type Hints required), Rust (for VSA/Performance critical components).
+*   **Language:** Python 3.11+ (type hints required), Rust (for VSA performance-critical components).
 *   **Style:** Follow PEP 8. Use meaningful variable names.
-*   **Documentation:** All classes and major functions must have docstrings. Update `README.md` and `docs/` if architecture changes.
-*   **Modularity:** Keep components loosely coupled (e.g., `CognitiveEngine`, `VisualCortex`, `MotorCortex`).
+*   **Imports:** Always use `import hypervec_shim as hypervec_rs` — never import `hypervec_rs` directly.
+*   **Documentation:** All classes and major functions must have docstrings.
+*   **Modularity:** Keep components loosely coupled.
 
 ## 4. Operational Workflow
 
-1.  **Read Context:** Check `SESSION_HANDOFF.md` and `IMPLEMENTATION_ROADMAP.md`.
-2.  **Plan:** Use `task_boundary` (if available) or outline steps in chat.
+1.  **Read Context:** Check `ROADMAP_TO_AGI.md` and `docs/IMPLEMENTATION_ROADMAP.md`.
+2.  **Plan:** Outline steps before implementing.
 3.  **Implement:** Write code, keeping changes atomic.
-4.  **Verify:** Run tests or simulations. *Never* assume code works without running it.
-5.  **Document:** Update code comments and documentation files.
-6.  **Handoff:** Update `SESSION_HANDOFF.md` for the next agent.
+4.  **Verify:** Run tests (`python -m pytest nsck-demo/tests/ -v`). Never assume code works without running it.
+5.  **Document:** Update code comments and documentation if architecture changes.
 
 ## 5. "Do Not" List
 
-*   **DO NOT** delete existing documentation or history without backup.
-*   **DO NOT** introduce "magic" logic hidden from the Global Workspace.
-*   **DO NOT** change the directory structure arbitrarily.
-*   **DO NOT** ignore existing TODOs or FIXMEs; address them if relevant to your task.
+*   **DO NOT** introduce heavy matrix multiplications in core VSA paths.
+*   **DO NOT** introduce "magic" logic hidden from the cognitive pipeline.
+*   **DO NOT** claim capabilities that are not backed by passing tests.
+*   **DO NOT** commit binary artifacts (*.db, *.pkl, *.pth, *.csv) — these are in .gitignore.

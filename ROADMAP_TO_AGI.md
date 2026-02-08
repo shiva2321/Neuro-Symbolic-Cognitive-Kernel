@@ -1,10 +1,16 @@
 # ROADMAP TO AGI: From Current System to True Intelligence
 
-**Document Purpose:** Concrete, actionable steps to transform the Node_network project from a symbolic AI system into a true AGI system.
+**Document Purpose:** Concrete, actionable steps to evolve the NSCK project toward general intelligence.
 
-**Audience:** You (the developer) and future contributors  
-**Time Horizon:** 5-10 year plan  
+**Audience:** You (the developer) and future contributors
+**Time Horizon:** Multi-year plan
 **Philosophy:** Honest, practical, and grounded in current research
+
+> **Current State (as of Feb 2026):** The system has a working foundation — VSA core,
+> episodic memory, causal reasoning, rule learning, planning, and metacognition all
+> have functional implementations with passing tests. However, it lacks real neural
+> learning, real perception, language understanding, and continual learning. This
+> roadmap addresses those gaps.
 
 ---
 

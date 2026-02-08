@@ -1,5 +1,10 @@
-Cognitive Architectures for Autonomous Intelligence: A Synthesis of Intrinsic Motivation, Global Workspace Dynamics, Causal Discovery, and Generative World Models
-1. Introduction: The Convergence of Cognitive Science and Artificial Intelligence
+# Cognitive Architectures for Autonomous Intelligence: A Synthesis of Intrinsic Motivation, Global Workspace Dynamics, Causal Discovery, and Generative World Models
+
+> **Note:** This is a literature review of the theoretical foundations that inform the
+> NSCK architecture. It describes target concepts and research directions — not all of
+> these are implemented in the current codebase.
+
+## 1. Introduction: The Convergence of Cognitive Science and Artificial Intelligence
 The pursuit of Artificial General Intelligence (AGI) has historically oscillated between symbolic, rule-based systems and connectionist, learning-based approaches. While the latter, particularly in the form of Deep Reinforcement Learning (RL), has achieved remarkable success in specialized domains—ranging from game playing to robotic manipulation—fundamental limitations remain. Standard model-free agents often struggle in environments characterized by sparse rewards, high dimensionality, and the requirement for long-term planning under uncertainty. Furthermore, the "black box" nature of deep neural networks frequently precludes the extraction of causal structures, limiting interpretability and robustness against distributional shifts.
 
 To bridge these gaps, contemporary research is increasingly drawing upon principles from cognitive neuroscience, developmental psychology, and information theory. This report provides an exhaustive analysis of four critical pillars that are currently converging to define the next generation of cognitive architectures:
