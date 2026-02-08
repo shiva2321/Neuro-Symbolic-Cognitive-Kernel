@@ -3,7 +3,7 @@
 ![Project Status](https://img.shields.io/badge/status-experimental_prototype-blue)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
-![Tests](https://img.shields.io/badge/tests-165+_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-216+_passing-brightgreen)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning and neural spiking networks, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
@@ -42,7 +42,7 @@ All components are designed to work together through a central cognitive engine,
 
 ## What Actually Works
 
-The following capabilities are implemented and verified by the test suite (165+ tests passing):
+The following capabilities are implemented and verified by the test suite (216+ tests passing):
 
 | Capability | Description |
 |---|---|
@@ -55,6 +55,11 @@ The following capabilities are implemented and verified by the test suite (165+ 
 | **Planning** | STRIPS-style planning with causal reasoner integration, spatial navigation |
 | **Intrinsic Motivation** | ICM for curiosity-driven exploration (~22K params, lightweight) |
 | **World Model** | Forward simulation with sparse random projection bottleneck (128-dim) |
+| **RL Engine (A2C/PPO)** | Advantage Actor-Critic and PPO with GAE for neural policy training |
+| **Neural-Symbolic Bridge** | Arbitration between neural policy and symbolic rules with safety overrides |
+| **SNN Training Pipeline** | Hebbian learning, concept activation mapping (SNN→VSA binding) |
+| **Continual Learning** | EWC, PackNet, Progressive Neural Networks, Memory Replay |
+| **Meta-Learning** | MAML and Reptile for rapid few-shot task adaptation |
 | **Game Environments** | Snake, Pong, Maze (grid-based test environments) |
 
 ---
@@ -66,10 +71,9 @@ These are documented, honest limitations of the current system:
 1. **No real language understanding** — the system operates on symbols, not semantics
 2. **No pixel-level perception** — uses structured game state, not raw images
 3. **No gradient-based learning in VSA core** — the VSA layer is not differentiable
-4. **No continual learning from raw data** — requires pre-extracted predicates
-5. **Causal discovery needs sufficient observation data** — sparse data yields incomplete graphs
-6. **No emotions, consciousness, or social cognition** — these are long-term research goals, not current features
-7. **No real-world robustness** — only tested in simple grid-world environments
+4. **Causal discovery needs sufficient observation data** — sparse data yields incomplete graphs
+5. **No real-world robustness** — only tested in simple grid-world environments
+6. **RL training requires environment interaction** — A2C/PPO need live environment loops to demonstrate full capability
 
 ---
 
@@ -78,8 +82,8 @@ These are documented, honest limitations of the current system:
 ```
 Node_network/
 ├── nsck-demo/
-│   ├── python/           # Core system (78 modules, ~20,700 lines)
-│   ├── tests/            # Test suite (53 test files, 165+ tests passing)
+│   ├── python/           # Core system (82 modules, ~22,000 lines)
+│   ├── tests/            # Test suite (56 test files, 216+ tests passing)
 │   ├── rust_vsa/         # Rust VSA extension (optional, Python fallback available)
 │   ├── web/              # Web dashboard assets
 │   ├── conftest.py       # Test configuration
@@ -102,6 +106,10 @@ Node_network/
 | Module | Purpose |
 |---|---|
 | `cognitive_engine.py` | Central orchestrator — integrates all subsystems |
+| `rl_engine.py` | A2C/PPO reinforcement learning with neural-symbolic bridge |
+| `snn_training_pipeline.py` | SNN training with Hebbian learning and concept activation mapping |
+| `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay |
+| `meta_learning.py` | MAML and Reptile for few-shot adaptation |
 | `brain_fusion.py` | Multi-task knowledge organization with VSA concepts |
 | `causal_reasoning.py` | Causal graph construction and inference |
 | `metacognition.py` | Self-monitoring, confidence scoring, conflict detection |
