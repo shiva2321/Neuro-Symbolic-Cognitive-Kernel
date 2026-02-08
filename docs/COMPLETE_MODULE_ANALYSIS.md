@@ -1,10 +1,10 @@
-# COMPLETE NSCK MODULE ANALYSIS REPORT
-## Exhaustive Analysis of All 59 Python Modules
+# NSCK MODULE ANALYSIS REPORT
+## Analysis of Core Python Modules
 
-**Date**: 2026-02-01  
-**Scope**: nsck-demo/python directory  
-**Total Modules Analyzed**: 59  
-**Analysis Type**: Full codebase audit including purpose, integration status, and recommendations
+**Date**: 2026-02-08 (updated)
+**Scope**: nsck-demo/python directory
+**Total Modules**: 78 Python files, 1 Rust crate
+**Analysis Type**: Codebase audit covering purpose, integration status, and quality
 
 ---
 
@@ -12,13 +12,16 @@
 
 ### Module Distribution by Status
 
-**Python Modules** (59 total):
-- ✅ **Fully Integrated**: 38 modules (64%)
-- ⚠️ **Partially Integrated**: 13 modules (22%)
-- 🔧 **Standalone/Utility**: 8 modules (14%)
+**Python Modules** (78 total, excluding removed verify scripts):
+- ✅ **Functional & Tested**: ~35 modules — core logic with passing test coverage
+- ⚠️ **Partially Implemented**: ~25 modules — have code but incomplete/untested features
+- 🔧 **Utility/Infrastructure**: ~18 modules — tools, UIs, training scripts
 
 **Rust Modules** (1):
-- ✅ **Fully Integrated**: 1 module (rust_vsa - CRITICAL infrastructure)
+- ✅ **Fully Integrated**: rust_vsa — VSA core with Python fallback via `hypervec_shim.py`
+
+> **Note:** "Functional" means the module's core API is exercised by passing tests.
+> Many modules have stub methods or placeholder logic for future capabilities.
 
 ### Critical Modules (Must-Have for System Operation)
 **18 modules identified as CRITICAL** (17 Python + 1 Rust):

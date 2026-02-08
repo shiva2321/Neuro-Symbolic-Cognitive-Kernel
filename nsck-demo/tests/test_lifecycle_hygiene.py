@@ -1,4 +1,4 @@
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from python.staged_recall import StagedRecall
 from python.lifecycle import LifecycleManager
 

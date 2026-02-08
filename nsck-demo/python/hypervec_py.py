@@ -66,19 +66,6 @@ class HyperVectorPy:
     def __repr__(self):
         return f"<HyperVector dim={DIMENSION} (Python)>"
 
-# Shim: Try Rust, Fallback to Python
-try:
-    # Rename to avoid name collision if the module was named the same, 
-    # but we renamed the crate to hypervec_rs so it's clean.
-    from hypervec_shim import HyperVector
-    import multiprocessing
-    if multiprocessing.current_process().name == 'MainProcess':
-        print(">> [VSA] Using Rust Accelerator (hypervec_rs)")
-except ImportError:
-    import multiprocessing
-    if multiprocessing.current_process().name == 'MainProcess':
-        print(">> [VSA] Using Python Fallback")
-    HyperVector = HyperVectorPy
-
-# Module level exposure
-# In python, 'hypervec_py.HyperVector' will work if we import this file as hypervec_py
+# Re-export the Python class under the canonical name so that
+# ``from hypervec_py import HyperVector`` works everywhere.
+HyperVector = HyperVectorPy

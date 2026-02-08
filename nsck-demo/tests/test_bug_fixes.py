@@ -9,7 +9,7 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import numpy as np
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 
 
 def test_semantic_memory_property_binding():

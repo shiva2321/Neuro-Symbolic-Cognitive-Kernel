@@ -11,17 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../pyth
 from rule_learner import RuleLearner, RuleCandidate
 
 # Mock hypervec_rs if not available
-try:
-    import hypervec_rs
-except ImportError:
-    from unittest.mock import MagicMock
-    hypervec_rs = MagicMock()
-    # Mock the HyperVector class
-    class MockHyperVector:
-        def __init__(self, seed):
-            self.bits = [0] * 1000 # Dummy bits
-            self.seed = seed
-    hypervec_rs.HyperVector = MockHyperVector
+import hypervec_shim as hypervec_rs
 
 from persistence import Rule, Episode, BrainStore
 from episodic_memory import LiveEpisode

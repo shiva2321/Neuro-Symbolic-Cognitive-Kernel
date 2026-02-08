@@ -9,7 +9,7 @@
 
 ## Overview
 
-The Rust VSA module provides **10,000x faster hypervector operations** compared to pure Python, using Rust's zero-cost abstractions and SIMD-friendly bit operations.
+The Rust VSA module provides significantly faster hypervector operations compared to pure Python, using Rust's zero-cost abstractions and SIMD-friendly bit operations. A pure-Python fallback (`hypervec_py.py`) is available when the Rust extension is not compiled.
 
 ### Key Statistics
 - **Total Lines of Code:** 194 lines (Rust)

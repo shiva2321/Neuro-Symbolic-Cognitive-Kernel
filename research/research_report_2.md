@@ -1,4 +1,9 @@
-The Architectural Foundations of Autonomous Intelligence: Intrinsic Motivation, Global Integration, and Causal Foresight
+# The Architectural Foundations of Autonomous Intelligence: Intrinsic Motivation, Global Integration, and Causal Foresight
+
+> **Note:** This is a literature review of theoretical foundations. It describes
+> research concepts that inform NSCK's design — not all are implemented in the
+> current codebase.
+
 The evolution of artificial intelligence from narrow, task-specific optimization toward general-purpose agency requires a fundamental shift in how systems acquire, organize, and utilize information. Modern computational frameworks are increasingly drawing upon cognitive science and developmental psychology to bridge the gap between reactive processing and proactive reasoning. This transition is characterized by four converging pillars: the mechanisms of intrinsic motivation that drive autonomous exploration, the global workspace architectures that facilitate multimodal integration, the causal discovery principles that extract structural knowledge from data, and the world models that enable high-fidelity planning within imagined latent spaces. This report provides an exhaustive analysis of these domains, synthesizing their mathematical foundations, architectural components, and the emergent behaviors they facilitate in complex environments.
 The Genesis of Autonomous Agency through Intrinsic Motivation
 The central challenge in building autonomous agents is the scarcity of extrinsic rewards. In the natural world, biological entities do not receive a constant stream of supervision; instead, they are driven by internal imperatives to learn, explore, and master their environments. Intrinsic motivation systems are the computational analogues of this drive, transforming the agent's internal uncertainty, learning progress, or control potential into a reward signal that guides behavior in the absence of external goals.[1, 2]

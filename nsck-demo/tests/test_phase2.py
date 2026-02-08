@@ -3,7 +3,7 @@ Tests for Phase 2: Self-Learning Engine
 """
 import pytest
 import time
-import hypervec_rs
+import hypervec_shim as hypervec_rs
 from python.rule_learner import RuleLearner
 from python.episodic_memory import EpisodicMemory, LiveEpisode
 from python.curiosity import CuriosityModule
