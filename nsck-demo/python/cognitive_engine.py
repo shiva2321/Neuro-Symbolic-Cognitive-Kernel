@@ -162,7 +162,7 @@ class CognitiveEngine:
             
         # [AGI] Phase 4: Continual Learning (EWC & Meta-Learning)
         try:
-            from continual_learning import ContinualLearner
+            from continual_learning import ContinualLearner, ProgressiveNetwork, MemoryReplayManager
             from meta_learning import MAMLLearner
             from curriculum import CurriculumDesigner
             # We assume self.snn is part of self.perception or similar
@@ -170,9 +170,22 @@ class CognitiveEngine:
             self.continual_learner = ContinualLearner(self.snn) if hasattr(self, 'snn') else None
             self.meta_learner = MAMLLearner(self.snn) if hasattr(self, 'snn') else None
             self.curriculum = CurriculumDesigner()
+            self.progressive_net = ProgressiveNetwork(input_dim=128, hidden_dim=64, output_dim=4)
+            self.memory_replay = MemoryReplayManager(capacity_per_task=500)
             print("[AGI] Phase 4 modules initialized.")
         except ImportError:
             print("[WARN] Phase 4 modules missing.")
+
+        # [AGI] Phase 1: RL Engine (A2C/PPO + Neural-Symbolic Bridge)
+        try:
+            from rl_engine import NeuralSymbolicBridge
+            self.neural_symbolic_bridge = NeuralSymbolicBridge(
+                rule_learner=self.rule_learner,
+                safety_threshold=0.3,
+            )
+            print("[AGI] Neural-Symbolic Bridge initialized.")
+        except ImportError:
+            self.neural_symbolic_bridge = None
 
         # [AGI] Phase 5: Consciousness & Self-Evolution
         try:

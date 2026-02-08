@@ -28,7 +28,7 @@ except ImportError:
 from lingua_cortex import get_lingua_cortex, SemanticFingerprint
 
 # Fallback config
-DEFAULT_MODEL_PATH = "models\phi-3-mini-4k-instruct.Q4_K_M.gguf"
+DEFAULT_MODEL_PATH = "models/phi-3-mini-4k-instruct.Q4_K_M.gguf"
 
 class LanguageModule:
     """
