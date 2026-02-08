@@ -186,8 +186,6 @@ class CognitiveEngine:
             print("[AGI] Neural-Symbolic Bridge initialized.")
         except ImportError:
             self.neural_symbolic_bridge = None
-        except ImportError:
-            print("[WARN] Phase 4 modules missing.")
 
         # [AGI] Phase 5: Consciousness & Self-Evolution
         try:
