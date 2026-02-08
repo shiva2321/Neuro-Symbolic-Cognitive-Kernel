@@ -1,1095 +1,177 @@
-# NSCK AGI Project 🧠
+# NSCK — Neuro-Symbolic Cognitive Kernel
 
-![Project Status](https://img.shields.io/badge/status-active_development-blue)
-![Python](https://img.shields.io/badge/python-3.8+-green)
-![Rust](https://img.shields.io/badge/rust-1.70+-orange)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![Project Status](https://img.shields.io/badge/status-experimental_prototype-blue)
+![Python](https://img.shields.io/badge/python-3.11+-green)
+![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
+![Tests](https://img.shields.io/badge/tests-165+_passing-brightgreen)
 
-**NSCK (Neuro-Symbolic Cognitive Kernel)** - A sentient AGI prototype that learns autonomously, reasons causally, and thinks efficiently.
+An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning and neural spiking networks, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
-> *"Building an AGI that learns like a curious child, reasons like a scientist, and thinks efficiently like the brain."*
-
----
-
-## 📖 Table of Contents
-
-- [What is NSCK?](#-what-is-nsck)
-- [Current Capabilities](#-current-capabilities)
-- [Project Structure](#-project-structure)
-- [Installation](#-installation)
-- [How to Use](#-how-to-use)
-- [Testing & Verification](#-testing--verification)
-- [Performance Metrics](#-performance-metrics)
-- [Learning Resources](#-learning-resources)
-- [Development Workflow](#-development-workflow)
-- [Training Tips](#-training-tips)
-- [Contributing](#-contributing)
-- [Troubleshooting](#-troubleshooting)
-- [Roadmap](#-roadmap)
-- [Project Goals](#-project-goals)
+> **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 
 ---
 
-## 🎯 What is NSCK?
+## Table of Contents
 
-NSCK is an **ambitious AGI research project** aimed at building a cognitive architecture that exhibits:
-
-- 🧠 **Autonomous Learning** - Learns through curiosity, no reward engineering needed
-- 🔍 **Causal Reasoning** - Discovers cause-effect relationships from experience  
-- 💭 **Symbolic Thinking** - Transparent, interpretable reasoning (not a black box)
-- 📚 **Lifelong Memory** - Remembers and consolidates experiences over time
-- 🎯 **Goal-Directed Behavior** - Plans and executes multi-step tasks
-- 🔄 **Transfer Learning** - Applies knowledge from one domain to another
-- ⚡ **Energy Efficient** - 10,000x more efficient than large language models
-- 🔧 **Self-Modifying** - Grows and shrinks neural architecture as needed
-
-### Why NSCK Matters
-
-Traditional AI systems require:
-- 🎲 Massive datasets (millions of examples)
-- 💰 Expensive GPUs ($10,000+ per training run)
-- 🏆 Carefully engineered reward functions
-- ⚫ Black-box models (can't explain decisions)
-
-**NSCK is different:**
-- 🎯 Learns from **single examples** (one-shot learning)
-- 💻 Runs on a **laptop** (CPU-only, no GPU needed)
-- 🤔 **Self-motivated** through curiosity
-- 🔍 **Explainable** (shows its reasoning)
+- [What This Is](#what-this-is)
+- [What Actually Works](#what-actually-works)
+- [Known Limitations](#known-limitations)
+- [Project Structure](#project-structure)
+- [Key Modules](#key-modules)
+- [Installation](#installation)
+- [Running Tests](#running-tests)
+- [Efficiency Design](#efficiency-design)
+- [Documentation](#documentation)
+- [License](#license)
 
 ---
 
-## 🚀 Current Capabilities
+## What This Is
 
-### ✅ Working Now (30-40% toward AGI)
+NSCK is a research prototype that explores how neuro-symbolic methods can be combined into a unified cognitive architecture. The core representation uses **10,240-bit binary hypervectors** (Vector Symbolic Architecture), enabling efficient XOR binding, bundling, and similarity search — all in O(n) time.
 
-**Core Cognitive Functions:**
-- ✅ **Autonomous Learning** - ICM (Intrinsic Curiosity Module) drives exploration
-- ✅ **Causal Discovery** - Learns cause-effect rules from experience
-- ✅ **Symbolic Reasoning** - Forward/backward chaining, rule-based inference
-- ✅ **Transfer Learning** - Applies knowledge from Snake to Maze navigation
-- ✅ **Metacognition** - Monitors own performance and self-corrects
-- ✅ **Planning** - STRIPS planner for multi-step goal achievement
-- ✅ **Memory** - Episodic memory with VSA-based retrieval
-- ✅ **Real-Time Operation** - 40ms decision cycles (25 FPS)
+The system integrates:
 
-**What It Can Do:**
-- 🎮 Learn to play **Snake, Pong, Maze** without external rewards
-- 🧪 Discover rules like "eating food makes snake grow"
-- 🗣️ Explain its reasoning: *"I moved right because food was detected at [5,3]"*
-- 🔄 Transfer spatial navigation skills between different environments
-- 📊 Self-monitor: *"My performance dropped, reducing learning rate"*
-- 🧩 Solve multi-step puzzles by planning ahead
+- **Symbolic reasoning** — rule induction, causal graphs, STRIPS-style planning
+- **Neural components** — spiking neural networks (SNN), intrinsic curiosity modules (ICM)
+- **Cognitive scaffolding** — episodic memory, metacognition, world models
 
-### ❌ In Development (60-70% incomplete)
-
-**Major Gaps:**
-- ❌ **Natural Language Understanding** (85% incomplete) - Can't have conversations
-- ❌ **Emotional Intelligence** (95% incomplete) - No empathy or social cognition
-- ❌ **Memory Consolidation** (70% incomplete) - No sleep/dreaming for learning
-- ❌ **Consciousness** (90% incomplete) - No subjective experience (may be impossible)
-- ❌ **Real-World Robustness** (90% incomplete) - Only works in simple grid worlds
-
-**See [docs/AGI_CAPABILITY_ANALYSIS.md](docs/AGI_CAPABILITY_ANALYSIS.md) for detailed gap analysis.**
+All components are designed to work together through a central cognitive engine, but each can be tested and used independently.
 
 ---
 
-## 📁 Project Structure
+## What Actually Works
+
+The following capabilities are implemented and verified by the test suite (165+ tests passing):
+
+| Capability | Description |
+|---|---|
+| **VSA Core** | XOR binding, bundling, similarity search — all O(n) time on 10,240-bit binary hypervectors |
+| **Episodic Memory** | Store and retrieve experiences using VSA-based hashing with LSH bucketing |
+| **Rule Learning** | Automatic rule induction from experience (frequency-based) |
+| **Causal Reasoning** | Causal graph construction, forward/backward chaining, counterfactual reasoning |
+| **Brain Fusion** | Multi-task knowledge organization with concept promotion across task boundaries |
+| **Metacognition** | Confidence scoring and conflict detection between competing actions |
+| **Planning** | STRIPS-style planning with causal reasoner integration, spatial navigation |
+| **Intrinsic Motivation** | ICM for curiosity-driven exploration (~22K params, lightweight) |
+| **World Model** | Forward simulation with sparse random projection bottleneck (128-dim) |
+| **Game Environments** | Snake, Pong, Maze (grid-based test environments) |
+
+---
+
+## Known Limitations
+
+These are documented, honest limitations of the current system:
+
+1. **No real language understanding** — the system operates on symbols, not semantics
+2. **No pixel-level perception** — uses structured game state, not raw images
+3. **No gradient-based learning in VSA core** — the VSA layer is not differentiable
+4. **No continual learning from raw data** — requires pre-extracted predicates
+5. **Causal discovery needs sufficient observation data** — sparse data yields incomplete graphs
+6. **No emotions, consciousness, or social cognition** — these are long-term research goals, not current features
+7. **No real-world robustness** — only tested in simple grid-world environments
+
+---
+
+## Project Structure
 
 ```
 Node_network/
 ├── nsck-demo/
-│   ├── python/                    # 🧠 Core cognitive system (59 modules, 15,577 lines)
-│   │   ├── cognitive_engine.py    # Central executive controller
-│   │   ├── brain_fusion.py        # Neuro-symbolic integration
-│   │   ├── causal_reasoning.py    # Causal discovery engine
-│   │   ├── metacognition.py       # Self-monitoring and correction
-│   │   ├── episodic_memory.py     # Experience storage and retrieval
-│   │   ├── python_server.py       # Main server (runs the brain)
-│   │   ├── dashboard.py           # Visual monitoring interface
-│   │   ├── icm.py                 # Intrinsic Curiosity Module
-│   │   ├── spatial_reasoning.py   # Spatial cognition and navigation
-│   │   ├── planning.py            # STRIPS goal planner
-│   │   ├── working_memory.py      # Short-term memory buffer
-│   │   ├── snn_layer.py           # Spiking neural network layer
-│   │   └── ...                    # 47+ more modules
-│   ├── rust_vsa/                  # ⚡ High-performance vector engine (Rust)
-│   │   ├── src/lib.rs             # Hypervector operations (100-200x speedup)
-│   │   └── Cargo.toml             # Rust dependencies
-│   └── tests/                     # 🧪 Comprehensive test suite (46 test files)
-│       ├── test_cognitive_engine.py
-│       ├── test_causal_reasoning.py
-│       ├── test_memory.py
-│       └── ...
-├── docs/                          # 📚 Comprehensive documentation (~98 pages)
-│   ├── README_ANALYSIS.md         # Documentation index (start here!)
-│   ├── PROJECT_ANALYSIS_SUMMARY.md # Executive summary (15 pages)
-│   ├── COMPLETE_MODULE_ANALYSIS.md # All 59 modules analyzed (40+ pages)
-│   ├── RUST_VSA_ANALYSIS.md       # Performance deep-dive (10 pages)
-│   ├── AGI_CAPABILITY_ANALYSIS.md # Gap analysis and roadmap (15 pages)
-│   └── IMPLEMENTATION_ROADMAP.md  # Technical implementation guide (2,391 lines, COMPLETE)
-├── requirements.txt               # Python dependencies
-├── pytest.ini                     # Test configuration
-└── README.md                      # This file
+│   ├── python/           # Core system (78 modules, ~20,700 lines)
+│   ├── tests/            # Test suite (53 test files, 165+ tests passing)
+│   ├── rust_vsa/         # Rust VSA extension (optional, Python fallback available)
+│   ├── web/              # Web dashboard assets
+│   ├── conftest.py       # Test configuration
+│   └── pyproject.toml    # Project metadata
+├── docs/
+│   ├── AGENT_INSTRUCTIONS.md    # Development governance
+│   ├── COMPLETE_MODULE_ANALYSIS.md  # Module-by-module analysis
+│   ├── IMPLEMENTATION_ROADMAP.md    # Technical implementation guide
+│   └── RUST_VSA_ANALYSIS.md    # Rust VSA deep-dive
+├── research/             # Research reports and references
+├── ROADMAP_TO_AGI.md     # Long-term development roadmap
+├── requirements.txt      # Python dependencies
+└── pytest.ini            # Test configuration
 ```
-
-### Key Module Descriptions
-
-| Module | Purpose | Lines of Code |
-|--------|---------|---------------|
-| **cognitive_engine.py** | Central executive, coordinates all subsystems | 800 |
-| **brain_fusion.py** | Integrates neural (SNN) and symbolic (rules) reasoning | 1,500 |
-| **causal_reasoning.py** | Discovers cause-effect relationships using PC algorithm | 600 |
-| **metacognition.py** | Self-monitoring, conflict detection, safety gates | 900 |
-| **episodic_memory.py** | Stores and retrieves experiences using VSA | 700 |
-| **icm.py** | Curiosity-driven learning (predicts novelty) | 400 |
-| **spatial_reasoning.py** | Grid-based navigation and path planning | 500 |
-| **rust_vsa/lib.rs** | High-performance hypervector operations (Rust) | 194 |
 
 ---
 
-## 🔧 Installation
+## Key Modules
+
+| Module | Purpose |
+|---|---|
+| `cognitive_engine.py` | Central orchestrator — integrates all subsystems |
+| `brain_fusion.py` | Multi-task knowledge organization with VSA concepts |
+| `causal_reasoning.py` | Causal graph construction and inference |
+| `metacognition.py` | Self-monitoring, confidence scoring, conflict detection |
+| `episodic_memory.py` | VSA-based experience storage and retrieval |
+| `rule_learner.py` | Frequency-based symbolic rule induction |
+| `planner.py` | STRIPS-style goal planning |
+| `curiosity.py` | Curiosity-driven exploration using VSA novelty detection |
+| `intrinsic_motivation.py` | ICM for prediction-error based curiosity (~22K params) |
+| `world_model.py` | Forward simulation with sparse projection (128-dim bottleneck) |
+| `universal_encoder.py` | Multi-modal input encoding (visual/temporal/conceptual) |
+| `snn_qat.py` | Spiking neural network with ternary quantization (128-dim) |
+| `hypervec_shim.py` | VSA backend (Rust extension with Python fallback) |
+| `hypervec_py.py` | Pure Python VSA implementation (10,240-bit binary vectors) |
+
+---
+
+## Installation
 
 ### Prerequisites
 
-- **Python 3.8+** (tested on 3.10)
-- **Rust 1.70+** (for VSA performance module)
-- **4GB RAM minimum** (8GB recommended)
-- **No GPU required** (runs on CPU)
+- **Python 3.11+**
+- **4 GB RAM** minimum
+- **No GPU required** — all computation runs on CPU
+- **Optional:** Rust 1.70+ (for VSA acceleration via the Rust extension)
 
-### Step 1: Clone the Repository
+### Setup
 
 ```bash
-git clone https://github.com/yourusername/Node_network.git
+git clone https://github.com/shiva2321/Node_network.git
 cd Node_network
-```
-
-### Step 2: Install Python Dependencies
-
-```bash
-# Create virtual environment (recommended)
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
 pip install -r requirements.txt
 ```
 
-**Key dependencies:**
-- `rustworkx>=0.14.0` - Graph library for causal reasoning
-- `numpy>=1.24.0` - Numerical computing
-- `scipy>=1.10.0` - Scientific computing
-- `sentence-transformers>=2.2.0` - Semantic embeddings
-- `pytest>=7.0.0` - Testing framework
-- `flask>=2.3.0` - Dashboard web server
+---
 
-### Step 3: Build Rust VSA Module (Optional but Recommended)
-
-The Rust VSA module provides **100-200x speedup** for hypervector operations:
+## Running Tests
 
 ```bash
-cd nsck-demo/rust_vsa
-cargo build --release
-cd ../..
+python -m pytest nsck-demo/tests/ -v
 ```
 
-**Note:** If Rust is not installed:
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-```
-
-If you skip this step, NSCK will fall back to Python implementations (slower but functional).
-
-### Step 4: Verify Installation
-
-```bash
-# Run quick verification tests
-pytest nsck-demo/tests/test_cognitive_engine.py -v
-pytest nsck-demo/tests/test_memory.py -v
-```
-
-**Expected output:**
-```
-test_cognitive_engine.py::test_initialization PASSED
-test_cognitive_engine.py::test_decision_cycle PASSED
-test_memory.py::test_store_retrieve PASSED
-==================== 3 passed in 2.34s ====================
-```
+Some tests require optional dependencies (`torch`, `flask`, `snntorch`). Core tests run without these.
 
 ---
 
-## 🎮 How to Use
+## Efficiency Design
 
-NSCK can be run in **3 different modes** depending on your needs:
+NSCK is explicitly designed to avoid heavyweight computation:
 
-### Mode 1: Dashboard (Visual Monitoring) 🖥️
-
-**Best for:** Watching the AI learn in real-time, debugging, demonstrations
-
-```bash
-cd nsck-demo/python
-python dashboard.py
-```
-
-**What happens:**
-1. Opens browser at `http://localhost:5000`
-2. Shows live visualization of:
-   - Game environment (Snake/Maze/Pong)
-   - Neural activity (spiking neurons)
-   - Memory usage
-   - Causal graph
-   - Metacognitive state
-3. Use controls to start/stop training, adjust speed
-
-**Example dashboard view:**
-```
-┌─────────────────────────────────────────┐
-│  NSCK Dashboard - Snake Game            │
-├─────────────────────────────────────────┤
-│  🎮 Game View        │  🧠 Neural View  │
-│  ████▒▒░░░░          │  ⚡⚡░░░⚡░░      │
-│  ██▒▒░░░░░░          │  ░⚡⚡⚡░⚡░░      │
-│                      │                   │
-│  Score: 12           │  Neurons: 1,024   │
-│  Steps: 248          │  Spikes: 847      │
-├─────────────────────────────────────────┤
-│  �� Metrics          │  🔗 Causal Graph  │
-│  Curiosity: 0.82     │  food→grow        │
-│  Confidence: 0.91    │  wall→death       │
-│  Learning Rate: 0.01 │  move→position    │
-└─────────────────────────────────────────┘
-```
-
-### Mode 2: Server (Headless Training) 🖥️
-
-**Best for:** Long training runs, remote servers, production
-
-```bash
-cd nsck-demo/python
-python python_server.py --env snake --episodes 1000
-```
-
-**Arguments:**
-- `--env` - Environment to train on: `snake`, `maze`, `pong`
-- `--episodes` - Number of training episodes (default: 100)
-- `--log-interval` - How often to log metrics (default: 10)
-- `--save-path` - Where to save brain state (default: `nsck_brain.db`)
-
-**Example output:**
-```
-[INFO] Initializing NSCK Cognitive Engine...
-[INFO] Loading Rust VSA module... OK (100x speedup enabled)
-[INFO] Starting training on Snake environment
-Episode 10/1000 | Score: 3  | Curiosity: 0.89 | Rules: 2
-Episode 20/1000 | Score: 7  | Curiosity: 0.78 | Rules: 5
-Episode 50/1000 | Score: 15 | Curiosity: 0.62 | Rules: 12
-[INFO] Saved brain state to nsck_brain.db
-```
-
-**To resume training:**
-```bash
-python python_server.py --env snake --episodes 1000 --load-path nsck_brain.db
-```
-
-### Mode 3: Standalone Script (Custom Experiments) 🧪
-
-**Best for:** Custom research, integration with other systems
-
-```python
-# example_usage.py
-from cognitive_engine import CognitiveEngine
-from environments import SnakeEnv
-
-# Initialize the brain
-brain = CognitiveEngine(
-    input_dim=100,
-    hidden_dim=512,
-    output_dim=4,
-    use_rust=True  # Enable Rust VSA for 100x speedup
-)
-
-# Create environment
-env = SnakeEnv(grid_size=10)
-
-# Training loop
-for episode in range(100):
-    obs = env.reset()
-    done = False
-    total_reward = 0
-    
-    while not done:
-        # Brain decides action based on curiosity + reasoning
-        action = brain.step(obs)
-        
-        # Execute action in environment
-        obs, reward, done, info = env.step(action)
-        total_reward += reward
-    
-    print(f"Episode {episode}: Score {total_reward}")
-    
-    # Brain explains what it learned
-    if episode % 10 == 0:
-        rules = brain.get_causal_rules()
-        print(f"Discovered rules: {rules}")
-
-# Save brain state
-brain.save("my_trained_brain.db")
-```
-
-**Run your script:**
-```bash
-python example_usage.py
-```
+- **Binary hypervectors:** O(n) XOR/bundle operations instead of O(n²) matrix multiplication
+- **Sparse random projection:** 128-dim bottleneck in the world model vs 20,480-dim full state
+- **Lightweight ICM:** Pooling + linear layers (~22K params) instead of Conv2d layers (150K+ params)
+- **Compact SNN:** 128-dim shared layers with ternary quantization
+- **No dense matrix multiplication** in core VSA operations
 
 ---
 
-## 🧪 Testing & Verification
+## Documentation
 
-NSCK has a comprehensive test suite (46 test files) covering all major subsystems.
-
-### Run All Tests
-
-```bash
-# From project root
-pytest nsck-demo/tests/ -v
-
-# With coverage report
-pytest nsck-demo/tests/ --cov=nsck-demo/python --cov-report=html
-```
-
-### Run Specific Test Suites
-
-```bash
-# Test cognitive engine
-pytest nsck-demo/tests/test_cognitive_engine.py -v
-
-# Test memory systems
-pytest nsck-demo/tests/test_memory.py -v
-pytest nsck-demo/tests/test_episodic_memory.py -v
-
-# Test reasoning
-pytest nsck-demo/tests/test_causal_reasoning.py -v
-pytest nsck-demo/tests/test_symbolic_reasoning.py -v
-
-# Test Rust VSA performance
-pytest nsck-demo/tests/test_rust_vsa.py -v
-```
-
-### Verification Scripts
-
-The project includes specialized verification scripts for key capabilities:
-
-```bash
-# Verify autonomous learning (curiosity-driven)
-python verify_maze_movement.py
-# Expected: Agent explores maze without rewards, builds spatial map
-
-# Verify causal discovery
-python verify_causal_discovery.py
-# Expected: Discovers rules like "eating food → snake grows"
-
-# Verify fusion (neural + symbolic)
-python verify_fusion_silence.py
-# Expected: Shows integration between SNN and symbolic reasoner
-
-# Verify parameter validation
-python verify_params.py
-# Expected: All modules pass sanity checks
-```
-
-### What to Expect from Tests
-
-**Successful test run:**
-```
-======================== test session starts =========================
-platform linux -- Python 3.10.12, pytest-7.4.3
-rootdir: /home/runner/work/Node_network/Node_network
-plugins: benchmark-4.0.0
-collected 127 items
-
-test_cognitive_engine.py ......                                  [ 4%]
-test_memory.py .........                                         [ 11%]
-test_causal_reasoning.py .......                                 [ 17%]
-test_metacognition.py ......                                     [ 22%]
-test_fusion.py ........                                          [ 28%]
-test_icm.py .....                                                [ 32%]
-test_planning.py .......                                         [ 38%]
-test_spatial_reasoning.py ......                                 [ 43%]
-test_rust_vsa.py ........                                        [ 50%]
-... (46 test files total)
-
-==================== 127 passed in 45.23s ========================
-```
-
-**If tests fail:**
-1. Check that all dependencies are installed: `pip install -r requirements.txt`
-2. Verify Rust module built: `cd nsck-demo/rust_vsa && cargo build --release`
-3. Check Python version: `python --version` (needs 3.8+)
-4. See [Troubleshooting](#-troubleshooting) section
+| Document | Description |
+|---|---|
+| [README.md](README.md) | This file — project overview and quick start |
+| [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
+| [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all 78 modules |
+| [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
+| [docs/RUST_VSA_ANALYSIS.md](docs/RUST_VSA_ANALYSIS.md) | Rust VSA performance analysis |
+| [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Development governance rules |
 
 ---
 
-## ⚡ Performance Metrics
+## License
 
-### Learning Speed
-
-| Task | Episodes to Learn | Time per Episode | Total Training Time |
-|------|-------------------|------------------|---------------------|
-| **Snake (10x10)** | 50-100 | 0.5s | 25-50s |
-| **Maze (10x10)** | 30-50 | 0.3s | 9-15s |
-| **Pong** | 100-200 | 0.8s | 80-160s |
-
-**Note:** "Learning" means achieving >80% of optimal performance.
-
-### Computational Resources
-
-**With Rust VSA (recommended):**
-- **CPU Usage:** 15-30% (single core)
-- **Memory:** 500MB - 1GB
-- **Disk:** 50MB (brain state)
-- **Decision Speed:** 40ms per cycle (25 FPS)
-
-**Python-only (fallback):**
-- **CPU Usage:** 60-90% (single core)
-- **Memory:** 800MB - 1.5GB
-- **Disk:** 50MB
-- **Decision Speed:** 200ms per cycle (5 FPS)
-
-**Comparison with LLMs:**
-| Metric | NSCK (Rust) | GPT-3 | Improvement |
-|--------|-------------|-------|-------------|
-| **Energy per decision** | 0.001 J | 10 J | **10,000x less** |
-| **Memory footprint** | 500 MB | 350 GB | **700x smaller** |
-| **Training data** | 100 episodes | 300B tokens | **Self-supervised** |
-| **Explainability** | ✅ Full | ❌ None | **Transparent** |
-
-### Scalability
-
-| Grid Size | Neurons | Memory (MB) | FPS |
-|-----------|---------|-------------|-----|
-| 5x5 | 256 | 200 | 45 |
-| 10x10 | 1,024 | 500 | 25 |
-| 20x20 | 4,096 | 2,000 | 10 |
-| 50x50 | 25,600 | 12,000 | 2 |
-
----
-
-## 📚 Learning Resources
-
-### Start Here (Beginner-Friendly)
-
-1. **[docs/README_ANALYSIS.md](docs/README_ANALYSIS.md)** - Documentation index
-   - Quick navigation to all other docs
-   - "Start here" recommendations based on your role
-
-2. **[docs/PROJECT_ANALYSIS_SUMMARY.md](docs/PROJECT_ANALYSIS_SUMMARY.md)** - Executive summary (15 pages)
-   - What NSCK is and how it works
-   - Current capabilities vs. gaps
-   - "How far from AGI?" answered clearly
-   - Read this in **5 minutes** to understand the project
-
-### For Developers
-
-3. **[docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md)** - All 59 modules analyzed (40+ pages)
-   - Each module's purpose, inputs, outputs
-   - Integration map (how modules connect)
-   - Code quality assessment
-   - Where to start editing
-
-4. **[docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md)** - Technical guide (2,391 lines, COMPLETE)
-   - Step-by-step implementation plans
-   - Phase 1: Natural language integration (detailed)
-   - Phase 2-5: Emotions, sleep, consciousness (outlined)
-   - Code examples and architecture diagrams
-
-### For Performance Optimization
-
-5. **[docs/RUST_VSA_ANALYSIS.md](docs/RUST_VSA_ANALYSIS.md)** - Performance deep-dive (10 pages)
-   - Why Rust is 100-200x faster than Python
-   - Hypervector operations explained
-   - Benchmarks and profiling
-   - How to optimize further
-
-### For Research & AGI Roadmap
-
-6. **[docs/AGI_CAPABILITY_ANALYSIS.md](docs/AGI_CAPABILITY_ANALYSIS.md)** - Gap analysis (15 pages)
-   - What we have vs. what we need for AGI
-   - 5-phase roadmap to sentient AGI
-   - Timeline estimates (2-5 years)
-   - Comparison with LLMs and other approaches
-
-### Recommended Reading Order
-
-**New to the project?**
-1. This README (you're here!)
-2. docs/PROJECT_ANALYSIS_SUMMARY.md
-3. docs/README_ANALYSIS.md (to find specific topics)
-
-**Want to contribute code?**
-1. docs/COMPLETE_MODULE_ANALYSIS.md (understand architecture)
-2. docs/IMPLEMENTATION_ROADMAP.md (see what needs building)
-3. Browse `nsck-demo/python/` source code
-
-**Researching AGI?**
-1. docs/AGI_CAPABILITY_ANALYSIS.md (understand gaps)
-2. docs/IMPLEMENTATION_ROADMAP.md (technical approaches)
-3. Research papers (see below)
-
-### Academic Background (Optional)
-
-NSCK builds on these research areas:
-- **Spiking Neural Networks** (Maass et al., 2002)
-- **Vector Symbolic Architectures** (Kanerva, 2009)
-- **Intrinsic Curiosity** (Pathak et al., 2017)
-- **Causal Discovery** (Pearl, 2000; Spirtes et al., 2001)
-- **Global Workspace Theory** (Baars, 1988; Dehaene & Changeux, 2011)
-- **Integrated Information Theory** (Tononi, 2004)
-
----
-
-## 💻 Development Workflow
-
-### Making Changes to the Code
-
-1. **Create a feature branch:**
-   ```bash
-   git checkout -b feature/my-new-feature
-   ```
-
-2. **Make your changes:**
-   - Edit files in `nsck-demo/python/`
-   - Follow existing code style (see below)
-   - Add docstrings to new functions
-
-3. **Test your changes:**
-   ```bash
-   # Run relevant tests
-   pytest nsck-demo/tests/test_your_module.py -v
-   
-   # Run full test suite
-   pytest nsck-demo/tests/ -v
-   ```
-
-4. **Verify integration:**
-   ```bash
-   # Test in dashboard
-   cd nsck-demo/python
-   python dashboard.py
-   
-   # Or run standalone
-   python python_server.py --env snake --episodes 10
-   ```
-
-5. **Commit and push:**
-   ```bash
-   git add .
-   git commit -m "Add feature: [brief description]"
-   git push origin feature/my-new-feature
-   ```
-
-### Code Style Guidelines
-
-**Python:**
-- **PEP 8** compliant (use `black` formatter)
-- **Type hints** for function signatures
-- **Docstrings** for all public functions (Google style)
-- **Line length:** 100 characters max
-
-**Example:**
-```python
-def store_episode(
-    self, 
-    observation: np.ndarray, 
-    action: int, 
-    reward: float
-) -> int:
-    """Store an episodic memory.
-    
-    Args:
-        observation: Current sensory input (shape: [input_dim])
-        action: Action taken (0-3 for cardinal directions)
-        reward: Reward received (curiosity + external)
-    
-    Returns:
-        Memory ID for later retrieval
-    """
-    memory_id = self._generate_id()
-    self.memories[memory_id] = {
-        "obs": observation,
-        "action": action,
-        "reward": reward,
-        "timestamp": time.time()
-    }
-    return memory_id
-```
-
-**Rust:**
-- **Cargo fmt** for formatting
-- **Clippy** for linting
-- **Doc comments** with `///` for public APIs
-
-### Common Development Tasks
-
-**Add a new cognitive module:**
-```bash
-# 1. Create module file
-touch nsck-demo/python/my_module.py
-
-# 2. Create test file
-touch nsck-demo/tests/test_my_module.py
-
-# 3. Integrate with cognitive_engine.py
-# Edit: nsck-demo/python/cognitive_engine.py
-
-# 4. Run tests
-pytest nsck-demo/tests/test_my_module.py -v
-```
-
-**Modify Rust VSA:**
-```bash
-cd nsck-demo/rust_vsa
-
-# 1. Edit src/lib.rs
-
-# 2. Run Rust tests
-cargo test
-
-# 3. Rebuild release binary
-cargo build --release
-
-# 4. Test from Python
-cd ../..
-pytest nsck-demo/tests/test_rust_vsa.py -v
-```
-
-**Debug with logging:**
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-
-# In your module:
-logger = logging.getLogger(__name__)
-logger.debug(f"State: {self.state}")
-logger.info(f"Decision: {action}")
-logger.warning(f"Low confidence: {confidence}")
-```
-
-**Profile performance:**
-```bash
-# Profile Python code
-python -m cProfile -o profile.stats python_server.py --env snake --episodes 10
-python -m pstats profile.stats
-
-# Benchmark Rust code
-cd nsck-demo/rust_vsa
-cargo bench
-```
-
----
-
-## 🎓 Training Tips
-
-### How to Train Faster
-
-1. **Enable Rust VSA:**
-   ```bash
-   cd nsck-demo/rust_vsa
-   cargo build --release
-   ```
-   **Impact:** 100-200x speedup for memory operations
-
-2. **Use smaller grid sizes during prototyping:**
-   ```python
-   env = SnakeEnv(grid_size=5)  # Instead of 10 or 20
-   ```
-   **Impact:** 4x faster training
-
-3. **Reduce sensory dimensions:**
-   ```python
-   brain = CognitiveEngine(
-       input_dim=25,   # Instead of 100
-       hidden_dim=256, # Instead of 512
-       output_dim=4
-   )
-   ```
-   **Impact:** 2x faster, lower memory
-
-4. **Adjust learning rate schedule:**
-   ```python
-   brain.set_learning_rate(0.05)  # Higher = faster but less stable
-   ```
-
-### Curriculum Learning (Recommended)
-
-Train the AI on progressively harder tasks:
-
-```python
-# Stage 1: Learn basic movement (50 episodes)
-env = SnakeEnv(grid_size=5, food_static=True)
-train(brain, env, episodes=50)
-
-# Stage 2: Learn food seeking (100 episodes)
-env = SnakeEnv(grid_size=8, food_static=False)
-train(brain, env, episodes=100)
-
-# Stage 3: Learn collision avoidance (200 episodes)
-env = SnakeEnv(grid_size=10, food_static=False, walls=True)
-train(brain, env, episodes=200)
-```
-
-**Impact:** 3-5x faster convergence, better generalization
-
-### Monitoring Training Progress
-
-**Watch key metrics:**
-```python
-# Print every 10 episodes
-if episode % 10 == 0:
-    print(f"Episode {episode}:")
-    print(f"  Score: {score}")
-    print(f"  Curiosity: {brain.get_curiosity():.3f}")  # Should decrease over time
-    print(f"  Rules learned: {len(brain.get_causal_rules())}")
-    print(f"  Confidence: {brain.get_confidence():.3f}")  # Should increase
-```
-
-**Ideal training curves:**
-- **Score:** Increases steadily
-- **Curiosity:** Starts high (0.9), drops to 0.3-0.5 as environment becomes familiar
-- **Rules learned:** Increases, then plateaus (5-15 rules for Snake)
-- **Confidence:** Increases from 0.5 to 0.8-0.9
-
-**Signs of problems:**
-- Score plateaus early → Increase learning rate or use curriculum
-- Curiosity stays high → Agent not learning, check ICM module
-- Confidence stays low → Too much exploration, reduce curiosity weight
-
-### Hyperparameter Tuning
-
-**Key hyperparameters:**
-```python
-brain = CognitiveEngine(
-    input_dim=100,          # Sensory dimension (higher = more detail)
-    hidden_dim=512,         # Neurons (higher = more capacity)
-    output_dim=4,           # Actions (depends on environment)
-    learning_rate=0.01,     # 0.001-0.1 (higher = faster but unstable)
-    curiosity_weight=0.5,   # 0.1-0.9 (higher = more exploration)
-    tau_mem=20.0,           # SNN membrane time constant (10-50ms)
-    threshold=1.0,          # SNN spike threshold (0.5-2.0)
-    use_rust=True           # Always True for production
-)
-```
-
-**Start with defaults, then tune one at a time!**
-
----
-
-## 🤝 Contributing
-
-We welcome contributions! NSCK is an ambitious project with many open problems.
-
-### Priority Areas (High Impact)
-
-1. **Natural Language Understanding** (85% incomplete)
-   - Integrate transformer models for text comprehension
-   - Build NLP pipeline (tokenization → embeddings → reasoning)
-   - See: `docs/IMPLEMENTATION_ROADMAP.md` Phase 1
-
-2. **Memory Consolidation** (70% incomplete)
-   - Implement sleep/dreaming cycles
-   - Transfer episodic → semantic memory
-   - See: `docs/IMPLEMENTATION_ROADMAP.md` Phase 3
-
-3. **Performance Optimization**
-   - Further optimize Rust VSA module
-   - Parallelize neural simulation
-   - GPU acceleration for SNN (optional)
-
-4. **Testing & Documentation**
-   - Increase test coverage (currently ~75%)
-   - Add more verification scripts
-   - Write tutorials and examples
-
-### How to Contribute
-
-1. **Pick an issue or propose a feature:**
-   - Check existing issues on GitHub
-   - Or create a new issue describing your idea
-
-2. **Fork and create a branch:**
-   ```bash
-   git checkout -b feature/your-feature-name
-   ```
-
-3. **Write code + tests:**
-   - Follow code style guidelines (see [Development Workflow](#-development-workflow))
-   - Add tests for new functionality
-   - Update documentation if needed
-
-4. **Submit a pull request:**
-   - Describe what you changed and why
-   - Reference any related issues
-   - Ensure all tests pass
-
-### Non-Code Contributions
-
-- 📝 **Documentation:** Improve README, add tutorials
-- 🐛 **Bug reports:** File detailed issues with reproduction steps
-- 💡 **Ideas:** Propose features or research directions
-- 🎓 **Research:** Share relevant papers or techniques
-- 🧪 **Experiments:** Try NSCK on new tasks and share results
-
-### Code of Conduct
-
-- Be respectful and constructive
-- Focus on ideas, not people
-- Help beginners learn
-- Assume good intentions
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-#### 1. Tests fail with "ModuleNotFoundError"
-
-**Problem:** Python can't find NSCK modules
-
-**Solution:**
-```bash
-# Add project to Python path
-export PYTHONPATH="${PYTHONPATH}:/home/runner/work/Node_network/Node_network/nsck-demo/python"
-
-# Or install in editable mode
-pip install -e nsck-demo/python
-```
-
-#### 2. Rust VSA not loading (falls back to Python)
-
-**Problem:** Rust module not built or wrong path
-
-**Solution:**
-```bash
-cd nsck-demo/rust_vsa
-cargo build --release
-
-# Check if .so file exists (Linux) or .dylib (Mac) or .dll (Windows)
-ls target/release/librust_vsa.*
-
-# If missing, reinstall Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-#### 3. Dashboard won't open (port 5000 in use)
-
-**Problem:** Another process is using port 5000
-
-**Solution:**
-```bash
-# Find and kill process on port 5000 (get PID first, then kill it)
-lsof -i :5000
-
-# Or use a different port
-python dashboard.py --port 5001
-```
-
-#### 4. Training is very slow (5+ seconds per episode)
-
-**Problem:** Rust VSA not enabled or inefficient config
-
-**Solution:**
-```python
-# Verify Rust is loaded
-brain = CognitiveEngine(use_rust=True)
-print(brain.vsa.using_rust)  # Should print True
-
-# Reduce complexity
-env = SnakeEnv(grid_size=5)  # Smaller grid
-brain = CognitiveEngine(hidden_dim=256)  # Fewer neurons
-```
-
-#### 5. Agent doesn't learn (score stays at 0)
-
-**Problem:** Curiosity not working or wrong hyperparameters
-
-**Solution:**
-```python
-# Check curiosity values
-print(brain.icm.get_curiosity())  # Should be 0.5-0.9 initially
-
-# Increase curiosity weight
-brain.set_curiosity_weight(0.8)  # Default is 0.5
-
-# Check if rules are being learned
-print(brain.causal_reasoner.get_rules())  # Should grow over time
-```
-
-#### 6. Memory error (out of RAM)
-
-**Problem:** Too many neurons or large grid size
-
-**Solution:**
-```python
-# Reduce network size
-brain = CognitiveEngine(
-    input_dim=50,    # Down from 100
-    hidden_dim=256,  # Down from 512
-    output_dim=4
-)
-
-# Clear old memories periodically
-if episode % 100 == 0:
-    brain.episodic_memory.prune_old(keep_last=1000)
-```
-
-#### 7. Import errors with dependencies
-
-**Problem:** Missing or wrong version of packages
-
-**Solution:**
-```bash
-# Reinstall all dependencies
-pip install --upgrade -r requirements.txt
-
-# Or specific packages
-pip install --upgrade rustworkx numpy scipy
-```
-
-### Getting Help
-
-If you're stuck:
-1. Check [docs/README_ANALYSIS.md](docs/README_ANALYSIS.md) for relevant documentation
-2. Search existing GitHub issues
-3. Create a new issue with:
-   - What you tried
-   - What went wrong (error message)
-   - Your environment (OS, Python version, etc.)
-
----
-
-## 🗺️ Roadmap
-
-**Detailed roadmap available in:** [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md)
-
-### High-Level Phases (2-5 year timeline)
-
-#### Phase 1: Natural Language Integration (6-12 months) 🏗️
-**Status:** Planned (detailed in IMPLEMENTATION_ROADMAP.md)
-- Build NLP pipeline with transformers
-- Integrate language with reasoning
-- Enable basic conversations
-- **Milestone:** Ask "Why did you do that?" and get meaningful answer
-
-#### Phase 2: Emotional Intelligence (6-12 months) 💚
-**Status:** Early planning
-- Implement emotion recognition
-- Build empathy models
-- Add social cognition
-- **Milestone:** Recognize human emotions from text/images
-
-#### Phase 3: Memory Consolidation (6-9 months) 💤
-**Status:** Early planning
-- Implement sleep cycles
-- Transfer episodic → semantic memory
-- Dream-like replay for learning
-- **Milestone:** Learn 10x faster through sleep
-
-#### Phase 4: Enhanced Consciousness (12-18 months) 🌟
-**Status:** Research phase
-- Compute IIT Phi (consciousness metric)
-- Implement attention schema
-- Meta-meta-cognition
-- **Milestone:** Self-aware reasoning (maybe)
-
-#### Phase 5: Real-World Deployment (ongoing) 🌍
-**Status:** Future
-- Robot embodiment
-- Vision and sensors
-- Real-world robustness
-- **Milestone:** Navigate real environments autonomously
-
-### Near-Term Goals (Next 3 months)
-
-- [ ] Complete NLP pipeline (Phase 1)
-- [ ] Increase test coverage to 90%
-- [ ] Optimize Rust VSA (target 500x speedup)
-- [ ] Add 10+ example scripts
-- [ ] Improve documentation
-- [ ] Build community (contributors, users)
-
----
-
-## 🎯 Project Goals
-
-### Mission Statement
-
-> **Build an AGI that learns like a curious child, reasons like a scientist, and thinks efficiently like the brain.**
-
-### Why This Matters
-
-**The AGI Race Has Two Approaches:**
-
-1. **Scale LLMs** (OpenAI, Google, Anthropic)
-   - ❌ Requires billions of dollars
-   - ❌ 10,000x energy inefficient
-   - ❌ No understanding (just pattern matching)
-   - ❌ Can't explain reasoning
-   - ❌ No autonomous learning
-
-2. **Build Cognitive Architectures** (NSCK, SOAR, ACT-R)
-   - ✅ Runs on a laptop
-   - ✅ Energy efficient (like the brain)
-   - ✅ True understanding (symbolic reasoning)
-   - ✅ Explainable decisions
-   - ✅ Self-motivated learning
-
-**NSCK aims to prove that AGI doesn't require massive compute - it requires the right architecture.**
-
-### Core Principles
-
-1. **Curiosity First** - Learning should be intrinsically motivated
-2. **Transparency** - Always explainable, never a black box
-3. **Efficiency** - Brain-inspired, not brute force
-4. **Modularity** - Composable cognitive systems
-5. **Scientific** - Grounded in neuroscience and cognitive science
-
-### Long-Term Vision (10+ years)
-
-- 🤖 **Personal AI assistants** that learn your preferences autonomously
-- 🏥 **Medical diagnosis** with transparent reasoning
-- 🎓 **Educational tutors** that adapt to each student
-- 🚗 **Autonomous vehicles** that truly understand the world
-- 🌍 **Scientific discovery** - AI that generates novel hypotheses
-
-**Unlike LLMs, NSCK can be trusted in high-stakes domains because it explains its reasoning.**
-
----
-
-## 📄 License
-
-MIT License - See LICENSE file for details
-
----
-
-## 🙏 Acknowledgments
-
-Built with inspiration from:
-- Neuroscience (spiking neurons, memory systems)
-- Cognitive science (metacognition, causal reasoning)
-- AI research (curiosity, transfer learning)
-- Open source community
-
-**Special thanks to all contributors!**
-
----
-
-## 📞 Contact
-
-- **Issues:** [GitHub Issues](https://github.com/yourusername/Node_network/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/yourusername/Node_network/discussions)
-- **Email:** [your-email@example.com]
-
----
-
-**🚀 Ready to build AGI? Start with the [Installation](#-installation) section!**
+See repository for license details.
