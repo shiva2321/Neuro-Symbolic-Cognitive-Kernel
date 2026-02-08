@@ -169,6 +169,7 @@ NSCK is explicitly designed to avoid heavyweight computation:
 | [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
 | [docs/RUST_VSA_ANALYSIS.md](docs/RUST_VSA_ANALYSIS.md) | Rust VSA performance analysis |
 | [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Development governance rules |
+| [docs/AGENT_COORDINATION_PLAN.md](docs/AGENT_COORDINATION_PLAN.md) | Multi-agent coordination: roles, work units, guardrails, parallelism |
 
 ---
 
