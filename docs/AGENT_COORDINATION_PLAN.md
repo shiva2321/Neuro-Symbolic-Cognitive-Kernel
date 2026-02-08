@@ -357,7 +357,7 @@ Agents must run **sequentially** when:
 | **WU-0-07** | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | — | ❌ |
 | **WU-0-08** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | — |
 
-✅ = Can run in parallel  ⚠️ = Caution (shared infrastructure files)  ❌ = Must run sequentially
+✅ = Can run in parallel  ⚠️ = Caution — shared infrastructure files; agents should coordinate by reviewing each other's target files before starting and running sequentially if both touch the same file  ❌ = Must run sequentially (hard dependency)
 
 ### 5.3 Recommended Execution Order
 
@@ -431,7 +431,7 @@ An agent's work is **automatically rejected** if:
 Before starting any work, every agent must read these files in order:
 
 ```
-1. docs/AGENT_INSTRUCTIONS.md          — governance rules (37 lines)
+1. docs/AGENT_INSTRUCTIONS.md          — governance rules
 2. docs/AGENT_COORDINATION_PLAN.md     — this document, your work unit
 3. ROADMAP_TO_AGI.md                   — phase definitions (skip code samples)
 4. README.md                           — what currently works vs doesn't

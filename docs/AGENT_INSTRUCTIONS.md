@@ -40,7 +40,7 @@ This document defines development conventions for the NSCK (Neuro-Symbolic Cogni
 *   **DO NOT** introduce heavy matrix multiplications in core VSA paths.
 *   **DO NOT** introduce "magic" logic hidden from the cognitive pipeline.
 *   **DO NOT** claim capabilities that are not backed by passing tests.
-*   **DO NOT** commit binary artifacts (*.db, *.pkl, *.pth, *.csv, *.png) — these are in .gitignore.
+*   **DO NOT** commit binary artifacts (*.db, *.pkl, *.pth, *.csv) — these are in .gitignore. Runtime-generated *.png files are also ignored; only commit PNGs explicitly needed for documentation.
 *   **DO NOT** modify files outside your assigned role's scope without documenting the cross-role dependency.
 *   **DO NOT** add new dependencies without checking for security vulnerabilities and documenting the justification.
 *   **DO NOT** change public API signatures of critical modules unless your Work Unit explicitly requires it.
