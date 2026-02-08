@@ -1,13 +1,13 @@
 # NSCK — Neuro-Symbolic Cognitive Kernel
 
-![Project Status](https://img.shields.io/badge/status-Phase_1_Complete-green)
+![Project Status](https://img.shields.io/badge/status-Phase_7_Complete-green)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
-![Tests](https://img.shields.io/badge/tests-230+_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-267+_passing-brightgreen)
 
-An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning and neural spiking networks, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
+An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning, neural spiking networks, and cross-domain transfer learning, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
-**Latest Update:** Phase 1 (Neural Learning Engine) complete! Added multi-task learning with gradient surgery and rule extraction from neural policies. See [Phase 1 Completion Report](docs/PHASE1_COMPLETION_REPORT.md).
+**Latest Update:** All 7 phases complete. Transfer learning fixed and enhanced with cross-domain knowledge consolidation, LLM translator integration (Phi3), and comprehensive test coverage. See [Architecture](docs/ARCHITECTURE.md).
 
 > **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 
@@ -35,8 +35,11 @@ NSCK is a research prototype that explores how neuro-symbolic methods can be com
 The system integrates:
 
 - **Symbolic reasoning** — rule induction, causal graphs, STRIPS-style planning
-- **Neural components** — spiking neural networks (SNN), intrinsic curiosity modules (ICM)
-- **Cognitive scaffolding** — episodic memory, metacognition, world models
+- **Neural components** — spiking neural networks (SNN), multi-task learning with gradient surgery
+- **Cognitive scaffolding** — episodic memory, metacognition, world models, self-awareness
+- **Transfer learning** — cross-domain knowledge transfer via structural analogy
+- **Social intelligence** — emotion processing, Theory of Mind, empathy
+- **Language** — Phi3 LLM as peripheral translator (NL ↔ symbolic)
 
 All components are designed to work together through a central cognitive engine, but each can be tested and used independently.
 
@@ -44,49 +47,79 @@ All components are designed to work together through a central cognitive engine,
 
 ## What Actually Works
 
-The following capabilities are implemented and verified by the test suite (230+ tests passing):
+The following capabilities are implemented and verified by the test suite (267+ tests passing):
 
-### Phase 0 Foundation (Verified)
+### Phase 0: Foundation
 | Capability | Description |
 |---|---|
-| **VSA Core** | XOR binding, bundling, similarity search — all O(n) time on 10,240-bit binary hypervectors |
-| **Episodic Memory** | Store and retrieve experiences using VSA-based hashing with LSH bucketing |
-| **Rule Learning** | Automatic rule induction from experience (frequency-based) |
-| **Causal Reasoning** | Causal graph construction, forward/backward chaining, counterfactual reasoning |
-| **Brain Fusion** | Multi-task knowledge organization with concept promotion across task boundaries |
-| **Metacognition** | Confidence scoring and conflict detection between competing actions |
-| **Planning** | STRIPS-style planning with causal reasoner integration, spatial navigation |
-| **Intrinsic Motivation** | ICM for curiosity-driven exploration (~22K params, lightweight) |
-| **World Model** | Forward simulation with sparse random projection bottleneck (128-dim) |
-| **RL Engine (A2C/PPO)** | Advantage Actor-Critic and PPO with GAE for neural policy training |
-| **Neural-Symbolic Bridge** | Arbitration between neural policy and symbolic rules with safety overrides |
-| **SNN Training Pipeline** | Hebbian learning, concept activation mapping (SNN→VSA binding) |
-| **Continual Learning** | EWC, PackNet, Progressive Neural Networks, Memory Replay |
-| **Meta-Learning** | MAML and Reptile for rapid few-shot task adaptation |
-| **Game Environments** | Snake, Pong, Maze (grid-based test environments) |
+| **VSA Core** | XOR binding, bundling, similarity search — all O(n) on 10,240-bit binary HVs |
+| **Episodic Memory** | VSA-based experience storage with LSH bucketing |
+| **Rule Learning** | Frequency-based symbolic rule induction |
+| **Causal Reasoning** | Causal graphs, forward/backward chaining, counterfactuals |
+| **Brain Fusion** | Multi-task knowledge organization with concept promotion |
+| **Planning** | STRIPS-style planning with spatial navigation |
+| **World Model** | Forward simulation with 128-dim sparse projection |
 
-### Phase 1: Neural Learning Engine (Complete)
+### Phase 1: Neural Learning Engine
 | Capability | Description |
 |---|---|
 | **Multi-Task Learning** | Shared encoder with task-specific heads for Snake, Pong, Maze |
-| **Gradient Surgery** | Conflict resolution for multi-task gradients (Yu et al., 2020) |
-| **Rule Extraction** | Extract symbolic rules from trained neural policies (ECLAIRE/DeepRED patterns) |
-| **Dual Inference** | Combined neural (fast) + symbolic (safe) decision-making with safety overrides |
+| **Gradient Surgery** | Conflict resolution for multi-task gradients |
+| **Rule Extraction** | Symbolic rules extracted from neural policies |
+| **Dual Inference** | Combined neural (fast) + symbolic (safe) decision-making |
 
-See [Phase 1 Completion Report](docs/PHASE1_COMPLETION_REPORT.md) for details.
+### Phase 2: Perception Systems
+| Capability | Description |
+|---|---|
+| **Multimodal Processing** | Vision, audio, language all bind to HyperVectors |
+
+### Phase 3: Continual Learning
+| Capability | Description |
+|---|---|
+| **EWC** | Elastic Weight Consolidation for catastrophic forgetting prevention |
+| **Progressive Networks** | New columns with lateral connections per task |
+| **PackNet** | Pruning & capacity allocation per task |
+| **Memory Replay** | Interleaved training with experience buffer |
+
+### Phase 4: World Models & Planning
+| Capability | Description |
+|---|---|
+| **MPC** | Model Predictive Control for forward planning |
+| **MCTS** | Monte Carlo Tree Search for exploration |
+| **Hierarchical Planning** | Options framework for multi-level planning |
+
+### Phase 5: Self-Model & Metacognition
+| Capability | Description |
+|---|---|
+| **Self-Awareness** | Performance prediction, confidence tracking |
+| **Self-Explanation** | Transparent reasoning traces |
+| **Self-Improvement** | Autonomous learning rate adjustment |
+
+### Phase 6: Social & Emotional Intelligence
+| Capability | Description |
+|---|---|
+| **Emotion System** | Plutchik+Russell model, drive-based emotions |
+| **Theory of Mind** | Agent mental modeling, Sally-Anne test passing |
+
+### Phase 7: Integration & Transfer Learning
+| Capability | Description |
+|---|---|
+| **Cross-Domain Transfer** | Learn in Snake, apply in Pong/Maze via structural analogy |
+| **Knowledge Consolidation** | Multi-domain experiences → abstract domain-independent rules |
+| **Global Rules** | Domain-independent safety rules apply across all tasks |
+| **LLM Translator** | Phi3 translates system state to natural language (peripheral only) |
+| **Full Integration** | All phases working as unified cognitive architecture |
 
 ---
 
 ## Known Limitations
 
-These are documented, honest limitations of the current system:
-
-1. **No real language understanding** — the system operates on symbols, not semantics
+1. **No real language understanding** — the LLM is a translator peripheral, not a reasoning engine
 2. **No pixel-level perception** — uses structured game state, not raw images
 3. **No gradient-based learning in VSA core** — the VSA layer is not differentiable
 4. **Causal discovery needs sufficient observation data** — sparse data yields incomplete graphs
 5. **No real-world robustness** — only tested in simple grid-world environments
-6. **RL training requires environment interaction** — A2C/PPO need live environment loops to demonstrate full capability
+6. **Transfer limited to structurally similar domains** — requires shared abstract concepts
 
 ---
 
@@ -95,18 +128,18 @@ These are documented, honest limitations of the current system:
 ```
 Node_network/
 ├── nsck-demo/
-│   ├── python/           # Core system (82 modules, ~22,000 lines)
-│   ├── tests/            # Test suite (56 test files, 216+ tests passing)
-│   ├── rust_vsa/         # Rust VSA extension (optional, Python fallback available)
+│   ├── python/           # Core system modules
+│   ├── tests/            # Test suite (267+ tests)
+│   ├── rust_vsa/         # Rust VSA extension (optional)
 │   ├── web/              # Web dashboard assets
-│   ├── conftest.py       # Test configuration
 │   └── pyproject.toml    # Project metadata
 ├── docs/
-│   ├── AGENT_INSTRUCTIONS.md    # Development governance
-│   ├── COMPLETE_MODULE_ANALYSIS.md  # Module-by-module analysis
-│   ├── IMPLEMENTATION_ROADMAP.md    # Technical implementation guide
-│   └── RUST_VSA_ANALYSIS.md    # Rust VSA deep-dive
-├── research/             # Research reports and references
+│   ├── ARCHITECTURE.md           # System architecture & workflows
+│   ├── PHASE1-7_COMPLETION_REPORT.md  # Phase completion reports
+│   ├── IMPLEMENTATION_ROADMAP.md # Technical implementation guide
+│   ├── COMPLETE_MODULE_ANALYSIS.md   # Module-by-module analysis
+│   └── AGENT_INSTRUCTIONS.md    # Development governance
+├── research/             # Research reports
 ├── ROADMAP_TO_AGI.md     # Long-term development roadmap
 ├── requirements.txt      # Python dependencies
 └── pytest.ini            # Test configuration
@@ -119,23 +152,18 @@ Node_network/
 | Module | Purpose |
 |---|---|
 | `cognitive_engine.py` | Central orchestrator — integrates all subsystems |
-| `rl_engine.py` | A2C/PPO reinforcement learning with neural-symbolic bridge |
-| `snn_training_pipeline.py` | SNN training with Hebbian learning and concept activation mapping |
-| `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay |
-| `meta_learning.py` | MAML and Reptile for few-shot adaptation |
-| `brain_fusion.py` | Multi-task knowledge organization with VSA concepts |
-| `causal_reasoning.py` | Causal graph construction and inference |
-| `metacognition.py` | Self-monitoring, confidence scoring, conflict detection |
-| `episodic_memory.py` | VSA-based experience storage and retrieval |
+| `analogy.py` | Cross-domain transfer via structural alignment |
+| `train_phase7_demo.py` | Integrated system with KnowledgeStore and LLM translator |
 | `rule_learner.py` | Frequency-based symbolic rule induction |
-| `planner.py` | STRIPS-style goal planning |
-| `curiosity.py` | Curiosity-driven exploration using VSA novelty detection |
-| `intrinsic_motivation.py` | ICM for prediction-error based curiosity (~22K params) |
-| `world_model.py` | Forward simulation with sparse projection (128-dim bottleneck) |
-| `universal_encoder.py` | Multi-modal input encoding (visual/temporal/conceptual) |
-| `snn_qat.py` | Spiking neural network with ternary quantization (128-dim) |
-| `hypervec_shim.py` | VSA backend (Rust extension with Python fallback) |
-| `hypervec_py.py` | Pure Python VSA implementation (10,240-bit binary vectors) |
+| `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay |
+| `multi_task_learning.py` | Shared encoder + task heads + gradient surgery |
+| `world_model.py` | Forward simulation with sparse projection |
+| `language_module.py` | Phi3 LLM translator (peripheral) |
+| `emotion_system.py` | Emotion processing (Plutchik+Russell) |
+| `theory_of_mind.py` | Agent mental modeling + false belief detection |
+| `self_model.py` | Self-awareness and performance tracking |
+| `episodic_memory.py` | VSA-based experience storage |
+| `semantic_memory.py` | Concept graph with spreading activation |
 
 ---
 
@@ -146,7 +174,8 @@ Node_network/
 - **Python 3.11+**
 - **4 GB RAM** minimum
 - **No GPU required** — all computation runs on CPU
-- **Optional:** Rust 1.70+ (for VSA acceleration via the Rust extension)
+- **Optional:** Rust 1.70+ (for VSA acceleration)
+- **Optional:** Phi3 GGUF model (for LLM translator)
 
 ### Setup
 
@@ -161,7 +190,11 @@ pip install -r requirements.txt
 ## Running Tests
 
 ```bash
+# Run core tests
 python -m pytest nsck-demo/tests/ -v
+
+# Run transfer learning tests specifically
+python -m pytest nsck-demo/tests/test_transfer_learning.py -v
 ```
 
 Some tests require optional dependencies (`torch`, `flask`, `snntorch`). Core tests run without these.
@@ -184,13 +217,11 @@ NSCK is explicitly designed to avoid heavyweight computation:
 
 | Document | Description |
 |---|---|
-| [README.md](README.md) | This file — project overview and quick start |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, workflows, and proofs |
 | [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
-| [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all 78 modules |
 | [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
-| [docs/RUST_VSA_ANALYSIS.md](docs/RUST_VSA_ANALYSIS.md) | Rust VSA performance analysis |
+| [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all modules |
 | [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Development governance rules |
-| [docs/AGENT_COORDINATION_PLAN.md](docs/AGENT_COORDINATION_PLAN.md) | Multi-agent coordination: roles, work units, guardrails, parallelism |
 
 ---
 
