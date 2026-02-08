@@ -141,3 +141,7 @@ class EmotionSystem:
     def get_emotion_hypervector(self):
         """Return the VSA vector for the current emotion."""
         return self.emotion_codebook.get(self.current_emotion)
+    
+    def get_emotion_vector(self, emotion_name: str):
+        """Get the VSA vector for a specific emotion."""
+        return self.emotion_codebook.get(emotion_name, self.emotion_codebook.get("neutral"))

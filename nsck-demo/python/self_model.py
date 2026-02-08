@@ -72,15 +72,15 @@ class SelfModel:
         # TODO Phase 3.3: Use 'state' for contextual prediction (e.g., "I'm bad at corners")
         return stats["successes"] / stats["attempts"]
     
-    def update(self, task_tag: str, action: str, predicted_confidence: float, actual_success: bool, reward: float = 0.0):
+    def update(self, task_tag: str, predicted_confidence: float, actual_success: bool, action: str = "UNKNOWN", reward: float = 0.0):
         """
         Update model with new experience.
         
         Args:
             task_tag: Task identifier
-            action: Action taken
             predicted_confidence: What the agent THOUGHT would happen (0.0-1.0)
             actual_success: Did it actually succeed?
+            action: Action taken (optional, for capability tracking)
             reward: Reward received
         """
         stats = self.task_stats[task_tag]

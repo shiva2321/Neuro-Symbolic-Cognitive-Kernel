@@ -1,11 +1,13 @@
 # NSCK — Neuro-Symbolic Cognitive Kernel
 
-![Project Status](https://img.shields.io/badge/status-experimental_prototype-blue)
+![Project Status](https://img.shields.io/badge/status-Phase_1_Complete-green)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
-![Tests](https://img.shields.io/badge/tests-216+_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-230+_passing-brightgreen)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning and neural spiking networks, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
+
+**Latest Update:** Phase 1 (Neural Learning Engine) complete! Added multi-task learning with gradient surgery and rule extraction from neural policies. See [Phase 1 Completion Report](docs/PHASE1_COMPLETION_REPORT.md).
 
 > **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 
@@ -42,8 +44,9 @@ All components are designed to work together through a central cognitive engine,
 
 ## What Actually Works
 
-The following capabilities are implemented and verified by the test suite (216+ tests passing):
+The following capabilities are implemented and verified by the test suite (230+ tests passing):
 
+### Phase 0 Foundation (Verified)
 | Capability | Description |
 |---|---|
 | **VSA Core** | XOR binding, bundling, similarity search — all O(n) time on 10,240-bit binary hypervectors |
@@ -61,6 +64,16 @@ The following capabilities are implemented and verified by the test suite (216+ 
 | **Continual Learning** | EWC, PackNet, Progressive Neural Networks, Memory Replay |
 | **Meta-Learning** | MAML and Reptile for rapid few-shot task adaptation |
 | **Game Environments** | Snake, Pong, Maze (grid-based test environments) |
+
+### Phase 1: Neural Learning Engine (Complete)
+| Capability | Description |
+|---|---|
+| **Multi-Task Learning** | Shared encoder with task-specific heads for Snake, Pong, Maze |
+| **Gradient Surgery** | Conflict resolution for multi-task gradients (Yu et al., 2020) |
+| **Rule Extraction** | Extract symbolic rules from trained neural policies (ECLAIRE/DeepRED patterns) |
+| **Dual Inference** | Combined neural (fast) + symbolic (safe) decision-making with safety overrides |
+
+See [Phase 1 Completion Report](docs/PHASE1_COMPLETION_REPORT.md) for details.
 
 ---
 
