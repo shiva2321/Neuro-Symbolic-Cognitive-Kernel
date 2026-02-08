@@ -1,34 +1,49 @@
-"""Compatibility shim for the `hypervec_rs` module.
+"""Compatibility shim for the ``hypervec_rs`` Rust extension.
 
-This file is *not* intended to shadow the compiled extension on PYTHONPATH.
-Instead, tests or modules can import it explicitly if needed.
+Tries to load the compiled Rust extension first.  When it is not available
+(e.g. in CI or on a machine without the compiled binary) it falls back
+transparently to the pure-Python implementation in ``hypervec_py``.
 
-We also provide an optional monkey-patch that adds missing methods to the
-compiled HyperVector class when running on an older build.
+Modules throughout the codebase should import via::
+
+    import hypervec_shim as hypervec_rs
+
+This guarantees they get the fastest available backend without crashing
+when the Rust build is missing.
 """
 
 from __future__ import annotations
 
 import hashlib
+import multiprocessing
 from typing import Optional
 
-# This should now find the compiled extension since this file is named hypervec_shim.py
-import hypervec_rs as _ext
+_USE_RUST = False
+
+try:
+    import hypervec_rs as _ext  # compiled Rust extension
+    _USE_RUST = True
+except ImportError:
+    _ext = None
+
+if _ext is None:
+    # Fall back to the pure-Python implementation.
+    from hypervec_py import HyperVectorPy as _FallbackHV  # noqa: E402
+
+    if multiprocessing.current_process().name == "MainProcess":
+        print(">> [VSA] Using Python Fallback (via shim)")
 
 
 def _hv_repr_bytes(hv) -> bytes:
     return repr(hv).encode("utf-8")
 
 
-def _install_compat_methods():
-    HV = getattr(_ext, "HyperVector", None)
-    if HV is None:
-        return
+def _install_compat_methods(HV):
+    """Add helper methods that may be missing from the Rust class."""
 
     # --- weighted_bundle ---
     if not hasattr(HV, "weighted_bundle"):
         def weighted_bundle(self, other, weight: float, seed: Optional[int] = None):
-            # Approximate: repeatedly bundle to bias toward self.
             w = max(0.0, min(1.0, float(weight)))
             k = 7
             self_n = max(1, int(round(w * k)))
@@ -46,7 +61,6 @@ def _install_compat_methods():
     # --- lsh_hash ---
     if not hasattr(HV, "lsh_hash"):
         def lsh_hash(self, seed: int, n_bits: int) -> int:
-            # Deterministic hash of repr (good enough for tests/caching).
             h = hashlib.blake2b(_hv_repr_bytes(self), digest_size=8)
             sig64 = int.from_bytes(h.digest(), "little")
             n = int(n_bits)
@@ -57,9 +71,13 @@ def _install_compat_methods():
         setattr(HV, "lsh_hash", lsh_hash)
 
 
-_install_compat_methods()
-
-# Re-export the patched class
-HyperVector = _ext.HyperVector
+if _USE_RUST:
+    _install_compat_methods(_ext.HyperVector)
+    HyperVector = _ext.HyperVector
+    if multiprocessing.current_process().name == "MainProcess":
+        print(">> [VSA] Using Rust Accelerator (hypervec_rs)")
+else:
+    _install_compat_methods(_FallbackHV)
+    HyperVector = _FallbackHV
 
 __all__ = ["HyperVector"]
