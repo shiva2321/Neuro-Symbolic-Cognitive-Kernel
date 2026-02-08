@@ -17,4 +17,4 @@ models/
 *.pkl
 *.pth
 *.csv
-emnist_samples.png
+*.png
