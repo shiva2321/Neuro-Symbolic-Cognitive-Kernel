@@ -30,7 +30,7 @@ import numpy as np
 @dataclass
 class CuriosityConfig:
     """Configuration for intrinsic motivation."""
-    latent_dim: int = 256          # Feature embedding dimension
+    latent_dim: int = 64           # Feature embedding dimension (compact for efficiency)
     learning_rate: float = 1e-4    # ICM training learning rate
     beta: float = 0.2              # Weight of forward loss vs inverse loss
     intrinsic_scale: float = 0.01  # Scale factor for intrinsic reward
@@ -42,15 +42,17 @@ class FeatureNetwork(nn.Module):
     """
     Extracts state features for prediction models.
     Shared between forward and inverse models.
+
+    Uses adaptive pooling + small linear projection instead of
+    heavy convolutions to stay energy/memory efficient.
     """
-    def __init__(self, latent_dim: int = 256):
+    def __init__(self, latent_dim: int = 64):
         super().__init__()
         
-        # Visual pathway (for game frames)
-        self.conv1 = nn.Conv2d(4, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        # Lightweight pathway: pool to fixed 4×4 then project
         self.pool = nn.AdaptiveAvgPool2d((4, 4))
-        self.fc = nn.Linear(64 * 4 * 4, latent_dim)
+        # 4 channels × 4 × 4 = 64 features → latent_dim
+        self.fc = nn.Linear(4 * 4 * 4, latent_dim)
         
     def forward(self, state: torch.Tensor) -> torch.Tensor:
         """
@@ -62,21 +64,21 @@ class FeatureNetwork(nn.Module):
         Returns:
             [B, latent_dim] feature tensor
         """
-        # Handle different input shapes
-        # Handle different input shapes
-        # Input is expected to be [B, 4, 10, 10] (Frame Stack)
         if state.dim() == 3:
-             # If just [4, 10, 10], add batch dim
              state = state.unsqueeze(0)
         if state.dim() == 2:
-            # Assume flattened, try to reshape to 10x10 (Snake grid)
             state = state.view(-1, 1, 10, 10)
-            
-        x = F.relu(self.conv1(state))
-        x = F.relu(self.conv2(x))
-        x = self.pool(x)
-        x = x.flatten(1)
-        x = self.fc(x)
+
+        # Ensure 4 channels via repeat/slice
+        b, c, h, w = state.shape
+        if c < 4:
+            state = state.repeat(1, (4 // c) + 1, 1, 1)[:, :4, :, :]
+        elif c > 4:
+            state = state[:, :4, :, :]
+
+        x = self.pool(state)       # [B, 4, 4, 4]
+        x = x.flatten(1)           # [B, 64]
+        x = F.relu(self.fc(x))
         return x
 
 
@@ -86,15 +88,15 @@ class ForwardModel(nn.Module):
     
     The prediction error is the intrinsic reward signal.
     """
-    def __init__(self, latent_dim: int = 256, num_actions: int = 4):
+    def __init__(self, latent_dim: int = 64, num_actions: int = 4):
         super().__init__()
         
         # Action embedding
-        self.action_embed = nn.Embedding(num_actions, 32)
+        self.action_embed = nn.Embedding(num_actions, 16)
         
-        # Dynamics prediction
-        self.fc1 = nn.Linear(latent_dim + 32, 256)
-        self.fc2 = nn.Linear(256, latent_dim)
+        # Dynamics prediction (compact: latent+16 → latent)
+        self.fc1 = nn.Linear(latent_dim + 16, latent_dim)
+        self.fc2 = nn.Linear(latent_dim, latent_dim)
         
     def forward(self, features: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         """
@@ -120,11 +122,11 @@ class InverseModel(nn.Module):
     
     This helps learn action-relevant features (filter out noise).
     """
-    def __init__(self, latent_dim: int = 256, num_actions: int = 4):
+    def __init__(self, latent_dim: int = 64, num_actions: int = 4):
         super().__init__()
         
-        self.fc1 = nn.Linear(latent_dim * 2, 256)
-        self.fc2 = nn.Linear(256, num_actions)
+        self.fc1 = nn.Linear(latent_dim * 2, latent_dim)
+        self.fc2 = nn.Linear(latent_dim, num_actions)
         
     def forward(self, features: torch.Tensor, next_features: torch.Tensor) -> torch.Tensor:
         """

@@ -39,11 +39,11 @@ class TaskAwareSNN(nn.Module):
         spike_grad = surrogate.fast_sigmoid(slope=25)
 
         # 1. Universal Cortex (The "Eye/Ear")
-        self.encoder = UniversalEncoder(latent_dim=256)
+        self.encoder = UniversalEncoder(latent_dim=128)
         
         # 2. Association Area (SNN Core)
-        # Input: 256 (Latent) -> Hidden: 256 -> Output: 256
-        self.fc_shared = nn.Linear(256, 256)
+        # Input: 128 (Latent) -> Hidden: 128 -> Output: 128
+        self.fc_shared = nn.Linear(128, 128)
         self.lif_shared = snn.Leaky(beta=beta, spike_grad=spike_grad, threshold=0.5)
 
         # 3. Dynamic Heads (The "Motor Cortex")
@@ -59,8 +59,8 @@ class TaskAwareSNN(nn.Module):
         if task_name not in self.heads:
             print(f"[Brain] Growing new Neocortex segment for task: {task_name}")
             self.heads[task_name] = nn.ModuleDict({
-                "actor": nn.Linear(256, num_actions),   # [Batch, Actions]
-                "critic": nn.Linear(256, 1)             # [Batch, 1] - How good is this state?
+                "actor": nn.Linear(128, num_actions),   # [Batch, Actions]
+                "critic": nn.Linear(128, 1)             # [Batch, 1] - How good is this state?
             })
             
             # Send to device if model is already on GPU

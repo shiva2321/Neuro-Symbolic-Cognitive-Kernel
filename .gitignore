@@ -11,3 +11,10 @@ data_mnist/
 nsck-demo/data_mnist/
 models/
 *.gguf
+
+# Runtime-generated artifacts – never commit these
+*.db
+*.pkl
+*.pth
+*.csv
+emnist_samples.png
