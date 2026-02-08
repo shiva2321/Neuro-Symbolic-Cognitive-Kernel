@@ -1,12 +1,18 @@
 """
 Tests for Phase 3/4: Continual Learning and Meta-Learning
-Validates EWC, PackNet, MAML, and Reptile implementations.
+Validates EWC, PackNet, Progressive Networks, Memory Replay, MAML, and Reptile.
 """
 import unittest
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
-from continual_learning import ContinualLearner, PackNetManager
+from continual_learning import (
+    ContinualLearner,
+    PackNetManager,
+    ProgressiveNetwork,
+    ProgressiveColumn,
+    MemoryReplayManager,
+)
 from meta_learning import MAMLLearner, ReptileLearner
 
 
@@ -130,6 +136,96 @@ class TestReptileLearner(unittest.TestCase):
         support_x = torch.randn(5, 8)
         support_y = torch.randint(0, 4, (5,))
         learner.adapt(support_x, support_y, steps=3)
+
+
+class TestProgressiveNetwork(unittest.TestCase):
+    """Test Progressive Neural Networks for continual learning (Phase 3.2)."""
+
+    def test_add_first_task(self):
+        net = ProgressiveNetwork(input_dim=8, hidden_dim=16, output_dim=4)
+        col = net.add_task("snake")
+        self.assertIsInstance(col, ProgressiveColumn)
+        self.assertEqual(len(net.columns), 1)
+
+    def test_add_multiple_tasks(self):
+        net = ProgressiveNetwork(input_dim=8, hidden_dim=16, output_dim=4)
+        net.add_task("snake")
+        net.add_task("pong")
+        col_c = net.add_task("maze")
+        self.assertEqual(len(net.columns), 3)
+        # Only last column should be trainable
+        for param in net.columns[0].parameters():
+            self.assertFalse(param.requires_grad)
+        for param in net.columns[1].parameters():
+            self.assertFalse(param.requires_grad)
+        # Latest column is trainable
+        trainable_count = sum(
+            1 for p in col_c.parameters() if p.requires_grad
+        )
+        self.assertGreater(trainable_count, 0)
+
+    def test_forward_with_lateral(self):
+        net = ProgressiveNetwork(input_dim=8, hidden_dim=16, output_dim=4)
+        net.add_task("snake")
+        col_b = net.add_task("pong")
+        x = torch.randn(2, 8)
+        out = col_b(x)
+        self.assertEqual(out.shape, (2, 4))
+
+    def test_get_column(self):
+        net = ProgressiveNetwork(input_dim=8, hidden_dim=16, output_dim=4)
+        net.add_task("snake")
+        col = net.get_column("snake")
+        self.assertIsNotNone(col)
+        self.assertIsNone(net.get_column("nonexistent"))
+
+    def test_stats(self):
+        net = ProgressiveNetwork(input_dim=8, hidden_dim=16, output_dim=4)
+        net.add_task("task_a")
+        net.add_task("task_b")
+        stats = net.get_stats()
+        self.assertEqual(stats["num_tasks"], 2)
+        self.assertIn("task_a", stats["task_names"])
+        self.assertGreater(stats["total_params"], 0)
+
+
+class TestMemoryReplayManager(unittest.TestCase):
+    """Test Memory Replay for continual learning (Phase 3.3)."""
+
+    def test_store_and_sample(self):
+        mgr = MemoryReplayManager(capacity_per_task=100)
+        inputs = torch.randn(10, 8)
+        targets = torch.randint(0, 4, (10,))
+        mgr.store("snake", inputs, targets)
+        result = mgr.sample_mixed(batch_size=5)
+        self.assertIsNotNone(result)
+        sampled_inputs, sampled_targets = result
+        self.assertLessEqual(sampled_inputs.shape[0], 10)
+
+    def test_multi_task_replay(self):
+        mgr = MemoryReplayManager(capacity_per_task=50)
+        mgr.store("snake", torch.randn(20, 8), torch.randint(0, 4, (20,)))
+        mgr.store("pong", torch.randn(20, 8), torch.randint(0, 4, (20,)))
+        result = mgr.sample_mixed(batch_size=10)
+        self.assertIsNotNone(result)
+
+    def test_capacity_limit(self):
+        mgr = MemoryReplayManager(capacity_per_task=5)
+        mgr.store("task_a", torch.randn(20, 8), torch.randint(0, 4, (20,)))
+        self.assertEqual(len(mgr.task_buffers["task_a"]), 5)
+
+    def test_empty_sample(self):
+        mgr = MemoryReplayManager()
+        result = mgr.sample_mixed(batch_size=10)
+        self.assertIsNone(result)
+
+    def test_stats(self):
+        mgr = MemoryReplayManager(capacity_per_task=100)
+        mgr.store("snake", torch.randn(15, 8), torch.randint(0, 4, (15,)))
+        mgr.store("pong", torch.randn(10, 8), torch.randint(0, 4, (10,)))
+        stats = mgr.get_stats()
+        self.assertEqual(stats["snake"], 15)
+        self.assertEqual(stats["pong"], 10)
 
 
 if __name__ == "__main__":

@@ -180,3 +180,173 @@ class PackNetManager:
             stats[task_id] = allocated / total_params
             
         return stats
+
+
+class ProgressiveColumn(nn.Module):
+    """
+    Single column in a Progressive Neural Network (Phase 3.2).
+    Each task gets its own column with lateral connections from previous columns.
+
+    Reference: "Progressive Neural Networks" (Rusu et al., 2016)
+    """
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int,
+                 prev_columns: Optional[List[nn.Module]] = None):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, output_dim)
+
+        # Lateral connections from previous columns
+        self.lateral_connections = nn.ModuleList()
+        if prev_columns:
+            for _ in prev_columns:
+                self.lateral_connections.append(
+                    nn.Linear(hidden_dim, hidden_dim, bias=False)
+                )
+
+        self.prev_columns = prev_columns or []
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = torch.relu(self.fc1(x))
+
+        # Add lateral inputs from frozen previous columns
+        for i, (prev_col, lateral) in enumerate(
+            zip(self.prev_columns, self.lateral_connections)
+        ):
+            with torch.no_grad():
+                prev_h = torch.relu(prev_col.fc1(x))
+            h = h + lateral(prev_h)
+
+        return self.fc2(torch.relu(h))
+
+
+class ProgressiveNetwork:
+    """
+    Progressive Neural Network for continual learning (Phase 3.2).
+    Adds new capacity for each task while freezing old columns.
+
+    Architecture:
+        Task A     Task B     Task C
+          |          |          |
+        [Col A] → [Col B] → [Col C]
+                  (frozen)  (learning)
+    """
+    def __init__(self, input_dim: int, hidden_dim: int, output_dim: int):
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.columns: List[ProgressiveColumn] = []
+        self.task_names: List[str] = []
+
+    def add_task(self, task_name: str) -> ProgressiveColumn:
+        """
+        Add a new column for a new task.
+        Previous columns are frozen (no forgetting).
+
+        Args:
+            task_name: Identifier for the new task
+
+        Returns:
+            The new trainable column
+        """
+        # Freeze all existing columns
+        for col in self.columns:
+            for param in col.parameters():
+                param.requires_grad = False
+
+        # Create new column with lateral connections
+        new_col = ProgressiveColumn(
+            input_dim=self.input_dim,
+            hidden_dim=self.hidden_dim,
+            output_dim=self.output_dim,
+            prev_columns=list(self.columns),
+        )
+        self.columns.append(new_col)
+        self.task_names.append(task_name)
+        return new_col
+
+    def get_column(self, task_name: str) -> Optional[ProgressiveColumn]:
+        """Get the column for a specific task."""
+        if task_name in self.task_names:
+            idx = self.task_names.index(task_name)
+            return self.columns[idx]
+        return None
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Return network statistics."""
+        total_params = sum(
+            p.numel() for col in self.columns for p in col.parameters()
+        )
+        trainable = sum(
+            p.numel()
+            for col in self.columns
+            for p in col.parameters()
+            if p.requires_grad
+        )
+        return {
+            "num_tasks": len(self.columns),
+            "total_params": total_params,
+            "trainable_params": trainable,
+            "task_names": list(self.task_names),
+        }
+
+
+class MemoryReplayManager:
+    """
+    Memory replay for continual learning (Phase 3.3).
+    Interleaves old and new task data to prevent forgetting.
+
+    Supports:
+      - Naive replay (store real experiences)
+      - Goldilocks replay (balance recent vs old)
+
+    Reference: "Continual Learning with Generative Replay" (Shin et al., 2017)
+    """
+    def __init__(self, capacity_per_task: int = 500):
+        self.capacity = capacity_per_task
+        self.task_buffers: Dict[str, List[Tuple[torch.Tensor, torch.Tensor]]] = {}
+
+    def store(self, task_id: str, inputs: torch.Tensor, targets: torch.Tensor):
+        """Store experiences for a task (keeps most recent up to capacity)."""
+        if task_id not in self.task_buffers:
+            self.task_buffers[task_id] = []
+
+        buf = self.task_buffers[task_id]
+        for i in range(inputs.shape[0]):
+            buf.append((inputs[i].detach().cpu(), targets[i].detach().cpu()))
+            if len(buf) > self.capacity:
+                buf.pop(0)
+
+    def sample_mixed(self, batch_size: int) -> Optional[Tuple[torch.Tensor, torch.Tensor]]:
+        """
+        Sample a balanced batch from all tasks.
+
+        Args:
+            batch_size: Total batch size
+
+        Returns:
+            (inputs, targets) tuple or None if empty
+        """
+        if not self.task_buffers:
+            return None
+
+        per_task = max(1, batch_size // len(self.task_buffers))
+        samples = []
+
+        import random
+        for task_id, buf in self.task_buffers.items():
+            if buf:
+                n = min(len(buf), per_task)
+                samples.extend(random.sample(buf, n))
+
+        if not samples:
+            return None
+
+        random.shuffle(samples)
+        inputs, targets = zip(*samples)
+        return torch.stack(inputs), torch.stack(targets)
+
+    def get_stats(self) -> Dict[str, int]:
+        """Return buffer statistics."""
+        return {
+            task_id: len(buf) for task_id, buf in self.task_buffers.items()
+        }
