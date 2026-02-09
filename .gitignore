@@ -1,9 +1,13 @@
 **/target/
 **/__pycache__/
+**/.pytest_cache/
+.idea/
+.vscode/
 *.pyc
 *.log
 *.txt
 !nsck_gameplay_log.txt
+!requirements.txt
 run_log_*.txt
 nsck-demo/10Minute_experiment_video.mp4
 
