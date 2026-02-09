@@ -55,8 +55,9 @@ class TestRuleLearner:
         
         learner.induce_rules("snake")
         
-        # Query for state1
-        matches = learner.get_applicable_rules(state1, "snake")
+        # Query for state1 — get_applicable_rules expects active predicates, not state
+        active_preds = verifier.get_active_predicates(state1, context="snake")
+        matches = learner.get_applicable_rules(active_preds, "snake")
         assert len(matches) >= 1
         best_rule, score = matches[0]
         assert "UP" in best_rule.consequence
