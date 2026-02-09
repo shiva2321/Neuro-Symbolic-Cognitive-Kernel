@@ -413,12 +413,14 @@ class IntegratedNSCKSystem:
         }
     
     def understand_emotion(self, drives, reward):
-        """Phase 6: Emotional processing."""
+        """Phase 6: Emotional processing with blend and mood."""
         self.emotion_system.update_from_drives(drives, reward)
         return {
             'emotion': self.emotion_system.current_emotion,
             'valence': self.emotion_system.valence,
-            'arousal': self.emotion_system.arousal
+            'arousal': self.emotion_system.arousal,
+            'blend': self.emotion_system.get_emotion_blend(),
+            'mood': self.emotion_system.get_mood(),
         }
     
     def model_other_agent(self, agent_id, observations):
@@ -436,6 +438,56 @@ class IntegratedNSCKSystem:
                 'position': model.position
             }
         return {}
+
+    def get_cognitive_metrics(self):
+        """
+        Aggregate metrics from all cognitive subsystems.
+
+        Returns a dict capturing the health, confidence, emotional state,
+        learning progress, and social awareness of the entire system —
+        useful for monitoring and capability-proof documentation.
+        """
+        # Self-model stats across known tasks
+        task_summaries = {}
+        for task_tag in list(self.self_model.task_stats.keys()):
+            stats = self.self_model.get_stats(task_tag)
+            task_summaries[task_tag] = {
+                'attempts': stats['attempts'],
+                'successes': stats['successes'],
+                'success_rate': (
+                    stats['successes'] / stats['attempts']
+                    if stats['attempts'] > 0 else 0.0
+                ),
+                'calibration_error': self.self_model.get_calibration_error(task_tag),
+                'trend': self.self_model.get_improvement_trend(task_tag),
+                'context_breakdown': self.self_model.get_context_performance(task_tag),
+            }
+
+        return {
+            'phases_active': {
+                'neural_learning':   True,
+                'perception':        True,
+                'continual_learning': True,
+                'world_model':       True,
+                'self_model':        True,
+                'emotion':           True,
+                'theory_of_mind':    True,
+                'transfer_learning': True,
+            },
+            'emotion': self.emotion_system.get_emotion_info(),
+            'mood': self.emotion_system.get_mood(),
+            'task_performance': task_summaries,
+            'knowledge_store': {
+                'abstract_rules': len(self.knowledge_store.abstract_rules),
+                'total_experiences': sum(
+                    len(v) for v in self.knowledge_store.experience_index.values()
+                ),
+                'domains': list(self.knowledge_store.domain_schemas.keys()),
+            },
+            'social': {
+                'tracked_agents': list(self.theory_of_mind.agent_models.keys()),
+            },
+        }
 
 
 def demonstrate_phase7_integration():
