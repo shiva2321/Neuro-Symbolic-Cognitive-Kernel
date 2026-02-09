@@ -125,8 +125,9 @@ class SelfModel:
         recent = self.recent_window.get(task_tag)
         if recent and len(recent) >= 5:
             recent_rate = sum(recent) / len(recent)
-            # Light blend (20%) toward recent trend
-            return 0.8 * base_rate + 0.2 * recent_rate
+            # Only blend when there's a meaningful difference (avoids float noise)
+            if abs(recent_rate - base_rate) > 0.01:
+                return 0.8 * base_rate + 0.2 * recent_rate
 
         return base_rate
     
