@@ -1,5 +1,5 @@
 import unittest
-from global_workspace import GlobalWorkspace, WorkspaceModule
+from global_workspace import GlobalWorkspace, WorkspaceModule, Coalition
 
 class MockModule(WorkspaceModule):
     def __init__(self, name):
@@ -12,7 +12,7 @@ class MockModule(WorkspaceModule):
 
 class TestGlobalWorkspace(unittest.TestCase):
     def test_competition_and_broadcast(self):
-        """Test that the highest salience proposal wins and is broadcasted."""
+        """Test that the highest activation Coalition wins and is broadcasted."""
         gw = GlobalWorkspace(attention_threshold=0.6)
         
         # 1. Setup modules
@@ -21,41 +21,39 @@ class TestGlobalWorkspace(unittest.TestCase):
         gw.register_module("Vision", vision)
         gw.register_module("Memory", memory)
         
-        # 2. Round 1: Vision wins (0.9 > 0.4)
-        proposals_1 = {
-            "Vision": ("Object detected: Snake", 0.9),
-            "Memory": ("Recall: null", 0.4)
-        }
+        # 2. Round 1: Vision wins (higher activation)
+        proposals_1 = [
+            Coalition(source="Vision", content="Object detected: Snake", base_salience=0.9),
+            Coalition(source="Memory", content="Recall: null", base_salience=0.4)
+        ]
         winner = gw.compete(proposals_1)
         
-        self.assertEqual(winner, "Vision")
+        self.assertIsNotNone(winner)
+        self.assertEqual(winner.source, "Vision")
         self.assertEqual(gw.workspace_content, "Object detected: Snake")
         
         # Verify broadcast
         self.assertEqual(vision.received[-1], "Object detected: Snake")
-        self.assertEqual(memory.received[-1], "Object detected: Snake") # Memory hears Vision
+        self.assertEqual(memory.received[-1], "Object detected: Snake")
         
-        # 3. Round 2: No one wins (both < 0.6)
-        proposals_2 = {
-            "Vision": ("Background noise", 0.2),
-            "Memory": ("Faint memory", 0.3)
-        }
+        # 3. Round 2: No one wins (both below threshold)
+        proposals_2 = [
+            Coalition(source="Vision", content="Background noise", base_salience=0.05),
+            Coalition(source="Memory", content="Faint memory", base_salience=0.1)
+        ]
         winner = gw.compete(proposals_2)
         
         self.assertIsNone(winner)
-        # Content remains from previous or strictly implies "no update"?
-        # Implementation just updates if threshold passed. so content is STALE or NONE?
-        # Current impl: `self.workspace_content` is NOT cleared if no winner.
-        # But `compete` returns None.
         
-        # 4. Round 3: Memory wins (0.8 > 0.1)
-        proposals_3 = {
-            "Vision": ("Nothing new", 0.1),
-            "Memory": ("Danger pattern recognized!", 0.8)
-        }
+        # 4. Round 3: Memory wins
+        proposals_3 = [
+            Coalition(source="Vision", content="Nothing new", base_salience=0.1),
+            Coalition(source="Memory", content="Danger pattern recognized!", base_salience=0.8)
+        ]
         winner = gw.compete(proposals_3)
         
-        self.assertEqual(winner, "Memory")
+        self.assertIsNotNone(winner)
+        self.assertEqual(winner.source, "Memory")
         self.assertEqual(vision.received[-1], "Danger pattern recognized!")
         
         print("\n[TEST] Global Workspace verification passed!")

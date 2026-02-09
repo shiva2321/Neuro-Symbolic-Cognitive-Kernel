@@ -534,11 +534,15 @@ class CausalReasoner:
     ) -> CounterfactualResult:
         """
         Answer "What if I did Y instead of X?" using simulator or Causal Graph.
+
+        Enhanced: Now produces a richer explanation with causal chain details
+        and quantified risk/benefit assessment.
         """
         original_outcome = "unknown"
         counterfactual_outcome = "unknown"
         affected = []
         confidence = 0.5
+        chain_details: List[str] = []
         
         if self.simulator:
             try:
@@ -578,11 +582,51 @@ class CausalReasoner:
             affected = list(set(actual_effects) ^ set(alt_effects))
             confidence = 0.4 # Graph induction is probabilistic
 
+        # Enhanced: Collect causal chain details for richer explanations
+        actual_chains = self.graph.forward_chain(actual_action, max_depth=3, context=task_tag)
+        alt_chains = self.graph.forward_chain(alternative_action, max_depth=3, context=task_tag)
+        for ch in actual_chains:
+            chain_details.append(f"  actual: {ch.describe()} (strength={ch.total_strength:.2f})")
+        for ch in alt_chains:
+            chain_details.append(f"  alternative: {ch.describe()} (strength={ch.total_strength:.2f})")
+
+        # Enhanced: Risk / benefit assessment
+        def _risk_score(chains):
+            risk = 0.0
+            for ch in chains:
+                if any(w in ch.end for w in ("DEATH", "COLLISION", "FAIL", "LOST")):
+                    risk += ch.total_strength
+            return risk
+
+        def _benefit_score(chains):
+            benefit = 0.0
+            for ch in chains:
+                if any(w in ch.end for w in ("REWARD", "SCORE", "SUCCESS", "GROW")):
+                    benefit += ch.total_strength
+            return benefit
+
+        actual_risk = _risk_score(actual_chains)
+        alt_risk = _risk_score(alt_chains)
+        actual_benefit = _benefit_score(actual_chains)
+        alt_benefit = _benefit_score(alt_chains)
+
         # Generate explanation
+        parts: List[str] = []
         if original_outcome == counterfactual_outcome:
-            explanation = f"Likely no difference: both {actual_action} and {alternative_action} seem to lead to {original_outcome}"
+            parts.append(f"Likely no difference: both {actual_action} and {alternative_action} lead to {original_outcome}.")
         else:
-            explanation = f"Causal simulation suggests: {actual_action} -> {original_outcome}, but {alternative_action} -> {counterfactual_outcome}"
+            parts.append(f"Causal simulation: {actual_action} → {original_outcome}, but {alternative_action} → {counterfactual_outcome}.")
+
+        if actual_risk != alt_risk:
+            better = alternative_action if alt_risk < actual_risk else actual_action
+            parts.append(f"{better} is safer (risk {actual_risk:.2f} vs {alt_risk:.2f}).")
+        if actual_benefit != alt_benefit:
+            better = alternative_action if alt_benefit > actual_benefit else actual_action
+            parts.append(f"{better} has higher reward potential (benefit {actual_benefit:.2f} vs {alt_benefit:.2f}).")
+        if chain_details:
+            parts.append("Causal chains:\n" + "\n".join(chain_details[:6]))
+
+        explanation = " ".join(parts)
         
         return CounterfactualResult(
             query=f"What if {alternative_action} instead of {actual_action}?",

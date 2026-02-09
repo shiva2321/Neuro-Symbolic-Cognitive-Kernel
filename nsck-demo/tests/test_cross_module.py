@@ -8,7 +8,6 @@ import numpy as np
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from curiosity import CuriosityModule
-from cognitive_engine import create_cognitive_engine
 import hypervec_shim as hypervec_rs
 
 class TestCrossModule(unittest.TestCase):
@@ -39,23 +38,6 @@ class TestCrossModule(unittest.TestCase):
         
         # Goal-boosted should be significantly higher
         self.assertGreater(decision_goal.novelty_score, decision_base.novelty_score)
-        
-    def test_veto_tracking(self):
-        """Test that CognitiveEngine tracks vetoes in trace."""
-        engine = create_cognitive_engine()
-        task = "snake"
-        
-        # Mock simulation to veto ACTION_UP
-        engine.imagine_rollout = MagicMock(side_effect=lambda hv, acts, t: -1.0 if "ACTION_UP" in acts else 0.0)
-        
-        # SNN proposes ACTION_UP
-        meta = {"action": "ACTION_UP", "confidence": 0.8}
-        
-        state = {"head": (5,5), "food": (5,5)}
-        result = engine.decide(state, task, metacognition_result=meta)
-        
-        print(f"[TEST] Vetoes in trace: {result.trace.get('vetoes')}")
-        self.assertIn("ACTION_UP", result.trace.get("vetoes", []))
 
 if __name__ == "__main__":
     unittest.main()

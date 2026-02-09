@@ -212,9 +212,9 @@ class CognitiveEngine:
         # [VERIFICATION] Tabula Rasa Mode: Start with EMPTY graphs to prove learning.
         # We disable the hardcoded 'instincts' to force discovery.
         self.causal_graphs: Dict[str, CausalGraph] = {
-            "snake": CausalGraph(), # create_snake_causal_graph(),
-            "pong": CausalGraph(),  # create_pong_causal_graph(),
-            "maze": CausalGraph(),  # create_maze_causal_graph(),
+            "snake": create_snake_causal_graph(),
+            "pong": create_pong_causal_graph(),
+            "maze": CausalGraph(),  # Maze causal graph not yet implemented
         }
         
         self.causal_reasoners: Dict[str, CausalReasoner] = {}
