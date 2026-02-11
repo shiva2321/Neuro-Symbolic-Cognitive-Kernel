@@ -103,6 +103,239 @@ Full activity log with filtering and export capabilities.
 
 ---
 
+## API Examples
+
+### Chat API
+
+**Request**:
+```bash
+curl -X POST http://localhost:5051/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What is consciousness?",
+    "sample_text": "Consciousness is the state of being aware."
+  }'
+```
+
+**Response**:
+```json
+{
+  "response": "Consciousness relates to awareness and subjective experience...",
+  "dialogue_response": "That's an interesting philosophical question about awareness.",
+  "reasoning_trace": [
+    "Encoded input text to hypervectors",
+    "Recalled 3 relevant memories",
+    "Disambiguated context: philosophy",
+    "Matched concept: AWARENESS with confidence 0.85"
+  ],
+  "confidence": 0.85,
+  "emotion": "neutral",
+  "emotion_blend": {
+    "neutral": 0.45,
+    "trust": 0.25,
+    "anticipation": 0.20,
+    "joy": 0.10
+  },
+  "context_disambiguations": ["philosophy", "cognitive_science"]
+}
+```
+
+### Game Simulation API
+
+**Start Game**:
+```bash
+curl -X POST http://localhost:5051/api/game/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "game_type": "snake",
+    "auto_play": true,
+    "speed": 200
+  }'
+```
+
+**Response**:
+```json
+{
+  "status": "started",
+  "session_id": "snake_1707627600",
+  "message": "Snake game started",
+  "game_type": "snake",
+  "auto_play": true,
+  "speed_ms": 200
+}
+```
+
+**Get Game State**:
+```bash
+curl "http://localhost:5051/api/game/state?session_id=snake_1707627600"
+```
+
+**Response**:
+```json
+{
+  "session_id": "snake_1707627600",
+  "game_type": "snake",
+  "status": "running",
+  "score": 150,
+  "steps": 45,
+  "state": {
+    "head_pos": [5, 8],
+    "food_pos": [7, 8],
+    "body_length": 5,
+    "direction": "RIGHT"
+  },
+  "last_action": "ACTION_RIGHT",
+  "reasoning": "Rule: {FOOD_RIGHT} → ACTION_RIGHT (confidence: 0.87)"
+}
+```
+
+**Step Game Manually**:
+```bash
+curl -X POST http://localhost:5051/api/game/step \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "snake_1707627600"}'
+```
+
+**Response**:
+```json
+{
+  "status": "stepped",
+  "session_id": "snake_1707627600",
+  "new_score": 160,
+  "steps": 46,
+  "action_taken": "ACTION_UP",
+  "reward": 10,
+  "reasoning": "Planner coalition won: path to food requires UP movement",
+  "game_over": false
+}
+```
+
+### System Monitor API
+
+**Get Full Monitor Data**:
+```bash
+curl "http://localhost:5051/api/monitor"
+```
+
+**Response**:
+```json
+{
+  "emotion": {
+    "current_emotion": "joy",
+    "valence": 0.72,
+    "arousal": 0.58,
+    "intensity": 0.65,
+    "blend": {
+      "joy": 0.38,
+      "trust": 0.25,
+      "anticipation": 0.22,
+      "neutral": 0.15
+    }
+  },
+  "mood": {
+    "avg_valence": 0.68,
+    "avg_arousal": 0.54,
+    "dominant_emotion": "joy",
+    "stability": 0.12,
+    "window_size": 10
+  },
+  "emotion_history": [
+    {"step": 1, "emotion": "neutral", "valence": 0.0, "arousal": 0.0},
+    {"step": 2, "emotion": "anticipation", "valence": 0.2, "arousal": 0.6},
+    {"step": 3, "emotion": "joy", "valence": 0.7, "arousal": 0.5}
+  ],
+  "self_model": {
+    "snake": {
+      "success_rate": 0.83,
+      "attempts": 120,
+      "trend": "improving"
+    },
+    "pong": {
+      "success_rate": 0.71,
+      "attempts": 85,
+      "trend": "stable"
+    }
+  },
+  "stats": {
+    "queries_processed": 145,
+    "knowledge_entries": 67,
+    "episodes_stored": 205,
+    "facts_learned": 12,
+    "corrections_made": 3
+  }
+}
+```
+
+### Knowledge Base API
+
+**Get Knowledge Entries**:
+```bash
+curl "http://localhost:5051/api/knowledge"
+```
+
+**Response**:
+```json
+{
+  "entries": [
+    {
+      "concept": "FOOD_ABOVE",
+      "relation": "CAUSES",
+      "target": "ACTION_UP",
+      "confidence": 0.87,
+      "source": "rule_learning",
+      "observations": 103
+    },
+    {
+      "concept": "WALL_AHEAD",
+      "relation": "PREVENTS",
+      "target": "MOVE_FORWARD",
+      "confidence": 0.95,
+      "source": "safety_rules",
+      "observations": 45
+    }
+  ],
+  "total": 67
+}
+```
+
+### Export API
+
+**Export as Text**:
+```bash
+curl "http://localhost:5051/api/export/text" -o nsck_export.txt
+```
+
+**Export as JSON**:
+```bash
+curl "http://localhost:5051/api/export/json" -o nsck_export.json
+```
+
+**JSON Structure**:
+```json
+{
+  "exported_at": "2026-02-11T04:59:16Z",
+  "system_stats": {
+    "queries_processed": 145,
+    "knowledge_entries": 67,
+    "episodes_stored": 205
+  },
+  "emotion": {
+    "current": "joy",
+    "history": [...]
+  },
+  "self_model": {
+    "snake": {"success_rate": 0.83, "trend": "improving"},
+    "pong": {"success_rate": 0.71, "trend": "stable"}
+  },
+  "knowledge_base": [...],
+  "chat_history": [...],
+  "game_sessions": [...],
+  "activity_log": [...]
+}
+```
+
+---
+
 ## Architecture
 
 ```
