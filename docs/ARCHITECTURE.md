@@ -4,6 +4,8 @@
 
 NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines Vector Symbolic Architecture (VSA), symbolic reasoning, neural networks, and analogical transfer learning into a unified system. It is designed for CPU-only operation with energy efficiency as a core constraint.
 
+**For detailed implementation reference, see [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.md)** - Complete API documentation with class signatures, method parameters, and usage examples.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                   Language Module (Phi3)                     │
@@ -73,17 +75,52 @@ Unbind:  Bound ⊕ Filler = Role (perfect recovery)
 **What**: Central orchestrator that integrates all cognitive subsystems.
 
 **How**: The `decide()` method runs a competition among multiple knowledge sources:
+
+**Method Signature:**
+```python
+def decide(
+    state: Dict[str, Any],
+    task_tag: str,
+    metacognition_result: Optional[Dict] = None
+) -> CognitiveState
+```
+
+**Decision Flow:**
 1. **Perception** → Extract active predicates from state
+   - `active_predicates = verifier.extract_predicates(state, task_tag)`
 2. **Proposal Generation** → Multiple systems propose actions:
-   - SNN (fast neural system)
-   - Rules (symbolic system, including global rules)
-   - Planner (goal-directed STRIPS planning)
-   - Active Inference (curiosity-driven)
-   - Imagination (world model simulation)
+   - **SNN** (fast neural system): Neural network prediction
+   - **RULES** (symbolic system): `rule_learner.get_applicable_rules(predicates, task_tag)`
+   - **PLANNER** (goal-directed): STRIPS planning via `planner.plan(state, goal)`
+   - **EXPLORATION** (curiosity): `curiosity.get_exploration_bonus(state_hv)`
+   - **ACTIVE_INFERENCE** (drive-based): Homeostatic needs → actions
+   - **IMAGINATION** (world model): `world_model.sample_hypothetical_trajectories()`
 3. **Global Workspace Competition** → Coalitions compete for "consciousness"
+   - `winner = global_workspace.compete_with_rehearsal(proposals, state_hv, world_model)`
+   - Mental rehearsal vetoes dangerous actions
 4. **Winner Selection** → Highest-activation proposal wins
-5. **Value Alignment** → Safety check on chosen action
-6. **Learning** → Update episodic memory, rules, self-model
+5. **Value Alignment** → Safety check via `SafetyGate.is_safe()`
+6. **Consciousness Phi** → Integration measure (Phase 3.1)
+7. **Learning** → Update episodic memory, rules, self-model
+
+**Returns:** `CognitiveState` dataclass with:
+```python
+@dataclass
+class CognitiveState:
+    chosen_action: str
+    confidence: float  # Metacognitive confidence
+    self_confidence: float  # Self-model prediction
+    exploration_mode: bool
+    emotion: str  # Current emotional state
+    imagined_reward: float
+    explanation: Optional[Explanation]
+    trace: Dict[str, Any]  # Full decision trace
+```
+
+**Key Integrations:**
+- 30+ cognitive modules initialized in `__init__()`
+- Per-task causal reasoners: `causal_reasoners: Dict[str, CausalReasoner]`
+- Global workspace registers all modules: `global_workspace.register_module(name, module)`
 
 **Why**: This architecture mirrors Global Workspace Theory (Baars, 1988), where specialized modules compete for access to a shared workspace, enabling flexible and context-sensitive decision-making.
 

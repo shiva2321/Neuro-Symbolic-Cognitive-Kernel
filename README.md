@@ -149,22 +149,29 @@ Node_network/
 
 ## Key Modules
 
-| Module | Purpose |
-|---|---|
-| `cognitive_engine.py` | Central orchestrator — integrates all subsystems |
-| `analogy.py` | Cross-domain transfer via structural alignment |
-| `train_phase7_demo.py` | Integrated system with KnowledgeStore and LLM translator |
-| `testing_dashboard.py` | Comprehensive web dashboard for testing & monitoring all capabilities |
-| `rule_learner.py` | Frequency-based symbolic rule induction |
-| `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay |
-| `multi_task_learning.py` | Shared encoder + task heads + gradient surgery |
-| `world_model.py` | Forward simulation with sparse projection |
-| `language_module.py` | Phi3 LLM translator (peripheral) |
-| `emotion_system.py` | Emotion processing (Plutchik+Russell) |
-| `theory_of_mind.py` | Agent mental modeling + false belief detection |
-| `self_model.py` | Self-awareness and performance tracking |
-| `episodic_memory.py` | VSA-based experience storage |
-| `semantic_memory.py` | Concept graph with spreading activation |
+| Module | Purpose | Key Classes/Methods |
+|---|---|---|
+| `cognitive_engine.py` | Central orchestrator — integrates all subsystems | `CognitiveEngine.decide()`, `CognitiveEngine.learn()` |
+| `global_workspace.py` | GWT decision arbitration with mental rehearsal | `GlobalWorkspace.compete_with_rehearsal()` |
+| `analogy.py` | Cross-domain transfer via structural alignment | `AnalogyEngine.find_analogy()`, `transfer_rule()` |
+| `train_phase7_demo.py` | Integrated system with KnowledgeStore and LLM translator | Full 7-phase integration |
+| `testing_dashboard.py` | Comprehensive web dashboard for testing & monitoring | Flask app on port 5051 |
+| `rule_learner.py` | Frequency-based symbolic rule induction | `RuleLearner.observe()`, `induce_rules()` |
+| `causal_reasoning.py` | Causal graph induction and counterfactuals | `CausalReasoner.counterfactual()`, Delta-P |
+| `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay | `ContinualLearner.ewc_loss()`, `PackNetManager` |
+| `multi_task_learning.py` | Shared encoder + task heads + gradient surgery | `GradientSurgery.project_conflicting_gradients()` |
+| `world_model.py` | Forward simulation with sparse projection | `WorldModel.imagine()`, 128-dim bottleneck |
+| `language_module.py` | Phi3 LLM translator (peripheral) | `LanguageModule.understand()`, `generate()` |
+| `emotion_system.py` | Emotion processing (Plutchik+Russell) | `EmotionSystem.update_from_drives()`, 8 emotions |
+| `theory_of_mind.py` | Agent mental modeling + false belief detection | `TheoryOfMind.detect_false_belief()` (Sally-Anne) |
+| `self_model.py` | Self-awareness and performance tracking | `SelfModel.predict_success()`, context-aware |
+| `episodic_memory.py` | VSA-based experience storage | `EpisodicMemory.recall_similar()` (LSH) |
+| `semantic_memory.py` | Concept graph with spreading activation | `SemanticMemory.spread_activation()` (NetworkX) |
+| `planner.py` | STRIPS-style goal-directed planning | `STRIPSPlanner.plan()` (BFS) |
+| `hypervec_py.py` | VSA core operations (10,240-bit) | `xor()`, `bundle()`, `similarity()`, `permute()` |
+| `universal_input.py` | Universal data grounding to VSA | `UniversalInput.ground()` (any modality → HV) |
+
+**For detailed API documentation, see [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md)**
 
 ---
 
@@ -185,6 +192,56 @@ git clone https://github.com/shiva2321/Node_network.git
 cd Node_network
 pip install -r requirements.txt
 ```
+
+### API Examples
+
+**Decision Making:**
+```python
+from cognitive_engine import CognitiveEngine
+from config import NSCKConfig
+
+engine = CognitiveEngine(NSCKConfig())
+cognitive_state = engine.decide(
+    state={"head": (5,5), "food": (8,3)},
+    task_tag="snake"
+)
+print(f"Action: {cognitive_state.chosen_action}")
+print(f"Confidence: {cognitive_state.confidence}")
+print(f"Winner: {cognitive_state.trace['winner']}")
+```
+
+**Learning from Experience:**
+```python
+engine.learn(
+    state=state_t,
+    action="ACTION_RIGHT",
+    reward=1.0,
+    task_tag="snake",
+    outcome="success",
+    next_state=state_t1
+)
+```
+
+**Transfer Learning:**
+```python
+from analogy import AnalogyEngine
+
+engine = AnalogyEngine()
+analogy = engine.find_analogy("snake", "pong")
+new_cond, new_action = engine.transfer_rule(
+    {"AGENT_NEAR_TARGET"}, "MOVE_FORWARD", "snake", "pong"
+)
+```
+
+**Memory Retrieval:**
+```python
+from episodic_memory import EpisodicMemory
+
+memory = EpisodicMemory()
+similar_episodes = memory.recall_similar(query_hv, "snake", k=5)
+```
+
+See [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) for complete API reference.
 
 ---
 
@@ -241,12 +298,13 @@ NSCK is explicitly designed to avoid heavyweight computation:
 | Document | Description |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, workflows, mathematical foundations, and references |
+| [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) | Comprehensive API reference with class signatures, methods, and examples |
 | [docs/FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) | Complete mathematical formulas with derivations and test-backed proofs |
 | [docs/RUN_LOGS_AND_EVIDENCE.md](docs/RUN_LOGS_AND_EVIDENCE.md) | Actual test execution logs, performance benchmarks, and concrete evidence |
 | [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) | Testing dashboard usage, API reference, and export formats |
+| [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all 91 modules with integration status |
 | [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
 | [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
-| [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all modules |
 | [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Development governance rules |
 
 ---
