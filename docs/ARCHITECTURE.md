@@ -252,6 +252,22 @@ Novel Domain C → find_relevant_experience()
 | `metacognition.py` | ~150 | Self-monitoring + conflict detection |
 | `language_module.py` | ~120 | Phi3 LLM translator peripheral |
 | `train_phase7_demo.py` | ~500 | Integrated system + KnowledgeStore |
+| `testing_dashboard.py` | ~900 | Comprehensive web testing dashboard |
+
+---
+
+## Testing Dashboard
+
+The **Testing Dashboard** (`testing_dashboard.py`) is a self-contained Flask web application
+that exposes the full cognitive system for interactive testing and monitoring.
+
+**Capabilities:**
+- Chat with the cognitive system using text samples
+- Launch Snake, Pong, and Maze simulations (simultaneously or sequentially)
+- Monitor emotion blend, self-model performance, and knowledge base in real time
+- Export complete logs, reasoning traces, and system state to TXT or JSON
+
+See [TESTING_DASHBOARD.md](TESTING_DASHBOARD.md) for full documentation and API reference.
 
 ---
 
@@ -261,4 +277,5 @@ Novel Domain C → find_relevant_experience()
 - **Neural**: torch (CPU-only)
 - **LLM**: llama-cpp-python (optional, for Phi3 integration)
 - **Testing**: pytest
-- **Optional**: flask (dashboard), snntorch (SNN training)
+- **Dashboard**: flask
+- **Optional**: snntorch (SNN training)

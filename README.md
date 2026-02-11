@@ -154,6 +154,7 @@ Node_network/
 | `cognitive_engine.py` | Central orchestrator — integrates all subsystems |
 | `analogy.py` | Cross-domain transfer via structural alignment |
 | `train_phase7_demo.py` | Integrated system with KnowledgeStore and LLM translator |
+| `testing_dashboard.py` | Comprehensive web dashboard for testing & monitoring all capabilities |
 | `rule_learner.py` | Frequency-based symbolic rule induction |
 | `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay |
 | `multi_task_learning.py` | Shared encoder + task heads + gradient surgery |
@@ -195,9 +196,31 @@ python -m pytest nsck-demo/tests/ -v
 
 # Run transfer learning tests specifically
 python -m pytest nsck-demo/tests/test_transfer_learning.py -v
+
+# Run testing dashboard tests
+python -m pytest nsck-demo/tests/test_testing_dashboard.py -v
 ```
 
 Some tests require optional dependencies (`torch`, `flask`, `snntorch`). Core tests run without these.
+
+---
+
+## Testing Dashboard
+
+Launch the comprehensive web dashboard for interactive testing of all system capabilities:
+
+```bash
+python nsck-demo/python/testing_dashboard.py
+# Open http://localhost:5051 in your browser
+```
+
+The dashboard provides:
+- **💬 Chat & Test** — Submit text samples and chat with the cognitive system, observe reasoning traces and disambiguations
+- **🎮 Game Simulations** — Run Snake, Pong, and Maze games simultaneously or sequentially, watch the system play and learn
+- **📊 System Monitor** — Real-time emotion tracking, self-model performance, knowledge base browsing
+- **📋 Logs & Export** — Full activity log with filtering, export everything to TXT or JSON
+
+See [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) for detailed documentation.
 
 ---
 
@@ -218,6 +241,7 @@ NSCK is explicitly designed to avoid heavyweight computation:
 | Document | Description |
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, workflows, and proofs |
+| [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) | Testing dashboard usage, API reference, and export formats |
 | [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
 | [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
 | [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all modules |
