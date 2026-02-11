@@ -244,13 +244,11 @@ NSCK is explicitly designed to avoid heavyweight computation:
 | [docs/FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) | Complete mathematical formulas with derivations and test-backed proofs |
 | [docs/RUN_LOGS_AND_EVIDENCE.md](docs/RUN_LOGS_AND_EVIDENCE.md) | Actual test execution logs, performance benchmarks, and concrete evidence |
 | [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) | Testing dashboard usage, API reference, and export formats |
-| [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
-| [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
+| **[ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md)** | **Long-term roadmap + 2026 research-backed enhancements** |
+| **[docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md)** | **Technical implementation guide + detailed specs for all improvements** |
 | [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all modules |
+| **[docs/AGENT_COORDINATION_PLAN.md](docs/AGENT_COORDINATION_PLAN.md)** | **Agent assignments and coordination for 2026 enhancements** |
 | [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Development governance rules |
-| **[docs/RESEARCH_SYNTHESIS_2026.md](docs/RESEARCH_SYNTHESIS_2026.md)** | **Latest research-backed improvements (2024-2026)** |
-| **[docs/IMPLEMENTATION_PLAN_2026.md](docs/IMPLEMENTATION_PLAN_2026.md)** | **Detailed 12-week implementation plan** |
-| **[docs/AGENT_TASK_ASSIGNMENTS_2026.md](docs/AGENT_TASK_ASSIGNMENTS_2026.md)** | **Agent task breakdown and assignments** |
 
 ---
 

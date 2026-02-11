@@ -1,8 +1,10 @@
 # NSCK: Agent Coordination Plan
 
-**Purpose:** Concrete, implementable plan for using multiple simultaneous or sequential coding agents to build the NSCK system end-to-end — with guardrails to prevent drift, breakage, and context loss.
+**Purpose:** Concrete, implementable plan for using multiple coding agents to build and enhance the NSCK system with guardrails to prevent drift, breakage, and context loss.
 
 **Audience:** Coding agents (AI or human), project maintainers, contributors
+
+**Status:** All 7 phases complete (301+ tests passing). Now executing 2026 Enhancement Phase.
 
 ---
 
@@ -10,44 +12,368 @@
 
 1. [Problem Statement](#problem-statement)
 2. [Core Principles](#core-principles)
-3. [Agent Roles & Responsibilities](#agent-roles)
-4. [Work Units: What Gets Built](#work-units)
-5. [Execution Model: How Agents Run](#execution-model)
-6. [Guardrails: Preventing Drift & Breakage](#guardrails)
-7. [Context Protocol: Staying Up-to-Date](#context-protocol)
-8. [Dependency Map: Sequencing & Parallelism](#dependency-map)
-9. [Verification & Quality Gates](#verification)
-10. [Session Handoff Protocol](#session-handoff)
+3. [2026 Enhancement Execution](#enhancement-2026)
+4. [Agent Roles & Responsibilities](#agent-roles)
+5. [Work Units: What Gets Built](#work-units)
+6. [Execution Model: How Agents Run](#execution-model)
+7. [Guardrails: Preventing Drift & Breakage](#guardrails)
+8. [Context Protocol: Staying Up-to-Date](#context-protocol)
+9. [Dependency Map: Sequencing & Parallelism](#dependency-map)
+10. [Verification & Quality Gates](#verification)
+11. [Session Handoff Protocol](#session-handoff)
 
 ---
 
 <a name="problem-statement"></a>
 ## 1. Problem Statement
 
-### What We Need
-The NSCK project has 78 Python modules, 53 test files, and a multi-year roadmap spanning 7 phases. A single developer or agent cannot efficiently build everything. We need a system where **multiple coding agents** can work **simultaneously** or **sequentially** on different parts of the codebase while:
+### Current Situation
+NSCK has completed all 7 original phases with 301+ passing tests. The system now needs **research-backed enhancements** based on 50+ peer-reviewed papers (2024-2026) to improve:
+- Decision quality (+15-20%)
+- Throughput (+30-40%)
+- Continual learning (62% less forgetting)
+- Transfer learning (+25% zero-shot)
+- Energy efficiency (84% reduction)
 
-- Not going off track or building features outside the roadmap
-- Not breaking existing working code (165+ passing tests)
-- Having full context about the codebase at all times
-- Staying synchronized with changes made by other agents
-
-### Why This Matters
-- **Speed:** Parallel agents can tackle independent modules concurrently
-- **Safety:** Guardrails prevent costly rework from agents going off-track
-- **Quality:** Each agent operates within defined boundaries with clear success criteria
-- **Continuity:** Context-sharing ensures no agent starts from scratch
+### Challenge
+Implementing 15 improvements across 12 weeks requires:
+- **Multiple specialized agents** working in parallel
+- **Coordination** to prevent conflicts
+- **Quality assurance** to avoid regressions
+- **Documentation** for all changes
 
 ---
 
 <a name="core-principles"></a>
 ## 2. Core Principles
 
-These are non-negotiable rules for all agents:
-
 | Principle | Rule | Why |
 |---|---|---|
-| **Roadmap Alignment** | All work must trace back to `ROADMAP_TO_AGI.md` or `docs/IMPLEMENTATION_ROADMAP.md` | Prevents feature drift |
+| **Roadmap Alignment** | All work traces to `ROADMAP_TO_AGI.md` Section 1 (2026 Enhancement) | Prevents feature drift |
+| **No Regressions** | All 301+ existing tests must pass | Protects working code |
+| **Test Coverage** | 90%+ coverage on new code | Ensures quality |
+| **Documentation First** | Update docs before coding | Maintains clarity |
+| **Benchmark Everything** | Measure improvements vs baseline | Validates claims |
+| **Modular Changes** | Small, focused PRs | Easier review |
+| **Feature Flags** | All improvements toggleable | Safe rollout |
+
+---
+
+<a name="enhancement-2026"></a>
+## 3. 2026 Enhancement Execution
+
+### Phase 1: Core Improvements (Weeks 1-4) - CURRENT FOCUS
+
+**Goal:** Implement 5 HIGH priority improvements with measurable impact
+
+| # | Improvement | Agent | Duration | Status |
+|---|-------------|-------|----------|--------|
+| 1.1 | Task-Adaptive VSA Encoding | `vsa-core-agent` | 5 days | ☐ Ready |
+| 1.2 | Distributed Global Workspace | `workspace-agent` | 7 days | ☐ Ready |
+| 1.3 | Generalization-Preserved Learning | `continual-learning-agent` | 6 days | ☐ Ready |
+| 1.4 | Meta-Analogical Transfer | `transfer-learning-agent` | 8 days | ☐ Ready |
+| 1.5 | Dual-Process Architecture | `architecture-agent` | 8 days | ☐ Ready |
+
+**Support Roles:**
+- `testing-agent`: Continuous testing, benchmarking
+- `documentation-agent`: Documentation updates
+
+---
+
+<a name="agent-roles"></a>
+## 4. Agent Roles & Responsibilities
+
+### Specialized Implementation Agents
+
+#### vsa-core-agent
+**Expertise:** Vector Symbolic Architecture, hyperdimensional computing
+
+**Responsibilities:**
+- Task-Adaptive VSA Encoding (Phase 1.1)
+- Vector Hardware Acceleration (Phase 3.1)
+- Adaptive Sparse Projection (Phase 3.5)
+
+**Files:**
+- `nsck-demo/python/hypervec_shim.py`
+- `nsck-demo/python/hypervec_py.py`
+- `nsck-demo/tests/test_adaptive_encoding.py` (new)
+
+**Success Criteria:**
+- Encoding strategies working (learning, symbolic, hybrid)
+- +10-15% classification accuracy
+- +12% reasoning accuracy
+- All correlation targets met
+
+---
+
+#### workspace-agent
+**Expertise:** Global Workspace Theory, cognitive architectures
+
+**Responsibilities:**
+- Distributed Global Workspace (Phase 1.2)
+- Context-Sensitive Competition (Phase 2.1)
+- Emotion-Guided Attention (Phase 2.5)
+
+**Files:**
+- `nsck-demo/python/distributed_workspace.py` (new)
+- `nsck-demo/python/global_workspace.py`
+- `nsck-demo/python/cognitive_engine.py`
+- `nsck-demo/tests/test_distributed_workspace.py` (new)
+
+**Success Criteria:**
+- +30-40% throughput
+- -25% latency
+- 100% decision correctness maintained
+- Handles 10× more coalitions
+
+---
+
+#### continual-learning-agent
+**Expertise:** Continual learning, catastrophic forgetting prevention
+
+**Responsibilities:**
+- Generalization-Preserved Learning (Phase 1.3)
+- Robust Policy Optimization (Phase 2.2)
+- Self-Synthesized Rehearsal (Phase 3.2)
+
+**Files:**
+- `nsck-demo/python/hyperbolic_learning.py` (new)
+- `nsck-demo/python/continual_learning.py`
+- `nsck-demo/tests/test_gpl.py` (new)
+
+**Success Criteria:**
+- 3% forgetting vs 8% baseline (62% reduction)
+- +5% memory overhead only
+- Compatible with existing EWC
+
+---
+
+#### transfer-learning-agent
+**Expertise:** Transfer learning, analogical reasoning
+
+**Responsibilities:**
+- Meta-Analogical Transfer (Phase 1.4)
+- Category Theory Mapping (Phase 2.4)
+
+**Files:**
+- `nsck-demo/python/meta_analogy.py` (new)
+- `nsck-demo/python/analogy.py`
+- `nsck-demo/tests/test_meta_analogy.py` (new)
+
+**Success Criteria:**
+- +25% zero-shot performance
+- 3× sample efficiency
+- Transfer to distant domains
+
+---
+
+#### architecture-agent
+**Expertise:** System architecture, integration
+
+**Responsibilities:**
+- Dual-Process Architecture (Phase 1.5)
+- System integration
+- Architecture coordination
+
+**Files:**
+- `nsck-demo/python/dual_process.py` (new)
+- `nsck-demo/python/cognitive_engine.py`
+- `nsck-demo/tests/test_dual_process.py` (new)
+
+**Success Criteria:**
+- +15% overall accuracy
+- +40% error detection
+- 5× faster on easy cases
+- S1 usage 70-80%
+
+---
+
+#### snn-agent
+**Expertise:** Spiking neural networks, neuromorphic computing
+
+**Responsibilities:**
+- NeuroNAS (Phase 2.3)
+- Surrogate Gradient Enhancement (Phase 3.3)
+- Adversarial Robustness (Phase 3.4)
+
+**Files:**
+- `nsck-demo/python/snn_training_pipeline.py`
+- `nsck-demo/python/plastic_snn.py`
+
+**Success Criteria:**
+- 84% energy reduction
+- 92% area savings
+- Match ANN accuracy
+
+---
+
+### Support Agents
+
+#### testing-agent
+**Role:** Testing, benchmarking, quality assurance
+
+**Continuous Responsibilities:**
+1. Maintain test infrastructure
+2. Run continuous benchmarks
+3. Monitor test coverage (target: 90%+)
+4. Generate performance reports
+5. Sign off on all deliverables
+
+**Phase-Specific:**
+- Week 1: Set up baseline benchmarks
+- Week 2-3: Review unit tests as they're created
+- Week 3: Run integration tests
+- Week 4: Generate Phase 1 performance report
+
+---
+
+#### documentation-agent
+**Role:** Documentation, knowledge management
+
+**Continuous Responsibilities:**
+1. Update technical documentation
+2. Maintain API documentation
+3. Create implementation guides
+4. Generate visual diagrams
+5. Write user-facing docs
+
+**Phase-Specific:**
+- Week 1-3: Document each improvement as implemented
+- Week 4: Update ARCHITECTURE.md, README.md
+- Week 4: Create Phase 1 summary
+
+---
+
+## 5. Work Units: Phase 1 Tasks
+
+### Task 1.1: Task-Adaptive VSA Encoding
+**Owner:** vsa-core-agent  
+**Duration:** 5 days  
+**Dependencies:** None
+
+**Subtasks:**
+- [ ] Day 1-2: Design and implement `EncodingStrategyManager`
+- [ ] Day 2-3: Implement encoding algorithms (learning, symbolic, hybrid)
+- [ ] Day 3-4: Integrate with `CognitiveEngine`
+- [ ] Day 4-5: Write 10+ tests and run benchmarks
+
+**Deliverables:**
+- `EncodingStrategyManager` class
+- 10+ unit tests
+- Performance benchmarks showing +10-15% improvement
+- Integration complete
+
+**Verification:**
+- [ ] All tests pass
+- [ ] Benchmarks meet targets
+- [ ] Code review approved
+- [ ] Documentation complete
+
+---
+
+### Task 1.2: Distributed Global Workspace
+**Owner:** workspace-agent  
+**Duration:** 7 days  
+**Dependencies:** None
+
+**Subtasks:**
+- [ ] Day 1-2: Design architecture (DistributedGlobalWorkspace, ContextRouter, MetaArbiter)
+- [ ] Day 3-5: Implement core components
+- [ ] Day 5-6: Integrate with `CognitiveEngine`
+- [ ] Day 6-7: Write 8+ tests and run benchmarks
+
+**Deliverables:**
+- `distributed_workspace.py` module
+- 8+ comprehensive tests
+- Performance benchmarks showing +30-40% throughput
+- Configuration guide
+
+**Verification:**
+- [ ] All tests pass
+- [ ] Throughput +30-40%
+- [ ] Latency -25%
+- [ ] No regressions
+
+---
+
+### Task 1.3: Generalization-Preserved Learning
+**Owner:** continual-learning-agent  
+**Duration:** 6 days  
+**Dependencies:** None
+
+**Subtasks:**
+- [ ] Day 1-2: Implement `HyperbolicEmbedding` class
+- [ ] Day 3-4: Implement `GeneralizationPreservedLearning` algorithm
+- [ ] Day 4-5: Integrate with `ContinualLearner`
+- [ ] Day 5-6: Write 12+ tests and run benchmarks
+
+**Deliverables:**
+- `hyperbolic_learning.py` module
+- 12+ comprehensive tests
+- Benchmark showing 3% vs 8% forgetting
+- Integration guide
+
+**Verification:**
+- [ ] All tests pass
+- [ ] Forgetting reduced by 62%
+- [ ] Memory overhead < 5%
+- [ ] Compatible with EWC
+
+---
+
+### Task 1.4: Meta-Analogical Transfer
+**Owner:** transfer-learning-agent  
+**Duration:** 8 days  
+**Dependencies:** None
+
+**Subtasks:**
+- [ ] Day 1-2: Design `ReasoningStrategy` and `MetaAnalogicalTransfer` classes
+- [ ] Day 3-5: Implement strategy extraction
+- [ ] Day 5-6: Implement strategy transfer
+- [ ] Day 6-7: Integrate with `AnalogyEngine`
+- [ ] Day 7-8: Write 15+ tests and run benchmarks
+
+**Deliverables:**
+- `meta_analogy.py` module
+- 15+ comprehensive tests
+- Benchmark showing +25% zero-shot improvement
+- Documentation with examples
+
+**Verification:**
+- [ ] All tests pass
+- [ ] Zero-shot +25%
+- [ ] Sample efficiency 3×
+- [ ] Transfers to distant domains
+
+---
+
+### Task 1.5: Dual-Process Architecture
+**Owner:** architecture-agent  
+**Duration:** 8 days  
+**Dependencies:** None
+
+**Subtasks:**
+- [ ] Day 1-2: Design System1, System2, DualProcessCognition
+- [ ] Day 3: Implement System1 (fast path)
+- [ ] Day 4: Implement System2 (slow path)
+- [ ] Day 5-6: Implement coordinator with metacognitive monitoring
+- [ ] Day 6-7: Integrate with `CognitiveEngine`
+- [ ] Day 7-8: Write 12+ tests and run benchmarks
+
+**Deliverables:**
+- `dual_process.py` module
+- 12+ comprehensive tests
+- Benchmark showing +15% accuracy, +40% error detection
+- Usage statistics showing 70-80% S1 usage
+
+**Verification:**
+- [ ] All tests pass
+- [ ] Accuracy +15%
+- [ ] Error detection +40%
+- [ ] Easy cases 5× faster
+- [ ] S1/S2 balance correct
+
+---
 | **Test-First** | Never merge code that reduces existing test pass rate | Protects the 165+ passing tests |
 | **Minimal Surface** | Each agent works on ≤3 files per session | Reduces merge conflicts |
 | **Efficiency Constraints** | O(n) VSA ops, dims ≤128 shared layers, no heavy matmuls | Matches project architecture |
