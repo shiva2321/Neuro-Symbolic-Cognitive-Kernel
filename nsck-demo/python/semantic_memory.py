@@ -27,6 +27,12 @@ class SemanticMemory:
         
         print("SemanticMemory Initialized.")
     
+    def reset(self):
+        """Clear all semantic knowledge and re-initialize."""
+        self.concept_graph = nx.DiGraph()
+        self.concept_hvs = {}
+        print("[SEMANTIC] Memory reset complete.")
+    
     def add_concept(self, concept_name: str, properties: Dict[str, Any], hv_override: Optional[hypervec_rs.HyperVector] = None):
         """
         Add a new concept to semantic memory.

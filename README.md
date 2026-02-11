@@ -1,13 +1,13 @@
 # NSCK — Neuro-Symbolic Cognitive Kernel
 
-![Project Status](https://img.shields.io/badge/status-Phase_7_Complete-green)
+![Project Status](https://img.shields.io/badge/status-Phase_8_Complete-green)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
-![Tests](https://img.shields.io/badge/tests-178_collected_21+_verified-brightgreen)
+![Tests](https://img.shields.io/badge/tests-338+_passing-brightgreen)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning, neural spiking networks, and cross-domain transfer learning, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
-**Latest Update:** All 7 phases complete. Transfer learning fixed and enhanced with cross-domain knowledge consolidation, LLM translator integration (Phi3), and comprehensive test coverage. See [Architecture](docs/ARCHITECTURE.md).
+**Latest Update:** Phase 8 complete — temporal permutation, universal input layer, and mental rehearsal with veto mechanism. All 338+ tests passing. See [Architecture](docs/ARCHITECTURE.md) and [Phase History](docs/PHASE_HISTORY.md).
 
 > **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 

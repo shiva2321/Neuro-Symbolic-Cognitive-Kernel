@@ -120,6 +120,27 @@ class KnowledgeIntegration:
         # Bootstrap with basic knowledge
         self._bootstrap_knowledge()
 
+    def reset(self):
+        """Clear all knowledge and re-initialize the entire cognitive pipeline."""
+        self.knowledge = []
+        self._concept_index = defaultdict(list)
+        self.stats = {
+            "queries_processed": 0,
+            "facts_learned": 0,
+            "corrections_made": 0,
+            "episodes_recorded": 0,
+        }
+        # Reset sub-modules
+        self.semantic.reset()
+        self.episodic.reset()
+        self.context.reset()
+        self.causal_discovery.reset()
+        self.causal_graph.reset()
+        
+        # Re-bootstrap
+        self._bootstrap_knowledge()
+        print("[COGNITIVE] Core integration pipeline reset.")
+
     # ------------------------------------------------------------------
     # Bootstrap
     # ------------------------------------------------------------------

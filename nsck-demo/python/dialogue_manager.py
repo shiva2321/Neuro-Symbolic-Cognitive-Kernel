@@ -20,6 +20,11 @@ class DialogueManager:
         
         # Store last 10 turns given as (Sender, Text)
         self.context_window = deque(maxlen=10) 
+    
+    def reset(self):
+        """Clear the dialogue context window."""
+        self.context_window.clear()
+        print("[DIALOGUE] Context window cleared.")
         
     def process_turn(self, user_input: str) -> str:
         """Process one dialogue turn from the user."""

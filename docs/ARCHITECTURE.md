@@ -185,6 +185,29 @@ Maze: EXIT_ABOVE is active → recommend ACTION_UP (via abstract rule)
 - `TheoryOfMind`: Maintains mental models of other agents, detects false beliefs
 - Sally-Anne test passing (first-order false belief detection)
 
+### 8. Temporal Encoding & Advanced Deliberation (Phase 8)
+
+**What**: Three interrelated capabilities that bring the system closer to human-like cognition:
+
+**8.1 Temporal Permutation** (`lib.rs`, `hypervec_py.py`, `hypervec_shim.py`)
+- `permute(shift)`: Circular bitwise rotation of 10,240-bit HVs
+- Enables sequence encoding: `A ⊕ ρ¹(B) ⊕ ρ²(C)` preserves order
+- Inverse property: `permute(n).permute_inverse(n) ≈ identity` (>99% similarity)
+
+**8.2 Universal Input Layer** (`universal_input.py`)
+-   **Scalars**: Thermometer encoding (nearby values → similar HVs)
+-   **Categories**: Deterministic codebook with LRU eviction (max 10K entries)
+-   **Dicts**: Recursive role-filler binding (Role_HV ⊗ Value_HV, then bundle)
+-   **Lists**: Permutation-based sequence encoding
+
+**8.3 Mental Rehearsal & Veto** (`global_workspace.py`)
+-   `compete_with_rehearsal()`: Simulates action outcomes via WorldModel before committing
+-   Danger vector registry: States at catastrophic outcomes form a veto set
+-   Veto threshold: predicted states with >75% similarity to danger vectors are blocked
+-   Deadlock fallback: EMERGENCY ACTION_STAY when all proposals vetoed
+
+**Why**: Temporal reasoning enables trajectory planning. Universal input maps heterogeneous sensor data into a shared algebraic space. Mental rehearsal prevents known-dangerous actions without explicit rules, mimicking human "hesitation" before risky choices.
+
 ---
 
 ## Data Flow
@@ -357,9 +380,11 @@ Activation = salience + relevance + affect_match + 0.5·sender_confidence
 Winner = argmax(Activation) if max > threshold else None
 ```
 
-**Test Evidence**: `test_global_workspace.py`
+**Test Evidence**: `test_global_workspace.py`, `test_phase8_mental_rehearsal.py`
 - Coalition A: activation=2.35 wins over B: activation=1.55 ✅
 - Broadcast successful to all modules ✅
+- Phase 8: Danger veto blocks harmful actions, selects next-best alternative ✅
+- Phase 8: Deadlock fallback triggers EMERGENCY response ✅
 
 #### 6. Johnson-Lindenstrauss Sparse Projection
 
@@ -393,7 +418,33 @@ Memory: 75× fewer parameters in world model
 
 **Key Design Principle**: Avoid O(n³) matrix operations typical of deep learning. All core operations are O(n) or O(n²) in practice.
 
-### References
+---
+
+## Monitoring & Testing Interfaces
+
+NSCK includes three specialized web dashboards for real-time system monitoring, testing, and operational control:
+
+### web_dashboard.py (Main Operational Interface)
+- **Purpose**: Primary mission control using Flask-SocketIO
+- **Port**: 5000
+- **Features**: Process management, ZMQ telemetry, AGI report generation
+- **Status**: CRITICAL - Production operational dashboard
+
+### testing_dashboard.py (Capability Testing)
+- **Purpose**: Comprehensive testing interface for all cognitive capabilities  
+- **Port**: 5051
+- **Features**: Chat, game simulations (Snake/Pong/Maze), teacher/student modes, log export
+- **Status**: PRIMARY testing interface
+
+### cognitive_dashboard.py (Knowledge Inspection)
+- **Purpose**: Cognitive system monitoring and knowledge inspection
+- **Port**: 5050
+- **Features**: Multimodal input, reasoning traces, knowledge queries, export (JSON/ZIP)
+- **Status**: Alternative monitoring interface
+
+---
+
+## References
 
 1. **Baars (1988)**: *A Cognitive Theory of Consciousness* - Global Workspace Theory
 2. **Cheng & Novick (1992)**: "Covariation in natural causal induction" - Delta-P formula

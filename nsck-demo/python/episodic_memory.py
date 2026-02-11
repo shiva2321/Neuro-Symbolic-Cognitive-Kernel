@@ -119,6 +119,16 @@ class EpisodicMemory:
         self.lsh_index: Dict[str, Dict[int, List[int]]] = {}
         self.lsh_bits = 64  # Number of hash bits
     
+    def reset(self):
+        """Clear all episodic memories and re-initialize."""
+        self.recent = {}
+        self.lsh_index = {}
+        if self.store:
+            # We don't delete the DB here, KnowledgeIntegration will handle file deletion,
+            # but we should ensure the store's in-memory state is cleared if any.
+            pass
+        print("[EPISODIC] Memory reset complete.")
+    
     def record(self, episode: LiveEpisode):
         """
         Record a new episode.

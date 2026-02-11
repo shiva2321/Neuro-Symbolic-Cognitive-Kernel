@@ -79,6 +79,20 @@ class SelfModel:
         
         print("SelfModel Initialized with Identity HV.")
 
+    def reset(self):
+        """Clear all performance metrics and context stats."""
+        self.task_stats = defaultdict(lambda: {
+            "attempts": 0,
+            "successes": 0,
+            "total_reward": 0.0,
+            "confidence_errors": []
+        })
+        self.current_confidence = defaultdict(lambda: 0.5)
+        self.capabilities = defaultdict(lambda: 0.0)
+        self.context_stats = defaultdict(lambda: {"attempts": 0, "successes": 0})
+        self.recent_window = defaultdict(list)
+        print("[SELF-MODEL] Performance data reset.")
+
     def update_confidence(self, task_tag: str, confidence: float):
         """Update current confidence level based on active module."""
         self.current_confidence[task_tag] = confidence

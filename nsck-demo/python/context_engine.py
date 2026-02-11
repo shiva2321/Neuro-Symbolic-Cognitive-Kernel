@@ -82,6 +82,16 @@ class ContextEngine:
         # Bootstrap common-sense associations
         self._bootstrap_common_sense()
 
+    def reset(self):
+        """Clear all contextual mappings and re-bootstrap."""
+        self.context_meanings = defaultdict(dict)
+        self.meaning_prototypes = defaultdict(dict)
+        self.association_strength = defaultdict(float)
+        self._obs_counts = defaultdict(int)
+        self.default_meanings = {}
+        self._bootstrap_common_sense()
+        print("[CONTEXT] Engine reset complete.")
+
     # ------------------------------------------------------------------
     # Bootstrap
     # ------------------------------------------------------------------

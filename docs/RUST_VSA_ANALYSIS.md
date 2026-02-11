@@ -12,7 +12,7 @@
 The Rust VSA module provides significantly faster hypervector operations compared to pure Python, using Rust's zero-cost abstractions and SIMD-friendly bit operations. A pure-Python fallback (`hypervec_py.py`) is available when the Rust extension is not compiled.
 
 ### Key Statistics
-- **Total Lines of Code:** 194 lines (Rust)
+- **Total Lines of Code:** 195 lines (Rust)
 - **Dimension:** 10,240 bits (10KB per vector)
 - **Implementation:** Binary hypervectors with u64 blocks (160 blocks × 64 bits)
 - **Build System:** Maturin (Rust → Python extension)
@@ -323,14 +323,14 @@ results = query.similarity_batch(vectors)  // Not implemented
 ```
 **Impact:** Missed SIMD vectorization opportunities
 
-### 2. **No Advanced VSA Operations**
+### 2. **No Advanced VSA Operations** (PARTIALLY RESOLVED)
 Missing operations from VSA literature:
-- **Permutation** (circular shift for sequences)
-- **Inverse** (undo binding)
+- ✅ **Permutation** (circular shift for sequences) — **ADDED IN PHASE 8**
+- **Inverse** (undo binding) — Can use XOR (self-inverse)
 - **Resonator Network** (cleanup memory)
 - **MAP decoding** (maximum a posteriori)
 
-**Workaround:** Implemented in Python layer where needed
+**Phase 8 Update:** Permutation operator now implemented in Rust (`permute`, `permute_inverse`), Python fallback (`hypervec_py.py`), and shim compat layer (`hypervec_shim.py`). Enables temporal sequence encoding.
 
 ### 3. **Fixed Dimension (10,240 bits)**
 - Hardcoded constant

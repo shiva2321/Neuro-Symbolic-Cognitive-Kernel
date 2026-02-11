@@ -61,6 +61,18 @@ class HyperVectorPy:
         
         # Similarity = 1 - dist/dim
         return 1.0 - (hamming_dist / DIMENSION)
+
+    def permute(self, shift):
+        """Circular bitwise permutation (rotation) of the hypervector."""
+        shift_norm = shift % DIMENSION
+        if shift_norm == 0:
+            return HyperVectorPy.from_bits(self.bits.copy())
+        new_bits = np.roll(self.bits, -shift_norm)
+        return HyperVectorPy.from_bits(new_bits)
+
+    def permute_inverse(self, shift):
+        """Inverse permutation: equivalent to permute(-shift)."""
+        return self.permute(-shift)
     
         
     def __repr__(self):

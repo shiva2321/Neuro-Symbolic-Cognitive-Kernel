@@ -90,6 +90,16 @@ class CausalDiscovery:
         self.observed_causes = defaultdict(set)
         self.observed_effects = defaultdict(set)
 
+    def reset(self):
+        """Clear all causal statistics."""
+        self.total_steps = defaultdict(int)
+        self.count_c = defaultdict(lambda: defaultdict(int))
+        self.count_e = defaultdict(lambda: defaultdict(int))
+        self.count_ce = defaultdict(lambda: defaultdict(int))
+        self.observed_causes = defaultdict(set)
+        self.observed_effects = defaultdict(set)
+        print("[CAUSAL] Discovery stats reset.")
+
     def observe(self, context: str, causes: List[str], effects: List[str]):
         """
         Record a single time-step (transition).
@@ -195,6 +205,14 @@ class CausalGraph:
         
         # Context-specific subgraphs
         self.context_links: Dict[str, Set[CausalLink]] = defaultdict(set)
+    
+    def reset(self):
+        """Clear all causal links."""
+        self.forward = defaultdict(list)
+        self.backward = defaultdict(list)
+        self.all_links = set()
+        self.context_links = defaultdict(set)
+        print("[CAUSAL] Graph reset complete.")
     
     def add_link(self, link: CausalLink):
         """Add a causal relationship to the graph."""

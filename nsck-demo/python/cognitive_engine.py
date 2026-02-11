@@ -46,6 +46,7 @@ from semantic_memory import SemanticMemory
 import os
 from agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
 from consciousness_metrics import GlobalWorkspaceMetrics
+from universal_input import UniversalInput  # [AGI] Phase 8
 from logger_service import get_logger
 from language_module import LanguageModule
 from dialogue_manager import DialogueManager
@@ -198,6 +199,14 @@ class CognitiveEngine:
             print("[AGI] Phase 5 modules initialized.")
         except ImportError:
             print("[WARN] Phase 5 modules missing.")
+
+        # [AGI] Phase 8: Universal Input Layer
+        try:
+            self.universal_input = UniversalInput()
+            print("[AGI] Phase 8: UniversalInput Initialized.")
+        except Exception as e:
+            self.universal_input = None
+            print(f"[WARN] Phase 8 UniversalInput failed: {e}")
 
         # [AGI] Phase 5.1 (Legacy): World Model (Imagination)
         try:
@@ -462,8 +471,22 @@ class CognitiveEngine:
         proposal_summary = " | ".join([f"{c.source}({c.content}):{c.activation:.2f}" for c in coalitions])
         self.logger.log(f"BRAIN:{task_tag.upper()}", f"[COMPETITION] Proposals: {proposal_summary}", level="THOUGHT")
 
-        # Run competition
-        winner_coalition = self.global_workspace.compete(coalitions)
+        # [AGI] Phase 8: Mental Rehearsal (simulate-before-acting) when WorldModel is ready
+        if self.world_model and self.world_model.is_ready(task_tag) and self.global_workspace._danger_vectors:
+            winner_coalition = self.global_workspace.compete_with_rehearsal(
+                coalitions,
+                current_state_hv=situation_hv,
+                world_model=self.world_model,
+                get_action_hv_fn=self.get_concept_hv,
+            )
+            # Log rehearsal activity
+            recent_vetoes = self.global_workspace.get_recent_vetoes(3)
+            if recent_vetoes:
+                veto_summary = ", ".join([f"{v['source']}→{v['action']}" for v in recent_vetoes])
+                self.logger.log(f"BRAIN:{task_tag.upper()}", f"[REHEARSAL] Recent vetoes: {veto_summary}", level="THOUGHT")
+        else:
+            # Standard competition (no rehearsal available)
+            winner_coalition = self.global_workspace.compete(coalitions)
         
         # 5. Determine Final Action
         trace = {"proposals": len(coalitions)}
@@ -639,6 +662,11 @@ class CognitiveEngine:
             self.homeostasis.integrity -= 0.5
             
         self.homeostasis.update()
+
+        # [AGI] Phase 8: Register danger vectors for mental rehearsal veto
+        if (outcome == "death" or reward < -0.5) and self.current_state.situation_hv:
+            self.global_workspace.register_danger(self.current_state.situation_hv)
+            self.logger.log(f"BRAIN:{task_tag.upper()}", f"[REHEARSAL] Danger vector registered (outcome={outcome}, reward={reward:.2f})", level="THOUGHT")
         self.emotion_system.update_from_drives(self.homeostasis.drives, reward)
 
         # 1. Record observation for rule learning

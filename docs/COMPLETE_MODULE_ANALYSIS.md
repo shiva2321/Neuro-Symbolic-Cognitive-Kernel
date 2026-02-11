@@ -1,9 +1,9 @@
 # NSCK MODULE ANALYSIS REPORT
 ## Analysis of Core Python Modules
 
-**Date**: 2026-02-08 (updated)
+**Date**: 2026-02-11 (updated)
 **Scope**: nsck-demo/python directory
-**Total Modules**: 78 Python files, 1 Rust crate
+**Total Modules**: 91 Python files, 1 Rust crate
 **Analysis Type**: Codebase audit covering purpose, integration status, and quality
 
 ---
@@ -12,19 +12,19 @@
 
 ### Module Distribution by Status
 
-**Python Modules** (78 total, excluding removed verify scripts):
-- ✅ **Functional & Tested**: ~35 modules — core logic with passing test coverage
-- ⚠️ **Partially Implemented**: ~25 modules — have code but incomplete/untested features
-- 🔧 **Utility/Infrastructure**: ~18 modules — tools, UIs, training scripts
+**Python Modules** (91 total, including dashboards and new integrations):
+- ✅ **Functional & Tested**: ~40 modules — core logic with passing test coverage
+- ⚠️ **Partially Implemented**: ~28 modules — have code but incomplete/untested features
+- 🔧 **Utility/Infrastructure**: ~23 modules — tools, UIs, dashboards, training scripts
 
 **Rust Modules** (1):
-- ✅ **Fully Integrated**: rust_vsa — VSA core with Python fallback via `hypervec_shim.py`
+- ✅ **Fully Integrated**: rust_vsa — VSA core (195 lines) with Python fallback via `hypervec_shim.py`
 
 > **Note:** "Functional" means the module's core API is exercised by passing tests.
 > Many modules have stub methods or placeholder logic for future capabilities.
 
 ### Critical Modules (Must-Have for System Operation)
-**18 modules identified as CRITICAL** (17 Python + 1 Rust):
+**19 modules identified as CRITICAL** (18 Python + 1 Rust):
 
 **Python Modules**:
 1. `cognitive_engine.py` - Central orchestrator
@@ -44,6 +44,7 @@
 15. `config.py` - Configuration management
 16. `hypervec_shim.py` - VSA infrastructure bridge
 17. `hypervec_py.py` - VSA Python fallback
+18. `universal_input.py` - Universal sensor grounding (Phase 8)
 
 **Rust Modules**:
 18. **`rust_vsa/` (hypervec_rs)** - High-performance VSA core (10-100x faster than Python)
@@ -106,6 +107,7 @@ INFRASTRUCTURE:
 ├── config.py (CRITICAL) - Hyperparameters
 ├── hypervec_shim.py (CRITICAL) - VSA bridge
 ├── hypervec_py.py (CRITICAL) - VSA fallback
+├── universal_input.py (CRITICAL) - Universal grounding (Phase 8)
 └── perception.py (MEDIUM) - Sensor fusion
 
 ENVIRONMENTS & UIs:
@@ -313,7 +315,16 @@ UTILITIES:
 
 ---
 
-### 3. SYMBOLIC REASONING LAYER (7 modules)
+### 3. SYMBOLIC LAYER (9 modules)
+
+#### **knowledge_integration.py** ⭐ HIGH - FULLY INTEGRATED
+**Purpose**: Unified cognitive integration pipeline connecting multimodal perception → memory → reasoning → learning into a coherent cognitive loop. Handles knowledge queries, self-correction, and transfer learning across domains.
+
+**Key Components**:
+- `KnowledgeIntegration`: Central orchestration class
+- `CognitiveResponse`: Full response with reasoning traces
+- `KnowledgeEntry`: Triple store for learned facts
+- Context disambigu
 
 #### **rule_learner.py** ⭐ CRITICAL - FULLY INTEGRATED
 **Purpose**: Symbolic induction engine learning decision rules from state-action-outcome observations. Uses frequency-based ILP without gradient descent.
@@ -1717,6 +1728,267 @@ The system is functional and capable of sophisticated learning, but would benefi
 | Module | Purpose | Status | Priority | Performance |
 |--------|---------|--------|----------|-------------|
 | **rust_vsa/** | High-performance VSA core | ✅ Active | **CRITICAL** | 10-100x faster than Python |
+
+---
+
+## APPENDIX: NEWLY ADDED MODULES (2026-02-11)
+
+The following 8 modules were added to the codebase after the initial documentation. They represent significant enhancements to knowledge integration, context understanding, social cognition, dashboard capabilities, and consciousness metrics.
+
+### A1. KNOWLEDGE INTEGRATION MODULE
+
+#### **knowledge_integration.py** ⭐ HIGH - FULLY INTEGRATED
+**Purpose**: Unified cognitive integration pipeline connecting multimodal perception → memory → reasoning → learning into a coherent cognitive loop. Implements knowledge queries, self-correction, transfer learning across domains, and causal inference integration.
+
+**Key Components**:
+- `KnowledgeIntegration`: Central orchestration class connecting all cognitive subsystems
+- `CognitiveResponse`: Full response dataclass with reasoning traces and disambiguations
+- `KnowledgeEntry`: Triple store (concept, relation, target) for learned facts
+- Bootstrap knowledge base with common-sense facts
+- Cross-domain knowledge transfer
+
+**Dependencies**:  
+- `semantic_memory`, `episodic_memory`, `context_engine`
+- `multimodal_processor`, `causal_reasoning`
+- `hypervec_shim`
+
+**Usage**: Core module imported by `testing_dashboard.py`, `cognitive_dashboard.py`
+
+**Integration**: ✅ Primary knowledge orchestration pipeline
+
+**Status**: 🟢 Production-ready (502 lines)
+
+**Recommendations**:
+- Add knowledge graph visualization
+- Implement confidence decay for old facts
+- Add knowledge pruning strategies
+
+---
+
+### A2. CONTEXT DISAMBIGUATION MODULE
+
+#### **context_engine.py** ⭐ HIGH - FULLY INTEGRATED
+**Purpose**: Contextual disambiguation and situated understanding. Handles polysemy (e.g., "red" means danger in traffic, beauty in flowers, emergency in health). Uses VSA role-filler bindings and spreading activation for context-dependent meaning resolution.
+
+**Key Components**:
+- `ContextEngine`: Main disambiguation engine
+- `ContextFrame`: Snapshot of current interpretive context (domain, concepts, environment)
+- `DisambiguatedMeaning`: Result with confidence and alternatives
+- Bootstrap common-sense associations (red→danger/beauty, bank→finance/river)
+- Multi-strategy disambiguation (direct match, cue overlap, semantic proximity)
+
+**Dependencies**:
+- `semantic_memory`, `hypervec_shim`
+- VSA operations for context binding
+
+**Usage**: Imported by `knowledge_integration.py`, `multimodal_processor.py`
+
+**Integration**: ✅ Context-aware semantic grounding
+
+**Status**: 🟢 Production-ready (395 lines)
+
+**Recommendations**:
+- Add learning rate tuning for context associations
+- Implement temporal context tracking
+- Add context conflict resolution
+
+---
+
+### A3. DIALOGUE MANAGEMENT MODULE
+
+#### **dialogue_manager.py** ⭐ MEDIUM - PARTIALLY INTEGRATED
+**Purpose**: Orchestrates conversation, context tracking, and intent routing. Acts as bridge between user and cognitive engine. Implements anaphora resolution and dialogue state management.
+
+**Key Components**:
+- `DialogueManager`: Main conversation orchestrator
+- Context window (last 10 turns)
+- Anaphora resolution (`resolve_anaphora`)
+- Intent routing (explain, seek, question)
+- Multi-turn dialogue tracking
+
+**Dependencies**:
+- `language_module`, `cognitive_engine`
+- Simple regex-based NLP
+
+**Usage**: Imported by `testing_dashboard.py`
+
+**Integration**: ⚠️ Active in dashboard but not main server loop
+
+**Status**: 🟡 Functional but underused (122 lines)
+
+**Recommendations**:
+- **INTEGRATE** with `python_server.py` for chat mode
+- Add dialogue policy learning
+- Implement clarification strategies
+
+---
+
+### A4. EMPATHY MODULE
+
+#### **empathy.py** ⭐ MEDIUM - STANDALONE
+**Purpose**: Emotional resonance (Mirror Neurons) and compassion. Uses Theory of Mind to infer others' states and EmotionSystem to "feel" them. Implements emotional contagion and compassionate response generation.
+
+**Key Components**:
+- `EmpathyModule`: Core empathy engine
+- Emotional contagion with configurable coefficient (0.7 default)
+- Emotion inference from mental state models
+- Compassionate response generation
+
+**Dependencies**:
+- `emotion_system.EmotionSystem`
+- `theory_of_mind.TheoryOfMind`
+
+**Usage**: Phase 2.3 module, not yet integrated into main loop
+
+**Integration**: ⚠️ **NEEDS ACTIVATION** in cognitive engine
+
+**Status**: 🟡 Ready but dormant (131 lines)
+
+**Recommendations**:
+- **ACTIVATE** in multi-agent scenarios
+- Add empathy-driven action modulation
+- Implement empathy-based trust modeling
+
+---
+
+### A5. CONSCIOUSNESS METRICS MODULE
+
+#### **consciousness_metrics.py** ⭐ HIGH - STANDALONE
+**Purpose**: Computes computational correlates of consciousness. Implements IIT 3.0 (Integrated Information Theory) Phi (Φ) estimation and Attention Schema Theory (AST). Provides subjective report generation.
+
+**Key Components**:
+- `ConsciousnessMonitor`: Main consciousness metrics engine
+- `compute_phi()`: Phi estimation via minimal cut analysis
+- `update_attention_schema()`: AST meta-representation of attention
+- `GlobalWorkspaceMetrics`: Extracts influence graph from coalitions
+
+**Dependencies**:
+- `networkx`, `numpy`
+- `global_workspace` for coalition data
+
+**Usage**: Phase 5.1 module, not yet integrated
+
+**Integration**: ⚠️ **AWAITING INTEGRATION** with Global Workspace
+
+**Status**: 🟡 Implemented but inactive (95 lines)
+
+**Recommendations**:
+- **INTEGRATE** with `global_workspace.py` for real-time Phi tracking
+- Add Phi threshold for conscious/unconscious states
+- Implement consciousness-gated learning
+
+---
+
+### A6. TESTING DASHBOARD MODULE
+
+#### **testing_dashboard.py** ⭐ HIGH - FULLY INTEGRATED  
+**Purpose**: Comprehensive Flask web dashboard for testing all NSCK capabilities. Provides chat interface, game simulations (Snake/Pong/Maze), system monitoring, and log export. Uses learned policy and teacher/student modes for game play.
+
+**Key Components**:
+- Flask app with SocketIO for real-time updates
+- `LearnedPolicy`: Lookup-table learner for dashboard simulations
+- Game simulation infrastructure (Snake, Pong, Maze)
+- Teacher solvers (A* for Maze, BFS for Snake, perfect tracking for Pong)
+- Export functionality (TXT, JSON)
+- Integration with `knowledge_integration`, `emotion_system`, `self_model`, `dialogue_manager`
+
+**Dependencies**:
+- `Flask`, extensive cognitive module imports
+- `knowledge_integration`, `multimodal_processor`, `context_engine`
+- `simulation`, `emotion_system`, `self_model`, `language_module`, `dialogue_manager`
+- `maze_game`
+
+**Usage**: Standalone dashboard server (port 5051)
+
+**Integration**: ✅ Primary testing interface
+
+**Status**: 🟢 Production-ready (2146 lines, 80KB)
+
+**Recommendations**:
+- Document API endpoints comprehensively
+- Add authentication for production use
+- Implement session persistence
+
+---
+
+### A7. COGNITIVE DASHBOARD MODULE
+
+#### **cognitive_dashboard.py** ⭐ MEDIUM - FULLY INTEGRATED
+**Purpose**: Standalone web dashboard for cognitive system monitoring. Features cognitive processing, memory viewing, knowledge inspection, reasoning trace visualization, and data export (JSON/ZIP).
+
+**Key Components**:
+- Flask app with single-page HTML/JS frontend
+- Multimodal input processing (text, image, audio, structured)
+- Real-time cognitive statistics display
+- Knowledge base query interface
+- Context engine statistics
+- Export functionality (JSON, ZIP)
+
+**Dependencies**:
+- `Flask`, `knowledge_integration`, `multimodal_processor`, `context_engine`
+
+**Usage**: Standalone dashboard server (port 5050)
+
+**Integration**: ✅ Alternative monitoring interface
+
+**Status**: 🟢 Production-ready (632 lines)
+
+**Recommendations**:
+- Consider consolidating with `testing_dashboard.py`
+- Add real-time WebSocket updates
+- Implement user configuration persistence
+
+---
+
+### A8. WEB DASHBOARD MODULE
+
+#### **web_dashboard.py** ⭐ CRITICAL - FULLY INTEGRATED
+**Purpose**: Main web-based mission control dashboard using Flask-SocketIO. Manages game process lifecycle, ZMQ communication with brain, real-time telemetry display, and comprehensive AGI report generation. Primary UI for system operation.
+
+**Key Components**:
+- Flask-SocketIO server with WebSocket support
+- Process management (start/stop games)
+- ZMQ listener for brain broadcasts (ports 5566, 5567)
+- Real-time data forwarding to web clients
+- Comprehensive AGI report export with task-specific filtering
+- Game room management for multi-task monitoring
+
+**Dependencies**:
+- `Flask`, `flask_socketio`, `zmq`
+- Subprocess management for game processes
+- Database (SQLite) and CSV logging integration
+
+**Usage**: Primary web interface (port 5000)
+
+**Integration**: ✅ **CRITICAL** - Main operational dashboard
+
+**Status**: 🟢 Production-ready (453 lines)
+
+**Recommendations**:
+- Add process health monitoring
+- Implement automatic crash recovery
+- Add WebSocket reconnection logic
+
+---
+
+### Summary of New Modules
+
+| Module | Lines | Type | Status | Priority |
+|--------|-------|------|--------|----------|
+| knowledge_integration.py | 502 | Integration | ✅ Active | HIGH |
+| context_engine.py | 395 | Symbolic | ✅ Active | HIGH |
+| dialogue_manager.py | 122 | Interaction | ⚠️ Partial | MEDIUM |
+| empathy.py | 131 | Social | ⚠️ Dormant | MEDIUM |
+| consciousness_metrics.py | 95 | Metrics | ⚠️ Dormant | HIGH |
+| testing_dashboard.py | 2146 | UI | ✅ Active | HIGH |
+| cognitive_dashboard.py | 632 | UI | ✅ Active | MEDIUM |
+| web_dashboard.py | 453 | UI | ✅ Active | **CRITICAL** |
+
+**Total Added**: 4,476 lines across 8 modules
+
+---
+
+## END OF MODULE ANALYSIS
 
 **Details**: See RUST_VSA_ANALYSIS.md for complete technical documentation
 

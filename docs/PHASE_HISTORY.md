@@ -2710,3 +2710,127 @@ Phase 7: Integration         ✅ COMPLETE (working demo)
 **Report Date:** February 8, 2026  
 **Status:** Phase 7 Complete ✅  
 **Next Steps:** Deployment & Scaling
+
+---
+
+# Phase 8: Neuro-Symbolic Integration & Temporal Deliberation
+
+## Executive Summary
+
+Phase 8 adds three interrelated capabilities that deepen the system's temporal reasoning, sensory grounding, and deliberative safety:
+
+1. **Temporal Permutation** — circular bitwise rotation of 10,240-bit hypervectors for sequence and trajectory encoding
+2. **Universal Input Layer** — maps heterogeneous data (scalars, strings, dicts, lists) into the shared VSA space
+3. **Mental Rehearsal & Veto** — simulates actions through the WorldModel before committing; blocks actions whose predicted outcomes resemble known danger states
+
+**Status:** ✅ COMPLETE  
+**Test Coverage:** 37/37 Phase 8 tests passing (0.15s)  
+**Regression:** Existing tests unaffected
+
+---
+
+## 8.1 Temporal Permutation
+
+**Files Modified:** `lib.rs`, `hypervec_py.py`, `hypervec_shim.py`
+
+**Capability:** `permute(shift)` performs a circular bitwise rotation across the 160 u64 blocks of a 10,240-bit HV. This enables:
+
+- **Sequence encoding:** `A ⊕ ρ¹(B) ⊕ ρ²(C)` — order-preserving composition
+- **Inverse property:** `permute(n).permute_inverse(n) ≈ identity` (>99% similarity)
+- **Quasi-orthogonality:** large shifts produce ~0.5 similarity (confirmed by tests)
+
+**Bug Fix:** The `hypervec_shim.py` compat fallback was calling `__getstate__(None)` instead of `__getstate__()`, causing silent failure and identity return. Fixed to call without arguments.
+
+---
+
+## 8.2 Universal Input Layer
+
+**New File:** `universal_input.py` (~230 lines)
+
+| Data Type | Encoding | Properties |
+|-----------|----------|------------|
+| Scalar (float/int) | Thermometer + windowed bundle | Nearby values → high similarity |
+| Category (str) | Seeded codebook with LRU (max 10K) | Deterministic, domain-namespaced |
+| Dict | Recursive role-filler binding (Role⊗Value) | Key recovery via unbinding |
+| List/Tuple | Permutation-based `Σ ρⁱ(itemᵢ)` | Order-preserving |
+
+**Integration:** Instantiated in `CognitiveEngine.__init__()` as `self.universal_input`.
+
+---
+
+## 8.3 Mental Rehearsal & Veto
+
+**File Modified:** `global_workspace.py` (108 → ~260 lines)
+
+**New Methods:**
+- `register_danger(hv)` — registers a catastrophic-outcome state vector (LRU eviction at 200)
+- `_is_dangerous(predicted_hv)` — checks similarity against all danger vectors
+- `compete_with_rehearsal(proposals, state_hv, world_model, get_action_hv_fn)` — deliberation loop:
+  1. Rank proposals by activation
+  2. Simulate top candidate through WorldModel
+  3. If predicted state ≥ 75% similar to any danger vector → VETO (halve salience, try next)
+  4. If safe → commit and broadcast
+  5. If all vetoed → EMERGENCY fallback (ACTION_STAY)
+
+**Integration in `cognitive_engine.py`:**
+- `decide()`: Uses rehearsal when WorldModel is ready AND danger vectors exist
+- `learn()`: Registers danger vectors on death outcomes or reward < -0.5
+
+---
+
+## Test Results
+
+```
+test_phase8_permutation.py         10/10 ✅
+  - Inverse property (multiple shifts)
+  - Negative shifts
+  - Full rotation identity
+  - Zero shift identity
+  - Quasi-orthogonality
+  - Different shifts produce different results
+  - Sequence encoding order sensitivity
+  - Sequence query recovery
+  - Exact 64-bit shift
+  - 65-bit cross-boundary shift
+
+test_phase8_universal_input.py     17/17 ✅
+  - Scalar similarity test (nearby > far)
+  - Identical values high similarity
+  - Extreme values low similarity
+  - Categorical determinism
+  - Different labels quasi-orthogonal
+  - Domain namespacing
+  - LRU eviction (max_codebook=10)
+  - Dict role-filler recovery
+  - Different dicts differ
+  - Sequence order matters
+  - Same sequence deterministic
+  - Auto-dispatch (float, int, str, dict, list)
+  - Stats counting
+
+test_phase8_mental_rehearsal.py    10/10 ✅
+  - Veto prevents dangerous action
+  - Safe action passes through
+  - Deadlock fallback (EMERGENCY)
+  - Second-best selected after veto
+  - Danger registry add + query
+  - LRU eviction (max=5)
+  - is_dangerous positive detection
+  - is_dangerous negative (random HV)
+  - get_status includes Phase 8 fields
+  - get_recent_vetoes empty check
+```
+
+---
+
+## Dashboard Integration
+
+- Three new module indicators added to Cognitive Pulse: `TEMPORAL`, `UINPUT`, `REHEARS`
+- `get_status()` now reports `danger_vectors` count and `rehearsal_vetoes` count
+- `get_recent_vetoes(n)` provides recent veto events for dashboard display
+
+---
+
+**Report Date:** February 11, 2026  
+**Status:** Phase 8 Complete ✅  
+**System Total:** 338+ tests passing

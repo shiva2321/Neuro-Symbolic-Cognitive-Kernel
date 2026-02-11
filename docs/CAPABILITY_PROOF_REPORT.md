@@ -1,6 +1,6 @@
 # NSCK Capability Proof Report
 
-> **Generated**: 2026-02-09 | **Test suite**: `nsck-demo/tests/test_capability_proofs.py` | **Result**: 21/21 PASSED
+> **Generated**: 2026-02-11 (updated) | **Test suite**: `nsck-demo/tests/test_capability_proofs.py` | **Result**: 21/21 PASSED
 
 This document presents verified, test-backed evidence of every major capability in the NSCK (Neuro-Symbolic Cognitive Kernel) system.  Each section follows the format:
 

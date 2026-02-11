@@ -63,6 +63,11 @@ class LearnedPolicy:
         counts = self.policy[state_hash]
         return max(counts, key=counts.get)
 
+    def reset(self):
+        """Clear all learned state-action mappings."""
+        self.policy.clear()
+        print("[POLICY] Dashboard learned policy reset.")
+
 # Global Policy Instance
 _dashboard_policy = LearnedPolicy()
 
@@ -1101,6 +1106,86 @@ def api_feedback():
 
 
 
+@app.route("/api/system/reset", methods=["POST"])
+def api_system_reset():
+    """Perform a full system reset: clear memories, files, and restart games."""
+    global _chat_history
+    
+    _log("system", ">>> INITIATING FULL BRAIN RESET <<<")
+    
+    # 1. Stop all game simulations (Threads and Sessions)
+    _log("system", "Stopping all game threads...")
+    with _game_lock:
+        # Signal all threads to stop
+        for sid, stop_event in _game_threads.items():
+            stop_event.set()
+        _game_threads.clear()
+        
+        # Mark all sessions as done
+        for sid, gs in _game_sessions.items():
+            try:
+                gs["env"].done = True
+                _log("game", f"Terminated session {gs['game_type']} ({sid})")
+            except:
+                pass
+    
+    # Give threads a moment to catch the signal
+    time.sleep(0.5)
+
+    # 2. Reset Cognitive Modules and Transient States
+    system = _get_system()
+    emo = _get_emotion()
+    sm = _get_self_model()
+    
+    system.reset()
+    emo.reset()
+    sm.reset()
+    _dashboard_policy.reset()
+    
+    # Reset dialogue if it exists
+    global _dialogue
+    if _dialogue:
+        _dialogue.reset()
+    
+    # 3. Clear transient dashboard state
+    _chat_history.clear()
+    _activity_log.clear() # Optional: decide if log should persist. Implementation plan says clear.
+    _log("system", "Dashboard transients cleared.")
+    
+    # 4. Clear Persistent Files
+    # Identify database path from BrainStore if possible, or use default path.
+    # Looking at persistence.py learnings: nsck_brain.db is the target.
+    db_path = "nsck_brain.db"
+    if os.path.exists(db_path):
+        try:
+            # We need to Ensure the sqlite connection is closed first.
+            # KnowledgeIntegration.reset() calls self.episodic.reset(),
+            # which might need to close the store.
+            if system.episodic.store:
+                system.episodic.store.close()
+            
+            os.remove(db_path)
+            _log("system", f"Deleted persistent database: {db_path}")
+        except Exception as e:
+            _log("error", f"Failed to delete {db_path}: {e}")
+
+    log_csv = "training_log.csv"
+    if os.path.exists(log_csv):
+        try:
+            os.remove(log_csv)
+            _log("system", f"Deleted training log: {log_csv}")
+        except Exception as e:
+            _log("error", f"Failed to delete {log_csv}: {e}")
+
+    _log("system", ">>> FULL BRAIN RESET COMPLETE <<<")
+    
+    return jsonify({
+        "status": "ok", 
+        "message": "Brain cleared and system re-initialized.",
+        "stats": system.get_statistics()
+    })
+
+
 # ---------------------------------------------------------------------------
 # HTML Dashboard Template
 # ---------------------------------------------------------------------------
@@ -1302,6 +1387,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
     <button class="secondary" onclick="refreshAll()">↻ Refresh All</button>
     <button class="warn" onclick="exportText()">📄 Export TXT</button>
     <button class="secondary" onclick="exportJSON()">📥 Export JSON</button>
+    <button class="danger" onclick="fullReset()">⚠ RESET BRAIN</button>
   </div>
 </div>
 
@@ -1907,6 +1993,31 @@ async function stopGame(sessionId) {
   } catch(e) {}
   const badge = document.getElementById('badge-' + sessionId);
   if (badge) { badge.className = 'badge badge-yellow'; badge.textContent = 'STOPPED'; }
+}
+
+async function fullReset() {
+  if (!confirm("⚠️ CAUTION: Are you sure you want to clear the entire brain? This will erase all learned knowledge, experiences, and model weights. This cannot be undone.")) {
+    return;
+  }
+  
+  try {
+    const resp = await fetch(API + '/api/system/reset', { method: 'POST' });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      alert("✅ Brain cleared and system re-initialized.");
+      // Clear chat
+      document.getElementById('chat-area').innerHTML = '';
+      document.getElementById('reasoning-trace').innerHTML = '<div style="color:#8b949e">Send a message to see the system\'s reasoning process...</div>';
+      // Stop all pollers
+      stopAllGames();
+      // Refresh
+      refreshAll();
+    } else {
+      alert("❌ Error: " + data.error);
+    }
+  } catch(e) {
+    alert("❌ Network error during reset: " + e.message);
+  }
 }
 
 async function stopAllGames() {

@@ -76,6 +76,17 @@ class EmotionSystem:
         
         # Emotion-to-hypervector mapping
         self.emotion_codebook = self._build_emotion_codebook()
+
+    def reset(self):
+        """Clear emotional state and history."""
+        self.valence = 0.0
+        self.arousal = 0.0
+        self.current_emotion = "neutral"
+        self.emotion_intensity = 0.0
+        self.emotion_blend = {"neutral": 1.0}
+        self.emotion_history = []
+        self._step = 0
+        print("[EMOTION] System reset.")
     
     def _build_emotion_codebook(self) -> Dict[str, Any]:
         """Create VSA representations for emotions."""

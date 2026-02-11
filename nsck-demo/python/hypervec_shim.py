@@ -70,6 +70,57 @@ def _install_compat_methods(HV):
 
         setattr(HV, "lsh_hash", lsh_hash)
 
+    # --- permute (Phase 8: Temporal Encoding) ---
+    if not hasattr(HV, "permute"):
+        import numpy as _np
+
+        def permute(self, shift: int):
+            """Circular bitwise permutation for temporal encoding."""
+            dim = 10240
+            shift_norm = shift % dim
+            if shift_norm == 0:
+                return self  # identity
+
+            # For Rust HVs, get the u64 block state via pickle interface
+            try:
+                state = self.__getstate__()  # Returns list of 160 u64 ints
+            except Exception:
+                # Should not happen — indicates a broken HV object
+                return self
+
+            num_u64 = dim // 64
+            total_bits = dim
+
+            s = ((shift_norm % total_bits) + total_bits) % total_bits
+            word_shift = s // 64
+            bit_shift = s % 64
+
+            new_bits = [0] * num_u64
+            if bit_shift == 0:
+                for i in range(num_u64):
+                    src = (i + num_u64 - word_shift) % num_u64
+                    new_bits[i] = state[src]
+            else:
+                complement = 64 - bit_shift
+                mask = (1 << 64) - 1
+                for i in range(num_u64):
+                    src_hi = (i + num_u64 - word_shift) % num_u64
+                    src_lo = (i + num_u64 - word_shift - 1) % num_u64
+                    new_bits[i] = ((state[src_hi] << bit_shift) | (state[src_lo] >> complement)) & mask
+
+            result = type(self).__new__(type(self))
+            result.__setstate__(new_bits)
+            return result
+
+        setattr(HV, "permute", permute)
+
+    if not hasattr(HV, "permute_inverse"):
+        def permute_inverse(self, shift: int):
+            """Inverse permutation: permute(-shift)."""
+            return self.permute(-shift)
+
+        setattr(HV, "permute_inverse", permute_inverse)
+
 
 if _USE_RUST:
     _install_compat_methods(_ext.HyperVector)
