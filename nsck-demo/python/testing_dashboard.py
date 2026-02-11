@@ -81,6 +81,11 @@ _game_sessions: Dict[str, Dict[str, Any]] = {}
 _game_lock = threading.Lock()
 _game_threads: Dict[str, threading.Event] = {}
 
+# Game simulation constants
+EXPLORATION_PROBABILITY = 0.1   # Chance of random action in snake
+MAZE_EXPLORATION_PROBABILITY = 0.2  # Chance of random action in maze
+MIN_POLL_INTERVAL_MS = 200  # Minimum polling interval for game state updates
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -126,7 +131,7 @@ def _get_language() -> LanguageModule:
     global _language
     if _language is None:
         _language = LanguageModule()
-        _log("system", "LanguageModule initialised (mock=%s)" % _language.mock_mode)
+        _log("system", f"LanguageModule initialised (mock={_language.mock_mode})")
     return _language
 
 
@@ -210,7 +215,7 @@ def _choose_action_for_game(game_state: Dict) -> str:
         else:
             action = "DOWN" if dy > 0 else "UP"
         # add some exploration
-        if np.random.random() < 0.1:
+        if np.random.random() < EXPLORATION_PROBABILITY:
             action = np.random.choice(["UP", "DOWN", "LEFT", "RIGHT"])
     elif game_type == "pong":
         ball_y = game_state["ball_y"]
@@ -236,7 +241,7 @@ def _choose_action_for_game(game_state: Dict) -> str:
             candidates.append("UP")
         if not candidates:
             candidates = ["UP", "DOWN", "LEFT", "RIGHT"]
-        action = candidates[0] if np.random.random() > 0.2 else np.random.choice(candidates)
+        action = candidates[0] if np.random.random() > MAZE_EXPLORATION_PROBABILITY else np.random.choice(candidates)
     else:
         action = "UP"
 
@@ -1352,6 +1357,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 <!-- ================================================================ -->
 <script>
 const API = '';
+const MIN_POLL_INTERVAL_MS = 200;
 let allLogs = [];
 let gamePollers = {};
 
@@ -1545,7 +1551,7 @@ function startGamePoller(sessionId, intervalMs) {
         if (badge) { badge.className = 'badge badge-red'; badge.textContent = 'DONE'; }
       }
     } catch(e) {}
-  }, Math.max(intervalMs, 200));
+  }, Math.max(intervalMs, MIN_POLL_INTERVAL_MS));
 }
 
 function updateGameCard(sessionId, state, history) {

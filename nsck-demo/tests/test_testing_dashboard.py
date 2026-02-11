@@ -6,11 +6,10 @@ chat, game simulations, monitoring, and export functionality.
 import sys
 import os
 import json
-import io
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from python.testing_dashboard import app, _activity_log, _chat_history, _game_sessions
+from python.testing_dashboard import app
 
 
 def _client():
