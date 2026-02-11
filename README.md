@@ -110,11 +110,22 @@ The following capabilities are implemented and verified by the test suite (178 t
 | **LLM Translator** | Phi3 translates system state to natural language (peripheral only) |
 | **Full Integration** | All phases working as unified cognitive architecture |
 
+### Phase 8: Natural Language Learning (NEW)
+| Capability | Description |
+|---|---|
+| **Text Learning** | Learn from text files using VSA-based concept extraction (NOT LLM-dependent) |
+| **Concept Extraction** | Pattern-based extraction of concepts and semantic relations |
+| **Hypervector Encoding** | Text → 10,240-dim hypervectors via LinguaCortex (Semantic Folding) |
+| **Knowledge Storage** | Concepts stored in SemanticMemory graph + EpisodicMemory episodes |
+| **Natural Language Q&A** | Answer questions based on learned knowledge with confidence scores |
+| **Query System** | Semantic search + spreading activation + fact retrieval |
+| **Dashboard Integration** | Upload text files, query knowledge, view statistics via web UI |
+
 ---
 
 ## Known Limitations
 
-1. **No real language understanding** — the LLM is a translator peripheral, not a reasoning engine
+1. **Pattern-based language learning** — uses regex patterns for relation extraction, not deep NLU
 2. **No pixel-level perception** — uses structured game state, not raw images
 3. **No gradient-based learning in VSA core** — the VSA layer is not differentiable
 4. **Causal discovery needs sufficient observation data** — sparse data yields incomplete graphs
@@ -155,7 +166,8 @@ Node_network/
 | `global_workspace.py` | GWT decision arbitration with mental rehearsal | `GlobalWorkspace.compete_with_rehearsal()` |
 | `analogy.py` | Cross-domain transfer via structural alignment | `AnalogyEngine.find_analogy()`, `transfer_rule()` |
 | `train_phase7_demo.py` | Integrated system with KnowledgeStore and LLM translator | Full 7-phase integration |
-| `testing_dashboard.py` | Comprehensive web dashboard for testing & monitoring | Flask app on port 5051 |
+| `testing_dashboard.py` | Web dashboard with chat, games, monitoring, and **text learning** | Flask app on port 5051, 23 API endpoints |
+| `text_knowledge_learner.py` | **NEW:** VSA-based text learning (NOT LLM-dependent) | `TextKnowledgeLearner.learn_from_text_file()`, `query_learned_knowledge()` |
 | `rule_learner.py` | Frequency-based symbolic rule induction | `RuleLearner.observe()`, `induce_rules()` |
 | `causal_reasoning.py` | Causal graph induction and counterfactuals | `CausalReasoner.counterfactual()`, Delta-P |
 | `continual_learning.py` | EWC, PackNet, Progressive Networks, Memory Replay | `ContinualLearner.ewc_loss()`, `PackNetManager` |
@@ -241,6 +253,24 @@ memory = EpisodicMemory()
 similar_episodes = memory.recall_similar(query_hv, "snake", k=5)
 ```
 
+**Text Learning (NEW):**
+```python
+from text_knowledge_learner import TextKnowledgeLearner
+
+# Initialize learner (uses VSA, not LLM)
+learner = TextKnowledgeLearner()
+
+# Learn from text file
+session = learner.learn_from_text_file("science.txt")
+# → Extracts concepts, relations, stores in semantic memory
+
+# Query learned knowledge
+result = learner.query_learned_knowledge("What is photosynthesis?")
+# → Returns: confidence, facts, reasoning trace
+print(f"Confidence: {result['confidence']:.2f}")
+print(f"Answer: {result['answer']}")
+```
+
 See [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) for complete API reference.
 
 ---
@@ -256,6 +286,9 @@ python -m pytest nsck-demo/tests/test_transfer_learning.py -v
 
 # Run testing dashboard tests
 python -m pytest nsck-demo/tests/test_testing_dashboard.py -v
+
+# Run text learning tests (NEW)
+python -m pytest nsck-demo/tests/test_text_knowledge_learner.py -v
 ```
 
 Some tests require optional dependencies (`torch`, `flask`, `snntorch`). Core tests run without these.
@@ -273,6 +306,7 @@ python nsck-demo/python/testing_dashboard.py
 
 The dashboard provides:
 - **💬 Chat & Test** — Submit text samples and chat with the cognitive system, observe reasoning traces and disambiguations
+- **📚 Text Learning** — **NEW:** Upload text files, learn concepts/relations via VSA, query learned knowledge with confidence scores
 - **🎮 Game Simulations** — Run Snake, Pong, and Maze games simultaneously or sequentially, watch the system play and learn
 - **📊 System Monitor** — Real-time emotion tracking, self-model performance, knowledge base browsing
 - **📋 Logs & Export** — Full activity log with filtering, export everything to TXT or JSON
@@ -302,6 +336,9 @@ NSCK is explicitly designed to avoid heavyweight computation:
 | [docs/FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) | Complete mathematical formulas with derivations and test-backed proofs |
 | [docs/RUN_LOGS_AND_EVIDENCE.md](docs/RUN_LOGS_AND_EVIDENCE.md) | Actual test execution logs, performance benchmarks, and concrete evidence |
 | [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) | Testing dashboard usage, API reference, and export formats |
+| [docs/TEXT_LEARNING_USER_GUIDE.md](docs/TEXT_LEARNING_USER_GUIDE.md) | **NEW:** Text learning system user guide, API reference, and workflows |
+| [docs/TEXT_LEARNING_ARCHITECTURE.md](docs/TEXT_LEARNING_ARCHITECTURE.md) | **NEW:** Technical architecture of VSA-based text learning |
+| [docs/TEXT_LEARNING_PROOF.md](docs/TEXT_LEARNING_PROOF.md) | **NEW:** Proof of text learning capabilities with test results |
 | [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all 91 modules with integration status |
 | [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
 | [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |

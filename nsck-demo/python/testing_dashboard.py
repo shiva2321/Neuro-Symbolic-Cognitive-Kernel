@@ -42,6 +42,7 @@ from self_model import SelfModel
 from language_module import LanguageModule
 from dialogue_manager import DialogueManager
 from maze_game import MazeGame
+from text_knowledge_learner import TextKnowledgeLearner
 import heapq
 from collections import defaultdict
 
@@ -101,6 +102,7 @@ _emotion: Optional[EmotionSystem] = None
 _self_model: Optional[SelfModel] = None
 _language: Optional[LanguageModule] = None
 _dialogue: Optional[DialogueManager] = None
+_text_learner: Optional[TextKnowledgeLearner] = None
 
 _activity_log: deque = deque(maxlen=2000)
 _chat_history: List[Dict[str, str]] = []
@@ -170,6 +172,19 @@ def _get_dialogue() -> DialogueManager:
         _dialogue = DialogueManager(None, _get_language())
         _log("system", "DialogueManager initialised")
     return _dialogue
+
+
+def _get_text_learner() -> TextKnowledgeLearner:
+    global _text_learner
+    if _text_learner is None:
+        system = _get_system()
+        _text_learner = TextKnowledgeLearner(
+            semantic_memory=system.semantic,
+            episodic_memory=system.episodic,
+            context_engine=system.context
+        )
+        _log("system", "TextKnowledgeLearner initialised")
+    return _text_learner
 
 
 # ---------------------------------------------------------------------------
@@ -557,6 +572,7 @@ def api_chat():
 
     system = _get_system()
     emo = _get_emotion()
+    text_learner = _get_text_learner()
 
     # If there is a sample text, process it through the cognitive pipeline first
     reasoning_trace = []
@@ -575,7 +591,10 @@ def api_chat():
             for d in resp.disambiguations
         ]
 
-    # Now process the user message itself
+    # First try to query learned knowledge from text learner
+    learned_response = text_learner.query_learned_knowledge(user_msg, top_k=5)
+    
+    # Now process the user message itself through normal pipeline
     inp2 = MultimodalInput(text=user_msg)
     resp2 = system.process_input(inp2, task_tag="chat")
     answer = resp2.answer
@@ -586,11 +605,24 @@ def api_chat():
     dm = _get_dialogue()
     dialogue_response = dm.process_turn(user_msg)
 
-    # Combine answers
+    # Combine answers - prioritize learned knowledge if confidence is high
+    answer_parts = []
+    
+    if learned_response['confidence'] > 0.3:
+        answer_parts.append("**From Learned Knowledge:**")
+        answer_parts.append(learned_response['answer'])
+        reasoning_trace.extend(learned_response['reasoning_trace'])
+        confidence = max(confidence, learned_response['confidence'])
+    
+    if answer and answer.strip():
+        answer_parts.append("\n**From Cognitive Pipeline:**")
+        answer_parts.append(answer)
+    
     if dialogue_response and dialogue_response != "I'm not sure what you mean. Can you rephrase?":
-        combined = f"{answer}\n\n[Dialogue]: {dialogue_response}"
-    else:
-        combined = answer
+        answer_parts.append("\n**Conversational Response:**")
+        answer_parts.append(dialogue_response)
+    
+    combined = "\n".join(answer_parts) if answer_parts else "I don't have enough information to answer that."
 
     # Emotion info
     emotion_info = {
@@ -613,6 +645,7 @@ def api_chat():
         "confidence": confidence,
         "reasoning_trace": reasoning_trace,
         "emotion": emotion_info,
+        "learned_facts_used": len(learned_response.get('related_facts', [])),
         "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
     }
     _chat_history.append(assistant_entry)
@@ -620,6 +653,7 @@ def api_chat():
     _log("chat", f"Assistant: {combined[:120]}...", {
         "confidence": confidence,
         "trace_len": len(reasoning_trace),
+        "learned_facts": len(learned_response.get('related_facts', [])),
     })
 
     return jsonify({
@@ -629,12 +663,195 @@ def api_chat():
         "disambiguations": disambiguations,
         "emotion": emotion_info,
         "stats": system.get_statistics(),
+        "learned_knowledge": learned_response,
     })
 
 
 @app.route("/api/chat/history")
 def api_chat_history():
     return jsonify({"history": _chat_history})
+
+
+# ---------------------------------------------------------------------------
+# Routes – Text Learning (NEW)
+# ---------------------------------------------------------------------------
+
+@app.route("/api/learn/upload", methods=["POST"])
+def api_learn_upload():
+    """
+    Upload and learn from text file(s).
+    Accepts either file upload or text content directly.
+    """
+    text_learner = _get_text_learner()
+    
+    # Check if files were uploaded
+    if 'files' in request.files:
+        files = request.files.getlist('files')
+        if not files or files[0].filename == '':
+            return jsonify({"error": "No files selected"}), 400
+        
+        sessions = []
+        for file in files:
+            if file and file.filename:
+                # Save temporarily
+                import tempfile
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tmp:
+                    content = file.read().decode('utf-8')
+                    tmp.write(content)
+                    tmp_path = tmp.name
+                
+                try:
+                    # Learn from file
+                    session = text_learner.learn_from_text_file(tmp_path)
+                    sessions.append({
+                        'session_id': session.session_id,
+                        'filename': file.filename,
+                        'duration': session.end_time - session.start_time,
+                        'concepts': session.concepts_learned,
+                        'relations': session.relations_learned,
+                        'facts': session.facts_stored,
+                        'sentences': session.sentences_processed
+                    })
+                    
+                    _log("learning", f"Learned from file: {file.filename}", {
+                        "session_id": session.session_id,
+                        "concepts": session.concepts_learned,
+                        "facts": session.facts_stored
+                    })
+                finally:
+                    # Clean up temp file
+                    os.unlink(tmp_path)
+        
+        return jsonify({
+            "success": True,
+            "sessions": sessions,
+            "total_concepts": len(text_learner.semantic.concept_hvs),
+            "total_facts": len(text_learner.learned_facts)
+        })
+    
+    # Check for direct text content
+    elif request.is_json:
+        data = request.get_json()
+        text_content = data.get('text', '').strip()
+        filename = data.get('filename', 'direct_input.txt')
+        
+        if not text_content:
+            return jsonify({"error": "No text content provided"}), 400
+        
+        # Save to temporary file
+        import tempfile
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as tmp:
+            tmp.write(text_content)
+            tmp_path = tmp.name
+        
+        try:
+            # Learn from text
+            session = text_learner.learn_from_text_file(tmp_path)
+            
+            _log("learning", f"Learned from text input: {filename}", {
+                "session_id": session.session_id,
+                "concepts": session.concepts_learned,
+                "facts": session.facts_stored
+            })
+            
+            return jsonify({
+                "success": True,
+                "session": {
+                    'session_id': session.session_id,
+                    'filename': filename,
+                    'duration': session.end_time - session.start_time,
+                    'concepts': session.concepts_learned,
+                    'relations': session.relations_learned,
+                    'facts': session.facts_stored,
+                    'sentences': session.sentences_processed
+                },
+                "total_concepts": len(text_learner.semantic.concept_hvs),
+                "total_facts": len(text_learner.learned_facts)
+            })
+        finally:
+            os.unlink(tmp_path)
+    
+    return jsonify({"error": "No valid input provided"}), 400
+
+
+@app.route("/api/learn/stats")
+def api_learn_stats():
+    """Get learning statistics."""
+    text_learner = _get_text_learner()
+    stats = text_learner.get_statistics()
+    
+    return jsonify({
+        "success": True,
+        "stats": stats
+    })
+
+
+@app.route("/api/learn/query", methods=["POST"])
+def api_learn_query():
+    """Query learned knowledge."""
+    data = request.get_json(force=True, silent=True) or {}
+    query = data.get("query", "").strip()
+    
+    if not query:
+        return jsonify({"error": "No query provided"}), 400
+    
+    text_learner = _get_text_learner()
+    result = text_learner.query_learned_knowledge(query, top_k=10)
+    
+    _log("query", f"Queried learned knowledge: {query}", {
+        "confidence": result['confidence'],
+        "facts_found": len(result['related_facts'])
+    })
+    
+    return jsonify({
+        "success": True,
+        "result": result
+    })
+
+
+@app.route("/api/learn/export")
+def api_learn_export():
+    """Export learned knowledge as text."""
+    text_learner = _get_text_learner()
+    exported = text_learner.export_learned_knowledge()
+    
+    # Create downloadable text file
+    buf = io.BytesIO(exported.encode('utf-8'))
+    buf.seek(0)
+    
+    return send_file(
+        buf,
+        mimetype='text/plain',
+        as_attachment=True,
+        download_name=f'learned_knowledge_{int(time.time())}.txt'
+    )
+
+
+@app.route("/api/learn/reset", methods=["POST"])
+def api_learn_reset():
+    """Reset all learned knowledge."""
+    global _text_learner
+    
+    if _text_learner:
+        # Reset the learner
+        _text_learner.learned_facts.clear()
+        _text_learner.learning_sessions.clear()
+        _text_learner.concept_frequencies.clear()
+        _text_learner.relation_patterns.clear()
+        _text_learner.semantic.reset()
+        _text_learner.episodic.reset()
+        
+        _log("learning", "All learned knowledge reset")
+        
+        return jsonify({
+            "success": True,
+            "message": "All learned knowledge has been reset"
+        })
+    
+    return jsonify({
+        "success": True,
+        "message": "No learner to reset"
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -1394,6 +1611,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 <!-- ========== TAB BAR ========== -->
 <div class="tab-bar">
   <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat & Test</button>
+  <button class="tab-btn" onclick="switchTab('learn')">📚 Text Learning</button>
   <button class="tab-btn" onclick="switchTab('games')">🎮 Game Simulations</button>
   <button class="tab-btn" onclick="switchTab('monitor')">📊 System Monitor</button>
   <button class="tab-btn" onclick="switchTab('logs')">📋 Logs & Export</button>
@@ -1465,7 +1683,87 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 </div>
 
 <!-- ================================================================ -->
-<!-- TAB 2: GAME SIMULATIONS -->
+<!-- TAB 2: TEXT LEARNING -->
+<!-- ================================================================ -->
+<div class="tab-content" id="tab-learn">
+  <div class="grid-2">
+    <!-- Left: File Upload & Learning -->
+    <div>
+      <div class="panel">
+        <h2>📤 Upload Text Files</h2>
+        <p style="font-size:12px;color:#8b949e;margin-bottom:12px">
+          Upload text files (.txt) for the system to learn from. The system will extract concepts,
+          relations, and store knowledge in its semantic and episodic memory using VSA (Vector Symbolic Architecture).
+        </p>
+        <input type="file" id="text-files" accept=".txt" multiple style="margin-bottom:12px">
+        <div style="display:flex;gap:8px">
+          <button onclick="uploadTextFiles()" id="upload-btn">📤 Upload & Learn</button>
+          <button class="secondary" onclick="document.getElementById('text-files').value=''">Clear Selection</button>
+        </div>
+        <div id="upload-status" style="margin-top:12px;font-size:12px"></div>
+      </div>
+
+      <div class="panel">
+        <h2>✍️ Or Paste Text Directly</h2>
+        <textarea id="direct-text" rows="6"
+          placeholder="Paste text content here to learn from it directly..."></textarea>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <input type="text" id="direct-filename" placeholder="Optional filename" style="flex:1">
+          <button onclick="learnFromDirectText()">📝 Learn from Text</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📊 Learning Statistics</h2>
+        <div class="stat-cards" id="learning-stats">
+          <div class="stat-card"><div class="val" id="ls-sessions">0</div><div class="lbl">Sessions</div></div>
+          <div class="stat-card"><div class="val" id="ls-concepts">0</div><div class="lbl">Concepts</div></div>
+          <div class="stat-card"><div class="val" id="ls-facts">0</div><div class="lbl">Facts</div></div>
+          <div class="stat-card"><div class="val" id="ls-episodes">0</div><div class="lbl">Episodes</div></div>
+        </div>
+        <div style="margin-top:12px">
+          <button class="secondary" onclick="refreshLearningStats()">↻ Refresh Stats</button>
+          <button onclick="exportLearnedKnowledge()">📥 Export Knowledge</button>
+          <button class="danger" onclick="resetLearning()">⚠ Reset Learning</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Query & Knowledge Display -->
+    <div>
+      <div class="panel">
+        <h2>🔍 Query Learned Knowledge</h2>
+        <p style="font-size:12px;color:#8b949e;margin-bottom:12px">
+          Test the system's understanding by querying what it learned from the text files.
+        </p>
+        <div class="chat-input-row">
+          <textarea id="query-input" rows="2" placeholder="Ask about learned concepts..."></textarea>
+          <button onclick="queryLearned()">Search</button>
+        </div>
+        <div id="query-result" style="margin-top:12px;padding:12px;background:var(--bg);border:1px solid var(--border);border-radius:4px;min-height:100px;max-height:400px;overflow-y:auto">
+          <div style="color:#8b949e;font-size:12px">Enter a query to search learned knowledge...</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>🧠 Learning Sessions</h2>
+        <div id="sessions-list" style="max-height:300px;overflow-y:auto;font-size:12px">
+          <div style="color:#8b949e">No learning sessions yet...</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>📈 Top Learned Concepts</h2>
+        <div id="top-concepts" style="max-height:200px;overflow-y:auto;font-size:12px">
+          <div style="color:#8b949e">No concepts learned yet...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- TAB 3: GAME SIMULATIONS -->
 <!-- ================================================================ -->
 <div class="tab-content" id="tab-games">
   <div class="panel">
@@ -1645,6 +1943,7 @@ function switchTab(tabId) {
   event.target.classList.add('active');
   if (tabId === 'monitor') refreshMonitor();
   if (tabId === 'logs') refreshLogs();
+  if (tabId === 'learn') refreshLearningStats();
 }
 
 // ---- Chat ----
@@ -1731,6 +2030,222 @@ function updateChatDetails(data) {
     document.getElementById('qs-knowledge').textContent = data.stats.knowledge_entries || 0;
     document.getElementById('qs-episodes').textContent = data.stats.episodes_recorded || 0;
     document.getElementById('qs-facts').textContent = data.stats.facts_learned || 0;
+  }
+}
+
+// ---- Text Learning ----
+async function uploadTextFiles() {
+  const fileInput = document.getElementById('text-files');
+  const files = fileInput.files;
+  
+  if (!files || files.length === 0) {
+    showUploadStatus('❌ No files selected', 'error');
+    return;
+  }
+  
+  const btn = document.getElementById('upload-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Learning...';
+  showUploadStatus('📤 Uploading and learning from files...', 'info');
+  
+  const formData = new FormData();
+  for (let file of files) {
+    formData.append('files', file);
+  }
+  
+  try {
+    const resp = await fetch(API + '/api/learn/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await resp.json();
+    
+    if (data.success) {
+      const summary = data.sessions.map(s => 
+        `✅ ${s.filename}: ${s.concepts} concepts, ${s.facts} facts (${s.duration.toFixed(2)}s)`
+      ).join('<br>');
+      showUploadStatus(
+        `🎉 Successfully learned from ${data.sessions.length} file(s)!<br>${summary}<br>` +
+        `Total: ${data.total_concepts} concepts, ${data.total_facts} facts`,
+        'success'
+      );
+      fileInput.value = '';
+      refreshLearningStats();
+    } else {
+      showUploadStatus('❌ Error: ' + (data.error || 'Unknown error'), 'error');
+    }
+  } catch(e) {
+    showUploadStatus('❌ Network error: ' + e.message, 'error');
+  }
+  
+  btn.disabled = false;
+  btn.textContent = '📤 Upload & Learn';
+}
+
+async function learnFromDirectText() {
+  const text = document.getElementById('direct-text').value.trim();
+  if (!text) {
+    alert('Please enter some text to learn from');
+    return;
+  }
+  
+  const filename = document.getElementById('direct-filename').value.trim() || 'direct_input.txt';
+  
+  try {
+    const resp = await fetch(API + '/api/learn/upload', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({text: text, filename: filename})
+    });
+    const data = await resp.json();
+    
+    if (data.success) {
+      const s = data.session;
+      showUploadStatus(
+        `✅ Learned successfully!<br>` +
+        `${s.concepts} concepts, ${s.facts} facts learned in ${s.duration.toFixed(2)}s`,
+        'success'
+      );
+      document.getElementById('direct-text').value = '';
+      document.getElementById('direct-filename').value = '';
+      refreshLearningStats();
+    } else {
+      showUploadStatus('❌ Error: ' + (data.error || 'Unknown error'), 'error');
+    }
+  } catch(e) {
+    showUploadStatus('❌ Network error: ' + e.message, 'error');
+  }
+}
+
+function showUploadStatus(message, type) {
+  const statusDiv = document.getElementById('upload-status');
+  const colors = {
+    info: 'var(--accent)',
+    success: 'var(--green)',
+    error: 'var(--red)'
+  };
+  statusDiv.innerHTML = `<div style="color:${colors[type] || 'var(--text)'}; padding:8px; background:var(--bg); border-radius:4px">${message}</div>`;
+}
+
+async function refreshLearningStats() {
+  try {
+    const resp = await fetch(API + '/api/learn/stats');
+    const data = await resp.json();
+    
+    if (data.success) {
+      const stats = data.stats;
+      
+      // Update stat cards
+      document.getElementById('ls-sessions').textContent = stats.total_sessions || 0;
+      document.getElementById('ls-concepts').textContent = stats.total_concepts || 0;
+      document.getElementById('ls-facts').textContent = stats.total_facts || 0;
+      document.getElementById('ls-episodes').textContent = stats.total_episodes || 0;
+      
+      // Update sessions list
+      const sessionsList = document.getElementById('sessions-list');
+      if (stats.sessions && stats.sessions.length > 0) {
+        sessionsList.innerHTML = stats.sessions.map(s => `
+          <div style="margin-bottom:8px;padding:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px">
+            <div style="font-weight:600;color:var(--accent)">${s.filename}</div>
+            <div style="color:#8b949e">Session ${s.session_id} • ${s.duration.toFixed(2)}s</div>
+            <div>Concepts: ${s.concepts} | Relations: ${s.relations} | Facts: ${s.facts}</div>
+          </div>
+        `).join('');
+      } else {
+        sessionsList.innerHTML = '<div style="color:#8b949e">No learning sessions yet...</div>';
+      }
+      
+      // Update top concepts
+      const topConcepts = document.getElementById('top-concepts');
+      if (stats.concept_frequencies && Object.keys(stats.concept_frequencies).length > 0) {
+        const entries = Object.entries(stats.concept_frequencies)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 15);
+        topConcepts.innerHTML = entries.map(([concept, freq]) => `
+          <div style="margin:4px 0;padding:4px 8px;background:var(--bg);border-radius:3px">
+            <strong>${concept}</strong>: <span style="color:var(--green)">${freq}</span> occurrences
+          </div>
+        `).join('');
+      } else {
+        topConcepts.innerHTML = '<div style="color:#8b949e">No concepts learned yet...</div>';
+      }
+    }
+  } catch(e) {
+    console.error('Error refreshing learning stats:', e);
+  }
+}
+
+async function queryLearned() {
+  const query = document.getElementById('query-input').value.trim();
+  if (!query) return;
+  
+  const resultDiv = document.getElementById('query-result');
+  resultDiv.innerHTML = '<div style="color:var(--accent)">🔍 Searching...</div>';
+  
+  try {
+    const resp = await fetch(API + '/api/learn/query', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: query})
+    });
+    const data = await resp.json();
+    
+    if (data.success) {
+      const result = data.result;
+      
+      let html = `<div style="margin-bottom:12px">
+        <strong>Query:</strong> "${query}"<br>
+        <strong>Confidence:</strong> <span style="color:var(--green)">${(result.confidence*100).toFixed(1)}%</span>
+      </div>`;
+      
+      if (result.answer) {
+        html += `<div style="padding:12px;background:var(--panel);border-left:3px solid var(--accent);border-radius:4px;margin-bottom:12px">
+          ${result.answer.replace(/\n/g, '<br>')}
+        </div>`;
+      }
+      
+      if (result.reasoning_trace && result.reasoning_trace.length > 0) {
+        html += `<details style="margin-top:12px">
+          <summary style="cursor:pointer;color:var(--accent);margin-bottom:8px">🔍 Reasoning Trace (${result.reasoning_trace.length} steps)</summary>
+          <div style="font-size:11px;color:#8b949e">
+            ${result.reasoning_trace.map(t => `<div style="margin:2px 0;padding:2px 4px">• ${t}</div>`).join('')}
+          </div>
+        </details>`;
+      }
+      
+      resultDiv.innerHTML = html;
+    } else {
+      resultDiv.innerHTML = `<div style="color:var(--red)">❌ ${data.error || 'Unknown error'}</div>`;
+    }
+  } catch(e) {
+    resultDiv.innerHTML = `<div style="color:var(--red)">❌ Network error: ${e.message}</div>`;
+  }
+}
+
+async function exportLearnedKnowledge() {
+  try {
+    window.location.href = API + '/api/learn/export';
+  } catch(e) {
+    alert('Error exporting knowledge: ' + e.message);
+  }
+}
+
+async function resetLearning() {
+  if (!confirm('⚠️ Are you sure you want to reset ALL learned knowledge? This cannot be undone!')) {
+    return;
+  }
+  
+  try {
+    const resp = await fetch(API + '/api/learn/reset', {method: 'POST'});
+    const data = await resp.json();
+    
+    if (data.success) {
+      alert('✅ All learned knowledge has been reset');
+      refreshLearningStats();
+      document.getElementById('query-result').innerHTML = '<div style="color:#8b949e;font-size:12px">Enter a query to search learned knowledge...</div>';
+    }
+  } catch(e) {
+    alert('Error resetting learning: ' + e.message);
   }
 }
 
