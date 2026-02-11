@@ -143,6 +143,41 @@ UTILITIES:
 
 ---
 
+## IMPLEMENTATION REFERENCE
+
+For comprehensive implementation details including class signatures, method parameters, algorithms, and usage examples, see:
+
+**[docs/IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.md)** - Complete API reference with:
+- Class definitions and signatures
+- Method parameters and return types  
+- Data structures and relationships
+- Algorithm implementations with pseudocode
+- Integration patterns
+- Configuration tables
+- Usage examples
+
+**Quick Reference - Key Classes:**
+
+| Module | Primary Classes | Key Methods |
+|--------|-----------------|-------------|
+| `cognitive_engine.py` | CognitiveEngine, CognitiveState, Proposal | decide(), learn(), transfer(), get_concept_hv() |
+| `global_workspace.py` | GlobalWorkspace, Coalition, RehearsalEvent | compete(), compete_with_rehearsal(), register_danger() |
+| `emotion_system.py` | EmotionSystem | update_from_drives(), get_mood(), get_emotion_blend() |
+| `theory_of_mind.py` | TheoryOfMind, MentalStateModel | detect_false_belief(), predict_action() |
+| `episodic_memory.py` | EpisodicMemory, LiveEpisode | record(), recall_similar(), sample() |
+| `semantic_memory.py` | SemanticMemory | add_concept(), spread_activation(), query() |
+| `rule_learner.py` | RuleLearner, RuleCandidate | observe(), induce_rules(), get_applicable_rules() |
+| `causal_reasoning.py` | CausalReasoner, CausalGraph, CausalLink | counterfactual(), forward_chain(), backward_chain() |
+| `analogy.py` | AnalogyEngine, Analogy | find_analogy(), transfer_rule(), zero_shot_action() |
+| `planner.py` | STRIPSPlanner, PlanNode | plan(), plan_hierarchical() |
+| `world_model.py` | WorldModel, DynamicsPredictor | imagine(), sample_hypothetical_trajectories() |
+| `self_model.py` | SelfModel | predict_success(), update(), get_calibration_error() |
+| `metacognition.py` | MetacognitiveEngine, InferenceResult | compute_confidence(), compute_severity() |
+| `hypervec_py.py` | HyperVectorPy | xor(), bundle(), similarity(), permute() |
+| `universal_input.py` | UniversalInput | ground(), ground_scalar(), ground_category() |
+
+---
+
 ## DETAILED MODULE ANALYSIS
 
 ### 1. CORE ORCHESTRATION (2 modules)
