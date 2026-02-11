@@ -237,7 +237,16 @@ class TextKnowledgeLearner:
             
             # If causal relation, add to causal graph
             if rel in ['causes', 'results_in', 'leads_to', 'produces']:
-                self.causal_graph.add_edge(subj, obj, mechanism=f"learned from text: {sentence[:50]}")
+                try:
+                    self.causal_graph.add_causes(
+                        cause=subj,
+                        effect=obj,
+                        mechanism=f"learned from text: {sentence[:50]}",
+                        confidence=0.7
+                    )
+                except Exception as e:
+                    # If causal graph fails, just skip it
+                    pass
             
             # Store fact
             fact = LearnedFact(
@@ -275,7 +284,7 @@ class TextKnowledgeLearner:
             emotion='curious',
             impact_score=len(concepts) + len(relations) * 2
         )
-        self.episodic.add(episode)
+        self.episodic.record(episode)
         
         return stats
     
@@ -418,7 +427,16 @@ class TextKnowledgeLearner:
         top_activated = sorted(activated.items(), key=lambda x: x[1], reverse=True)[:top_k]
         
         # Search episodic memory
-        recalled_episodes = self.episodic.query(query_hv, k=top_k)
+        recalled_episodes = []
+        try:
+            recalled_episodes = self.episodic.recall_similar(
+                query_hv, 
+                task_tag='text_learning', 
+                k=top_k
+            )
+        except Exception as e:
+            # If recall fails, just continue without episodes
+            pass
         
         # Find related facts
         related_facts = []
