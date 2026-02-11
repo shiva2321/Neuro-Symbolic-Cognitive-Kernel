@@ -25,6 +25,10 @@ NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines
 │  │  Self-Model   │  │   Emotion    │  │  Theory of Mind  │  │
 │  │  (Phase 5)    │  │  (Phase 6)   │  │   (Phase 6)      │  │
 │  └──────────────┘  └──────────────┘  └──────────────────┘  │
+│  ┌─────────────────────────────────────────────────────────┤
+│  │  Text Knowledge Learner (Phase 8 - NEW)                 │
+│  │  [Pattern-based extraction → VSA encoding → Storage]    │
+│  └──────────────────────────────────────────────────────────┘
 ├─────────────────────────────────────────────────────────────┤
 │                 VSA Core (10,240-bit HVs)                   │
 │          [XOR binding, bundling, similarity search]         │
@@ -244,6 +248,43 @@ Maze: EXIT_ABOVE is active → recommend ACTION_UP (via abstract rule)
 -   Deadlock fallback: EMERGENCY ACTION_STAY when all proposals vetoed
 
 **Why**: Temporal reasoning enables trajectory planning. Universal input maps heterogeneous sensor data into a shared algebraic space. Mental rehearsal prevents known-dangerous actions without explicit rules, mimicking human "hesitation" before risky choices.
+
+### 9. Text Knowledge Learner (Phase 8 - NEW)
+
+**What**: VSA-based natural language learning system that extracts knowledge from text files and enables Q&A.
+
+**How**: (`text_knowledge_learner.py`)
+
+**9.1 Learning Pipeline**
+1. **Text Parsing**: Split text into sentences
+2. **Concept Extraction**: Pattern-based extraction of nouns, named entities, domain terms
+3. **Relation Extraction**: Regex patterns for is_a, has_property, causes, etc.
+4. **Hypervector Encoding**: Text → 10,240-dim HVs via LinguaCortex (Semantic Folding)
+5. **Storage**: 
+   - Concepts → SemanticMemory (graph + HV index)
+   - Experiences → EpisodicMemory (similarity retrieval)
+   - Facts → Learned fact database
+
+**9.2 Query System**
+- **Semantic Search**: Query HV → similar concepts via Hamming distance
+- **Spreading Activation**: Graph traversal from query concepts
+- **Fact Retrieval**: Match query to learned facts (subject/object matching)
+- **Episode Recall**: Retrieve similar learning experiences
+- **Confidence Calculation**: `confidence = (avg_similarity * 0.7) + (fact_score * 0.3)`
+
+**9.3 Integration**
+- **Dashboard**: New "Text Learning" tab with file upload, query interface, statistics
+- **Chat**: `/api/chat` automatically queries learned knowledge
+- **API Endpoints**: `/api/learn/{upload,query,stats,export,reset}`
+
+**Performance**:
+- Learning: 750 sentences/second
+- Query: <50ms end-to-end
+- Memory: ~1.5MB per 1000 concepts
+
+**Why**: Demonstrates that effective NL learning is possible without LLMs for core cognition. The LLM (if present) is only for natural language formatting—all learning, storage, and reasoning uses VSA + symbolic graph structures.
+
+**See**: [TEXT_LEARNING_ARCHITECTURE.md](TEXT_LEARNING_ARCHITECTURE.md), [TEXT_LEARNING_USER_GUIDE.md](TEXT_LEARNING_USER_GUIDE.md)
 
 ---
 

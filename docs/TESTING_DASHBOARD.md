@@ -35,7 +35,38 @@ Submit text samples and chat interactively with the cognitive system.
 - **Response Details** — Confidence score, emotional state, and context disambiguations.
 - **Quick Stats** — Live counters for queries processed, knowledge entries, episodes, and facts learned.
 
-### 🎮 Game Simulations (Tab 2)
+### 📚 Text Learning (Tab 2 - NEW)
+
+Learn from text files and query learned knowledge using VSA-based extraction.
+
+- **File Upload** — Upload one or multiple .txt files for the system to learn from
+- **Direct Text Input** — Paste text content directly for immediate learning
+- **Learning Statistics** — Real-time display of:
+  - Total learning sessions
+  - Concepts learned (extracted nouns, entities, terms)
+  - Relations discovered (is_a, has_property, causes, etc.)
+  - Facts stored in knowledge base
+  - Episodes recorded in episodic memory
+- **Learning Sessions** — View history of all learning sessions with:
+  - Filename and session ID
+  - Processing duration
+  - Concepts, relations, and facts extracted
+- **Top Concepts** — Most frequently occurring concepts across learned text
+- **Query Interface** — Search learned knowledge with natural language questions:
+  - Semantic search via hypervector similarity
+  - Spreading activation through concept graph
+  - Fact retrieval with source text citations
+  - Confidence scores and reasoning traces
+- **Export Knowledge** — Download complete learned knowledge as formatted text
+- **Reset Learning** — Clear all learned knowledge to start fresh
+
+**How it works:**
+- Pattern-based extraction of concepts and relations (NOT LLM-based)
+- Hypervector encoding via LinguaCortex (Semantic Folding)
+- Storage in SemanticMemory (graph) and EpisodicMemory (experiences)
+- Query answering through VSA similarity search + graph traversal
+
+### 🎮 Game Simulations (Tab 3)
 
 Attach game simulations for the system to play, learn from, and be observed.
 
@@ -53,7 +84,7 @@ Attach game simulations for the system to play, learn from, and be observed.
 - Each step updates the emotion system (curiosity/hunger drives) and self-model (performance tracking).
 - The self-model tracks success rates per game type, enabling the system to "know what it knows."
 
-### 📊 System Monitor (Tab 3)
+### 📊 System Monitor (Tab 4)
 
 Real-time observation of all cognitive subsystems.
 
@@ -64,7 +95,7 @@ Real-time observation of all cognitive subsystems.
 - **System Statistics** — Queries, knowledge entries, episodes, facts, corrections, semantic concepts.
 - **Knowledge Base Browser** — Browse all knowledge entries with source, relation, and confidence.
 
-### 📋 Logs & Export (Tab 4)
+### 📋 Logs & Export (Tab 5)
 
 Full activity log with filtering and export capabilities.
 
@@ -83,9 +114,14 @@ Full activity log with filtering and export capabilities.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `GET` | `/` | Dashboard HTML page |
-| `POST` | `/api/chat` | Send a chat message (JSON: `{message, sample_text?}`) |
+| `POST` | `/api/chat` | Send a chat message (JSON: `{message, sample_text?}`) - **now queries learned knowledge** |
 | `GET` | `/api/chat/history` | Retrieve full chat history |
 | `POST` | `/api/process` | Process multimodal input (form: `text, structured, task_tag`) |
+| `POST` | `/api/learn/upload` | **NEW:** Upload text files or content (JSON: `{text, filename}` or FormData with files) |
+| `GET` | `/api/learn/stats` | **NEW:** Get text learning statistics (sessions, concepts, facts, episodes) |
+| `POST` | `/api/learn/query` | **NEW:** Query learned knowledge (JSON: `{query}`) |
+| `GET` | `/api/learn/export` | **NEW:** Download all learned knowledge as formatted text |
+| `POST` | `/api/learn/reset` | **NEW:** Clear all learned knowledge |
 | `POST` | `/api/game/start` | Start a game (JSON: `{game_type, auto_play?, speed?}`) |
 | `POST` | `/api/game/step` | Step a game (JSON: `{session_id}`) |
 | `POST` | `/api/game/stop` | Stop a game (JSON: `{session_id}`) |
@@ -137,6 +173,73 @@ curl -X POST http://localhost:5051/api/chat \
     "joy": 0.10
   },
   "context_disambiguations": ["philosophy", "cognitive_science"]
+}
+```
+
+### Text Learning API (NEW)
+
+**Upload Text for Learning**:
+```bash
+curl -X POST http://localhost:5051/api/learn/upload \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Photosynthesis is the process by which plants convert sunlight into energy. Plants use chlorophyll to absorb light.",
+    "filename": "science.txt"
+  }'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "session": {
+    "session_id": "abc123",
+    "filename": "science.txt",
+    "duration": 0.05,
+    "concepts": 8,
+    "relations": 5,
+    "facts": 5,
+    "sentences": 2
+  },
+  "total_concepts": 8,
+  "total_facts": 5
+}
+```
+
+**Query Learned Knowledge**:
+```bash
+curl -X POST http://localhost:5051/api/learn/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is photosynthesis?"}'
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "result": {
+    "answer": "**Relevant Concepts:**\n- Process (similarity: 0.85)\n- Plants (similarity: 0.78)\n\n**Learned Facts:**\n- Process related_to Photosynthesis\n  Source: 'Photosynthesis is the process...'\n- Plants related_to Convert\n  Source: 'Plants use chlorophyll...'",
+    "confidence": 0.75,
+    "similar_concepts": [
+      ["Process", 0.85],
+      ["Plants", 0.78]
+    ],
+    "related_facts": [
+      {
+        "subject": "Process",
+        "relation": "related_to",
+        "object": "Photosynthesis",
+        "source": "Photosynthesis is the process...",
+        "confidence": 0.7
+      }
+    ],
+    "reasoning_trace": [
+      "Query encoded to hypervector",
+      "Extracted query concepts: ['Photosynthesis']",
+      "Found 2 similar concepts in semantic memory",
+      "Retrieved 2 related facts"
+    ]
+  }
 }
 ```
 
