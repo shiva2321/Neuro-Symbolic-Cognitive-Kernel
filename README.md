@@ -3,7 +3,7 @@
 ![Project Status](https://img.shields.io/badge/status-Phase_7_Complete-green)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
-![Tests](https://img.shields.io/badge/tests-267+_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-178_collected_21+_verified-brightgreen)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning, neural spiking networks, and cross-domain transfer learning, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
@@ -47,7 +47,7 @@ All components are designed to work together through a central cognitive engine,
 
 ## What Actually Works
 
-The following capabilities are implemented and verified by the test suite (267+ tests passing):
+The following capabilities are implemented and verified by the test suite (178 tests collected, 21+ core tests verified passing with mathematical proofs and execution logs):
 
 ### Phase 0: Foundation
 | Capability | Description |
@@ -240,7 +240,9 @@ NSCK is explicitly designed to avoid heavyweight computation:
 
 | Document | Description |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, workflows, and proofs |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, workflows, mathematical foundations, and references |
+| [docs/FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) | Complete mathematical formulas with derivations and test-backed proofs |
+| [docs/RUN_LOGS_AND_EVIDENCE.md](docs/RUN_LOGS_AND_EVIDENCE.md) | Actual test execution logs, performance benchmarks, and concrete evidence |
 | [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) | Testing dashboard usage, API reference, and export formats |
 | [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
 | [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
