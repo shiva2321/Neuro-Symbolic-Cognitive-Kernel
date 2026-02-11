@@ -224,17 +224,23 @@ class MazeUI:
     
     def _reset_game(self):
         """Reset to new maze."""
-        self.game.reset()
-        self.session_id = str(uuid.uuid4())[:8]
-        self.step_count = 0
-        self.score = 0
-        
-        self.lbl_session.config(text=f"Session: {self.session_id}")
-        self.lbl_score.config(text="Score: 0")
-        self.lbl_steps.config(text="Steps: 0")
-        self.lbl_status.config(text="New maze! Use Arrow Keys or let Brain play", fg="#888888")
-        
-        self._render()
+        print("[MAZE_UI] Resetting game...")
+        try:
+            self.game.reset()
+            self.session_id = str(uuid.uuid4())[:8]
+            self.step_count = 0
+            self.score = 0
+            
+            self.lbl_session.config(text=f"Session: {self.session_id}")
+            self.lbl_score.config(text="Score: 0")
+            self.lbl_steps.config(text="Steps: 0")
+            self.lbl_status.config(text="New maze! Use Arrow Keys or let Brain play", fg="#888888")
+            
+            self._render()
+            print(f"[MAZE_UI] Reset complete. New Session: {self.session_id}")
+        except Exception as e:
+            print(f"[MAZE_UI] ERROR during reset: {e}")
+            self.lbl_status.config(text=f"Reset Error: {e}", fg="red")
     
     def _game_loop(self):
         """Main game loop - send state to brain and receive commands."""

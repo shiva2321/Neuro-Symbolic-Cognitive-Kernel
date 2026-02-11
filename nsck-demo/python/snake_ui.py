@@ -80,8 +80,29 @@ class SnakeGame:
             self.push.send_json(payload)
             self.last_key = None # Reset after sending
             
-            msg = self.sub.recv_string() 
-            self.direction = msg.split(":")[1]
+            # Use poller for non-blocking receive
+            if self.sub.poll(100): # 100ms timeout
+                msg = self.sub.recv_string()
+                self.direction = msg.split(":")[1]
+
+    def reset_game(self):
+        print(f"[SNAKE_UI] Resetting game session...")
+        try:
+            # Atomic swap of session ID to prevent network thread from sending mixed state
+            new_sid = str(uuid.uuid4())[:8]
+            self.session_id = new_sid
+            self.root.title(f"NSCK Snake (Student) [{self.session_id}]")
+            
+            self.snake = [(5, 5), (5, 6), (5, 7)]
+            self.food = (2, 2)
+            self.direction = "UP"
+            self.current_reward = 0.0
+            self.done = False
+            
+            print(f"[SNAKE_UI] Game reset. Starting loop for {new_sid}")
+            self.game_loop()
+        except Exception as e:
+            print(f"[SNAKE_UI] ERROR during reset: {e}")
 
     def game_loop(self):
         head_x, head_y = self.snake[0]
@@ -90,11 +111,13 @@ class SnakeGame:
         elif self.direction == "LEFT": head_x -= 1
         elif self.direction == "RIGHT": head_x += 1
         
+        game_over = False
+        
         # WALL DEATH (Strict Transfer Mode)
         if head_x < 0 or head_x >= 10 or head_y < 0 or head_y >= 10:
             self.current_reward = -10.0 # Death Penalty
             self.done = True
-            self.snake = [(5,5)] 
+            game_over = True
         else:
             new_head = (head_x, head_y)
             self.current_reward = -0.1 # Step Penalty
@@ -103,7 +126,7 @@ class SnakeGame:
             if new_head in self.snake: 
                 self.current_reward = -10.0 # Death Penalty
                 self.done = True
-                self.snake = [(5,5)] 
+                game_over = True
             else:
                 self.snake.insert(0, new_head)
                 if new_head == self.food:
@@ -117,7 +140,12 @@ class SnakeGame:
         for x, y in self.snake:
             self.canvas.create_rectangle(x*30, y*30, (x+1)*30, (y+1)*30, fill="green")
             
-        self.root.after(100, self.game_loop)
+        if game_over:
+            self.canvas.create_text(150, 150, text="GAME OVER", fill="white", font=("Arial", 24))
+            # Auto-restart after 1s
+            self.root.after(1000, self.reset_game)
+        else:
+            self.root.after(100, self.game_loop)
 
 if __name__ == "__main__":
     root = tk.Tk()

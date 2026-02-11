@@ -752,4 +752,4 @@ Result:
 
 ---
 
-*Document maintained by NSCK development team. Last test run: 2026-02-11*
+* Last test run: 2026-02-11

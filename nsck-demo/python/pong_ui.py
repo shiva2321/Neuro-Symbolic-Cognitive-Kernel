@@ -132,6 +132,15 @@ class PongGame:
                 self.p2_y -= 1
         self.p2_y = max(0, min(30 - self.paddle_h, self.p2_y))
 
+    def reset_game(self):
+        self.session_id = str(uuid.uuid4())[:8]
+        self.root.title(f"NSCK Pong (Student vs AI) [{self.session_id}]")
+        self.score_p1 = 0
+        self.score_p2 = 0
+        self.rally_count = 0
+        self.reset_ball()
+        self.game_loop()
+
     def game_loop(self):
         self.ball_x += self.ball_dx
         self.ball_y += self.ball_dy
@@ -145,6 +154,9 @@ class PongGame:
         # AI Opponent Move
         self.move_ai_paddle()
 
+        match_over = False
+        winner = ""
+
         if self.ball_x <= 1:
             if self.p1_y <= self.ball_y <= self.p1_y + self.paddle_h:
                 self.ball_dx *= -1
@@ -155,7 +167,7 @@ class PongGame:
                 self.score_p2 += 1
                 self.rally_count = 0
                 self.current_reward = -10.0 # Miss Penalty
-                self.done = True
+                self.done = True # Episode Done (Point Lost)
                 self.reset_ball()
                 
         if self.ball_x >= 29:
@@ -165,8 +177,16 @@ class PongGame:
             else:
                 self.score_p1 += 1
                 self.current_reward = 10.0 # Win Reward
-                self.done = True
+                self.done = True # Episode Done (Point Won)
                 self.reset_ball()
+
+        # Check Match Condition (First to 5)
+        if self.score_p1 >= 5:
+            match_over = True
+            winner = "YOU WIN!"
+        elif self.score_p2 >= 5:
+            match_over = True
+            winner = "AI WINS!"
 
         self.move_ai_paddle()
         
@@ -176,7 +196,11 @@ class PongGame:
         self.canvas.create_rectangle(290, self.p2_y*10, 300, (self.p2_y+self.paddle_h)*10, fill="#FF0000") 
         self.canvas.create_text(150, 20, text=f"{self.score_p1} - {self.score_p2} (Rally: {self.rally_count})", fill="white", font=("Arial", 16))
         
-        self.root.after(40, self.game_loop)
+        if match_over:
+             self.canvas.create_text(150, 150, text=winner, fill="yellow", font=("Arial", 24))
+             self.root.after(1000, self.reset_game)
+        else:
+             self.root.after(40, self.game_loop)
 
 if __name__ == "__main__":
     root = tk.Tk()

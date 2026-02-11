@@ -88,17 +88,13 @@ class MazeGame:
         # Generate maze
         maze = self._generate_maze()
         
-        # Place player in top-left area
-        player_pos = self._find_empty_cell(maze, prefer_area="top_left")
+        # Place player and exit at farthest points
+        player_pos, exit_pos = self._find_farthest_points(maze)
         
-        # Place exit in bottom-right area
-        exit_pos = self._find_empty_cell(maze, prefer_area="bottom_right")
-        
-        # Ensure path exists
+        # Ensure path exists (Braiding guarantees connectivity, but safe check)
         if not self._has_path(maze, player_pos, exit_pos):
-            # Clear a path if needed
-            self._clear_path(maze, player_pos, exit_pos)
-        
+             self._clear_path(maze, player_pos, exit_pos)
+             
         self.state = MazeState(
             player_pos=player_pos,
             exit_pos=exit_pos,
@@ -114,18 +110,34 @@ class MazeGame:
         return self.state
     
     def _generate_maze(self) -> List[List[int]]:
-        """Generate a random maze with walls."""
+        """
+        Generate an 'Open Arena' maze.
+        Starts empty and scatters random obstacles.
+        """
+        # 1. Start with full EMPTY (Open Area)
         maze = [[Cell.EMPTY.value for _ in range(self.width)] for _ in range(self.height)]
         
-        # Add random walls
+        # 2. Add Perimeter Walls (Optional, but good for keeping bounds)
+        for x in range(self.width):
+            maze[0][x] = Cell.WALL.value
+            maze[self.height - 1][x] = Cell.WALL.value
         for y in range(self.height):
-            for x in range(self.width):
-                # Keep borders clear for easier navigation
-                if x == 0 or y == 0 or x == self.width - 1 or y == self.height - 1:
-                    continue
-                if random.random() < self.wall_density:
-                    maze[y][x] = Cell.WALL.value
+            maze[y][0] = Cell.WALL.value
+            maze[y][self.width - 1] = Cell.WALL.value
+            
+        # 3. Scatter Random Obstacles
+        # Use wall_density (default 0.2) to determine count
+        inner_width = self.width - 2
+        inner_height = self.height - 2
+        total_inner_cells = inner_width * inner_height
+        num_obstacles = int(total_inner_cells * self.wall_density)
         
+        for _ in range(num_obstacles):
+            # Pick random spot inside perimeter
+            rx = random.randint(1, self.width - 2)
+            ry = random.randint(1, self.height - 2)
+            maze[ry][rx] = Cell.WALL.value
+
         return maze
     
     def _find_empty_cell(
@@ -159,6 +171,50 @@ class MazeGame:
             return (1, 1)
         
         return random.choice(candidates)
+    
+    def _find_farthest_points(self, maze: List[List[int]]) -> Tuple[Tuple[int, int], Tuple[int, int]]:
+        """Find the two empty cells with the maximum path distance between them (approximate)."""
+        # 1. Find a random empty cell
+        start_candidates = []
+        for y in range(self.height):
+            for x in range(self.width):
+                if maze[y][x] == Cell.EMPTY.value:
+                    start_candidates.append((x, y))
+        
+        if not start_candidates: return (1,1), (1,1) # Fallback
+        
+        start_node = random.choice(start_candidates)
+        
+        # 2. BFS from random node to find farthest node A
+        def bfs_farthest(start):
+            q = [(start, 0)]
+            visited = {start}
+            farthest_node = start
+            max_dist = 0
+            
+            idx = 0
+            while idx < len(q):
+                (cx, cy), dist = q[idx]
+                idx += 1
+                
+                if dist > max_dist:
+                    max_dist = dist
+                    farthest_node = (cx, cy)
+                
+                for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+                    nx, ny = cx + dx, cy + dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height:
+                        if maze[ny][nx] != Cell.WALL.value and (nx, ny) not in visited:
+                            visited.add((nx, ny))
+                            q.append(((nx, ny), dist + 1))
+            return farthest_node
+            
+        point_a = bfs_farthest(start_node)
+        
+        # 3. BFS from A to find farthest node B (This is the diameter)
+        point_b = bfs_farthest(point_a)
+        
+        return point_a, point_b
     
     def _has_path(
         self,

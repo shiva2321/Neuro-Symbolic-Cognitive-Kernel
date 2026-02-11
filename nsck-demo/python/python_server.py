@@ -1798,6 +1798,24 @@ def main():
                 # 1. Global Workspace Competition
                 workspace_data = COGNITIVE_ENGINE.get_workspace_telemetry()
                 pub_sock_stats.send_string(f"WORKSPACE:{json.dumps(workspace_data)}")
+            
+            # [AGI] Phase 3: Dashboard Visuals Broadcast
+            # Send VIS payload for Snake, Pong, Maze so dashboard can render them
+            if steps_total % 2 == 0 and GAME_ACTIVE: # limit rate slightly (15fps)
+                act_names = ["UP", "DOWN", "LEFT", "RIGHT"] if game_type != "pong" else ["UP", "DOWN"]
+                vis_payload = {
+                    "task": game_type, # standard field for web_dashboard
+                    "game": game_type, # fallback
+                    "grid": curr_np.tolist(),
+                    "probs": probs.tolist() if isinstance(probs, np.ndarray) else probs.detach().cpu().numpy().tolist(),
+                    "action": act_names[student_idx] if student_idx is not None and student_idx < len(act_names) else "UNKNOWN",
+                    "score": current_score,
+                    "reward": reward,
+                    "teacher": act_names[teacher_idx] if teacher_idx < len(act_names) else "NONE",
+                    "confidence": conf_val,
+                    "veto": is_veto
+                }
+                pub_sock_stats.send_string(f"VIS:{json.dumps(vis_payload)}")
                 
                 # 2. Causal Graph States
                 causal_data = COGNITIVE_ENGINE.get_causal_telemetry(game_type)

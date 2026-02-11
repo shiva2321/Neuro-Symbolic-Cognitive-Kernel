@@ -41,6 +41,30 @@ from emotion_system import EmotionSystem
 from self_model import SelfModel
 from language_module import LanguageModule
 from dialogue_manager import DialogueManager
+from maze_game import MazeGame
+import heapq
+from collections import defaultdict
+
+class LearnedPolicy:
+    """
+    Simple lookup-table learner for dashboard simulations.
+    Maps state_hash -> {action: count}.
+    """
+    def __init__(self):
+        self.policy = defaultdict(lambda: defaultdict(int))
+
+    def train(self, state_hash: str, action: str):
+        self.policy[state_hash][action] += 1
+
+    def predict(self, state_hash: str) -> Optional[str]:
+        if state_hash not in self.policy:
+            return None
+        # Return action with highest count
+        counts = self.policy[state_hash]
+        return max(counts, key=counts.get)
+
+# Global Policy Instance
+_dashboard_policy = LearnedPolicy()
 
 # Optional imports – gracefully degrade if not available
 try:
@@ -176,23 +200,22 @@ def _init_pong() -> Dict[str, Any]:
 
 
 def _init_maze() -> Dict[str, Any]:
-    size = 10
+    # Use actual MazeGame for random generation
+    game = MazeGame(width=10, height=10)
+    # game.reset() is called in __init__
+    
+    state_dict = game.state.to_dict()
+    # Convert list of lists to set of tuples for dashboard logic
     walls = set()
-    for i in range(size):
-        walls.add((0, i))
-        walls.add((size - 1, i))
-        walls.add((i, 0))
-        walls.add((i, size - 1))
-    walls.add((3, 3))
-    walls.add((3, 4))
-    walls.add((6, 6))
-    walls.add((6, 7))
+    for w in state_dict["walls"]:
+        walls.add(tuple(w))
+        
     return {
         "type": "maze",
-        "player": (1, 1),
-        "exit": (size - 2, size - 2),
+        "player": state_dict["player_pos"],
+        "exit": state_dict["exit_pos"],
         "walls": walls,
-        "size": size,
+        "size": 10,
         "score": 0,
         "steps": 0,
         "done": False,
@@ -200,59 +223,153 @@ def _init_maze() -> Dict[str, Any]:
     }
 
 
+def solve_maze_astar(start, goal, walls, width=10, height=10):
+    """A* Solver for Maze."""
+    def heuristic(a, b):
+        return abs(a[0] - b[0]) + abs(a[1] - b[1])
+
+    open_set = []
+    heapq.heappush(open_set, (0, start))
+    came_from = {}
+    g_score = {start: 0}
+    f_score = {start: heuristic(start, goal)}
+
+    while open_set:
+        _, current = heapq.heappop(open_set)
+
+        if current == goal:
+            # Reconstruct path
+            path = []
+            while current in came_from:
+                path.append(current)
+                current = came_from[current]
+            path.reverse()
+            if not path: return "UP" # Should not happen if start!=goal
+            
+            # Determine first move
+            next_step = path[0]
+            dx, dy = next_step[0] - start[0], next_step[1] - start[1]
+            if dx == 1: return "RIGHT"
+            if dx == -1: return "LEFT"
+            if dy == 1: return "DOWN"
+            if dy == -1: return "UP"
+            return "UP"
+
+        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            neighbor = (current[0] + dx, current[1] + dy)
+            if 0 <= neighbor[0] < width and 0 <= neighbor[1] < height:
+                if neighbor in walls: continue
+                
+                tentative_g_score = g_score[current] + 1
+                if tentative_g_score < g_score.get(neighbor, float('inf')):
+                    came_from[neighbor] = current
+                    g_score[neighbor] = tentative_g_score
+                    f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                    if neighbor not in [i[1] for i in open_set]:
+                        heapq.heappush(open_set, (f_score[neighbor], neighbor))
+    return None # No path
+
+def solve_snake_bfs(head, food, body, width=10, height=10):
+    """BFS Solver for Snake."""
+    queue = [(head, [])]
+    visited = {head}
+    body_set = set(body) # Includes tail, which might move, but treating as obstacle is safer
+
+    while queue:
+        current, path = queue.pop(0)
+        
+        if current == food:
+            if not path: return None
+            # Extract first move direction
+            next_step = path[0]
+            dx, dy = next_step[0] - head[0], next_step[1] - head[1]
+            if dx == 1: return "RIGHT"
+            if dx == -1: return "LEFT"
+            if dy == 1: return "DOWN"
+            if dy == -1: return "UP"
+        
+        for dx, dy in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            # Snake wraps? The sim_snake uses modulo, so we should too?
+            # Wait, existing sim_snake has toriodal wrap.
+            nx, ny = (current[0] + dx) % width, (current[1] + dy) % height
+            
+            if (nx, ny) not in visited and (nx, ny) not in body_set:
+                visited.add((nx, ny))
+                new_path = path + [(nx, ny)] if not path else path # optimize? no need path is short
+                # Actually we just need the first move.
+                # Let's store 'first_move' in queue instead of full path for memory?
+                # But here map is small (10x10). Full path is fine.
+                if not path:
+                    queue.append(((nx, ny), [(nx, ny)]))
+                else:
+                    queue.append(((nx, ny), path)) # Propagate first move
+                    
+    return None # No path found
+
 def _choose_action_for_game(game_state: Dict) -> str:
-    """Use heuristic + self-model to pick an action for a game step."""
+    """Use Teacher (Solver) or Student (Learned Policy) to pick action."""
     game_type = game_state["type"]
-    sm = _get_self_model()
-    emo = _get_emotion()
+    teacher_active = game_state.get("teacher_active", True) # Default to ON
+    
+    # helper to hash state
+    def get_state_hash(gs):
+        if gs["type"] == "snake":
+            # Relative food position + immediate danger? 
+            # Or just head/food relative?
+            # For robust learning we need local view. 
+            # Simple absolute state:
+            return f"snake:{gs['head']}:{gs['food']}"
+        elif gs["type"] == "maze":
+            return f"maze:{gs['player']}"
+        elif gs["type"] == "pong":
+            return f"pong:{gs['ball_x']}:{gs['ball_y']}:{gs['p1_y']}"
+        return "unknown"
 
-    if game_type == "snake":
-        hx, hy = game_state["head"]
-        fx, fy = game_state["food"]
-        dx, dy = fx - hx, fy - hy
-        if abs(dx) >= abs(dy):
-            action = "RIGHT" if dx > 0 else "LEFT"
-        else:
-            action = "DOWN" if dy > 0 else "UP"
-        # add some exploration
-        if np.random.random() < EXPLORATION_PROBABILITY:
-            action = np.random.choice(["UP", "DOWN", "LEFT", "RIGHT"])
-    elif game_type == "pong":
-        ball_y = game_state["ball_y"]
-        p1_y = game_state["p1_y"]
-        if ball_y < p1_y:
-            action = "UP"
-        elif ball_y > p1_y + 6:
-            action = "DOWN"
-        else:
-            action = "UP" if np.random.random() < 0.5 else "DOWN"
-    elif game_type == "maze":
-        px, py = game_state["player"]
-        ex, ey = game_state["exit"]
-        dx, dy = ex - px, ey - py
-        candidates = []
-        if dx > 0:
-            candidates.append("RIGHT")
-        elif dx < 0:
-            candidates.append("LEFT")
-        if dy > 0:
-            candidates.append("DOWN")
-        elif dy < 0:
-            candidates.append("UP")
-        if not candidates:
-            candidates = ["UP", "DOWN", "LEFT", "RIGHT"]
-        action = candidates[0] if np.random.random() > MAZE_EXPLORATION_PROBABILITY else np.random.choice(candidates)
+    state_hash = get_state_hash(game_state)
+    suggested_action = None
+
+    if teacher_active:
+        # --- TEACHER MODE: SOLVE & TRAIN ---
+        if game_type == "snake":
+            suggested_action = solve_snake_bfs(game_state["head"], game_state["food"], game_state["body"])
+            if not suggested_action: # Fallback if no path
+                 # naive
+                 hx, hy = game_state["head"]
+                 fx, fy = game_state["food"]
+                 dx, dy = fx - hx, fy - hy
+                 if abs(dx) > abs(dy): suggested_action = "RIGHT" if dx > 0 else "LEFT"
+                 else: suggested_action = "DOWN" if dy > 0 else "UP"
+
+        elif game_type == "maze":
+            # Convert set of walls to list for checking
+            walls = game_state["walls"]
+            suggested_action = solve_maze_astar(game_state["player"], game_state["exit"], walls)
+            if not suggested_action: suggested_action = "UP" # Stuck?
+
+        elif game_type == "pong":
+            # Perfect tracking
+            ball_y = game_state["ball_y"]
+            p1_y = game_state["p1_y"]
+            if ball_y < p1_y: suggested_action = "UP"
+            elif ball_y > p1_y + 6: suggested_action = "DOWN"
+            else: suggested_action = "UP" if np.random.random() < 0.5 else "DOWN"
+
+        # Train Policy
+        if suggested_action:
+            _dashboard_policy.train(state_hash, suggested_action)
+            
+        action = suggested_action if suggested_action else "UP"
+
     else:
-        action = "UP"
-
-    # Update emotion from game reward signal
-    reward = 0.0
-    if game_state.get("score", 0) > 0:
-        reward = 0.3
-    emo.update_from_drives({"curiosity": 0.6, "hunger": 0.2}, reward)
-
-    # Update self-model
-    pred_conf = sm.predict_success(game_type)
+        # --- STUDENT MODE: RECALL or FAIL ---
+        learned_action = _dashboard_policy.predict(state_hash)
+        
+        if learned_action:
+            action = learned_action
+        else:
+            # Cold Start / Unknown State -> Random Exploration
+            action = np.random.choice(["UP", "DOWN", "LEFT", "RIGHT"])
+            
     return action
 
 
@@ -263,7 +380,13 @@ def _step_game(session_id: str) -> Dict[str, Any]:
         if gs is None or gs["done"]:
             return {"error": "session not found or game over"}
 
-        action = _choose_action_for_game(gs)
+        # manual intervention?
+        if gs.get("manual_action"):
+            action = gs.pop("manual_action")
+            # Clear it so we don't repeat
+        else:
+            action = _choose_action_for_game(gs)
+            
         game_type = gs["type"]
         reward = 0.0
         done = False
@@ -369,8 +492,38 @@ def _run_game_loop(session_id: str, stop_event: threading.Event, speed: float = 
     """Background thread that auto-steps a game."""
     while not stop_event.is_set():
         result = _step_game(session_id)
-        if result.get("done") or result.get("error"):
+        if result.get("error"):
             break
+            
+        if result.get("done"):
+            # Auto-restart logic for dashboard simulation
+            time.sleep(1.0) # Pause for effect
+            with _game_lock:
+                gs = _game_sessions.get(session_id)
+                if gs:
+                    # Reset generic state
+                    gs["score"] = 0
+                    gs["steps"] = 0
+                    gs["done"] = False
+                    gs["history"] = []
+                    
+                    # Reset specific game state
+                    if gs["type"] == "snake":
+                        gs["head"] = (5, 5)
+                        gs["body"] = [(5, 5)]
+                        gs["food"] = (np.random.randint(0, 10), np.random.randint(0, 10))
+                    elif gs["type"] == "pong":
+                        gs["score"] = 0 # distinct from generic score?
+                        gs["ball_x"] = 15
+                        gs["ball_y"] = 15
+                    elif gs["type"] == "maze":
+                        # Regenerate maze walls/exit
+                        new_maze = _init_maze()
+                        gs["player"] = new_maze["player"]
+                        gs["exit"] = new_maze["exit"]
+                        gs["walls"] = new_maze["walls"]
+            _log("game", f"Auto-restarting session {session_id}")
+            continue
         stop_event.wait(speed)
 
 
@@ -537,7 +690,8 @@ def api_process():
 @app.route("/api/game/start", methods=["POST"])
 def api_game_start():
     data = request.get_json(force=True, silent=True) or {}
-    game_type = data.get("game_type", "snake").lower()
+    game_type = data.get("game", "snake")
+    teacher_active = data.get("teacher_active", True)
     auto_play = data.get("auto_play", False)
     speed = float(data.get("speed", 0.3))
 
@@ -548,9 +702,13 @@ def api_game_start():
     elif game_type == "maze":
         gs = _init_maze()
     else:
-        return jsonify({"error": f"unknown game: {game_type}"}), 400
+        return jsonify({"error": "unknown game"}), 400
 
     session_id = f"{game_type}_{int(time.time()*1000)}"
+    gs["session_id"] = session_id
+    gs["type"] = game_type
+    gs["teacher_active"] = teacher_active
+    
     with _game_lock:
         _game_sessions[session_id] = gs
 
@@ -578,6 +736,24 @@ def api_game_step():
     with _game_lock:
         gs = _game_sessions.get(session_id, {})
     return jsonify({**result, "state": _serialize_game(gs)})
+
+
+@app.route("/api/game/action", methods=["POST"])
+def api_game_action():
+    """Handle manual intervention from client."""
+    data = request.get_json(force=True, silent=True) or {}
+    session_id = data.get("session_id", "")
+    action = data.get("action", "")
+    
+    if not session_id or not action:
+        return jsonify({"error": "session_id and action required"}), 400
+        
+    with _game_lock:
+        gs = _game_sessions.get(session_id)
+        if gs:
+            gs["manual_action"] = action # Queue for next step
+            
+    return jsonify({"status": "queued", "action": action})
 
 
 @app.route("/api/game/stop", methods=["POST"])
@@ -1220,6 +1396,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
         <option value="maze">🏰 Maze</option>
       </select>
       <label style="font-size:12px;display:flex;align-items:center;gap:4px">
+        <input type="checkbox" id="teacherMode" checked> Teacher Mode (Learn)
+      </label>
+      <label style="font-size:12px;display:flex;align-items:center;gap:4px">
         <input type="checkbox" id="auto-play" checked> Auto-play
       </label>
       <label style="font-size:12px;display:flex;align-items:center;gap:4px">
@@ -1472,14 +1651,20 @@ function updateChatDetails(data) {
 // ---- Games ----
 async function startGame() {
   const gameType = document.getElementById('game-type').value;
+  const teacherActive = document.getElementById('teacherMode').checked;
   const autoPlay = document.getElementById('auto-play').checked;
   const speed = parseInt(document.getElementById('game-speed').value);
 
   try {
-    const resp = await fetch(API + '/api/game/start', {
+    const resp = await fetch('/api/game/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({game_type: gameType, auto_play: autoPlay, speed: speed/1000})
+      body: JSON.stringify({
+          game: gameType, 
+          teacher_active: teacherActive, 
+          auto_play: autoPlay, 
+          speed: speed/1000 // Convert ms to seconds
+      })
     });
     const data = await resp.json();
     if (data.error) { alert('Error: ' + data.error); return; }
@@ -1531,9 +1716,59 @@ function addGameCard(sessionId, gameType, state) {
     </div>
     <div class="game-log" id="log-${sessionId}"></div>
   `;
+  // Add Selection Logic
+  card.onclick = function() {
+      selectGameSession(sessionId);
+  };
   grid.appendChild(card);
+  
+  // Auto-select if first
+  if (!selectedSessionId) selectGameSession(sessionId);
+  
   renderGame(sessionId, state, gameType);
 }
+
+// Global Selection State
+let selectedSessionId = null;
+
+function selectGameSession(sid) {
+    if (selectedSessionId) {
+        const old = document.getElementById('game-' + selectedSessionId);
+        if (old) old.style.borderColor = '#30363d'; // Default border
+    }
+    selectedSessionId = sid;
+    const curr = document.getElementById('game-' + sid);
+    if (curr) curr.style.borderColor = '#58a6ff'; // Highlight blue
+}
+
+// Global Keyboard Listener
+document.addEventListener('keydown', async (e) => {
+    // Only capture if game is selected
+    if (!selectedSessionId) return;
+    
+    // Map keys
+    let action = null;
+    if (e.key === 'ArrowUp') action = 'UP';
+    else if (e.key === 'ArrowDown') action = 'DOWN';
+    else if (e.key === 'ArrowLeft') action = 'LEFT';
+    else if (e.key === 'ArrowRight') action = 'RIGHT';
+    
+    if (action) {
+        e.preventDefault(); // Stop scrolling
+        // Send manual action
+        try {
+            await fetch(API + '/api/game/action', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({session_id: selectedSessionId, action: action})
+            });
+            // Optional: Optimistic UI update? No, let poll handle it.
+            console.log(`Sent manual action ${action} to ${selectedSessionId}`);
+        } catch(err) {
+            console.error(err);
+        }
+    }
+});
 
 function startGamePoller(sessionId, intervalMs) {
   if (gamePollers[sessionId]) clearInterval(gamePollers[sessionId]);
@@ -1545,10 +1780,17 @@ function startGamePoller(sessionId, intervalMs) {
       const state = data.state;
       updateGameCard(sessionId, state, data.history || []);
       if (state.done) {
-        clearInterval(gamePollers[sessionId]);
-        delete gamePollers[sessionId];
+        // Do NOT stop polling for auto-play games!
+        // The backend will auto-restart.
+        // We just update the badge briefly?
         const badge = document.getElementById('badge-' + sessionId);
-        if (badge) { badge.className = 'badge badge-red'; badge.textContent = 'DONE'; }
+        if (badge) { badge.className = 'badge badge-yellow'; badge.textContent = 'RESTARTING'; }
+      } else {
+         const badge = document.getElementById('badge-' + sessionId);
+         if (badge && badge.textContent !== 'STOPPED') { 
+             badge.className = 'badge badge-green'; 
+             badge.textContent = 'RUNNING'; 
+         }
       }
     } catch(e) {}
   }, Math.max(intervalMs, MIN_POLL_INTERVAL_MS));
