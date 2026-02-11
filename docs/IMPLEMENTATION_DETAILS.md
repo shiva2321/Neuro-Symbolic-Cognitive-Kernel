@@ -299,6 +299,494 @@ print(f"Transferred: {new_cond} → {new_action}")
 
 ---
 
+## ADDITIONAL MODULES REFERENCE
+
+### Continual Learning & Meta-Learning
+
+**continual_learning.py**
+- **Classes:** `ContinualLearner`, `PackNetManager`, `ProgressiveNetworks`
+- **Key Methods:**
+  - `ContinualLearner.compute_fisher_information()` → `Dict[str, Tensor]`
+  - `ContinualLearner.ewc_loss(model)` → `float`
+    - Formula: (λ/2) * Σ F_i * (θ_i - θ*_i)²
+  - `PackNetManager.prune_and_allocate(model, task_id, prune_ratio=0.5)` → `None`
+- **Constants:** ewc_lambda=1000, fisher_sample_size=200
+
+**multi_task_learning.py**
+- **Classes:** `SharedEncoder`, `TaskHead`, `MultiTaskLearner`
+- **Key Methods:**
+  - `MultiTaskLearner.gradient_surgery(gradients)` → `Dict[str, Tensor]`
+    - PCGrad algorithm: projects conflicting gradients
+  - `forward_multitask(x, task_id)` → `Tuple[action_logits, value]`
+- **Architecture:** Input(state_dim) → Encoder(128) → Latent(64) → Heads(per-task)
+
+**meta_learning.py**
+- **Classes:** `MAML` - Model-Agnostic Meta-Learning
+- **Key Methods:**
+  - `meta_train(tasks, inner_lr, outer_lr, inner_steps)` → `None`
+    - Bi-level optimization for few-shot adaptation
+- **Algorithm:** θ' = θ - α∇L_task(θ); θ = θ - β∇Σ L_task(θ')
+
+### Perception & Grounding
+
+**perception.py**
+- **Classes:** `CleanupMemory`, `FusionEngine`
+- **Key Methods:**
+  - `CleanupMemory.retrieve(query_hv, k=3)` → `List[Tuple[str, float]]`
+    - K-nearest neighbors via Hamming distance
+  - `FusionEngine.fuse_multimodal(audio_hv, visual_hv, text_hv)` → `HyperVector`
+    - Role-based binding: audio⊗AUDIO_ROLE | visual⊗VISUAL_ROLE | text⊗TEXT_ROLE
+- **Constants:** cleanup_capacity=500
+
+**multimodal_processor.py**
+- **Classes:** `MultimodalProcessor`
+- **Key Methods:**
+  - `process_text(text)` → `HyperVector`
+  - `process_image(image_array)` → `HyperVector`
+  - `process_audio(audio_waveform)` → `HyperVector`
+  - `fuse_all(text, image, audio)` → `HyperVector`
+- **Integration:** Uses universal_input for grounding, role-filler binding for fusion
+
+**grounding_verifier.py**
+- **Classes:** `GroundingVerifier`
+- **Key Methods:**
+  - `get_active_predicates(state, task_tag)` → `Set[str]`
+    - Snake: REL_ABOVE, REL_BELOW, REL_LEFT, REL_RIGHT, DANGER_AHEAD, etc.
+    - Pong: BALL_ABOVE, BALL_BELOW, BALL_APPROACHING, PADDLE_ALIGNED, etc.
+    - Maze: AT_EXIT, WALL_AHEAD, PATH_CLEAR, etc.
+  - `verify_grounding(action, state, task_tag)` → `bool`
+- **Purpose:** Task-specific state→predicates mapping
+
+**symbol_grounding.py**
+- **Classes:** `SymbolGrounder`
+- **Key Methods:**
+  - `ground_state(state, task_tag)` → `HyperVector`
+    - Binds predicates to VSA space
+  - `ground_action(action)` → `HyperVector`
+  - `unground_symbol(hv, candidates)` → `str`
+    - Nearest-neighbor in symbol space
+- **Constants:** predicate_codebook (deterministic seeding per predicate)
+
+### Language & Dialogue
+
+**language_module.py**
+- **Classes:** `LanguageModule`
+- **Key Methods:**
+  - `understand(text)` → `Dict[str, Any]`
+    - Intent extraction via LLM (Phi3) or mock fallback
+  - `generate(system_state, context)` → `str`
+    - Natural language explanation generation
+  - `ground_to_vsa(parsed_intent)` → `HyperVector`
+- **Dependencies:** llama-cpp-python (optional), fallback to template-based
+
+**dialogue_manager.py**
+- **Classes:** `DialogueManager`
+- **Key Methods:**
+  - `process_turn(user_input, cognitive_engine)` → `str`
+    - Context window management (10 turns)
+  - `resolve_anaphora(text, history)` → `str`
+    - Simple pronoun→entity replacement
+  - `route_to_handler(intent)` → `str`
+    - Routes: question, command, why/explain
+- **Context:** Deque of (role, text) tuples, max_size=10
+
+**voice_interface.py**
+- **Classes:** `VoiceInterface`
+- **Key Methods:**
+  - `listen()` → `str` - Speech-to-text
+  - `speak(text)` → `None` - Text-to-speech
+  - `conversational_loop(cognitive_engine)` → `None`
+- **Dependencies:** speech_recognition, pyttsx3 (optional)
+
+### Consciousness & Monitoring
+
+**consciousness_metrics.py**
+- **Classes:** `ConsciousnessMonitor`
+- **Key Methods:**
+  - `compute_phi(global_workspace)` → `float`
+    - Integrated Information Theory approximation
+  - `measure_broadcast_reach(winner, modules)` → `float`
+  - `track_attention_stability(gw_history, window=10)` → `float`
+- **Metrics:** phi (integration), reach (broadcast %), stability (winner consistency)
+
+**explanation.py**
+- **Classes:** `ExplanationGenerator`
+- **Key Methods:**
+  - `explain_decision(cognitive_state)` → `str`
+    - Traces: winner, alternatives, confidence, emotion
+  - `explain_rule(rule, examples)` → `str`
+  - `explain_transfer(analogy, source_rule, target_rule)` → `str`
+- **Output:** Human-readable natural language explanations
+
+### Learning Support
+
+**curiosity.py**
+- **Classes:** `CuriosityModule`
+- **Key Methods:**
+  - `compute_novelty(situation_hv, task_tag)` → `float`
+    - Formula: 1 - max_similarity(situation, prototypes)
+  - `update_prototypes(situation_hv, task_tag)` → `None`
+    - K-means-like clustering, max 100 prototypes/task
+  - `detect_learning_stagnation(window=100)` → `bool`
+    - Improvement < 0.01 threshold
+- **Constants:** max_prototypes=100, window_size=100
+
+**intrinsic_motivation.py**
+- **Classes:** `IntrinsicCuriosityModule` (ICM)
+- **Key Methods:**
+  - `compute_intrinsic_reward(state, action, next_state)` → `float`
+    - Forward model error: ||predicted_next - actual_next||²
+  - `train_models(batch)` → `Dict[str, float]`
+    - Losses: forward_loss, inverse_loss
+- **Architecture:** Feature network (CNN) → latent(64) → forward/inverse models
+- **Scaling:** intrinsic_reward * 0.01 (typical)
+
+**learning.py**
+- **Classes:** `ReplayBuffer`
+- **Key Methods:**
+  - `add(episode, quadrant)` → `None`
+    - Quadrants: agree_success, agree_fail, disagree_success, disagree_fail
+  - `sample_balanced(batch_size)` → `List[Episode]`
+    - Samples equally from all 4 quadrants
+  - `sleep_cycle(episodes, rule_learner)` → `None`
+    - Offline consolidation: rule induction, pattern extraction
+- **Capacity:** 2500 per quadrant (10K total)
+
+**learning_progress.py**
+- **Classes:** `LearningProgressTracker`
+- **Key Methods:**
+  - `track_progress(task_tag, metric_value)` → `float`
+    - Returns delta from moving average
+  - `detect_plateau(task_tag, threshold=0.01, window=50)` → `bool`
+- **Purpose:** Triggers curriculum advancement or exploration boost
+
+### Planning & Spatial Reasoning
+
+**spatial_reasoning.py**
+- **Classes:** `GridPlanner` (extends STRIPSPlanner)
+- **Key Methods:**
+  - `plan(initial_state, goal, max_depth=20)` → `List[str]`
+    - Parses AT_X_Y predicates, computes Manhattan distance heuristic
+  - `extract_position(state)` → `Tuple[int, int]`
+  - `compute_movement(from_pos, to_pos)` → `str`
+- **Heuristic:** A* with Manhattan distance to goal
+
+**curriculum.py**
+- **Classes:** `CurriculumManager`
+- **Key Methods:**
+  - `select_next_task(performance_history)` → `str`
+    - Difficulty progression based on success rate
+  - `adjust_difficulty(task_tag, direction)` → `None`
+- **Strategy:** Gradual increase, fallback on failure
+
+### Homeostasis & Drives
+
+**homeostasis.py**
+- **Classes:** `HomeostaticSystem`
+- **Key Methods:**
+  - `update_drives(elapsed_time, actions)` → `Dict[str, float]`
+    - Drives: hunger, energy, curiosity, safety
+    - Decay rates: hunger +0.01/step, energy -0.02/step
+  - `compute_urgency()` → `float`
+    - Max drive level (0-1)
+  - `generate_drive_goals()` → `List[str]`
+    - Maps drives to goal predicates (e.g., hunger → FIND_FOOD)
+- **Constants:** hunger_decay=0.01, energy_decay=0.02, safety_baseline=0.8
+
+### Agency & Active Inference
+
+**agency.py**
+- **Classes:** `ActiveInferenceAgent`
+- **Key Methods:**
+  - `infer_hidden_state(observations)` → `BeliefState`
+  - `plan_actions(belief, preferences)` → `List[str]`
+    - Minimizes expected free energy
+  - `update_generative_model(outcome)` → `None`
+- **Framework:** Partially Observable Markov Decision Process (POMDP)
+
+**ai_controller.py**
+- **Classes:** `PymdpController`
+- **Key Methods:**
+  - `step(observation)` → `int`
+    - Uses pymdp library for active inference
+  - `update_beliefs(obs, action)` → `None`
+- **Dependencies:** pymdp (optional)
+
+### Social Intelligence
+
+**empathy.py**
+- **Classes:** `EmpathyModule`
+- **Key Methods:**
+  - `simulate_other_emotion(agent_id, their_state, tom_model)` → `Dict`
+    - Projects self onto other's situation
+  - `generate_empathic_response(emotion)` → `str`
+- **Algorithm:** Belief projection + self-emotion simulation
+
+**teaching.py**
+- **Classes:** `TeacherInterface`, `HumanTeacher`
+- **Key Methods:**
+  - `provide_feedback(state, action, correct_action)` → `None`
+  - `correct_misconception(rule, counterexample)` → `None`
+  - `suggest_exploration(area)` → `str`
+- **Mode:** Interactive learning from human demonstrations
+
+### Utilities & Infrastructure
+
+**concept_mapper.py**
+- **Classes:** `ConceptMapper`
+- **Key Methods:**
+  - `decode_hypervector(hv, codebook)` → `str`
+    - Nearest-neighbor concept retrieval
+  - `visualize_concept_space(hvs, labels)` → `None`
+    - t-SNE or UMAP projection
+- **Purpose:** Debugging and visualization
+
+**latent_probe.py**
+- **Classes:** `LatentProbe`
+- **Key Methods:**
+  - `train_probe(latents, labels)` → `LinearProbe`
+    - Linear readout for latent space analysis
+  - `interpret_dimension(dim_idx, examples)` → `str`
+- **Purpose:** Neural representation interpretability
+
+**context_engine.py**
+- **Classes:** `ContextEngine`
+- **Key Methods:**
+  - `update_context(new_info)` → `None`
+  - `retrieve_relevant(query, k=5)` → `List[str]`
+    - Temporal decay + recency bias
+  - `prune_stale(age_threshold=3600)` → `int`
+- **Storage:** Temporal facts with timestamps
+
+**lifecycle.py**
+- **Classes:** `ConceptLifecycle`
+- **Key Methods:**
+  - `promote_concept(name, usage_count)` → `None`
+    - Moves from short-term to long-term storage
+  - `decay_unused(threshold=1000)` → `List[str]`
+  - `merge_similar(similarity_threshold=0.9)` → `int`
+- **Purpose:** Knowledge base hygiene
+
+**brain_fusion.py**
+- **Classes:** `BrainFusion`
+- **Key Methods:**
+  - `fuse_knowledge(brains, strategy="tagged_conservative")` → `FusedBrain`
+    - Global layer: shared primitives (deterministic seeding)
+    - Task layers: isolated task-specific knowledge
+  - `query_fused(query_hv, task_tag)` → `Dict`
+    - Returns: concept, action, similarity, provenance
+- **Strategies:** tagged_conservative (isolate task rules), merge_all (global rules)
+
+### Dashboards & Monitoring
+
+**testing_dashboard.py**
+- **Flask App:** Port 5051, 18 API endpoints
+- **Features:**
+  - `/api/chat` - Text input → cognitive response
+  - `/api/game/start/<game>` - Launch Snake/Pong/Maze
+  - `/api/monitor/emotion` - Real-time emotion state
+  - `/api/export/logs` - Export TXT/JSON
+- **Purpose:** Comprehensive testing interface
+- **Tests:** 25 passing tests in test_testing_dashboard.py
+
+**cognitive_dashboard.py**
+- **Flask App:** Port 5050, 12 API endpoints
+- **Features:**
+  - `/api/input/multimodal` - Text/image/audio input
+  - `/api/reasoning/trace` - Explanation generation
+  - `/api/knowledge/query` - Semantic memory search
+  - `/api/export/state` - JSON/ZIP export
+- **Purpose:** Knowledge inspection and reasoning traces
+
+**dashboard.py**
+- **Flask App:** Port 5000, operational interface
+- **Features:** Process management, ZMQ telemetry, AGI report generation
+- **Purpose:** Main operational dashboard
+- **Status:** Production-ready
+
+### Game Environments
+
+**snake_ui.py, pong_ui.py, maze_ui.py**
+- **Purpose:** Pygame-based UI for human play and visualization
+- **Key Methods:**
+  - `render()` - Draw game state
+  - `handle_input()` - Keyboard controls
+  - `step(action)` - Physics update
+- **Integration:** ZMQ communication with python_server.py
+
+**snake_headless.py**
+- **Purpose:** Headless Snake environment for batch testing
+- **Key Methods:**
+  - `reset()` → `state`
+  - `step(action)` → `(state, reward, done, info)`
+- **Compliance:** OpenAI Gym-like interface
+
+**simulation.py**
+- **Classes:** `SnakePhysics`, `PongPhysics`, `MazePhysics`
+- **Key Methods:**
+  - `simulate_action(state, action)` → `(next_state, reward, done)`
+  - `get_valid_actions(state)` → `List[str]`
+- **Purpose:** Pure Python physics for planning/imagination
+
+### Training Scripts
+
+**train_phase1_demo.py**
+- **Purpose:** Multi-task learning + rule extraction demo
+- **Key Features:**
+  - Trains on Snake, Pong, Maze simultaneously
+  - Extracts symbolic rules from neural policies
+  - Dual inference: neural (fast) + symbolic (safe)
+- **Run:** `python train_phase1_demo.py`
+
+**train_phase2_demo.py**
+- **Purpose:** Perception systems demo (vision, audio, language)
+- **Key Features:**
+  - Multimodal VSA binding
+  - Cleanup memory associative retrieval
+  - Grounding verification
+- **Run:** `python train_phase2_demo.py`
+
+**train_phase3_demo.py**
+- **Purpose:** Continual learning demo (EWC, PackNet, Meta-learning)
+- **Key Features:**
+  - EWC prevents catastrophic forgetting (7.3% retention improvement)
+  - Progressive Networks for task isolation
+  - MAML for few-shot adaptation
+- **Run:** `python train_phase3_demo.py`
+
+**train_phase4_demo.py**
+- **Purpose:** Causal discovery + planning demo
+- **Key Features:**
+  - Delta-P causal discovery
+  - Counterfactual reasoning
+  - Model Predictive Control (MPC)
+  - Monte Carlo Tree Search (MCTS)
+- **Run:** `python train_phase4_demo.py`
+
+**train_phase5_demo.py**
+- **Purpose:** Self-model + metacognition demo
+- **Key Features:**
+  - Performance tracking per task/context
+  - Confidence calibration
+  - Self-explanation
+  - Autonomous learning rate adjustment
+- **Run:** `python train_phase5_demo.py`
+
+**train_phase6_demo.py**
+- **Purpose:** Social & emotional intelligence demo
+- **Key Features:**
+  - Emotion generation (Plutchik + Russell)
+  - Theory of Mind (Sally-Anne test)
+  - Empathy simulation
+  - Social learning
+- **Run:** `python train_phase6_demo.py`
+
+**train_phase7_demo.py**
+- **Purpose:** Full integration + transfer learning demo
+- **Key Features:**
+  - KnowledgeStore for cross-session persistence
+  - Cross-domain transfer via analogy
+  - Abstract rule consolidation
+  - LLM translator (Phi3) for natural language
+- **Run:** `python train_phase7_demo.py`
+
+### Neural Network Training
+
+**train_snn.py**
+- **Purpose:** Standalone SNN training script
+- **Key Features:**
+  - Task-aware SNN training
+  - Quantization-aware training (QAT)
+  - Multi-task gradient surgery
+  - Model checkpointing
+- **Run:** `python train_snn.py --task snake --epochs 100`
+
+**snn_training_pipeline.py**
+- **Classes:** `SNNTrainingPipeline`
+- **Key Methods:**
+  - `train_task(task_id, episodes)` → `None`
+  - `evaluate_task(task_id, test_episodes)` → `Dict[str, float]`
+  - `save_checkpoint(path)` → `None`
+- **Purpose:** Modular training orchestration
+
+### Persistence
+
+**persistence.py**
+- **Classes:** `BrainStore` - SQLite backend with WAL
+- **Key Methods:**
+  - `store_rule(rule, task_tag)` → `None`
+  - `store_concept(name, hv_bytes)` → `None`
+  - `store_episode(episode)` → `None`
+  - `query_rules(task_tag, min_support=5)` → `List[Rule]`
+  - `flush()` → `None` - Write-behind buffering (100 episodes or 30s)
+- **Schema:** Tables for rules, concepts, episodes with indices on task_tag, timestamp
+- **Constants:** buffer_size=100, flush_interval=30s
+
+### Configuration
+
+**config.py**
+- **Classes:** `NSCKConfig` - Centralized hyperparameters
+- **Key Attributes:**
+  - `hv_dimension`: 10240
+  - `ewc_lambda`: 1000
+  - `attention_threshold`: 0.5
+  - `min_rule_support`: 5
+  - `world_model_bottleneck`: 128
+- **Purpose:** Single source of truth for all module parameters
+
+---
+
+## COMPLETE MODULE INDEX
+
+### By Category (91 Total Modules)
+
+**Core Architecture (6)**
+- cognitive_engine.py, global_workspace.py, python_server.py, config.py, system_launcher.py, agency.py
+
+**Memory Systems (5)**
+- episodic_memory.py, semantic_memory.py, intelligent_buffer.py, staged_recall.py, persistence.py
+
+**Learning Systems (9)**
+- rule_learner.py, causal_reasoning.py, analogy.py, continual_learning.py, multi_task_learning.py, meta_learning.py, curiosity.py, intrinsic_motivation.py, learning.py
+
+**Neural Networks (5)**
+- snn_qat.py, plastic_snn.py, universal_encoder.py, train_snn.py, snn_training_pipeline.py
+
+**Planning & Reasoning (5)**
+- planner.py, spatial_reasoning.py, world_model.py, brain_fusion.py, semantic_coherence.py
+
+**Self-Awareness (4)**
+- self_model.py, metacognition.py, explanation.py, consciousness_metrics.py
+
+**Social Intelligence (4)**
+- emotion_system.py, theory_of_mind.py, empathy.py, value_alignment.py
+
+**Perception & Grounding (6)**
+- perception.py, multimodal_processor.py, grounding_verifier.py, symbol_grounding.py, universal_input.py, hypervec_py.py
+
+**Language & Dialogue (5)**
+- language_module.py, dialogue_manager.py, voice_interface.py, voice_hd.py, lingua_cortex.py
+
+**Dashboards & Monitoring (4)**
+- testing_dashboard.py, cognitive_dashboard.py, dashboard.py, logger_service.py
+
+**Game Environments (5)**
+- snake_ui.py, snake_headless.py, pong_ui.py, maze_ui.py, maze_game.py, simulation.py
+
+**Training Demos (7)**
+- train_phase1_demo.py through train_phase7_demo.py
+
+**Support Systems (7)**
+- homeostasis.py, curriculum.py, learning_progress.py, lifecycle.py, context_engine.py, teaching.py, teacher_interface.py
+
+**Utilities (12)**
+- concept_mapper.py, latent_probe.py, saliency.py, character_dataset.py, char_offline_eval.py, debug_char_preprocess.py, visualize_transfer.py, build_codebook.py, download_model.py, ai_controller.py, voice_chatbot.py, train_semantic_folding.py
+
+**Infrastructure (2)**
+- hypervec_shim.py, __init__.py
+
+---
+
 ## NEXT STEPS
 
 For further details, consult:
