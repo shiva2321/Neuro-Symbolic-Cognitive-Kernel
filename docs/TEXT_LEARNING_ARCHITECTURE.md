@@ -420,6 +420,14 @@ We achieve a system that is:
 - ✅ Fast (750 sent/sec)
 - ✅ Efficient (1.5MB for 1000 concepts)
 - ✅ Interpretable (full transparency)
+
+## Related Documentation
+
+- [VSA_THEORY.md](VSA_THEORY.md) - Mathematical foundations and proofs
+- [ARCHITECTURE.md](ARCHITECTURE.md) - System architecture and decision flow
+- [MODULE_REFERENCE.md](MODULE_REFERENCE.md) - Complete API reference for all modules
+- [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) - Development guidelines and extension patterns
+- [TESTING.md](TESTING.md) - Test methodology and validation evidence
 - ✅ Private (local computation)
 - ✅ Accurate (56-86% confidence on test queries)
 

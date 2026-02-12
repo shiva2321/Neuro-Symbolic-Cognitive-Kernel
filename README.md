@@ -331,18 +331,18 @@ NSCK is explicitly designed to avoid heavyweight computation:
 
 | Document | Description |
 |---|---|
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, workflows, mathematical foundations, and references |
-| [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) | Comprehensive API reference with class signatures, methods, and examples |
-| [docs/FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) | Complete mathematical formulas with derivations and test-backed proofs |
-| [docs/RUN_LOGS_AND_EVIDENCE.md](docs/RUN_LOGS_AND_EVIDENCE.md) | Actual test execution logs, performance benchmarks, and concrete evidence |
-| [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) | Testing dashboard usage, API reference, and export formats |
-| [docs/TEXT_LEARNING_USER_GUIDE.md](docs/TEXT_LEARNING_USER_GUIDE.md) | **NEW:** Text learning system user guide, API reference, and workflows |
-| [docs/TEXT_LEARNING_ARCHITECTURE.md](docs/TEXT_LEARNING_ARCHITECTURE.md) | **NEW:** Technical architecture of VSA-based text learning |
-| [docs/TEXT_LEARNING_PROOF.md](docs/TEXT_LEARNING_PROOF.md) | **NEW:** Proof of text learning capabilities with test results |
-| [docs/COMPLETE_MODULE_ANALYSIS.md](docs/COMPLETE_MODULE_ANALYSIS.md) | Detailed analysis of all 91 modules with integration status |
-| [ROADMAP_TO_AGI.md](ROADMAP_TO_AGI.md) | Long-term development roadmap (7 phases) |
-| [docs/IMPLEMENTATION_ROADMAP.md](docs/IMPLEMENTATION_ROADMAP.md) | Technical implementation guide |
-| [docs/AGENT_INSTRUCTIONS.md](docs/AGENT_INSTRUCTIONS.md) | Development governance rules |
+| **Core Documentation** | |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, layer diagrams, decision cycle, and data flow |
+| [docs/VSA_THEORY.md](docs/VSA_THEORY.md) | Mathematical foundations with proofs, capacity bounds, and encoding schemes |
+| [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Complete API reference for all 22+ modules with signatures and descriptions |
+| [docs/TESTING.md](docs/TESTING.md) | Test methodology, all 85 tests documented, performance benchmarks |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Development guidelines, coding standards, and extension patterns |
+| **Text Learning System** | |
+| [docs/TEXT_LEARNING_USER_GUIDE.md](docs/TEXT_LEARNING_USER_GUIDE.md) | User guide for text learning: file upload, queries, API reference |
+| [docs/TEXT_LEARNING_ARCHITECTURE.md](docs/TEXT_LEARNING_ARCHITECTURE.md) | Technical architecture of VSA-based text learning |
+| [docs/TEXT_LEARNING_PROOF.md](docs/TEXT_LEARNING_PROOF.md) | Proof of text learning capabilities with test results |
+| **Legacy Documentation** | |
+| [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) | Legacy reference - redirects to current documentation |
 
 ---
 

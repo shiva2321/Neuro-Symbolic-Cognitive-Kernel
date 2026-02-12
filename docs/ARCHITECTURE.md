@@ -4,7 +4,10 @@
 
 NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines Vector Symbolic Architecture (VSA), symbolic reasoning, neural networks, and analogical transfer learning into a unified system. It is designed for CPU-only operation with energy efficiency as a core constraint.
 
-**For detailed implementation reference, see [IMPLEMENTATION_DETAILS.md](IMPLEMENTATION_DETAILS.md)** - Complete API documentation with class signatures, method parameters, and usage examples.
+**For detailed implementation reference:**
+- **[MODULE_REFERENCE.md](MODULE_REFERENCE.md)** - Complete API documentation with all class signatures and methods
+- **[VSA_THEORY.md](VSA_THEORY.md)** - Mathematical foundations, proofs, and formulas
+- **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Development guidelines, coding standards, and extension patterns
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

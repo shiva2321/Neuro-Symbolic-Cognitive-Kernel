@@ -391,11 +391,13 @@ The LLM (when present) is **only** for:
 
 ### Hypervector Properties
 
-- **High dimensionality**: 10,240 dimensions
-- **Sparsity**: ~2% active bits in SDRs
-- **Robustness**: Tolerant to noise and corruption
-- **Compositionality**: Clean algebraic operations
-- **Similarity**: Hamming distance for comparison
+- **High dimensionality**: 10,240 dimensions (binary VSA)
+- **Sparsity**: ~2% active bits in LinguaCortex SDRs
+- **Robustness**: Tolerant to noise and corruption (distributed representation)
+- **Compositionality**: Clean algebraic operations (XOR=bind, bundle=superposition)
+- **Similarity**: Hamming distance for comparison (0.5=random, 1.0=identical)
+
+For complete mathematical details, see [docs/VSA_THEORY.md](VSA_THEORY.md)
 
 ### Memory Capacity
 
@@ -429,10 +431,14 @@ The LLM (when present) is **only** for:
 
 - VSA/HDC: Kanerva, P. (2009). "Hyperdimensional Computing"
 - Semantic Folding: Webber, F. (2016). "Semantic Folding Theory"
-- NSCK Architecture: See `docs/ARCHITECTURE.md`
+- NSCK Architecture: See [docs/ARCHITECTURE.md](ARCHITECTURE.md)
+- VSA Theory & Proofs: See [docs/VSA_THEORY.md](VSA_THEORY.md)
+- Module API Reference: See [docs/MODULE_REFERENCE.md](MODULE_REFERENCE.md)
+- Testing Documentation: See [docs/TESTING.md](TESTING.md)
+- Development Guide: See [docs/DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: 2026-02-11  
+**Version**: 2.0  
+**Last Updated**: 2026-02-12  
 **Author**: NSCK Development Team
