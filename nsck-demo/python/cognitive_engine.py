@@ -103,8 +103,19 @@ class CognitiveEngine:
         """
         self.config = config or NSCKConfig()
         
-        # Initialize persistence (optional)
-        self.store = BrainStore(persistence_path) if persistence_path else None
+        # Initialize persistence — auto-wire if no path given
+        if persistence_path:
+            self.store = BrainStore(persistence_path)
+        else:
+            # Auto-wire: create default persistence in project directory
+            default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                       "..", "..", "nsck_brain.db")
+            try:
+                self.store = BrainStore(default_db)
+                print(f"[PERSISTENCE] Auto-wired BrainStore at {default_db}")
+            except Exception as e:
+                print(f"[PERSISTENCE] Auto-wire failed ({e}), running without persistence")
+                self.store = None
         
         # Initialize verifiers for each task
         self.verifiers: Dict[str, GroundingVerifier] = {

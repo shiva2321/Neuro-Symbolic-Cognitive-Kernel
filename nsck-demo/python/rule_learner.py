@@ -64,6 +64,10 @@ class RuleLearner:
         self.min_success_rate = min_success_rate
         self.max_rules_per_task = max_rules_per_task
         
+        # Approximate matching: allow subset predicate patterns
+        self.use_approximate_matching = True
+        self.subset_min_overlap = 0.6  # 60% overlap counts as match
+        
         # Tenure thresholds for stability
         self.tenure_support_threshold = 1000  # High-support rules get tenure
         self.bootstrap_threshold = 0.5  # Bootstrap rules need 50%
@@ -161,6 +165,22 @@ class RuleLearner:
         # Track success (positive reward = success)
         if reward > 0 or outcome == "success":
             cand.successes += 1
+        
+        # 5. Approximate matching: also credit overlapping patterns
+        if self.use_approximate_matching:
+            for existing_key, existing_cand in list(candidates.items()):
+                if existing_key == pattern_key:
+                    continue
+                existing_preds, existing_action = existing_key
+                if existing_action != action:
+                    continue
+                # Check overlap ratio
+                overlap = len(pred_set & existing_preds)
+                max_len = max(len(pred_set), len(existing_preds), 1)
+                if overlap / max_len >= self.subset_min_overlap:
+                    existing_cand.support += 0.5  # partial credit
+                    if reward > 0 or outcome == "success":
+                        existing_cand.successes += 0.5
     
     def induce_rules(self, task_tag: Optional[str] = None) -> List[Rule]:
         """

@@ -24,8 +24,14 @@ class STRIPSPlanner:
     Uses Breadth-First Search (or A*) to find a sequence of actions 
     that transforms start_state -> goal_state.
     
-    Unlike standard STRIPS which has fixed operators, this planner 
-    uses the LEARNED RULES from RuleLearner/BrainFusion as dynamic operators.
+    Supports:
+    1. Hardcoded operators (bootstrap)
+    2. CausalGraph-derived operators (learned from experience)
+    3. Rule-derived operators (from RuleLearner)
+    
+    Operators are automatically extracted from the CausalGraph when
+    available, so the planner can use *learned* transition dynamics
+    rather than only hardcoded actions.
     """
     
     def __init__(self, operators: List[any] = None):
@@ -33,10 +39,49 @@ class STRIPSPlanner:
         operators: List of Rule objects (condition, consequence)
         """
         self.operators = operators or []
+        self.causal_reasoner = None
+        self._learned_ops: Dict[str, Dict[str, Set[str]]] = {}  # action -> {"add": set, "del": set}
     
     def set_operators(self, rules: List[any]):
         """Update available operators from learned rules."""
         self.operators = rules
+        
+    def learn_operators_from_graph(self, graph, context: str = None):
+        """Extract STRIPS-style operators from a CausalGraph.
+        
+        For each action node in the graph, compute:
+        - add effects: nodes reachable via forward chaining
+        - delete effects: nodes that are 'prevented' by the action
+        
+        This eliminates the need for hardcoded action operators.
+        """
+        self._learned_ops.clear()
+        action_nodes = [n for n in graph.forward if n.startswith("ACTION_")]
+        
+        for action in action_nodes:
+            add_effects = set()
+            del_effects = set()
+            
+            # Forward: direct effects are add effects
+            for effect, link in graph.forward.get(action, []):
+                if context and link.context and link.context != context:
+                    continue
+                if link.relation.value == "prevents":
+                    del_effects.add(effect)
+                else:
+                    add_effects.add(effect)
+            
+            # Check if any node prevents this action (symmetric)
+            for preventer, plink in graph.backward.get(action, []):
+                if plink.relation.value == "prevents":
+                    # The preventer must be absent for action to work
+                    pass  # precondition extraction (future)
+            
+            if add_effects or del_effects:
+                self._learned_ops[action] = {"add": add_effects, "del": del_effects}
+        
+        if self._learned_ops:
+            print(f"[PLANNER] Learned {len(self._learned_ops)} operators from CausalGraph")
         
     def plan(self, initial_state: Set[str], goal: Set[str], max_depth: int = 10) -> Optional[List[str]]:
         """
@@ -86,7 +131,11 @@ class STRIPSPlanner:
             # NOT the Policy Rules.
             
             # REFACTORING ON THE FLY:
-            possible_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"]
+            # Use learned operators if available, else fall back to hardcoded
+            if self._learned_ops:
+                possible_actions = list(self._learned_ops.keys())
+            else:
+                possible_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT"]
             
             for action in possible_actions:
                 # 1. Predict Next State (Add and Delete effects)
@@ -117,14 +166,24 @@ class STRIPSPlanner:
     def _predict(self, state: FrozenSet[str], action: str) -> Tuple[Set[str], Set[str]]:
         """
         Predict (add_effects, del_effects) of action given state.
+        
+        Priority:
+        1. Learned operators from CausalGraph (most accurate)
+        2. CausalReasoner direct query (backward compat)
+        3. Empty (no prediction)
         """
         add_effects = set()
         del_effects = set()
         
+        # 1. Check learned operators first
+        if action in self._learned_ops:
+            add_effects = set(self._learned_ops[action]["add"])
+            del_effects = set(self._learned_ops[action]["del"])
+            return add_effects, del_effects
+        
+        # 2. Fallback to CausalReasoner
         if hasattr(self, 'causal_reasoner') and self.causal_reasoner:
-             # Standard CausalGraph only gives additions
              add_effects = set(self.causal_reasoner.graph.get_immediate_effects(action))
-             # TODO: Extract 'prevents' from graph for del_effects
              
         return add_effects, del_effects
     

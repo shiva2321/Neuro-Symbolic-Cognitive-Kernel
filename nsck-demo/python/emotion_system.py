@@ -250,24 +250,153 @@ class EmotionSystem:
         return list(self.emotion_history)
     
     def recognize_emotion_from_text(self, text: str) -> str:
-        """Detect emotion in user's text."""
-        # Simple keyword-based classifier (replace with ML model later)
+        """Detect emotion in user's text with expanded vocabulary, negation,
+        and intensity detection.
+
+        Features beyond simple keyword matching:
+        - Expanded synonym/phrase lists (~15-25 patterns per emotion)
+        - Negation detection ("not happy" → sadness, "never scared" → trust)
+        - Intensity modifiers ("very", "extremely", "slightly", "barely")
+        - Multi-word phrases ("can't wait", "on edge", "fed up")
+
+        Returns:
+            Primary emotion label (str).  Also sets ``self._last_text_intensity``
+            [0-1] so callers can use it.
+        """
+        import re
+
+        # --- expanded emotion lexicon ---
         emotion_keywords = {
-            "joy": ["happy", "glad", "great", "wonderful", "excellent", "good"],
-            "sadness": ["sad", "unhappy", "depressed", "miserable", "bad"],
-            "anger": ["angry", "furious", "mad", "irritated", "hate"],
-            "fear": ["afraid", "scared", "worried", "anxious"],
-            "surprise": ["surprised", "shocked", "amazed", "astonished"],
-            "trust": ["trust", "reliable", "safe", "confident", "loyal"],
-            "disgust": ["disgusting", "gross", "revolting", "nasty"],
-            "anticipation": ["excited", "eager", "looking forward", "can't wait"],
+            "joy": [
+                "happy", "glad", "great", "wonderful", "excellent", "good",
+                "awesome", "fantastic", "delighted", "cheerful", "thrilled",
+                "ecstatic", "elated", "joyful", "pleased", "content",
+                "blissful", "overjoyed", "love it", "so good", "amazing",
+                "brilliant", "superb", "terrific", "magnificent",
+            ],
+            "sadness": [
+                "sad", "unhappy", "depressed", "miserable", "bad",
+                "sorrowful", "grief", "heartbroken", "gloomy", "melancholy",
+                "dejected", "despondent", "hopeless", "lonely", "lost",
+                "devastated", "crushed", "down", "blue", "weeping",
+                "tearful", "mourning", "anguish", "despair",
+            ],
+            "anger": [
+                "angry", "furious", "mad", "irritated", "hate",
+                "enraged", "outraged", "livid", "fuming", "irate",
+                "hostile", "resentful", "bitter", "fed up", "pissed",
+                "agitated", "infuriated", "annoyed", "exasperated",
+                "indignant", "frustrated", "seething",
+            ],
+            "fear": [
+                "afraid", "scared", "worried", "anxious", "terrified",
+                "frightened", "nervous", "panicked", "dread", "horror",
+                "alarmed", "uneasy", "apprehensive", "petrified",
+                "on edge", "tense", "phobia", "spooked", "shaky",
+                "intimidated", "paranoid",
+            ],
+            "surprise": [
+                "surprised", "shocked", "amazed", "astonished",
+                "stunned", "startled", "bewildered", "flabbergasted",
+                "dumbfounded", "speechless", "unexpected", "unbelievable",
+                "jaw dropped", "can't believe", "no way", "whoa",
+                "mind blown", "taken aback",
+            ],
+            "trust": [
+                "trust", "reliable", "safe", "confident", "loyal",
+                "dependable", "faithful", "honest", "secure", "assured",
+                "certain", "steady", "devoted", "committed", "sincere",
+                "genuine", "count on", "believe in",
+            ],
+            "disgust": [
+                "disgusting", "gross", "revolting", "nasty", "vile",
+                "repulsive", "sickening", "nauseating", "loathsome",
+                "abhorrent", "detestable", "horrid", "foul", "repugnant",
+                "yuck", "ugh", "eww", "awful taste", "stomach turning",
+            ],
+            "anticipation": [
+                "excited", "eager", "looking forward", "can't wait",
+                "hopeful", "expecting", "impatient", "curious",
+                "enthusiastic", "pumped", "hyped", "keen", "ready",
+                "itching", "raring", "yearning", "longing",
+                "counting down", "on the verge",
+            ],
         }
-        
+
+        # --- negation words ---
+        negation_words = {
+            "not", "no", "never", "neither", "nobody", "nothing",
+            "nowhere", "nor", "hardly", "barely", "scarcely",
+            "don't", "doesn't", "didn't", "won't", "wouldn't",
+            "can't", "cannot", "couldn't", "shouldn't", "isn't",
+            "aren't", "wasn't", "weren't", "haven't", "hasn't",
+        }
+
+        # Negation → opposite emotion
+        negation_flip = {
+            "joy": "sadness",
+            "sadness": "joy",
+            "anger": "trust",
+            "fear": "trust",
+            "trust": "fear",
+            "disgust": "anticipation",
+            "surprise": "anticipation",
+            "anticipation": "surprise",
+        }
+
+        # --- intensity modifiers ---
+        high_intensity = {
+            "very", "extremely", "incredibly", "absolutely", "totally",
+            "utterly", "completely", "so", "really", "insanely",
+            "overwhelmingly", "deeply", "profoundly", "intensely",
+        }
+        low_intensity = {
+            "slightly", "barely", "somewhat", "a little", "a bit",
+            "kind of", "sort of", "mildly", "faintly", "marginally",
+        }
+
         text_lower = text.lower()
+        # tokenise once
+        tokens = set(re.findall(r"[a-z']+", text_lower))
+
+        # Check for negation in first part of sentence
+        has_negation = bool(tokens & negation_words)
+
+        # Determine intensity multiplier
+        intensity = 0.6  # default medium
+        if tokens & high_intensity:
+            intensity = 1.0
+        elif any(lp in text_lower for lp in low_intensity):
+            intensity = 0.3
+
+        # Score each emotion
+        scores: dict[str, float] = {}
         for emotion, keywords in emotion_keywords.items():
-            if any(kw in text_lower for kw in keywords):
-                return emotion
-        return "neutral"
+            score = 0.0
+            for kw in keywords:
+                if " " in kw:
+                    # multi-word phrase
+                    if kw in text_lower:
+                        score += 1.5
+                else:
+                    if kw in tokens:
+                        score += 1.0
+            scores[emotion] = score
+
+        # Pick best
+        best_emotion = max(scores, key=scores.get)  # type: ignore[arg-type]
+        best_score = scores[best_emotion]
+
+        if best_score == 0:
+            self._last_text_intensity = 0.3
+            return "neutral"
+
+        # Apply negation flip
+        if has_negation:
+            best_emotion = negation_flip.get(best_emotion, best_emotion)
+
+        self._last_text_intensity = intensity
+        return best_emotion
     
     def get_emotion_info(self) -> Dict[str, Any]:
         """Telemetry."""

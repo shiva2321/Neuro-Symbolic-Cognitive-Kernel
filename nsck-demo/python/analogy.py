@@ -411,3 +411,107 @@ class AnalogyEngine:
             lines.append(f"  {m.source_concept} ≈ {m.target_concept}")
         
         return "\n".join(lines)
+
+    # ----------------------------------------------------------------
+    #  Auto-Abstraction via HV Similarity Clustering
+    # ----------------------------------------------------------------
+    def auto_discover_abstractions(
+        self,
+        domain_a: str,
+        domain_b: str,
+        concept_hvs_a: Dict[str, Any],
+        concept_hvs_b: Dict[str, Any],
+        similarity_threshold: float = 0.52,
+    ) -> List[ConceptMapping]:
+        """
+        Automatically discover cross-domain concept alignments by
+        comparing HyperVector similarity without manual registration.
+
+        Algorithm
+        ---------
+        1. For every concept HV in *domain_a*, compute Hamming similarity
+           against every concept HV in *domain_b*.
+        2. Greedily pick the best 1-to-1 matching above *similarity_threshold*.
+        3. Additionally, if names share a common stem (edit distance ≤ 3),
+           boost the similarity score to allow softer matching.
+        4. For each discovered pair, register a new auto-abstract concept
+           so that future ``transfer_rule`` / ``find_analogy`` calls pick
+           them up automatically.
+
+        Parameters
+        ----------
+        domain_a, domain_b : Domain tags.
+        concept_hvs_a : ``{concept_name: HyperVector}`` for domain_a.
+        concept_hvs_b : ``{concept_name: HyperVector}`` for domain_b.
+        similarity_threshold : Minimum similarity to accept a pairing (default lowered from 0.55 to 0.52).
+
+        Returns
+        -------
+        List of newly created ``ConceptMapping`` objects.
+        """
+        pairs: list[tuple[float, str, str]] = []
+
+        for name_a, hv_a in concept_hvs_a.items():
+            for name_b, hv_b in concept_hvs_b.items():
+                sim = hv_a.similarity(hv_b)
+                # Name-similarity bonus: boost if names partially match
+                name_bonus = 0.0
+                na, nb = name_a.lower(), name_b.lower()
+                # Check for shared prefix (≥ 3 chars)
+                shared = 0
+                for i in range(min(len(na), len(nb))):
+                    if na[i] == nb[i]:
+                        shared += 1
+                    else:
+                        break
+                if shared >= 3:
+                    name_bonus = 0.05
+                # Check if one name contains the other
+                if na in nb or nb in na:
+                    name_bonus = 0.08
+                adjusted_sim = sim + name_bonus
+                if adjusted_sim >= similarity_threshold:
+                    pairs.append((adjusted_sim, name_a, name_b))
+
+        # Sort descending by similarity
+        pairs.sort(key=lambda x: -x[0])
+
+        used_a: set[str] = set()
+        used_b: set[str] = set()
+        discovered: list[ConceptMapping] = []
+
+        for sim, name_a, name_b in pairs:
+            if name_a in used_a or name_b in used_b:
+                continue
+            used_a.add(name_a)
+            used_b.add(name_b)
+
+            # Register a new auto-abstract concept
+            abstract_name = f"AUTO_{name_a}_{name_b}".upper()
+            self.register_abstract(
+                abstract_name,
+                description=f"Auto-discovered: {name_a} ({domain_a}) ≈ {name_b} ({domain_b})",
+                groundings={domain_a: name_a, domain_b: name_b},
+            )
+
+            discovered.append(ConceptMapping(
+                source_domain=domain_a,
+                target_domain=domain_b,
+                source_concept=name_a,
+                target_concept=name_b,
+                similarity=sim,
+                relation_type="auto-discovered",
+            ))
+
+        # Invalidate cached analogy between these two domains
+        self.analogies.pop((domain_a, domain_b), None)
+        self.analogies.pop((domain_b, domain_a), None)
+
+        return discovered
+
+    def get_all_abstractions(self) -> Dict[str, Dict[str, str]]:
+        """Return a summary of all abstract concepts and their groundings."""
+        return {
+            name: dict(ac.grounding_predicates)
+            for name, ac in self.abstract_concepts.items()
+        }

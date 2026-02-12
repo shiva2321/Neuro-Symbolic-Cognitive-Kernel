@@ -126,7 +126,12 @@ class CausalDiscovery:
                 self.count_ce[context][(c, e)] += 1
 
     def _calculate_delta_p(self, context: str, c: str, e: str) -> Tuple[float, int]:
-        """Internal helper for Delta-P contingency calculation."""
+        """Internal helper for Delta-P contingency with Bayesian smoothing.
+        
+        Uses Laplace (add-1) smoothing so that even a small number of
+        observations can produce a non-zero signal, enabling faster causal
+        discovery from fewer data points.
+        """
         t = self.total_steps[context]
         nc = self.count_c[context][c]
         ne = self.count_e[context][e]
@@ -134,12 +139,29 @@ class CausalDiscovery:
         
         if nc == 0 or nc == t: return 0.0, 0
         
-        # P(E|C)
-        p_e_c = nce / nc
-        # P(E|~C)
-        p_e_nc = (ne - nce) / (t - nc)
+        # Bayesian (Laplace-smoothed) P(E|C) and P(E|~C)
+        alpha = 1.0  # Laplace smoothing parameter
+        p_e_c = (nce + alpha) / (nc + 2 * alpha)
+        not_c = t - nc
+        p_e_nc = (ne - nce + alpha) / (not_c + 2 * alpha)
         
         return p_e_c - p_e_nc, nc
+
+    def incremental_update(self, context: str, graph: 'CausalGraph',
+                            min_confidence: float = 0.3, min_evidence: int = 2):
+        """Incrementally add new links to an existing graph from latest stats.
+        
+        Unlike `induce_graph` which builds from scratch, this adds only
+        new links that don't already exist, using relaxed thresholds for
+        faster learning from fewer observations.
+        """
+        existing_pairs = {(l.cause, l.effect) for l in graph.all_links}
+        for (c, e) in self.count_ce[context].keys():
+            if (c, e) in existing_pairs:
+                continue
+            delta_p, evidence = self._calculate_delta_p(context, c, e)
+            if evidence >= min_evidence and delta_p > min_confidence:
+                graph.add_causes(cause=c, effect=e, strength=delta_p, context=context)
 
     def induce_graph(self, context: str, min_confidence: float = 0.5, min_evidence: int = 5) -> "CausalGraph":
         """

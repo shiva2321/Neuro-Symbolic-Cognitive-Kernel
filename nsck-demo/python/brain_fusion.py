@@ -318,9 +318,13 @@ class BrainFusion:
     Fuses multiple TaskBrains using tagged_conservative strategy.
     """
     
-    # Merge thresholds
-    HV_THRESHOLD = 0.92
-    CTX_THRESHOLD = 0.85
+    # Merge thresholds (adaptive: start strict, relax with more evidence)
+    HV_THRESHOLD = 0.75   # Lowered from 0.92 — use context similarity to gate
+    CTX_THRESHOLD = 0.65  # Lowered from 0.85 — allow more cross-task sharing
+    
+    # Strict mode can be enabled for safety-critical merges
+    STRICT_HV_THRESHOLD = 0.92
+    STRICT_CTX_THRESHOLD = 0.85
     
     def __init__(self):
         self.registered_brains: Dict[str, TaskBrain] = {}

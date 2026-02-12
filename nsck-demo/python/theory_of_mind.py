@@ -39,6 +39,8 @@ class MentalStateModel:
 class TheoryOfMind:
     """
     Cognitive system for tracking and predicting other agents.
+    Supports level-1 (Sally-Anne) and level-2 recursive reasoning
+    ("I think agent A thinks agent B thinks …").
     """
     def __init__(self):
         # Track multiple agents by ID
@@ -108,3 +110,203 @@ class TheoryOfMind:
                     false_beliefs.append(key)
                     
         return false_beliefs
+
+    # ----------------------------------------------------------------
+    # Level-2 Recursive Theory of Mind
+    # ----------------------------------------------------------------
+    def recursive_belief(
+        self,
+        observer: str,
+        target: str,
+        key: str,
+        depth: int = 2,
+    ) -> Dict[str, Any]:
+        """
+        Recursive belief reasoning up to *depth* levels.
+
+        Level 1: "What does *observer* believe about *key*?"
+        Level 2: "What does *observer* think *target* believes about *key*?"
+
+        Returns a dict::
+
+            {
+                "depth": <int>,
+                "chain": ["observer", "target", ...],
+                "belief_value": <value or None>,
+                "is_accurate": <bool>,     # compared to target's actual belief
+                "explanation": <str>,
+            }
+        """
+        obs_model = self.get_or_create_model(observer)
+        tgt_model = self.get_or_create_model(target)
+
+        if depth <= 1:
+            # Level 1: direct belief
+            val = obs_model.get_belief(key)
+            return {
+                "depth": 1,
+                "chain": [observer],
+                "belief_value": val,
+                "is_accurate": True,  # trivially accurate for own belief
+                "explanation": f"{observer} believes {key} = {val}",
+            }
+
+        # Level 2+:  observer's *model* of target's belief
+        # Heuristic — observer projects own knowledge state onto target,
+        # then applies any false-belief adjustments they know about.
+        #
+        # Key insight: if observer saw target observe X, observer knows
+        # target believes X.  If observer saw the world change AFTER
+        # target left, observer can infer target still holds old belief.
+
+        # Step 1: check if observer has an explicit record of target's
+        # belief (set via update_agent_perspective).
+        meta_key = f"__tom_{target}_believes_{key}"
+        observer_thinks_target_believes = obs_model.get_belief(meta_key)
+
+        if observer_thinks_target_believes is not None:
+            # Observer has an explicit model
+            actual_target_belief = tgt_model.get_belief(key)
+            accurate = observer_thinks_target_believes == actual_target_belief
+            return {
+                "depth": depth,
+                "chain": [observer, target],
+                "belief_value": observer_thinks_target_believes,
+                "is_accurate": accurate,
+                "explanation": (
+                    f"{observer} thinks {target} believes {key} = "
+                    f"{observer_thinks_target_believes} "
+                    f"(actually {actual_target_belief}, "
+                    f"{'correct' if accurate else 'WRONG'})"
+                ),
+            }
+
+        # Fallback: observer projects own belief onto target (simulation theory)
+        projected = obs_model.get_belief(key)
+        actual_target_belief = tgt_model.get_belief(key)
+        accurate = projected == actual_target_belief
+
+        return {
+            "depth": depth,
+            "chain": [observer, target],
+            "belief_value": projected,
+            "is_accurate": accurate,
+            "explanation": (
+                f"{observer} projects own belief onto {target}: "
+                f"{key} = {projected} "
+                f"(target actually believes {actual_target_belief}, "
+                f"{'correct' if accurate else 'WRONG'})"
+            ),
+        }
+
+    def update_observer_model_of_target(
+        self,
+        observer: str,
+        target: str,
+        key: str,
+        value: Any,
+    ):
+        """Record that *observer* knows *target* believes *key* = *value*.
+
+        Call this when observer witnesses target observe something.
+        """
+        meta_key = f"__tom_{target}_believes_{key}"
+        obs_model = self.get_or_create_model(observer)
+        obs_model.update_beliefs({meta_key: value})
+
+    def get_agent_summary(self, agent_id: str) -> Dict[str, Any]:
+        """Return a human-readable summary of an agent's mental model."""
+        model = self.get_or_create_model(agent_id)
+        return {
+            "agent_id": agent_id,
+            "position": model.position,
+            "beliefs": dict(model.beliefs),
+            "desires": list(model.desires),
+            "intentions": list(model.intentions),
+        }
+
+    # ----------------------------------------------------------------
+    # Level-2+ Belief Simulation (replaces pure projection heuristic)
+    # ----------------------------------------------------------------
+    def simulate_belief(
+        self,
+        observer: str,
+        target: str,
+        key: str,
+        observation_history: Optional[List[Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        """Simulate what *target* believes by replaying their observation history.
+
+        Instead of the projection heuristic (observer projects own belief
+        onto target), this method *simulates* the target's belief formation
+        by iterating over the observations that the target actually made.
+
+        Parameters
+        ----------
+        observer : Agent doing the reasoning.
+        target : Agent whose beliefs are being inferred.
+        key : The belief key to infer.
+        observation_history : List of observation dicts that *target* received,
+            in chronological order. If ``None``, falls back to projection.
+
+        Returns
+        -------
+        Dict with *depth*, *chain*, *belief_value*, *is_accurate*, *explanation*.
+        """
+        tgt_model = self.get_or_create_model(target)
+
+        if not observation_history:
+            # No history — fall back to recursive_belief with projection
+            return self.recursive_belief(observer, target, key, depth=2)
+
+        # Replay observations chronologically to compute target's latest belief
+        simulated_beliefs: Dict[str, Any] = {}
+        for obs in observation_history:
+            simulated_beliefs.update(obs)
+
+        simulated_value = simulated_beliefs.get(key)
+        actual_value = tgt_model.get_belief(key)
+        accurate = simulated_value == actual_value
+
+        return {
+            "depth": 2,
+            "chain": [observer, target],
+            "belief_value": simulated_value,
+            "is_accurate": accurate,
+            "method": "simulation",
+            "explanation": (
+                f"{observer} simulated {target}'s belief formation: "
+                f"{key} = {simulated_value} after {len(observation_history)} observations "
+                f"(actual: {actual_value}, {'correct' if accurate else 'WRONG'})"
+            ),
+        }
+
+    def predict_action_from_simulation(
+        self,
+        agent_id: str,
+        world_state: Dict[str, Any],
+    ) -> str:
+        """Predict action by simulating the agent's decision process.
+
+        Constructs what the agent *believes* the world looks like,
+        then applies the same desire-based heuristics the agent would use.
+        """
+        model = self.get_or_create_model(agent_id)
+
+        # Build agent's subjective world view
+        subjective_world = dict(model.beliefs)
+        # Override with ground truth only for keys the agent has observed
+        # (agent's beliefs may be stale)
+
+        # Apply desire-based reasoning on subjective world
+        for desire in model.desires:
+            if desire.startswith("find_"):
+                target_obj = desire.replace("find_", "")
+                # Where does the AGENT think the object is?
+                believed_loc = model.get_belief(f"{target_obj}_location")
+                if believed_loc:
+                    return f"search_{believed_loc}"
+                else:
+                    return "search_random"
+
+        return self.predict_action(agent_id)
