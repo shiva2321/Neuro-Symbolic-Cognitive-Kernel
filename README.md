@@ -150,8 +150,6 @@ Node_network/
 │   ├── IMPLEMENTATION_ROADMAP.md # Technical implementation guide
 │   ├── COMPLETE_MODULE_ANALYSIS.md   # Module-by-module analysis
 │   └── AGENT_INSTRUCTIONS.md    # Development governance
-├── research/             # Research reports
-├── ROADMAP_TO_AGI.md     # Long-term development roadmap
 ├── requirements.txt      # Python dependencies
 └── pytest.ini            # Test configuration
 ```
