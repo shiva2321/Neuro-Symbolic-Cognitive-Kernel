@@ -3,8 +3,8 @@ Tests for Phase 3: Semantic Understanding
 """
 import pytest
 from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner, create_snake_causal_graph
-from python.explanation import ExplanationGenerator, ExplanationType
-from python.semantic_coherence import SemanticCoherence
+from python.utilities.explanation import ExplanationGenerator, ExplanationType
+from python.scripts.semantic_coherence import SemanticCoherence
 
 
 class TestCausalReasoning:

@@ -8,7 +8,7 @@ import json
 import io
 import zipfile
 
-from python.cognitive_dashboard import app, get_system, _activity_log
+from python.archive.cognitive_dashboard import app, get_system, _activity_log
 
 
 def _client():

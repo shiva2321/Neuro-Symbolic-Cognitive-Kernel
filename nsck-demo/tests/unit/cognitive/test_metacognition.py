@@ -4,7 +4,7 @@ Verifies: confidence scoring, conflict detection, tiered escalation, safe fallba
 """
 import python.core.vsa.hypervec_shim as hypervec_rs
 from python.core.integration.brain_fusion import TaskBrain, BrainFusion, FusedBrain, ConceptType
-from python.metacognition import MetacognitiveEngine, EscalationRequest, snake_safe_fallback
+from python.core.cognitive.metacognition import MetacognitiveEngine, EscalationRequest, snake_safe_fallback
 
 def test_confidence_scoring():
     print("\n--- Test: Confidence Scoring ---")

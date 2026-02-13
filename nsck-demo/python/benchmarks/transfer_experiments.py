@@ -29,7 +29,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Tuple, Set
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
 
 from python.benchmarks.benchmark import (
     ENVS, TeacherAgent, StudentAgent, RandomAgent, run_training, run_testing, run_random_baseline,

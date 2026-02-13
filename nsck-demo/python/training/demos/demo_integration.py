@@ -16,7 +16,7 @@ unified system capable of learning, reasoning, planning, and social interaction.
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../')), '..', 'python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))
 
 import torch
 import numpy as np

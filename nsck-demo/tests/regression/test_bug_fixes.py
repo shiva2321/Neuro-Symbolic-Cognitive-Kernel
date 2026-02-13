@@ -76,7 +76,7 @@ def test_emotion_arousal_decay():
     """Test that arousal decays smoothly instead of jumping."""
     print("\n--- Test: Emotion Arousal Decay ---")
 
-    from python.emotion_system import EmotionSystem
+    from python.core.cognitive.emotion_system import EmotionSystem
 
     emo = EmotionSystem()
 
@@ -126,7 +126,7 @@ def test_world_model_hv_to_numpy():
     """Test that hv_to_numpy works with both Python and Rust HVs."""
     print("\n--- Test: World Model hv_to_numpy ---")
 
-    from python.world_model import WorldModel
+    from python.core.neural.world_model import WorldModel
 
     wm = WorldModel(hv_dim=10240)
 
@@ -153,12 +153,15 @@ def test_episodic_memory_no_duplicate_import():
 
     # Read the source file and count import lines
     ep_path = os.path.join(
-        os.path.dirname(__file__), "..", "python", "episodic_memory.py"
+        os.path.dirname(__file__), "..", "..", "python", "core", "memory", "episodic_memory.py"
     )
     with open(ep_path) as f:
         content = f.read()
 
-    import_count = content.count("import hypervec_shim as hypervec_rs")
+    import_count = content.count("import python.core.vsa.hypervec_shim as hypervec_rs")
+    if import_count == 0:
+        # Fallback: check for the old import style too
+        import_count = content.count("import hypervec_shim as hypervec_rs")
     assert import_count == 1, (
         f"Expected exactly 1 import of hypervec_shim, got {import_count}"
     )

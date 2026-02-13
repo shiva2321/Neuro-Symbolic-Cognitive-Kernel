@@ -347,7 +347,7 @@ class TestCrossDomainTransfer:
               experience for an unseen Pong situation.
         WHY:  Zero-shot transfer avoids learning from scratch in new domains.
         """
-        from train_phase7_demo import IntegratedNSCKSystem
+        from python.training.demos.demo_integration import IntegratedNSCKSystem
 
         system = IntegratedNSCKSystem()
 
@@ -398,7 +398,7 @@ class TestCrossDomainTransfer:
               Verify the knowledge store retains all domain information.
         WHY:  Cross-session persistence is essential for cumulative learning.
         """
-        from train_phase7_demo import IntegratedNSCKSystem
+        from python.training.demos.demo_integration import IntegratedNSCKSystem
 
         system = IntegratedNSCKSystem()
 
@@ -525,7 +525,7 @@ class TestCognitiveMetrics:
               then call get_cognitive_metrics() for a full snapshot.
         WHY:  System health monitoring and capability documentation.
         """
-        from train_phase7_demo import IntegratedNSCKSystem
+        from python.training.demos.demo_integration import IntegratedNSCKSystem
 
         system = IntegratedNSCKSystem()
 
@@ -566,7 +566,7 @@ class TestCognitiveMetrics:
         HOW:  Perceive → Self-assess → Feel → Plan → Social → Learn → Metrics.
         WHY:  Proves all 7 phases work together in sequence.
         """
-        from train_phase7_demo import IntegratedNSCKSystem
+        from python.training.demos.demo_integration import IntegratedNSCKSystem
         import python.core.vsa.hypervec_shim as hypervec_rs
 
         system = IntegratedNSCKSystem()

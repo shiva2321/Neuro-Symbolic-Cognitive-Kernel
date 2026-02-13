@@ -95,7 +95,7 @@ class TestModelPredictiveControl(unittest.TestCase):
     
     def test_mpc_planning(self):
         """Test MPC can select actions."""
-        from train_phase4_demo import ModelPredictiveController
+        from python.training.demos.demo_reasoning import ModelPredictiveController
         
         wm = WorldModel(hv_dim=10240)
         
@@ -125,7 +125,7 @@ class TestMonteCarloTreeSearch(unittest.TestCase):
     
     def test_mcts_search(self):
         """Test MCTS can perform tree search."""
-        from train_phase4_demo import MonteCarloTreeSearch, MCTSNode
+        from python.training.demos.demo_reasoning import MonteCarloTreeSearch, MCTSNode
         
         wm = WorldModel(hv_dim=10240)
         
@@ -150,7 +150,7 @@ class TestMonteCarloTreeSearch(unittest.TestCase):
     
     def test_mcts_node(self):
         """Test MCTS node operations."""
-        from train_phase4_demo import MCTSNode
+        from python.training.demos.demo_reasoning import MCTSNode
         
         node = MCTSNode(state="test_state")
         node.untried_actions = [0, 1, 2]
@@ -169,7 +169,7 @@ class TestHierarchicalPlanning(unittest.TestCase):
     
     def test_option_creation(self):
         """Test creating options."""
-        from train_phase4_demo import Option
+        from python.training.demos.demo_reasoning import Option
         
         option = Option(
             name="test_option",
@@ -185,7 +185,7 @@ class TestHierarchicalPlanning(unittest.TestCase):
     
     def test_hierarchical_planner(self):
         """Test hierarchical planning."""
-        from train_phase4_demo import Option, HierarchicalPlanner
+        from python.training.demos.demo_reasoning import Option, HierarchicalPlanner
         
         options = [
             Option("opt1", lambda s: "a1", lambda s: False),

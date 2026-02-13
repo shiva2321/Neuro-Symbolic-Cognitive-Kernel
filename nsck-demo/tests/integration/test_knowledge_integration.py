@@ -9,7 +9,7 @@ from python.core.integration.knowledge_integration import (
     KnowledgeIntegration,
     CognitiveResponse,
 )
-from python.multimodal_processor import MultimodalInput
+from python.core.multimodal.multimodal_processor import MultimodalInput
 import numpy as np
 
 

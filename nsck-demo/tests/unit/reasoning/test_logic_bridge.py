@@ -4,7 +4,7 @@ Verifies: Rule Resolution, Precedence, Safety Veto, and Probabilities
 """
 import unittest
 from python.core.integration.brain_fusion import FusedBrain, Rule, QueryResult
-from python.metacognition import MetacognitiveEngine, inference_to_probs, SafetyGate
+from python.core.cognitive.metacognition import MetacognitiveEngine, inference_to_probs, SafetyGate
 
 class TestLogicBridge(unittest.TestCase):
     
@@ -84,7 +84,7 @@ class TestLogicBridge(unittest.TestCase):
     def test_inference_to_probs(self):
         """Test conversion to probability array."""
         # Mock InferenceResult
-        from python.metacognition import InferenceResult
+        from python.core.cognitive.metacognition import InferenceResult
         
         mock_result = InferenceResult(
             action="ACTION_LEFT",

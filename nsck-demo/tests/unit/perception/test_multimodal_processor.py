@@ -6,7 +6,7 @@ import sys
 import os
 
 import numpy as np
-from python.multimodal_processor import (
+from python.core.multimodal.multimodal_processor import (
     MultimodalProcessor,
     MultimodalInput,
     ProcessedInput,

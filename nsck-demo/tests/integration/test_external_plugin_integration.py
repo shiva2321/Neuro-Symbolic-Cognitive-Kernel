@@ -16,7 +16,7 @@ from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
 
 def _write_plugin_file(tmp_path: Path) -> Path:
     plugin_code = "\n".join([
-        "from global_workspace import WorkspaceModule, Coalition",
+        "from python.core.reasoning.global_workspace import WorkspaceModule, Coalition",
         "import numpy as np",
         "",
         "class ExternalPlanner(WorkspaceModule):",

@@ -38,7 +38,8 @@ def test_transfer_learning_freeze():
     # Input: [1, 4, 10, 10]
     x = torch.randn(1, 4, 10, 10).to(device)
     logits, val = model(x, task_name="task_a")
-    loss = logits.mean() # Dummy loss
+    # Use MSE loss to force output towards 10.0 -> ensures gradients exist (unless output is already 10)
+    loss = (logits - 10.0).pow(2).mean() 
     
     optimizer.zero_grad()
     loss.backward()
@@ -64,12 +65,14 @@ def test_transfer_learning_freeze():
     # We must re-create optimizer or update param groups, but easier to just make a new one filtering frozen params
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-2)
     
-    logits_b, val_b = model(x, task_name="task_b")
-    loss_b = logits_b.mean()
-    
-    optimizer.zero_grad()
-    loss_b.backward()
-    optimizer.step()
+    # Train Task B for multiple steps to ensure update
+    for _ in range(10):
+        logits_b, val_b = model(x, task_name="task_b")
+        loss_b = (logits_b - 10.0).pow(2).mean()
+        
+        optimizer.zero_grad()
+        loss_b.backward()
+        optimizer.step()
     
     # 3. Assertions
     current_state_final = model.state_dict()

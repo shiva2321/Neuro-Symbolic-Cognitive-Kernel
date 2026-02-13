@@ -40,6 +40,48 @@ def _hv_repr_bytes(hv) -> bytes:
 
 def _install_compat_methods(HV):
     """Add helper methods that may be missing from the Rust class."""
+    import numpy as _np
+
+    # --- bits property (u64 blocks ↔ int8 numpy array) ---
+    if not hasattr(HV, "bits"):
+        @property
+        def _bits_property(self):
+            """Unpack 160 u64 ints into a 10240-element int8 numpy array."""
+            state = self.__getstate__()  # list of 160 u64 ints
+            arr = _np.zeros(10240, dtype=_np.int8)
+            for word_idx, word in enumerate(state):
+                for bit_pos in range(64):
+                    if word & (1 << bit_pos):
+                        arr[word_idx * 64 + bit_pos] = 1
+            return arr
+
+        try:
+            HV.bits = _bits_property
+        except (TypeError, AttributeError):
+            pass  # Rust class may not allow property assignment
+
+    # --- from_bits classmethod ---
+    if not hasattr(HV, "from_bits"):
+        @classmethod
+        def from_bits(cls, bits_array):
+            """Create a HyperVector from a numpy int8 bit array."""
+            bits_arr = _np.asarray(bits_array, dtype=_np.int8)
+            num_u64 = len(bits_arr) // 64
+            state = [0] * num_u64
+            for word_idx in range(num_u64):
+                word = 0
+                for bit_pos in range(64):
+                    if bits_arr[word_idx * 64 + bit_pos]:
+                        word |= (1 << bit_pos)
+                state[word_idx] = word
+            obj = cls.__new__(cls)
+            obj.__setstate__(state)
+            return obj
+
+        try:
+            HV.from_bits = from_bits
+        except (TypeError, AttributeError):
+            pass
 
     # --- weighted_bundle ---
     if not hasattr(HV, "weighted_bundle"):
@@ -125,8 +167,28 @@ def _install_compat_methods(HV):
 if _USE_RUST:
     _install_compat_methods(_ext.HyperVector)
     HyperVector = _ext.HyperVector
+    
+    # PATCH: Align permute direction with Python (Left-Shift for positive)
+    # Python: permute(1) -> np.roll(-1) (Left)
+    # Rust:   permute(1) -> Right Shift
+    # Fix: Negate shift called on Rust
+    
+    _rust_permute = HyperVector.permute
+    def _aligned_permute(self, shift: int):
+        return _rust_permute(self, -shift)
+    HyperVector.permute = _aligned_permute
+    
+    _rust_permute_inverse = HyperVector.permute_inverse
+    def _aligned_permute_inverse(self, shift: int):
+        # permute_inverse(s) = permute(-s)
+        # We want Python behavior: permute_inverse(1) -> permute(-1) -> np.roll(1) (Right)
+        # Rust behavior: permute_inverse(1) -> permute(-1) -> ROT_RIGHT(-1) = ROT_LEFT(1) (Left)
+        # So we also need to negate here to swap back to Right.
+        return _rust_permute_inverse(self, -shift)
+    HyperVector.permute_inverse = _aligned_permute_inverse
+    
     if multiprocessing.current_process().name == "MainProcess":
-        print(">> [VSA] Using Rust Accelerator (hypervec_rs)")
+        print(">> [VSA] Using Rust Accelerator (hypervec_rs) [Patched Direction]")
 else:
     _install_compat_methods(_FallbackHV)
     HyperVector = _FallbackHV

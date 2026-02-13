@@ -16,9 +16,9 @@ from python.core.neural.snn_qat import TaskAwareSNN, UniversalEncoder
 # Mock global variables
 import python.servers.python_server
 import threading
-python_server.REPLAY_BUFFER = REPLAY_BUFFER 
-python_server.REPLAY_BATCH_SIZE = 2
-python_server.model_lock = threading.Lock() # Mock Lock
+python.servers.python_server.REPLAY_BUFFER = REPLAY_BUFFER 
+python.servers.python_server.REPLAY_BATCH_SIZE = 2
+python.servers.python_server.model_lock = threading.Lock() # Mock Lock
 
 def test_deep_dreaming_cycle():
     """Verify that the dreaming cycle runs without error and computes loss."""

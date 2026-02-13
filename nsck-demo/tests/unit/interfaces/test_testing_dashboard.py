@@ -8,7 +8,7 @@ import os
 import json
 
 
-from python.testing_dashboard import app
+from python.interfaces.testing_dashboard import app
 
 
 def _client():

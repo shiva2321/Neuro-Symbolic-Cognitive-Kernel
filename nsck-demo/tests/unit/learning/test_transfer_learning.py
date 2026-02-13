@@ -17,7 +17,7 @@ import unittest
 
 
 from python.core.reasoning.analogy import AnalogyEngine
-from train_phase7_demo import IntegratedNSCKSystem, KnowledgeStore
+from python.training.demos.demo_integration import IntegratedNSCKSystem, KnowledgeStore
 from python.core.integration.persistence import Rule
 from python.core.reasoning.cognitive_engine import create_cognitive_engine
 from unittest.mock import patch

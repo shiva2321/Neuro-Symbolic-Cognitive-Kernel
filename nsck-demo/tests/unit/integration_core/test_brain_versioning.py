@@ -25,7 +25,7 @@ from python.core.integration.persistence import BrainStore, Rule, Concept, Episo
 @pytest.fixture
 def temp_brain():
     """Create a temporary brain for testing."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         db_path = os.path.join(tmpdir, "test_brain.db")
         brain = BrainStore(db_path)
         yield brain
@@ -329,9 +329,13 @@ def test_duplicate_checkpoint_tag(populated_brain):
     print("✅ Created first checkpoint: v1.0")
     
     # Try to create duplicate (should raise IntegrityError)
-    with pytest.raises(Exception):  # sqlite3.IntegrityError
+    raised = False
+    try:
         populated_brain.create_checkpoint("v1.0", "Duplicate")
+    except Exception:
+        raised = True
     
+    assert raised, "Should have raised an exception for duplicate tag"
     print("✅ Correctly rejects duplicate version tag")
 
 
