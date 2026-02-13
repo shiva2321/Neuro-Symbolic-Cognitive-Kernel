@@ -68,7 +68,7 @@ All sessions are logged to: /workspaces/Node_network/logs/
     args = parser.parse_args()
     
     # Ensure logs directory exists
-    log_dir = Path("/workspaces/Node_network/logs")
+    log_dir = Path.cwd() / "logs"
     log_dir.mkdir(exist_ok=True)
     
     print("=" * 80)
@@ -88,7 +88,7 @@ All sessions are logged to: /workspaces/Node_network/logs/
     
     # Import and run the app
     try:
-        from unified_dashboard import app, get_logger
+        from interfaces.unified_dashboard import app, get_logger
         
         # Setup graceful shutdown
         def signal_handler(sig, frame):

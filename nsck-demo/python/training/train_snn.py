@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from python.core.neural.snn_qat import QuantizedSNN
+from python.core.neural.snn_qat import TaskAwareSNN
 import numpy as np
 import os
 
@@ -35,17 +35,12 @@ def generate_synthetic_data():
         grid[ax, ay] = 2.0 # Apple
         
         # Wall boundaries are implicit logic, but visual representation:
-        # Let's say we input the local view or full grid.
-        # User said "10x10 dataset (Apple, Wall, Empty)"
-        
         # Let's just create random patterns classified by a simple rule 
         # to ensure the network learns something.
-        # Rule: If pixel (5, 4) (North of center) is Apple -> Label 0 (Apple)
-        #       If pixel (5, 4) is Wall -> Label 1 (Wall)
-        #       Else -> Label 2 (Empty)
         
-        # Place "Northern neighbor"
+        # Place "Northern neighbor" at (5, 4)
         target_pos = (5, 4)
+        # Randomize neighborhood
         val = np.random.choice([0, 2, 3], p=[0.6, 0.2, 0.2]) # 0=Empty, 2=Apple, 3=Wall
         grid[target_pos] = val
         
@@ -67,11 +62,15 @@ def train():
     dataset = TensorDataset(X, y)
     loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
     
-    model = QuantizedSNN()
+    # Initialize TaskAwareSNN
+    model = TaskAwareSNN()
+    # Register our synthetic task with 3 output classes
+    model.register_task("synthetic", 3)
+    
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.CrossEntropyLoss()
     
-    print("Starting Training...")
+    print("Starting Training (TaskAwareSNN)...")
     for epoch in range(EPOCHS):
         total_loss = 0
         correct = 0
@@ -80,21 +79,18 @@ def train():
         for data, targets in loader:
             optimizer.zero_grad()
             
-            # Forward pass: [Time, Batch, Out]
-            spikes = model(data)
+            # Forward pass: returns (action_logits, value_estimate)
+            # data shape: [Batch, 100] -> handled by UniversalEncoder (2D path)
+            action_logits, _ = model(data, task_name="synthetic")
             
-            # Aggregate spikes (sum over time) to get rate/logit
-            # Sum predictions over time
-            sum_spikes = spikes.sum(dim=0)
-            
-            loss = criterion(sum_spikes, targets)
+            loss = criterion(action_logits, targets)
             loss.backward()
             optimizer.step()
             
             total_loss += loss.item()
             
             # Accuracy
-            _, predicted = torch.max(sum_spikes.data, 1)
+            _, predicted = torch.max(action_logits.data, 1)
             total += targets.size(0)
             correct += (predicted == targets).sum().item()
             
@@ -102,7 +98,6 @@ def train():
 
     # Export
     torch.save(model.state_dict(), "snn_model.pth")
-    # model.export_onnx("snn_qat.onnx") # Optional export
     print("Model saved to snn_model.pth")
 
 if __name__ == "__main__":

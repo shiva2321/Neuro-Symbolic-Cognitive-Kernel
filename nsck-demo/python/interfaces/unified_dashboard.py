@@ -52,7 +52,7 @@ from flask import Flask, request, jsonify, send_file, render_template_string
 from flask_cors import CORS
 
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
 
 import numpy as np
 from pathlib import Path
@@ -171,31 +171,32 @@ class StructuredLogger:
         self.logger.setLevel(logging.DEBUG)
         
         # File handler for persistent logs
-        log_dir = Path("/workspaces/Node_network/logs")
-        log_dir.mkdir(exist_ok=True)
-        
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file = log_dir / f"nsck_session_{timestamp}.log"
-        
-        fh = logging.FileHandler(log_file)
-        fh.setLevel(logging.DEBUG)
-        fh.setFormatter(logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(category)s | %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        ))
-        self.logger.addHandler(fh)
-        
-        # Console handler
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.INFO)
-        ch.setFormatter(logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(message)s',
-            datefmt='%H:%M:%S'
-        ))
-        self.logger.addHandler(ch)
-        
-        self.log_file_path = str(log_file)
-        self._log_internal(f"Session started. Logging to: {log_file}")
+        self.log_file_path = "DISABLED"
+        try:
+            log_dir = Path.cwd() / "logs"
+            print(f"DEBUG: Creating log directory: {log_dir}")
+            log_dir.mkdir(exist_ok=True, parents=True)
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            log_file = log_dir / f"nsck_session_{timestamp}.log"
+            print(f"DEBUG: Log file path: {log_file}")
+            self.log_file_path = str(log_file)
+            
+            fh = logging.FileHandler(log_file)
+            print("DEBUG: FileHandler created successfully")
+            fh.setLevel(logging.DEBUG)
+            fh.setFormatter(logging.Formatter(
+                '%(asctime)s | %(levelname)-8s | %(category)s | %(message)s',
+                datefmt='%Y-%m-%d %H:%M:%S'
+            ))
+            self.logger.addHandler(fh)
+            self._log_internal(f"Session started. Logging to: {log_file}")
+
+        except Exception as e:
+            print(f"DEBUG: Failed to setup file logging: {e}")
+            self._log_internal(f"Session started. File logging DISABLED due to error: {e}")
+            # Continue without file logging
+            pass
     
     def _log_internal(self, message: str):
         """Internal logging without recursion."""
