@@ -16,7 +16,7 @@ python nsck-demo/nsck_sdk/domain_expert.py       # Pattern recognition
 # 3. Build your module (minimal example)
 import numpy as np
 from typing import Optional, Dict, Any
-from global_workspace import WorkspaceModule, Coalition
+from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
 
 class MyModule(WorkspaceModule):
     def propose(self, state_hv: np.ndarray) -> Optional[Coalition]:
@@ -39,14 +39,14 @@ class MyModule(WorkspaceModule):
         return {"status": "ok"}
 
 # 4. Register with ModuleRegistry
-from python.module_registry import ModuleRegistry
+from python.core.integration.module_registry import ModuleRegistry
 
 registry = ModuleRegistry()
 registry.register(MyModule)
 # Or auto-discover: registry.discover_modules("./my_modules")
 
 # 5. Integrate with CognitiveEngine
-from python.cognitive_engine import CognitiveEngine
+from python.core.reasoning.cognitive_engine import CognitiveEngine
 
 for module_class in registry.get_modules():
     instance = registry.instantiate(module_class, brain_store=brain)
@@ -185,7 +185,7 @@ NSCK uses **Vector Symbolic Architecture** (VSA):
 **Example**:
 ```python
 import hashlib
-import hypervec_shim as hv
+import python.core.vsa.hypervec_shim as hv
 
 def encode(label: str) -> np.ndarray:
     """Deterministic encoding."""
