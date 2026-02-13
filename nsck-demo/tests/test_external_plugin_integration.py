@@ -10,7 +10,7 @@ import numpy as np
 
 # Add project paths for plugin imports
 
-from python.module_registry import ModuleRegistry
+from python.core.integration.module_registry import ModuleRegistry
 from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
 
 

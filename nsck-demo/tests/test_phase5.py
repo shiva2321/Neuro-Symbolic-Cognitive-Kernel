@@ -2,7 +2,7 @@
 Tests for Phase 5: Generalization & Transfer
 """
 import pytest
-from python.analogy import AnalogyEngine, ConceptMapping, Analogy
+from python.core.reasoning.analogy import AnalogyEngine, ConceptMapping, Analogy
 
 
 class TestAnalogy:

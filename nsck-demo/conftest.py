@@ -16,10 +16,8 @@ from pathlib import Path
 
 def pytest_configure() -> None:
     root = Path(__file__).resolve().parent
-    python_dir = root / "python"
-
-    # Prepend so it wins over any similarly-named installed packages.
+    
+    # Only add root to sys.path for package-qualified imports like python.core.vsa
+    # Adding python/ would cause conflicts since "import python.x" would try to find python/python/x
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
-    if python_dir.exists() and str(python_dir) not in sys.path:
-        sys.path.insert(0, str(python_dir))

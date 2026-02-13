@@ -4,7 +4,7 @@ Verifies: ActionSemantics -> MetacognitiveWrapper -> MetacognitiveEngine -> Fuse
 """
 import unittest
 import numpy as np
-from python.symbol_grounding import ActionSemantics
+from python.core.perception.symbol_grounding import ActionSemantics
 
 class TestIntegration(unittest.TestCase):
     
@@ -43,7 +43,7 @@ class TestIntegration(unittest.TestCase):
         
     def test_wrapper_structure(self):
         """Verify wrapper initialized correct engine."""
-        from python.symbol_grounding import get_kernel_engine
+        from python.core.perception.symbol_grounding import get_kernel_engine
         engine_wrapper = get_kernel_engine()
         self.assertTrue(hasattr(engine_wrapper, "engine"))
         brain = engine_wrapper.engine.brain

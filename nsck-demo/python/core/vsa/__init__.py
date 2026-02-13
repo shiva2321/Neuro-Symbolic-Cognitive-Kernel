@@ -1,6 +1,5 @@
 """Vector Symbolic Architecture (VSA) - Hyperdimensional Computing"""
-from .hypervec_py import HyperVector
-from .hypervec_shim import HVBackend
+from .hypervec_shim import HyperVector
 from .universal_encoder import UniversalEncoder
 
-__all__ = ["HyperVector", "HVBackend", "UniversalEncoder"]
+__all__ = ["HyperVector", "UniversalEncoder"]

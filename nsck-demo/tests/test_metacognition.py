@@ -3,7 +3,7 @@ Test Metacognitive Engine
 Verifies: confidence scoring, conflict detection, tiered escalation, safe fallback
 """
 import python.core.vsa.hypervec_shim as hypervec_rs
-from python.brain_fusion import TaskBrain, BrainFusion, FusedBrain, ConceptType
+from python.core.integration.brain_fusion import TaskBrain, BrainFusion, FusedBrain, ConceptType
 from python.metacognition import MetacognitiveEngine, EscalationRequest, snake_safe_fallback
 
 def test_confidence_scoring():

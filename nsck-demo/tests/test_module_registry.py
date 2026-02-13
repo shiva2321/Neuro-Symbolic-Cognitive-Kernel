@@ -16,7 +16,7 @@ import shutil
 
 # Add parent directories to path
 
-from python.module_registry import ModuleRegistry, get_registry
+from python.core.integration.module_registry import ModuleRegistry, get_registry
 from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
 import numpy as np
 from typing import Optional, Dict, Any

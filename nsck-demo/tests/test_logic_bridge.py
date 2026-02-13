@@ -3,7 +3,7 @@ Test Logic Bridge Integration (Phase 5)
 Verifies: Rule Resolution, Precedence, Safety Veto, and Probabilities
 """
 import unittest
-from python.brain_fusion import FusedBrain, Rule, QueryResult
+from python.core.integration.brain_fusion import FusedBrain, Rule, QueryResult
 from python.metacognition import MetacognitiveEngine, inference_to_probs, SafetyGate
 
 class TestLogicBridge(unittest.TestCase):

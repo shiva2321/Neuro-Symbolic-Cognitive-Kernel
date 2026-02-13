@@ -15,7 +15,7 @@ def test_semantic_memory_property_binding():
     """Test that add_concept properly binds properties into HV."""
     print("--- Test: Semantic Memory Property Binding ---")
 
-    from python.semantic_memory import SemanticMemory
+    from python.core.memory.semantic_memory import SemanticMemory
 
     mem = SemanticMemory()
 
@@ -40,7 +40,7 @@ def test_brain_fusion_forward_chain_no_mutation():
     """Test that forward_chain_multi does not mutate global_rules."""
     print("\n--- Test: Forward Chain No Mutation ---")
 
-    from python.brain_fusion import FusedBrain, Rule
+    from python.core.integration.brain_fusion import FusedBrain, Rule
 
     brain = FusedBrain()
 
@@ -99,7 +99,7 @@ def test_brain_fusion_concept_context():
     """Test that get_concept_context returns a proper HV when rules exist."""
     print("\n--- Test: Concept Context ---")
 
-    from python.brain_fusion import TaskBrain
+    from python.core.integration.brain_fusion import TaskBrain
 
     brain = TaskBrain("snake")
     brain.add_concept("FOOD_ABOVE", hypervec_rs.HyperVector(5001))

@@ -5,8 +5,8 @@ Verifies: contextual disambiguation, learning, domain inference.
 import sys
 import os
 
-from python.context_engine import ContextEngine, ContextFrame, DisambiguatedMeaning
-from python.semantic_memory import SemanticMemory
+from python.core.reasoning.context_engine import ContextEngine, ContextFrame, DisambiguatedMeaning
+from python.core.memory.semantic_memory import SemanticMemory
 
 
 def test_red_danger_vs_red_roses():

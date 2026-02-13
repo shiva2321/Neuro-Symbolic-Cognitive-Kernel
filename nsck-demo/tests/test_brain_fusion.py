@@ -3,7 +3,7 @@ Test Brain Fusion
 Verifies: cross-task contamination prevention, promotion correctness, query isolation
 """
 import python.core.vsa.hypervec_shim as hypervec_rs
-from python.brain_fusion import TaskBrain, BrainFusion, GLOBAL_PRIMITIVES, ConceptType
+from python.core.integration.brain_fusion import TaskBrain, BrainFusion, GLOBAL_PRIMITIVES, ConceptType
 
 
 def test_global_primitives():

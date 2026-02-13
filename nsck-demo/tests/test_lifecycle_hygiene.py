@@ -1,6 +1,6 @@
 import python.core.vsa.hypervec_shim as hypervec_rs
-from python.staged_recall import StagedRecall
-from python.lifecycle import LifecycleManager
+from python.core.memory.staged_recall import StagedRecall
+from python.core.integration.lifecycle import LifecycleManager
 
 def test_accretion():
     print("--- Test: Accretion/Drift ---")

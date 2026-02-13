@@ -5,7 +5,7 @@ Verifies: unified cognitive pipeline, learning, self-correction, transfer.
 import sys
 import os
 
-from python.knowledge_integration import (
+from python.core.integration.knowledge_integration import (
     KnowledgeIntegration,
     CognitiveResponse,
 )

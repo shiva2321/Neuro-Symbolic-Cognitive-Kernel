@@ -4,10 +4,10 @@ Tests for Phase 2: Self-Learning Engine
 import pytest
 import time
 import python.core.vsa.hypervec_shim as hypervec_rs
-from python.rule_learner import RuleLearner
-from python.episodic_memory import EpisodicMemory, LiveEpisode
-from python.curiosity import CuriosityModule
-from python.grounding_verifier import create_snake_verifier
+from python.core.reasoning.rule_learner import RuleLearner
+from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
+from python.core.learning.curiosity import CuriosityModule
+from python.core.perception.grounding_verifier import create_snake_verifier
 
 
 class TestRuleLearner:
