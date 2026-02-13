@@ -123,17 +123,215 @@ _AUX_VERBS = frozenset({
     "will", "would", "could", "should", "shall", "can", "may", "might", "must",
 })
 
+# ---------------------------------------------------------------------------
+# Semantic Role System
+# ---------------------------------------------------------------------------
+# Semantic roles capture *functional* relationships independent of syntax:
+#   Agent:      volitional actor ("John broke the vase")
+#   Patient:    affected entity ("the vase broke")
+#   Experiencer: psychological participant ("Mary heard music")
+#   Theme:      moved/located entity ("Bob put the book on the shelf")
+#   Instrument: means of action ("She cut with a knife")
+#   Location:   spatial setting ("The meeting is in the office")
+#   Source:     origin ("He came from Boston")
+#   Goal:       destination ("They went to Paris")
+# ---------------------------------------------------------------------------
+
 # Syntactic role HVs (deterministic, shared globally)
 _ROLE_CACHE: dict = {}
 
 
 def _role_hv(role_name: str):
-    """Get a deterministic role HV for a syntactic function."""
+    """Get a deterministic role HV for a syntactic or semantic function.
+    
+    Supports both syntactic roles (subj, obj, pred) and semantic roles
+    (agent, patient, instrument, theme, experiencer, location, source, goal).
+    """
     if role_name not in _ROLE_CACHE:
         _ROLE_CACHE[role_name] = hv.HyperVector(
-            _stable_seed(f"__synrole__{role_name}")
+            _stable_seed(f"__role__{role_name}")
         )
     return _ROLE_CACHE[role_name]
+
+
+# Verb classification for semantic role assignment
+_AGENTIVE_VERBS = {
+    "break", "build", "create", "destroy", "make", "write", "paint",
+    "cut", "hit", "push", "pull", "throw", "kick", "open", "close",
+    "eat", "drink", "cook", "clean", "wash", "fix", "repair",
+    # Irregular past tense forms
+    "broke", "built", "made", "wrote", "cut", "hit"
+}
+
+_EXPERIENCER_VERBS = {
+    "hear", "see", "feel", "smell", "taste", "know", "believe",
+    "think", "understand", "remember", "forget", "like", "love",
+    "hate", "want", "need", "prefer", "enjoy", "fear", "hope",
+    # Irregular past tense forms
+    "heard", "saw", "felt", "knew", "thought", "understood",
+    "remembered", "forgot", "liked", "loved", "hated", "wanted"
+}
+
+_MOTION_VERBS = {
+    "go", "come", "move", "run", "walk", "fly", "swim", "travel",
+    "arrive", "depart", "enter", "exit", "leave", "return", "roll",
+    # Irregular past tense forms
+    "went", "came", "moved", "ran", "walked", "flew", "swam", "traveled",
+    "arrived", "departed", "entered", "exited", "left", "returned", "rolled"
+}
+
+_TRANSFER_VERBS = {
+    "give", "send", "bring", "take", "carry", "deliver", "pass",
+    "hand", "offer", "show", "teach", "tell",
+    # Irregular past tense forms
+    "gave", "sent", "brought", "took", "carried", "delivered",
+    "passed", "handed", "offered", "showed", "taught", "told"
+}
+
+_POSITIONAL_VERBS = {
+    "put", "place", "set", "lay", "stand", "sit", "hang", "install",
+    # Past tense forms
+    "placed", "laid", "stood", "sat", "hung", "installed"
+}
+
+
+def _classify_verb_semantics(verb: str) -> str:
+    """Classify verb into semantic categories for role assignment.
+    
+    Returns one of: agentive, experiencer, motion, transfer, positional, stative.
+    """
+    v = verb.lower()
+    
+    # Try exact match first
+    if v in _AGENTIVE_VERBS:
+        return "agentive"
+    if v in _EXPERIENCER_VERBS:
+        return "experiencer"
+    if v in _MOTION_VERBS:
+        return "motion"
+    if v in _TRANSFER_VERBS:
+        return "transfer"
+    if v in _POSITIONAL_VERBS:
+        return "positional"
+    
+    # Try stemming: remove common inflections
+    # Past tense: -ed
+    if v.endswith("ed") and len(v) > 3:
+        stem = v[:-2]
+        if stem in _AGENTIVE_VERBS or stem in _EXPERIENCER_VERBS:
+            if stem in _AGENTIVE_VERBS:
+                return "agentive"
+            if stem in _EXPERIENCER_VERBS:
+                return "experiencer"
+    
+    # Present 3rd person: -s/-es
+    if v.endswith("es") and len(v) > 3:
+        stem = v[:-2]
+        if stem in _AGENTIVE_VERBS or stem in _EXPERIENCER_VERBS or stem in _MOTION_VERBS:
+            return _classify_verb_semantics(stem)
+    elif v.endswith("s") and len(v) > 2 and not v.endswith("ss"):
+        stem = v[:-1]
+        if stem in _AGENTIVE_VERBS or stem in _EXPERIENCER_VERBS or stem in _MOTION_VERBS:
+            return _classify_verb_semantics(stem)
+    
+    # Present participle: -ing
+    if v.endswith("ing") and len(v) > 4:
+        stem = v[:-3]
+        if stem in _AGENTIVE_VERBS or stem in _EXPERIENCER_VERBS or stem in _MOTION_VERBS:
+            return _classify_verb_semantics(stem)
+        # Try doubling consonant removal (running -> run)
+        if len(stem) > 2 and stem[-1] == stem[-2]:
+            stem2 = stem[:-1]
+            if stem2 in _AGENTIVE_VERBS or stem2 in _MOTION_VERBS:
+                return _classify_verb_semantics(stem2)
+    
+    return "stative"  # Default for be/have/become and unknown verbs
+
+
+def _assign_semantic_roles(parsed: dict) -> dict:
+    """Map syntactic structure to semantic roles based on verb semantics.
+    
+    Takes output from _chunk_phrases() and returns a dict mapping
+    semantic roles (agent, patient, theme, etc.) to their fillers.
+    
+    Example:
+        Input:  {subject_np: {head: "John"}, verb: "broke", object_np: {head: "vase"}}
+        Output: {"agent": {head: "John"}, "patient": {head: "vase"}, "action": "broke"}
+    """
+    roles = {}
+    
+    if not parsed.get("verb"):
+        return roles
+    
+    verb = parsed["verb"]
+    verb_class = _classify_verb_semantics(verb)
+    roles["action"] = verb
+    roles["verb_class"] = verb_class
+    
+    subj = parsed.get("subject_np")
+    obj = parsed.get("object_np")
+    
+    # Semantic role assignment based on verb class
+    if verb_class == "agentive":
+        # Subject is volitional agent, object is affected patient
+        if subj:
+            roles["agent"] = subj
+        if obj:
+            roles["patient"] = obj
+    
+    elif verb_class == "experiencer":
+        # Subject is experiencer (psychological participant), object is stimulus
+        if subj:
+            roles["experiencer"] = subj
+        if obj:
+            roles["theme"] = obj  # What is perceived/thought about
+    
+    elif verb_class == "motion":
+        # Subject is theme (thing moving)
+        if subj:
+            roles["theme"] = subj
+    
+    elif verb_class == "transfer":
+        # Subject is agent, object is theme (thing transferred)
+        if subj:
+            roles["agent"] = subj
+        if obj:
+            roles["theme"] = obj
+    
+    elif verb_class == "positional":
+        # Subject is agent, object is theme (thing positioned)
+        if subj:
+            roles["agent"] = subj
+        if obj:
+            roles["theme"] = obj
+    
+    else:  # stative
+        # Subject is just subject (no agency)
+        if subj:
+            roles["subject"] = subj
+        if obj:
+            roles["object"] = obj
+    
+    # Process prepositional phrases for location/instrument/source/goal
+    for pp in parsed.get("prep_phrases", []):
+        prep = pp["prep"].lower()
+        np = pp["np"]
+        
+        if prep in ("with", "using", "by"):
+            roles["instrument"] = np
+        elif prep in ("in", "at", "on", "near", "above", "below", "beside"):
+            roles["location"] = np
+        elif prep in ("from", "out"):
+            roles["source"] = np
+        elif prep in ("to", "into", "toward"):
+            roles["goal"] = np
+        else:
+            # Generic prepositional modifier
+            if "modifier" not in roles:
+                roles["modifier"] = []
+            roles["modifier"].append({"prep": prep, "np": np})
+    
+    return roles
 
 
 def _pos_tag_simple(word: str) -> str:
@@ -159,6 +357,12 @@ def _pos_tag_simple(word: str) -> str:
              "often", "usually", "sometimes", "here", "there", "now",
              "then", "also", "already", "still", "just", "only", "not"):
         return "ADV"
+    
+    # Check verb lexicon (includes irregular forms)
+    if (w in _AGENTIVE_VERBS or w in _EXPERIENCER_VERBS or 
+        w in _MOTION_VERBS or w in _TRANSFER_VERBS or w in _POSITIONAL_VERBS):
+        return "VERB"
+    
     # Verb heuristics: common endings
     if w.endswith(("ting", "ning", "ding", "ring", "king", "ming",
                    "sing", "zing", "cing", "ping", "bing", "ving",
@@ -220,6 +424,11 @@ def _chunk_phrases(words: list) -> dict:
     elif i < n and tags[i] == "AUX" and result["aux"] is None:
         result["verb"] = words[i]
         i += 1
+    
+    # If we have aux but no main verb, treat aux as the verb (copula)
+    if result["aux"] and not result["verb"]:
+        result["verb"] = result["aux"]
+        result["aux"] = None
 
     # --- Parse object NP ---
     np_result = _parse_np(words, tags, i)
@@ -276,6 +485,11 @@ def _parse_np(words: list, tags: list, start: int):
         head_words.append(words[i])
         i += 1
 
+    # If no head nouns found but we have adjectives, treat last adj as head
+    # (likely a mistagged proper noun or noun ending in -y, -ic, etc.)
+    if not head_words and adjs:
+        head_words = [adjs.pop()]
+    
     if not head_words:
         return None
 
@@ -319,44 +533,65 @@ def _encode_np(np_dict: dict) -> "hv.HyperVector":
 def _build_phrase_structure_hv(words: list):
     """Build a compositional phrase-structure HV from a word list.
 
-    Uses the chunker to identify S → NP VP PP* structure, then encodes
-    each phrase with VSA role-filler binding and bundles the whole tree.
+    Uses the chunker to identify S → NP VP PP* structure, then assigns
+    semantic roles (Agent, Patient, Theme, Instrument, etc.) based on
+    verb semantics. Encodes with VSA role-filler binding.
 
     Returns None if the input is too short to parse.
+    
+    Example encoding for \"John broke the vase with a hammer\":
+        sentence_hv = bundle(
+            agent ⊗ NP(John),
+            patient ⊗ NP(vase),
+            instrument ⊗ NP(hammer),
+            action ⊗ HV(broke)
+        )
     """
     if len(words) < 2:
         return None
 
     parsed = _chunk_phrases(words)
+    
+    # NEW: Assign semantic roles based on verb class
+    semantic_roles = _assign_semantic_roles(parsed)
+    
+    if not semantic_roles:
+        return None
+    
     tree_parts = []
 
-    # Subject NP
-    if parsed["subject_np"]:
-        subj_hv = _encode_np(parsed["subject_np"])
-        tree_parts.append(_role_hv("subj").xor(subj_hv))
-
-    # Verb
-    if parsed["verb"]:
-        verb_hv = hv.HyperVector(_stable_seed(f"__kw__{parsed['verb']}"))
+    # Encode action (verb with auxiliary if present)
+    if semantic_roles.get("action"):
+        verb_hv = hv.HyperVector(_stable_seed(f"__kw__{semantic_roles['action']}"))
         if parsed.get("aux"):
             aux_hv = hv.HyperVector(_stable_seed(f"__kw__{parsed['aux']}"))
             verb_hv = _role_hv("aux").xor(aux_hv).xor(verb_hv)
-        tree_parts.append(_role_hv("pred").xor(verb_hv))
-
-    # Object NP
-    if parsed["object_np"]:
-        obj_hv = _encode_np(parsed["object_np"])
-        tree_parts.append(_role_hv("obj").xor(obj_hv))
-
-    # Prepositional phrases
-    for idx, pp in enumerate(parsed["prep_phrases"]):
-        prep_hv = hv.HyperVector(_stable_seed(f"__kw__{pp['prep']}"))
-        np_hv = _encode_np(pp["np"])
-        pp_hv = _role_hv("pp_prep").xor(prep_hv).xor(np_hv)
-        # Permute by index to distinguish multiple PPs
-        if idx > 0:
-            pp_hv = pp_hv.permute(idx)
-        tree_parts.append(_role_hv("pp").xor(pp_hv))
+        tree_parts.append(_role_hv("action").xor(verb_hv))
+    
+    # Encode semantic role fillers
+    for role_name in ["agent", "patient", "experiencer", "theme", "subject", "object"]:
+        if role_name in semantic_roles:
+            filler_np = semantic_roles[role_name]
+            filler_hv = _encode_np(filler_np)
+            tree_parts.append(_role_hv(role_name).xor(filler_hv))
+    
+    # Encode spatial/instrumental roles from PP
+    for role_name in ["instrument", "location", "source", "goal"]:
+        if role_name in semantic_roles:
+            filler_np = semantic_roles[role_name]
+            filler_hv = _encode_np(filler_np)
+            tree_parts.append(_role_hv(role_name).xor(filler_hv))
+    
+    # Encode generic modifiers (unclassified PPs)
+    if "modifier" in semantic_roles:
+        for idx, mod in enumerate(semantic_roles["modifier"]):
+            prep_hv = hv.HyperVector(_stable_seed(f"__kw__{mod['prep']}"))
+            np_hv = _encode_np(mod["np"])
+            mod_hv = _role_hv("pp_prep").xor(prep_hv).xor(np_hv)
+            # Permute by index to distinguish multiple modifiers
+            if idx > 0:
+                mod_hv = mod_hv.permute(idx)
+            tree_parts.append(_role_hv("modifier").xor(mod_hv))
 
     if not tree_parts:
         return None
@@ -474,11 +709,9 @@ class UniversalInput:
         lo = max(0, k - window)
         hi = min(self.n_bins - 1, k + window)
 
-        result = bins[k]  # centre bin gets full weight
-        for i in range(lo, hi + 1):
-            if i == k:
-                continue
-            result = result.bundle(bins[i])
+        window_bins = [bins[i] for i in range(lo, hi + 1)]
+        # Deterministic bundle ensures identical scalars yield identical HVs
+        result = _deterministic_bundle(window_bins)
 
         self._stats["scalars_grounded"] += 1
         return result

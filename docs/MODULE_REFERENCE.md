@@ -1,6 +1,6 @@
 # Module Reference
 
-> Complete API reference for all 22 modules in the NSCK cognitive architecture.  
+> Complete API reference for core modules in the NSCK cognitive architecture.  
 > Every public class, method, parameter, and return type is documented.
 
 ---
@@ -32,8 +32,9 @@
 | 21 | [`self_model`](#21-self_modelpy) | Metacognition | 255 |
 | 22 | [`persistence`](#22-persistencepy) | SQLite storage | 424 |
 | 23 | [`grounding_verifier`](#23-grounding_verifierpy) | Predicate verification | 414 |
+| 24 | [`module_registry`](#24-module_registrypy) | Module SDK discovery/registration | 269 |
 
-All files are located in `nsck-demo/python/`.
+All files are located in `nsck-demo/python/`. SDK examples are documented in `nsck-demo/nsck_sdk/`.
 
 ---
 
@@ -1034,6 +1035,40 @@ create_maze_verifier() → GroundingVerifier
     #            WALL_AT_UP, WALL_AT_DOWN, WALL_AT_LEFT, WALL_AT_RIGHT
     # Actions:   ACTION_UP, ACTION_DOWN, ACTION_LEFT, ACTION_RIGHT
 ```
+
+---
+
+## 24. `module_registry.py`
+
+> Module discovery, validation, and instantiation for external `WorkspaceModule` plugins.
+
+### Class: `ModuleRegistry`
+
+| Method | Signature | Description |
+|---|---|---|
+| `register` | `(self, module_class: Type[WorkspaceModule], name: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None)` | Register a module class with optional metadata. Validates interface compliance. |
+| `discover_modules` | `(self, directory: str, recursive: bool = True)` | Auto-discover modules in a directory (skips private/test files). |
+| `_load_modules_from_file` | `(self, filepath: Path) -> int` | Load a module file and register all valid `WorkspaceModule` subclasses. |
+| `_is_valid_module` | `(self, module_class: Type) -> bool` | Validate subclassing and required methods. |
+| `get_modules` | `(self) -> List[Type[WorkspaceModule]]` | Return registered module classes. |
+| `get_module` | `(self, name: str) -> Optional[Type[WorkspaceModule]]` | Look up a module by name. |
+| `list_modules` | `(self) -> List[Dict[str, Any]]` | Return modules with metadata for UI/diagnostics. |
+| `instantiate` | `(self, module_class: Type[WorkspaceModule], **kwargs) -> WorkspaceModule` | Create module instance with dependency injection. |
+| `clear` | `(self)` | Clear registry entries and metadata. |
+
+### Singleton Access
+
+```python
+from python.module_registry import get_registry
+
+registry = get_registry()
+```
+
+### Notes
+
+- Uses `importlib` to load modules by file path.
+- Skips files starting with `_` and test files by default.
+- Intended for SDK plugins in `nsck-demo/nsck_sdk/` and external modules.
 
 ---
 

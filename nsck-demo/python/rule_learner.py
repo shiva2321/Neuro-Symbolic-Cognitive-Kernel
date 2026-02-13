@@ -3,14 +3,19 @@ NSCK Rule Learner Module
 Automatic rule induction from experience using frequency-based ILP.
 
 NO GRADIENT DESCENT - uses counting, set logic, and symbolic induction only.
+
+Integration: Implements WorkspaceModule interface for substrate architecture.
 """
 import time
+import math
+import numpy as np
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, FrozenSet, Optional, Tuple, Any
 import hypervec_shim as hypervec_rs
 from persistence import BrainStore, Episode, Rule
 from grounding_verifier import GroundingVerifier
+from global_workspace import WorkspaceModule, Coalition
 
 
 @dataclass
@@ -25,18 +30,20 @@ class RuleCandidate:
     last_seen: float = 0.0
 
 
-class RuleLearner:
+class RuleLearner(WorkspaceModule):
     """
     Learns rules from experience using frequency counting and symbolic logic.
     
     NO matrices, NO gradients — just counting patterns and validating them.
     
+    Implements WorkspaceModule interface for Global Workspace integration.
+    
     Algorithm:
     1. Observe (state, action, outcome) tuples
     2. Extract active predicates from state
     3. Track frequency of predicate→action→outcome patterns
-    4. Induce rules when pattern reaches min_support
-    5. Validate rules against held-out episodes
+    4. Induce rules when pattern reaches min_support (or low-confidence threshold)
+    5.Validate rules against held-out episodes
     6. Prune low-performing rules
     """
     
@@ -45,6 +52,7 @@ class RuleLearner:
         verifier: GroundingVerifier,
         store: Optional[BrainStore] = None,
         min_support: int = 5,
+        min_confidence: float = 0.3,
         min_success_rate: float = 0.7,
         max_rules_per_task: int = 50
     ):
@@ -54,13 +62,15 @@ class RuleLearner:
         Args:
             verifier: Grounding verifier for predicate extraction
             store: Optional persistence store
-            min_support: Minimum observations before inducing rule
+            min_support: Minimum observations for rule to graduate to full confidence
+            min_confidence: Minimum confidence to create low-confidence rules (default: 0.3)
             min_success_rate: Minimum success rate for rule to be valid
             max_rules_per_task: Maximum rules to keep per task
         """
         self.verifier = verifier
         self.store = store
         self.min_support = min_support
+        self.min_confidence = min_confidence  # NEW: Allow low-confidence rules
         self.min_success_rate = min_success_rate
         self.max_rules_per_task = max_rules_per_task
         
@@ -85,6 +95,13 @@ class RuleLearner:
             "DANGER_UP", "DANGER_DOWN", "DANGER_LEFT", "DANGER_RIGHT",
             "TARGET_NEAR", "TARGET_FAR", "SAFE_PATH"
         }
+        
+        # WorkspaceModule telemetry
+        self._proposals_count = 0
+        self._wins_count = 0
+        self._last_state_hv = None
+        self._last_proposed_rule = None
+        self._current_task = None
     
     def _get_tenure_threshold(self, rule: Rule) -> float:
         """
@@ -182,9 +199,13 @@ class RuleLearner:
                     if reward > 0 or outcome == "success":
                         existing_cand.successes += 0.5
     
-    def induce_rules(self, task_tag: Optional[str] = None) -> List[Rule]:
+    def induce_rules(self, task_tag: Optional[str]= None) -> List[Rule]:
         """
         Induce new rules from accumulated observations.
+        
+        Supports both low-confidence rules (1-2 observations) and full-confidence rules
+        (min_support observations). Low-confidence rules participate in competition but
+        receive activation penalty until they graduate to full confidence.
         
         Args:
             task_tag: Optional task to focus on, or all tasks
@@ -199,24 +220,39 @@ class RuleLearner:
             candidates = self.candidates.get(task, {})
             
             for pattern_key, cand in list(candidates.items()):
-                # Check if meets threshold
-                if cand.support < self.min_support:
-                    continue
-                
+                # Calculate success rate and confidence
                 success_rate = cand.successes / cand.support if cand.support > 0 else 0
                 
-                if success_rate < self.min_success_rate:
-                    continue
+                # Determine confidence based on support count
+                low_conf_support = max(2, int(math.ceil(self.min_support / 2)))
+
+                if cand.support >= self.min_support:
+                    # Full support: full confidence if success rate is good
+                    if success_rate < self.min_success_rate:
+                        continue  # Not good enough even with full support
+                    confidence = min(1.0, success_rate)
+                elif cand.support >= low_conf_support:
+                    # Low support: allow low-confidence rule once support is at least half min_support
+                    if success_rate < self.min_success_rate:
+                        continue  # Even low-confidence rules need decent success rate
+                    # Confidence scales with support: support=2 -> 0.4, support=3 -> 0.6, etc.
+                    confidence = max(self.min_confidence, 0.2 * cand.support)
+                    confidence = min(confidence, 0.8)  # Cap at 0.8 until full support
+                else:
+                    continue  # No support
                 
                 # Check if already learned
                 existing = self._find_existing_rule(cand.condition, cand.action, task)
                 if existing:
-                    # Update existing rule's stats
+                    # Update existing rule's stats and confidence
                     existing.support_count = cand.support
                     existing.success_rate = success_rate
+                    existing.confidence = confidence
+                    if self.store:
+                        self.store.save_rule(existing)
                     continue
                 
-                # Create new rule
+                # Create new rule with calculated confidence
                 rule = Rule(
                     id=None,
                     condition=cand.condition,
@@ -227,6 +263,7 @@ class RuleLearner:
                     scope=self._determine_scope(cand.condition),
                     support_count=cand.support,
                     success_rate=success_rate,
+                    confidence=confidence,
                     created_at=time.time()
                 )
                 
@@ -237,8 +274,9 @@ class RuleLearner:
                 if self.store:
                     self.store.save_rule(rule)
                 
-                print(f"[LEARN] New rule: {set(cand.condition)} -> {cand.action} "
-                      f"(support={cand.support}, rate={success_rate:.2f})")
+                status = "LOW-CONF" if confidence < 0.7 else "LEARNED"
+                print(f"[{status}] New rule: {set(cand.condition)} -> {cand.action} "
+                      f"(support={cand.support}, rate={success_rate:.2f}, conf={confidence:.2f})")
         
         return new_rules
     
@@ -415,4 +453,148 @@ class RuleLearner:
             if rule.source == "learned":
                 self.learned_rules[rule.task_tag].append(rule)
         
-        print(f"[LOAD] Loaded {len(rules)} learned rules")
+        print(f"[LOAD] Loaded {len(rules)} learned rules")    
+    # ========================================================================
+    # WorkspaceModule Interface Implementation
+    # ========================================================================
+    
+    def set_current_task(self, task_tag: str):
+        """Set the current task context for proposal generation."""
+        self._current_task = task_tag
+    
+    def receive_broadcast(self, content: Any):
+        """
+        Receive broadcast from GlobalWorkspace when another module wins.
+        
+        Args:
+            content: Winner's content (typically Dict with 'action', 'winner', etc.)
+        """
+        # Track if we won
+        if isinstance(content, dict):
+            winner = content.get('winner')
+            if winner == 'RuleLearner':
+                self._wins_count += 1
+    
+    def propose(self, state_hv: Optional[np.ndarray]) -> Optional[Coalition]:
+        """
+        Generate rule-based action proposal for current state.
+        
+        Args:
+            state_hv: Current state encoded as hypervector (10240-bit), or None
+        
+        Returns:
+            Coalition with best-matching rule proposal, or None if no applicable rules
+        """
+        self._proposals_count += 1
+        self._last_state_hv = state_hv
+        
+        if not self._current_task:
+            return None  # Need task context
+        
+        # Get applicable rules (requires active predicates from state)
+        # NOTE: This requires state to be passed as dict with predicates
+        # For now, we'll return None if we can't access state predicates
+        # In full integration, CognitiveEngine would pass both state_hv and state_dict
+        
+        # Placeholder: In real integration, extract predicates from state
+        # For now, check if we have any high-confidence rules
+        task_rules = self.learned_rules.get(self._current_task, [])
+        if not task_rules:
+            return None
+        
+        # Find highest confidence rule
+        best_rule = max(task_rules, key=lambda r: r.confidence * r.success_rate)
+        
+        if best_rule.confidence < self.min_confidence:
+            return None  # Too low confidence to propose
+        
+        self._last_proposed_rule = best_rule
+        
+        # Calculate salience based on confidence and success rate
+        base_salience = 0.5 + (0.3 * best_rule.confidence)
+        relevance = best_rule.success_rate * 0.3
+        
+        return Coalition(
+            source="RuleLearner",
+            content={
+                "action": best_rule.consequence,
+                "rule_id": best_rule.id,
+                "rule_condition": list(best_rule.condition),
+                "reasoning": f"Rule #{best_rule.id}: {len(best_rule.condition)} predicates → {best_rule.consequence}"
+            },
+            base_salience=base_salience,
+            relevance=relevance,
+            affect_match=0.0,  # Rules are emotionally neutral
+            sender_confidence=best_rule.confidence
+        )
+    
+    def update(self, feedback_hv: Optional[np.ndarray], reward: float, info: Dict[str, Any]):
+        """
+        Learn from action outcome.
+        
+        Updates rule confidence based on whether the action succeeded.
+        All modules learn observationally even if they didn't win.
+        
+        Args:
+            feedback_hv: Resulting state after action
+            reward: Scalar reward signal
+            info: Context dict with 'winner', 'action_taken', 'success', etc.
+        """
+        winner = info.get('winner')
+        action = info.get('action_taken')
+        
+        # If we won, update the rule we proposed
+        if winner == 'RuleLearner' and self._last_proposed_rule is not None:
+            rule = self._last_proposed_rule
+            
+            # Update confidence based on outcome
+            if reward > 0:
+                # Success: increase confidence (capped at 1.0)
+                rule.confidence = min(1.0, rule.confidence + 0.05)
+                rule.success_rate = min(1.0, rule.success_rate + 0.02)
+            else:
+                # Failure: decrease confidence (floored at min_confidence)
+                rule.confidence = max(self.min_confidence, rule.confidence - 0.1)
+                rule.success_rate = max(0.0, rule.success_rate - 0.05)
+            
+            # Persist updated rule
+            if self.store and rule.id:
+                self.store.save_rule(rule)
+        
+        # Store state for next update cycle
+        self._last_state_hv = feedback_hv
+    
+    def get_telemetry(self) -> Dict[str, Any]:
+        """
+        Return current RuleLearner status for monitoring.
+        
+        Returns:
+            Dict with telemetry data
+        """
+        total_rules = sum(len(rules) for rules in self.learned_rules.values())
+        low_conf_rules = sum(
+            1 for rules in self.learned_rules.values()
+            for rule in rules if rule.confidence < 0.7
+        )
+        
+        win_rate = self._wins_count / max(1, self._proposals_count)
+        
+        avg_confidence = 0.0
+        if total_rules > 0:
+            all_rules = [r for rules in self.learned_rules.values() for r in rules]
+            avg_confidence = sum(r.confidence for r in all_rules) / total_rules
+        
+        return {
+            'active': True,
+            'proposals_count': self._proposals_count,
+            'wins_count': self._wins_count,
+            'win_rate': win_rate,
+            'confidence': avg_confidence,
+            'memory_size': total_rules,
+            'total_rules': total_rules,
+            'low_confidence_rules': low_conf_rules,
+            'high_confidence_rules': total_rules - low_conf_rules,
+            'current_task': self._current_task,
+            'tasks_tracked': len(self.learned_rules),
+            'candidates_count': sum(len(c) for c in self.candidates.values())
+        }

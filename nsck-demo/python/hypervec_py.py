@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from typing import Dict, List, Tuple, Optional
 
 DIMENSION = 10240
 
@@ -81,3 +82,234 @@ class HyperVectorPy:
 # Re-export the Python class under the canonical name so that
 # ``from hypervec_py import HyperVector`` works everywhere.
 HyperVector = HyperVectorPy
+
+class CleanupMemory:
+    """
+    Associative memory for VSA cleanup/denoising.
+    
+    As NSCK scales to thousands of concepts, Hamming distance noise accumulates
+    during binding/unbinding operations. CleanupMemory maintains a registry of
+    known "clean" atomic vectors and provides a cleanup operation to snap noisy
+    vectors back to their nearest neighbor.
+    
+    This prevents:
+    - False positives in similarity matching
+    - Drift in repeatedly bound/unbound vectors
+    - Crosstalk between conceptually distinct vectors
+    
+    Usage:
+        cleanup = CleanupMemory()
+        cleanup.register("apple", apple_hv)
+        cleanup.register("orange", orange_hv)
+        
+        # After noisy operations...
+        noisy_hv = some_complex_binding_operation()
+        clean_hv, label = cleanup.cleanup(noisy_hv, threshold=0.4)
+    """
+    
+    def __init__(self, max_size: int = 10000):
+        """
+        Initialize cleanup memory.
+        
+        Args:
+            max_size: Maximum number of atomic vectors to store (prevents unbounded growth)
+        """
+        self.memory: Dict[str, np.ndarray] = {}  # label -> bits
+        self.max_size = max_size
+        self.access_count: Dict[str, int] = {}  # For LRU eviction
+        self._total_cleanups = 0
+        self._successful_cleanups = 0
+    
+    def register(self, label: str, hv: HyperVectorPy, force: bool = False):
+        """
+        Register a clean atomic vector in the cleanup memory.
+        
+        Args:
+            label: Unique identifier for this vector (e.g., "MOVE_UP", "apple", "fear")
+            hv: The hypervector to register as a clean reference
+            force: If True, overwrite existing entry with same label
+        """
+        if label in self.memory and not force:
+            # Already registered, just increment access count
+            self.access_count[label] = self.access_count.get(label, 0) + 1
+            return
+        
+        # Check capacity
+        if len(self.memory) >= self.max_size and label not in self.memory:
+            self._evict_lru()
+        
+        self.memory[label] = hv.bits.copy()
+        self.access_count[label] = 1
+    
+    def _evict_lru(self):
+        """Evict least recently used entry to make space."""
+        if not self.access_count:
+            return
+        
+        lru_label = min(self.access_count, key=self.access_count.get)
+        del self.memory[lru_label]
+        del self.access_count[lru_label]
+    
+    def cleanup(self, noisy_hv: HyperVectorPy, threshold: float = 0.4) -> Tuple[Optional[HyperVectorPy], Optional[str]]:
+        """
+        Clean up a noisy hypervector by snapping to nearest known vector.
+        
+        Args:
+            noisy_hv: The potentially noisy hypervector to clean
+            threshold: Minimum similarity to consider a match (0.0-1.0)
+                      Higher = stricter (only very similar vectors match)
+                      Lower = more permissive (more cleanup, risk of false matches)
+                      Recommended: 0.4-0.6 for typical VSA operations
+        
+        Returns:
+            Tuple of (cleaned_hv, label) if match found above threshold
+            Tuple of (None, None) if no match found (vector is too noisy or unknown)
+        """
+        self._total_cleanups += 1
+        
+        if not self.memory:
+            return None, None
+        
+        best_label = None
+        best_similarity = threshold  # Must exceed this
+        
+        # Find nearest neighbor in cleanup memory
+        for label, clean_bits in self.memory.items():
+            # Calculate similarity directly on bits
+            diff = np.bitwise_xor(noisy_hv.bits, clean_bits)
+            hamming_dist = np.sum(diff)
+            similarity = 1.0 - (hamming_dist / DIMENSION)
+            
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_label = label
+        
+        if best_label is not None:
+            # Return the clean version from memory
+            self.access_count[best_label] = self.access_count.get(best_label, 0) + 1
+            self._successful_cleanups += 1
+            clean_hv = HyperVectorPy.from_bits(self.memory[best_label].copy())
+            return clean_hv, best_label
+        
+        return None, None
+    
+    def cleanup_or_keep(self, noisy_hv: HyperVectorPy, threshold: float = 0.4) -> HyperVectorPy:
+        """
+        Cleanup variant that returns the original vector if no match found.
+        
+        Convenient for pipelines where you always want a vector output.
+        
+        Args:
+            noisy_hv: The vector to clean
+            threshold: Minimum similarity for cleanup
+        
+        Returns:
+            Cleaned vector if match found, otherwise original noisy vector
+        """
+        clean_hv, _ = self.cleanup(noisy_hv, threshold)
+        return clean_hv if clean_hv is not None else noisy_hv
+    
+    def batch_register(self, vectors: Dict[str, HyperVectorPy]):
+        """
+        Register multiple vectors at once.
+        
+        Args:
+            vectors: Dictionary mapping labels to hypervectors
+        """
+        for label, hv in vectors.items():
+            self.register(label, hv)
+    
+    def load_from_store(self, store):
+        """
+        Load all atomic concepts from a BrainStore/Persistence object.
+        
+        Args:
+            store: BrainStore instance with load_concepts() method
+        """
+        concepts = store.load_concepts()
+        for concept in concepts:
+            # Assume concept has 'name' and 'vector' attributes
+            if hasattr(concept, 'vector') and concept.vector is not None:
+                hv = HyperVectorPy.from_bits(concept.vector)
+                self.register(concept.name, hv)
+    
+    def get_stats(self) -> Dict[str, any]:
+        """
+        Return statistics about cleanup memory usage.
+        
+        Returns:
+            Dictionary with telemetry data
+        """
+        success_rate = 0.0
+        if self._total_cleanups > 0:
+            success_rate = self._successful_cleanups / self._total_cleanups
+        
+        return {
+            'size': len(self.memory),
+            'max_size': self.max_size,
+            'capacity_used': len(self.memory) / self.max_size,
+            'total_cleanups': self._total_cleanups,
+            'successful_cleanups': self._successful_cleanups,
+            'success_rate': success_rate,
+            'most_accessed': max(self.access_count.items(), key=lambda x: x[1])[0] if self.access_count else None
+        }
+    
+    def clear(self):
+        """Clear all registered vectors (useful for testing or reset)."""
+        self.memory.clear()
+        self.access_count.clear()
+        self._total_cleanups = 0
+        self._successful_cleanups = 0
+    
+    def __repr__(self):
+        return f"<CleanupMemory size={len(self.memory)}/{self.max_size} cleanups={self._total_cleanups}>"
+
+
+# Utility functions for common VSA operations with cleanup
+def bundle_with_cleanup(vectors: List[HyperVectorPy], cleanup_mem: Optional[CleanupMemory] = None, threshold: float = 0.5) -> HyperVectorPy:
+    """
+    Bundle multiple vectors with optional cleanup at the end.
+    
+    Args:
+        vectors: List of hypervectors to bundle
+        cleanup_mem: Optional cleanup memory for denoising result
+        threshold: Cleanup threshold if cleanup_mem provided
+    
+    Returns:
+        Bundled (and optionally cleaned) hypervector
+    """
+    if not vectors:
+        return HyperVector.zero()
+    
+    result = vectors[0]
+    for v in vectors[1:]:
+        result = result.bundle(v)
+    
+    if cleanup_mem is not None:
+        result = cleanup_mem.cleanup_or_keep(result, threshold)
+    
+    return result
+
+
+def unbind_with_cleanup(bound_hv: HyperVectorPy, key_hv: HyperVectorPy, cleanup_mem: Optional[CleanupMemory] = None, threshold: float = 0.5) -> HyperVectorPy:
+    """
+    Unbind a vector and cleanup the result.
+    
+    Unbinding is the same as binding in VSA (XOR is self-inverse):
+        (A ⊗ B) ⊗ B = A
+    
+    Args:
+        bound_hv: The bound/encrypted hypervector
+        key_hv: The key to unbind with
+        cleanup_mem: Optional cleanup memory for denoising result
+        threshold: Cleanup threshold if cleanup_mem provided
+    
+    Returns:
+        Unbound (and optionally cleaned) hypervector
+    """
+    result = bound_hv.xor(key_hv)
+    
+    if cleanup_mem is not None:
+        result = cleanup_mem.cleanup_or_keep(result, threshold)
+    
+    return result

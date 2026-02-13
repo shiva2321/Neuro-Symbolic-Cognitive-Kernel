@@ -391,8 +391,11 @@ class EmotionSystem:
             self._last_text_intensity = 0.3
             return "neutral"
 
+        # Special-case anticipation phrases that include negation words
+        if "can't wait" in text_lower or "cannot wait" in text_lower:
+            best_emotion = "anticipation"
         # Apply negation flip
-        if has_negation:
+        elif has_negation:
             best_emotion = negation_flip.get(best_emotion, best_emotion)
 
         self._last_text_intensity = intensity

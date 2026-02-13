@@ -3,11 +3,11 @@
 ![Project Status](https://img.shields.io/badge/status-Phase_8_Complete-green)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
-![Tests](https://img.shields.io/badge/tests-338+_passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-500+_defined-brightgreen)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning, neural spiking networks, and cross-domain transfer learning, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
-**Latest Update:** Phase 8 complete — temporal permutation, universal input layer, and mental rehearsal with veto mechanism. All 338+ tests passing. See [Architecture](docs/ARCHITECTURE.md) and [Phase History](docs/PHASE_HISTORY.md).
+**Latest Update:** Phase 8 complete — temporal permutation, universal input layer, and mental rehearsal with veto mechanism. The suite includes 500+ test functions; run locally to validate results. See [Architecture](docs/ARCHITECTURE.md) and [Phase History](docs/PHASE_HISTORY.md).
 
 > **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 
@@ -15,6 +15,7 @@ An experimental research prototype for exploring neuro-symbolic AI. NSCK combine
 
 ## Table of Contents
 
+- [Unified Dashboard](#unified-dashboard)
 - [What This Is](#what-this-is)
 - [What Actually Works](#what-actually-works)
 - [Known Limitations](#known-limitations)
@@ -25,6 +26,56 @@ An experimental research prototype for exploring neuro-symbolic AI. NSCK combine
 - [Efficiency Design](#efficiency-design)
 - [Documentation](#documentation)
 - [License](#license)
+
+---
+
+## Unified Dashboard
+
+**NEW: Interactive Testing & Monitoring Interface** 🔬
+
+The Unified Dashboard provides a comprehensive web-based interface to test, verify, and monitor all NSCK capabilities. Designed with a scientific lab instrument aesthetic and enterprise-grade logging for peer review and analysis.
+
+### Quick Start
+
+```bash
+python launch_dashboard.py
+# Open browser to http://localhost:5000
+```
+
+### Key Features
+
+- **Interactive Testing**: Run Snake, Pong, Maze games with real-time learning visualization
+- **Conversational QA**: Test text knowledge learning and question answering
+- **Cognitive Monitoring**: Live system metrics, memory state, emotion tracking
+- **Structured Logging**: Multi-level categorization (system/cognitive/game/learning/error) with severity levels
+- **Export Capabilities**: Export session logs as JSON, CSV, or human-readable TXT for analysis
+- **Scientific UI**: Clean, data-first design optimized for research review
+
+### Structured Logging for Analysis
+
+All system activities are logged with structured metadata suitable for sharing with reviewers:
+
+- **Categories**: System startup, cognitive operations, game interactions, learning progress, errors
+- **Severity Levels**: DEBUG, INFO, WARNING, ERROR, CRITICAL
+- **Export Formats**: JSON (machine-readable), CSV (spreadsheet), TXT (documentation)
+- **Session Files**: Persistent logs saved to `/logs/nsck_session_YYYYMMDD_HHMMSS.log`
+
+### Documentation
+
+- **[Dashboard Guide](docs/DASHBOARD_GUIDE.md)**: Complete user guide with API reference and analysis examples
+- **[Implementation Summary](UNIFIED_DASHBOARD_SUMMARY.md)**: Technical details and validation checklist
+- **Launch Options**: Run `python launch_dashboard.py --help` for CLI options (port, host, debug mode)
+
+### Example: Export Session Logs
+
+```bash
+# After running experiments in the dashboard:
+curl http://localhost:5000/api/logs/export/json > session_analysis.json
+curl http://localhost:5000/api/logs/export/csv > session_data.csv
+curl http://localhost:5000/api/logs/export/txt > session_report.txt
+```
+
+The dashboard consolidates functionality from previous testing interfaces into a single unified platform designed for comprehensive system verification and peer-review-ready analysis.
 
 ---
 
@@ -47,7 +98,7 @@ All components are designed to work together through a central cognitive engine,
 
 ## What Actually Works
 
-The following capabilities are implemented and verified by the test suite (178 tests collected, 21+ core tests verified passing with mathematical proofs and execution logs):
+The following capabilities are implemented and covered by the test suite. See [Testing](docs/TESTING.md) for evidence and reproduction guidance.
 
 ### Phase 0: Foundation
 | Capability | Description |
@@ -140,7 +191,7 @@ The following capabilities are implemented and verified by the test suite (178 t
 Node_network/
 ├── nsck-demo/
 │   ├── python/           # Core system modules
-│   ├── tests/            # Test suite (267+ tests)
+│   ├── tests/            # Test suite (500+ test functions)
 │   ├── rust_vsa/         # Rust VSA extension (optional)
 │   ├── web/              # Web dashboard assets
 │   └── pyproject.toml    # Project metadata

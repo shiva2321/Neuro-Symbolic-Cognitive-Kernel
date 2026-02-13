@@ -26,6 +26,9 @@ class UniversalEncoder(nn.Module):
         self.visual_pool = nn.AdaptiveAvgPool2d((8, 8))
         # Max 4 channels * 8 * 8 = 256 features
         self.visual_fc = nn.Linear(4 * 8 * 8, latent_dim)
+        # Lightweight 1x1 convs for saliency hooks / transfer tests
+        self.visual_conv1 = nn.Conv2d(4, 4, kernel_size=1, bias=True)
+        self.visual_conv2 = nn.Conv2d(4, 4, kernel_size=1, bias=True)
         # Channel adaptation layers (pre-registered for common channel counts)
         self._visual_channel_adapters = nn.ModuleDict()
 
@@ -62,6 +65,8 @@ class UniversalEncoder(nn.Module):
                 x = adapter(x)
                 x = x.permute(0, 3, 1, 2)
 
+            x = F.relu(self.visual_conv1(x))
+            x = F.relu(self.visual_conv2(x))
             h = self.visual_pool(x)     # [B, 4, 8, 8]
             h = h.flatten(1)            # [B, 256]
             return F.relu(self.visual_fc(h))

@@ -57,7 +57,7 @@ pip install -r requirements.txt
 
 # 4. Verify
 PYTHONPATH=nsck-demo/python python nsck_capability_test.py
-# Expected: 85/85 tests passed
+# Expected: capability suite completes without errors
 ```
 
 ### Environment Variables
@@ -92,7 +92,7 @@ Node_network/
 ├── README.md                          # Project overview & Quick Start
 ├── requirements.txt                   # pip dependencies
 ├── pytest.ini                         # Pytest configuration
-├── nsck_capability_test.py            # Main test suite (85 tests)
+├── nsck_capability_test.py            # Main capability suite (see output for counts)
 │
 ├── docs/                              # Documentation
 │   ├── ARCHITECTURE.md                # System architecture
@@ -119,6 +119,7 @@ Node_network/
     │   ├── theory_of_mind.py          # Agent mental models
     │   ├── world_model.py             # VSA + numeric ensemble
     │   ├── global_workspace.py        # GWT competition
+    │   ├── module_registry.py         # Module SDK discovery/registration
     │   ├── brain_fusion.py            # Cross-task transfer
     │   ├── analogy.py                 # Structure mapping
     │   ├── curiosity.py               # Novelty detection
@@ -128,12 +129,14 @@ Node_network/
     │   ├── nlg.py                     # Natural language generation
     │   ├── language_module.py         # POS tagger + parser
     │   ├── grounding_verifier.py      # Symbol↔sensor audit
-    │   └── persistence.py             # SQLite BrainStore
+    │   ├── persistence.py             # SQLite BrainStore
+    │   └── unified_dashboard.py        # Unified scientific dashboard (Flask)
     │
     ├── rust_vsa/                      # Rust VSA backend (optional)
     │   └── src/lib.rs
     │
-    ├── tests/                         # Additional test files
+    ├── tests/                         # Additional test files (500+ test functions)
+    ├── nsck_sdk/                       # External module SDK + examples
     │   └── ...
     │
     └── web/                           # Dashboard frontend

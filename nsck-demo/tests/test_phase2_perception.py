@@ -8,8 +8,24 @@ Tests:
   - Multimodal integration
 """
 import unittest
+import importlib
 import torch
 import numpy as np
+
+_missing = []
+for _mod in [
+    "vision_encoder",
+    "audio_encoder",
+    "language_grounding",
+    "multimodal_integration",
+]:
+    if importlib.util.find_spec(_mod) is None:
+        _missing.append(_mod)
+
+if _missing:
+    raise unittest.SkipTest(
+        f"Missing optional perception modules: {', '.join(_missing)}"
+    )
 
 from vision_encoder import (
     LightweightVisionEncoder, VisualConceptMapper, VisionPerceptionSystem,

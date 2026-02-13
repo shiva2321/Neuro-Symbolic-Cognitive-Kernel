@@ -23,6 +23,7 @@ pytest-benchmark>=4.0.0
 # Visualization (optional)
 flask>=2.3.0
 flask-socketio>=5.3.0
+flask-cors>=4.0.0  # For unified dashboard CORS support
 
 # Terminal UI (optional)
 rich>=13.0.0

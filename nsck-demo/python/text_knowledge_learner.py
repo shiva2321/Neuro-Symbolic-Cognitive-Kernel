@@ -105,9 +105,16 @@ class TextKnowledgeLearner:
         self.concept_frequencies: Counter = Counter()
         self.relation_patterns: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
         
-        print("[TextLearner] Initialized with VSA-based cognitive architecture")
+        # Semantic folding state for relation discovery
+        self.concept_cooccurrence: Dict[Tuple[str, str], int] = defaultdict(int)
+        self.concept_context_hvs: Dict[str, hypervec_rs.HyperVector] = {}  # Accumulated context
+        self.folding_window_size = 7  # Words before/after for context
+        self.relation_threshold = 0.65  # Similarity threshold for implicit relations
+        self.min_cooccurrence = 3  # Minimum co-occurrences to consider relation
+        
+        print("[TextLearner] Initialized with VSA-based cognitive architecture + semantic folding")
     
-    def learn_from_text_file(self, filepath: str) -> LearningSession:
+    def learn_from_text_file(self, filepath: str, max_sentences: Optional[int] = None) -> LearningSession:
         """
         Learn from a text file by encoding knowledge into the cognitive system.
         
@@ -128,7 +135,12 @@ class TextKnowledgeLearner:
             text = f.read()
         
         # Learn from text
-        stats = self._learn_from_text(text, source=filepath, session_id=session_id)
+        stats = self._learn_from_text(
+            text,
+            source=filepath,
+            session_id=session_id,
+            max_sentences=max_sentences,
+        )
         
         # Create session record
         session = LearningSession(
@@ -153,7 +165,13 @@ class TextKnowledgeLearner:
         
         return session
     
-    def _learn_from_text(self, text: str, source: str, session_id: str) -> Dict[str, int]:
+    def _learn_from_text(
+        self,
+        text: str,
+        source: str,
+        session_id: str,
+        max_sentences: Optional[int] = None,
+    ) -> Dict[str, int]:
         """
         Core learning loop: extract and encode knowledge from text.
         
@@ -169,6 +187,8 @@ class TextKnowledgeLearner:
         
         # Split into sentences
         sentences = self._split_sentences(text)
+        if max_sentences is not None and max_sentences > 0:
+            sentences = sentences[:max_sentences]
         stats['sentences'] = len(sentences)
         
         print(f"[TextLearner] Processing {len(sentences)} sentences...")
@@ -232,6 +252,16 @@ class TextKnowledgeLearner:
         
         # Store relations in semantic memory and causal graph
         for subj, rel, obj in relations:
+            # Ensure concepts exist before adding relation
+            for concept in (subj, obj):
+                if concept not in self.semantic.concept_hvs:
+                    concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
+                    self.semantic.add_concept(
+                        concept_name=concept,
+                        properties={'source': source, 'session': session_id},
+                        hv_override=concept_hv
+                    )
+
             # Add relation to semantic memory
             self.semantic.add_relation(subj, rel, obj)
             
@@ -346,7 +376,7 @@ class TextKnowledgeLearner:
         # Extract words that appear important (longer words, domain terms)
         words = self._tokenize(sentence)
         for word in words:
-            if len(word) > 6 and word not in concepts:
+            if len(word) >= 5 and word not in concepts:
                 concepts.append(word.capitalize())
         
         # Deduplicate
@@ -358,44 +388,259 @@ class TextKnowledgeLearner:
         concepts: List[str]
     ) -> List[Tuple[str, str, str]]:
         """
-        Extract relations between concepts using pattern matching.
+        Extract relations using semantic folding and co-occurrence analysis.
+        
+        Phase 1 (Bootstrapping): Uses lightweight regex patterns for obvious relations
+        Phase 2 (Semantic Folding): Discovers relations via context similarity
+        
         Returns list of (subject, relation, object) tuples.
         """
         relations = []
         
-        # Relation patterns
-        patterns = [
-            (r'(\w+)\s+is\s+a\s+(\w+)', 'is_a'),
-            (r'(\w+)\s+has\s+(\w+)', 'has_property'),
+        # Phase 1: Bootstrap with explicit linguistic patterns (only for unambiguous cases)
+        explicit_patterns = [
+            (r'(\w+)\s+is\s+(?:a|an|the)?\s*(?:type\s+of\s+)?(\w+)', 'is_a'),
+            (r'(\w+)\s+are\s+(?:a|an|the)?\s*(\w+)', 'is_a'),
             (r'(\w+)\s+causes\s+(\w+)', 'causes'),
-            (r'(\w+)\s+results\s+in\s+(\w+)', 'results_in'),
-            (r'(\w+)\s+leads\s+to\s+(\w+)', 'leads_to'),
             (r'(\w+)\s+produces\s+(\w+)', 'produces'),
-            (r'(\w+)\s+contains\s+(\w+)', 'contains'),
-            (r'(\w+)\s+is\s+part\s+of\s+(\w+)', 'part_of'),
-            (r'(\w+)\s+similar\s+to\s+(\w+)', 'similar_to'),
-            (r'(\w+)\s+related\s+to\s+(\w+)', 'related_to'),
         ]
         
         sentence_lower = sentence.lower()
         
-        for pattern, relation_type in patterns:
+        for pattern, relation_type in explicit_patterns:
             matches = re.finditer(pattern, sentence_lower)
             for match in matches:
                 subj = match.group(1).capitalize()
                 obj = match.group(2).capitalize()
                 
-                # Only add if both are in extracted concepts or are substantial
                 if (subj in concepts or len(subj) > 3) and (obj in concepts or len(obj) > 3):
                     relations.append((subj, relation_type, obj))
         
-        # If we have multiple concepts but no relations, create "related_to" relations
-        if len(concepts) >= 2 and len(relations) == 0:
-            # Connect first concept to others
-            for i in range(1, min(len(concepts), 3)):
-                relations.append((concepts[0], 'related_to', concepts[i]))
+        # Phase 2: Semantic folding - discover implicit relations via co-occurrence
+        folded_relations = self._discover_relations_via_folding(sentence, concepts)
+        relations.extend(folded_relations)
         
         return relations
+    
+    def _discover_relations_via_folding(
+        self,
+        sentence: str,
+        concepts: List[str]
+    ) -> List[Tuple[str, str, str]]:
+        """
+        Discover relations through semantic folding and co-occurrence analysis.
+        
+        Algorithm:
+        1. For each concept pair in sentence, increment co-occurrence count
+        2. Update context hypervectors by bundling with neighboring words
+        3. Check similarity between concept context vectors
+        4. If similarity > threshold AND sufficient co-occurrence, infer relation
+        
+        Returns discovered (subject, relation_type, object) tuples.
+        """
+        relations = []
+        
+        if len(concepts) < 2:
+            return relations
+        
+        # Tokenize for context window analysis
+        words = self._tokenize(sentence)
+        word_positions = {word.capitalize(): [] for word in words}
+        for idx, word in enumerate(words):
+            word_cap = word.capitalize()
+            if word_cap in concepts:
+                word_positions[word_cap].append(idx)
+        
+        # Update co-occurrence counts and context vectors
+        for i, concept_a in enumerate(concepts):
+            for concept_b in concepts[i+1:]:
+                # Increment co-occurrence
+                pair = tuple(sorted([concept_a, concept_b]))
+                self.concept_cooccurrence[pair] += 1
+                
+                # Update context hypervectors using surrounding words
+                self._update_context_vectors(concept_a, concept_b, words, word_positions)
+        
+        # Discover relations based on accumulated context similarity
+        for i, concept_a in enumerate(concepts):
+            for concept_b in concepts[i+1:]:
+                pair = tuple(sorted([concept_a, concept_b]))
+                
+                # Check if we have enough evidence
+                if self.concept_cooccurrence[pair] < self.min_cooccurrence:
+                    continue
+                
+                # Check context similarity
+                if concept_a in self.concept_context_hvs and concept_b in self.concept_context_hvs:
+                    try:
+                        similarity = self.concept_context_hvs[concept_a].similarity(
+                            self.concept_context_hvs[concept_b]
+                        )
+                        
+                        if similarity > self.relation_threshold:
+                            # High similarity + co-occurrence = implicit relation
+                            relation_type = self._infer_relation_type(
+                                concept_a, concept_b, similarity, sentence
+                            )
+                            relations.append((concept_a, relation_type, concept_b))
+                    except Exception:
+                        pass  # Skip if similarity calculation fails
+        
+        return relations
+    
+    def _update_context_vectors(
+        self,
+        concept_a: str,
+        concept_b: str,
+        words: List[str],
+        word_positions: Dict[str, List[int]]
+    ):
+        """
+        Update context hypervectors for concepts based on surrounding words.
+        
+        Uses semantic folding: incrementally bundle context words into concept's
+        context vector, weighted by distance.
+        """
+        for concept in [concept_a, concept_b]:
+            if concept not in word_positions:
+                continue
+            
+            # Initialize context vector if first time
+            if concept not in self.concept_context_hvs:
+                self.concept_context_hvs[concept] = hypervec_rs.HyperVector(hash(concept) % (2**32))
+            
+            # Extract context window around each occurrence
+            for pos in word_positions[concept]:
+                window_start = max(0, pos - self.folding_window_size)
+                window_end = min(len(words), pos + self.folding_window_size + 1)
+                
+                # Bundle context words into concept's context vector
+                for ctx_pos in range(window_start, window_end):
+                    if ctx_pos == pos:
+                        continue  # Skip the concept itself
+                    
+                    context_word = words[ctx_pos].capitalize()
+                    distance = abs(ctx_pos - pos)
+                    
+                    # Create context word vector
+                    ctx_hv = hypervec_rs.HyperVector(hash(context_word) % (2**32))
+                    
+                    # Permute based on distance (encodes position)
+                    ctx_hv = ctx_hv.permute(distance)
+                    
+                    # Bundle into concept's context vector
+                    self.concept_context_hvs[concept] = self.concept_context_hvs[concept].bundle(ctx_hv)
+    
+    def _infer_relation_type(
+        self,
+        concept_a: str,
+        concept_b: str,
+        similarity: float,
+        sentence: str
+    ) -> str:
+        """
+        Infer relation type based on context and similarity.
+        
+        Uses heuristics and linguistic cues to categorize the relation.
+        Falls back to generic 'semantically_related' if no specific type found.
+        """
+        sentence_lower = sentence.lower()
+        a_lower = concept_a.lower()
+        b_lower = concept_b.lower()
+        
+        # Check for causal indicators in surrounding context
+        if any(word in sentence_lower for word in ['cause', 'because', 'due to', 'result', 'lead']):
+            return 'causes'
+        
+        # Check for taxonomic indicators
+        if any(word in sentence_lower for word in ['type of', 'kind of', 'is a', 'are']):
+            return 'is_a'
+        
+        # Check for part-whole indicators
+        if any(word in sentence_lower for word in ['part of', 'contain', 'compos', 'include']):
+            return 'part_of'
+        
+        # Check for similarity indicators
+        if any(word in sentence_lower for word in ['similar', 'like', 'resemble', 'analogous']):
+            return 'similar_to'
+        
+        # Very high similarity suggests strong semantic relation
+        if similarity > 0.8:
+            return 'strongly_related'
+        
+        # Default: generic semantic relation
+        return 'semantically_related'
+    
+    def get_folding_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about semantic folding and relation discovery.
+        
+        Returns telemetry about co-occurrence patterns and discovered relations.
+        """
+        total_pairs = len(self.concept_cooccurrence)
+        high_cooccurrence = sum(1 for count in self.concept_cooccurrence.values() if count >= self.min_cooccurrence)
+        
+        # Find most co-occurring concepts
+        top_cooccurrences = sorted(
+            self.concept_cooccurrence.items(),
+            key=lambda x: x[1],
+            reverse=True
+        )[:10]
+        
+        # Analyze relation types discovered
+        relation_types = Counter()
+        for fact in self.learned_facts:
+            relation_types[fact.relation] += 1
+        
+        return {
+            'total_concept_pairs': total_pairs,
+            'high_cooccurrence_pairs': high_cooccurrence,
+            'context_vectors_tracked': len(self.concept_context_hvs),
+            'folding_window_size': self.folding_window_size,
+            'relation_threshold': self.relation_threshold,
+            'min_cooccurrence': self.min_cooccurrence,
+            'top_cooccurring_pairs': [(f"{a}~{b}", count) for (a, b), count in top_cooccurrences],
+            'relation_types_discovered': dict(relation_types),
+            'emergent_relations': sum(1 for r in relation_types if r in ['semantically_related', 'strongly_related']),
+            'explicit_relations': sum(1 for r in relation_types if r in ['is_a', 'causes', 'produces'])
+        }
+    
+    def discover_emergent_relations(self, min_similarity: float = 0.7) -> List[Tuple[str, str, float]]:
+        """
+        Discover emergent relations by analyzing all concept context vectors.
+        
+        This is a batch analysis that finds implicit relations across the entire
+        learned knowledge base, not just within sentences.
+        
+        Args:
+            min_similarity: Minimum context similarity to consider a relation
+            
+        Returns:
+            List of (concept_a, concept_b, similarity) tuples
+        """
+        emergent_relations = []
+        concepts = list(self.concept_context_hvs.keys())
+        
+        for i, concept_a in enumerate(concepts):
+            for concept_b in concepts[i+1:]:
+                try:
+                    similarity = self.concept_context_hvs[concept_a].similarity(
+                        self.concept_context_hvs[concept_b]
+                    )
+                    
+                    if similarity >= min_similarity:
+                        pair = tuple(sorted([concept_a, concept_b]))
+                        cooccurrence = self.concept_cooccurrence.get(pair, 0)
+                        
+                        # Only add if we have some cooccurrence evidence
+                        if cooccurrence >= self.min_cooccurrence:
+                            emergent_relations.append((concept_a, concept_b, similarity))
+                except Exception:
+                    continue
+        
+        # Sort by similarity descending
+        emergent_relations.sort(key=lambda x: x[2], reverse=True)
+        return emergent_relations
     
     def query_learned_knowledge(
         self,

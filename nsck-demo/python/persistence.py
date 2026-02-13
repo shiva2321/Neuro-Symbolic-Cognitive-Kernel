@@ -1,11 +1,15 @@
 """
 NSCK Persistence Module
 SQLite-based storage for concepts, rules, and episodes.
+Includes brain versioning and export/import functionality.
 """
 import sqlite3
 import pickle
 import time
 import threading
+import json
+import shutil
+import zipfile
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -23,6 +27,7 @@ class Rule:
     scope: str = "task_local"  # "task_local", "candidate_global", "global"
     support_count: int = 0
     success_rate: float = 0.0
+    confidence: float = 1.0  # Confidence level [0.0, 1.0] - graduates as support increases
     created_at: float = 0.0
 
 
@@ -50,6 +55,19 @@ class Episode:
     outcome: str
     reward: float
     impact_score: float = 0.0
+
+
+@dataclass
+class BrainVersion:
+    """Stored brain checkpoint version."""
+    id: Optional[int]
+    version_tag: str  # e.g., "v1.0", "checkpoint_2026-02-12", "trained_maze"
+    description: str  # User-provided description
+    timestamp: float
+    rules_count: int
+    concepts_count: int
+    episodes_count: int
+    metadata_json: str  # JSON string with additional info
 
 
 class BrainStore:
@@ -94,9 +112,17 @@ class BrainStore:
                 scope TEXT DEFAULT 'task_local',
                 support_count INTEGER DEFAULT 0,
                 success_rate REAL DEFAULT 0.0,
+                confidence REAL DEFAULT 1.0,
                 created_at REAL
             )
         """)
+        
+        # Migration: Add confidence column if it doesn't exist (for existing databases)
+        try:
+            conn.execute('ALTER TABLE rules ADD COLUMN confidence REAL DEFAULT 1.0')
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # Column already exists
         
         # Concepts table
         conn.execute("""
@@ -126,12 +152,27 @@ class BrainStore:
             )
         """)
         
+        # Brain versions table (for checkpoints)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS brain_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version_tag TEXT UNIQUE,
+                description TEXT,
+                timestamp REAL,
+                rules_count INTEGER,
+                concepts_count INTEGER,
+                episodes_count INTEGER,
+                metadata_json TEXT
+            )
+        """)
+        
         # Indices for common queries
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rules_task ON rules(task_tag)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_concepts_task ON concepts(task_tag)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_task ON episodes(task_tag)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_time ON episodes(timestamp)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_episodes_impact ON episodes(impact_score)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_versions_time ON brain_versions(timestamp)")
         
         conn.commit()
         conn.close()
@@ -146,8 +187,8 @@ class BrainStore:
         if rule.id is None:
             cursor.execute("""
                 INSERT INTO rules (condition, consequence, priority, source, 
-                                   task_tag, scope, support_count, success_rate, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   task_tag, scope, support_count, success_rate, confidence, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 pickle.dumps(rule.condition),
                 rule.consequence,
@@ -157,13 +198,14 @@ class BrainStore:
                 rule.scope,
                 rule.support_count,
                 rule.success_rate,
+                rule.confidence,
                 time.time()
             ))
             rule_id = cursor.lastrowid
         else:
             cursor.execute("""
                 UPDATE rules SET condition=?, consequence=?, priority=?, source=?,
-                                 task_tag=?, scope=?, support_count=?, success_rate=?
+                                 task_tag=?, scope=?, support_count=?, success_rate=?, confidence=?
                 WHERE id=?
             """, (
                 pickle.dumps(rule.condition),
@@ -174,6 +216,7 @@ class BrainStore:
                 rule.scope,
                 rule.support_count,
                 rule.success_rate,
+                rule.confidence,
                 rule.id
             ))
             rule_id = rule.id
@@ -204,18 +247,35 @@ class BrainStore:
         
         rules = []
         for row in rows:
-            rules.append(Rule(
-                id=row[0],
-                condition=pickle.loads(row[1]),
-                consequence=row[2],
-                priority=row[3],
-                source=row[4],
-                task_tag=row[5],
-                scope=row[6],
-                support_count=row[7],
-                success_rate=row[8],
-                created_at=row[9]
-            ))
+            # Handle both old schema (9 columns) and new schema (10 columns with confidence)
+            if len(row) >= 11:  # New schema with confidence
+                rules.append(Rule(
+                    id=row[0],
+                    condition=pickle.loads(row[1]),
+                    consequence=row[2],
+                    priority=row[3],
+                    source=row[4],
+                    task_tag=row[5],
+                    scope=row[6],
+                    support_count=row[7],
+                    success_rate=row[8],
+                    confidence=row[9],
+                    created_at=row[10]
+                ))
+            else:  # Old schema without confidence
+                rules.append(Rule(
+                    id=row[0],
+                    condition=pickle.loads(row[1]),
+                    consequence=row[2],
+                    priority=row[3],
+                    source=row[4],
+                    task_tag=row[5],
+                    scope=row[6],
+                    support_count=row[7],
+                    success_rate=row[8],
+                    confidence=1.0,  # Default for old rules
+                    created_at=row[9] if len(row) > 9 else time.time()
+                ))
         
         return rules
     
@@ -417,6 +477,331 @@ class BrainStore:
             )
             conn.commit()
         
+        conn.close()
+    
+    # === BRAIN VERSIONING & EXPORT ===
+    
+    def create_checkpoint(self, version_tag: str, description: str = "") -> int:
+        """
+        Create a versioned checkpoint of the current brain state.
+        
+        Records snapshot metadata in brain_versions table. The actual
+        database state is the snapshot (we don't duplicate data).
+        
+        Args:
+            version_tag: Unique identifier (e.g., "v1.0", "trained_maze")
+            description: Human-readable description
+            
+        Returns:
+            Version ID
+            
+        Example:
+            brain.create_checkpoint(
+                version_tag="maze_expert_v1",
+                description="After 10K maze episodes with 87% success rate"
+            )
+        """
+        self.flush_episodes()  # Ensure all data is written
+        
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Count current state
+        cursor.execute("SELECT COUNT(*) FROM rules")
+        rules_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM concepts")
+        concepts_count = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM episodes")
+        episodes_count = cursor.fetchone()[0]
+        
+        # Collect metadata
+        metadata = {
+            "nsck_version": "2.0",
+            "db_path": self.db_path,
+            "checkpoint_time": time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        cursor.execute("""
+            INSERT INTO brain_versions 
+            (version_tag, description, timestamp, rules_count, concepts_count, 
+             episodes_count, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            version_tag,
+            description,
+            time.time(),
+            rules_count,
+            concepts_count,
+            episodes_count,
+            json.dumps(metadata)
+        ))
+        
+        version_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        
+        return version_id
+    
+    def list_versions(self) -> List[BrainVersion]:
+        """List all brain checkpoints, ordered by timestamp (newest first)."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM brain_versions 
+            ORDER BY timestamp DESC
+        """)
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [BrainVersion(
+            id=row[0],
+            version_tag=row[1],
+            description=row[2],
+            timestamp=row[3],
+            rules_count=row[4],
+            concepts_count=row[5],
+            episodes_count=row[6],
+            metadata_json=row[7]
+        ) for row in rows]
+    
+    def get_version(self, version_tag: str) -> Optional[BrainVersion]:
+        """Retrieve a specific version by tag."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM brain_versions WHERE version_tag=?
+        """, (version_tag,))
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row is None:
+            return None
+        
+        return BrainVersion(
+            id=row[0], version_tag=row[1], description=row[2],
+            timestamp=row[3], rules_count=row[4], concepts_count=row[5],
+            episodes_count=row[6], metadata_json=row[7]
+        )
+    
+    def export_brain(self, filepath: str, version_tag: Optional[str] = None):
+        """
+        Export brain to a portable .nsck file (ZIP archive).
+        
+        The .nsck file contains:
+        - brain.db: Complete SQLite database snapshot
+        - metadata.json: Version info, statistics, NSCK version
+        
+        Args:
+            filepath: Destination path (should end in .nsck)
+            version_tag: Optional version to include in metadata
+            
+        Example:
+            brain.export_brain("trained_maze_v1.nsck", version_tag="maze_expert_v1")
+        """
+        self.flush_episodes()  # Ensure all data is written
+        
+        # Ensure .nsck extension
+        filepath = Path(filepath)
+        if filepath.suffix != '.nsck':
+            filepath = filepath.with_suffix('.nsck')
+        
+        # Get version info if specified
+        version_info = {}
+        if version_tag:
+            version = self.get_version(version_tag)
+            if version:
+                version_info = {
+                    "version_tag": version.version_tag,
+                    "description": version.description,
+                    "timestamp": version.timestamp,
+                    "rules_count": version.rules_count,
+                    "concepts_count": version.concepts_count,
+                    "episodes_count": version.episodes_count,
+                    "metadata": json.loads(version.metadata_json)
+                }
+        
+        # If no version specified, get current state
+        if not version_info:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM rules")
+            rules_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM concepts")
+            concepts_count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) FROM episodes")
+            episodes_count = cursor.fetchone()[0]
+            conn.close()
+            
+            version_info = {
+                "version_tag": "exported_" + time.strftime("%Y%m%d_%H%M%S"),
+                "description": "Exported brain snapshot",
+                "timestamp": time.time(),
+                "rules_count": rules_count,
+                "concepts_count": concepts_count,
+                "episodes_count": episodes_count,
+                "metadata": {
+                    "nsck_version": "2.0",
+                    "export_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "source_db": str(self.db_path)
+                }
+            }
+        
+        # Create temporary directory for packaging
+        temp_dir = filepath.parent / f"_temp_{filepath.stem}"
+        temp_dir.mkdir(exist_ok=True)
+        
+        try:
+            # Copy database to temp directory
+            db_copy = temp_dir / "brain.db"
+            shutil.copy2(self.db_path, db_copy)
+            
+            # Create metadata.json
+            metadata_path = temp_dir / "metadata.json"
+            with open(metadata_path, 'w') as f:
+                json.dump(version_info, f, indent=2)
+            
+            # Create .nsck ZIP archive
+            with zipfile.ZipFile(filepath, 'w', zipfile.ZIP_DEFLATED) as zf:
+                zf.write(db_copy, arcname="brain.db")
+                zf.write(metadata_path, arcname="metadata.json")
+            
+        finally:
+            # Cleanup temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    
+    def import_brain(self, filepath: str, merge: bool = False):
+        """
+        Import brain from a .nsck file.
+        
+        Args:
+            filepath: Path to .nsck file
+            merge: If True, merge with existing brain. If False, replace current brain.
+            
+        Warning:
+            If merge=False, this will DELETE all existing brain data!
+            
+        Example:
+            # Replace current brain
+            brain.import_brain("expert_maze.nsck", merge=False)
+            
+            # Merge knowledge from another brain
+            brain.import_brain("language_expert.nsck", merge=True)
+        """
+        filepath = Path(filepath)
+        if not filepath.exists():
+            raise FileNotFoundError(f"Brain file not found: {filepath}")
+        
+        # Extract .nsck archive
+        temp_dir = filepath.parent / f"_temp_import_{int(time.time())}"
+        temp_dir.mkdir(exist_ok=True)
+        
+        try:
+            # Extract archive
+            with zipfile.ZipFile(filepath, 'r') as zf:
+                zf.extractall(temp_dir)
+            
+            # Read metadata
+            metadata_path = temp_dir / "metadata.json"
+            with open(metadata_path, 'r') as f:
+                metadata = json.load(f)
+            
+            imported_db = temp_dir / "brain.db"
+            
+            if not merge:
+                # Replace mode: Backup current brain and replace
+                backup_path = Path(self.db_path).with_suffix('.db.backup')
+                shutil.copy2(self.db_path, backup_path)
+                shutil.copy2(imported_db, self.db_path)
+                
+                # Reinitialize to ensure schema compatibility
+                self._init_db()
+            else:
+                # Merge mode: Copy data from imported brain
+                self._merge_brain_data(imported_db, metadata)
+        
+        finally:
+            # Cleanup temp directory
+            shutil.rmtree(temp_dir, ignore_errors=True)
+    
+    def _merge_brain_data(self, source_db_path: Path, metadata: Dict[str, Any]):
+        """
+        Merge brain data from another database.
+        
+        Handles ID conflicts by remapping imported data.
+        """
+        self.flush_episodes()
+        
+        # Attach source database
+        conn = sqlite3.connect(self.db_path)
+        conn.execute(f"ATTACH DATABASE '{source_db_path}' AS source")
+        
+        # Merge rules (skip duplicates based on condition+consequence)
+        conn.execute("""
+            INSERT OR IGNORE INTO rules 
+            (condition, consequence, priority, source, task_tag, scope, 
+             support_count, success_rate, confidence, created_at)
+            SELECT condition, consequence, priority, source, task_tag, scope,
+                   support_count, success_rate, confidence, created_at
+            FROM source.rules
+        """)
+        
+        # Merge concepts (skip duplicates based on name)
+        conn.execute("""
+            INSERT OR IGNORE INTO concepts
+            (name, hv_bytes, concept_type, task_tag, created_at, access_count)
+            SELECT name, hv_bytes, concept_type, task_tag, created_at, access_count
+            FROM source.concepts
+        """)
+        
+        # Merge episodes (always insert, no uniqueness constraint)
+        conn.execute("""
+            INSERT INTO episodes
+            (timestamp, task_tag, situation_hv_bytes, state_sketch, action, 
+             outcome, reward, impact_score)
+            SELECT timestamp, task_tag, situation_hv_bytes, state_sketch, action,
+                   outcome, reward, impact_score
+            FROM source.episodes
+        """)
+        
+        # Record merge in versions table
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM rules")
+        rules_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM concepts")
+        concepts_count = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM episodes")
+        episodes_count = cursor.fetchone()[0]
+        
+        merge_tag = f"merged_{metadata.get('version_tag', 'unknown')}_{int(time.time())}"
+        merge_metadata = {
+            "merge_source": metadata.get('version_tag', 'unknown'),
+            "merge_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "source_rules": metadata.get('rules_count', 0),
+            "source_concepts": metadata.get('concepts_count', 0),
+            "source_episodes": metadata.get('episodes_count', 0)
+        }
+        
+        conn.execute("""
+            INSERT INTO brain_versions
+            (version_tag, description, timestamp, rules_count, concepts_count,
+             episodes_count, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            merge_tag,
+            f"Merged from: {metadata.get('description', 'imported brain')}",
+            time.time(),
+            rules_count,
+            concepts_count,
+            episodes_count,
+            json.dumps(merge_metadata)
+        ))
+        
+        conn.commit()
+        conn.execute("DETACH DATABASE source")
         conn.close()
     
     def close(self):

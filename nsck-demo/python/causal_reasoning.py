@@ -140,7 +140,8 @@ class CausalDiscovery:
         if nc == 0 or nc == t: return 0.0, 0
         
         # Bayesian (Laplace-smoothed) P(E|C) and P(E|~C)
-        alpha = 1.0  # Laplace smoothing parameter
+        # Use smoothing only when data is sparse to avoid dampening strong signals.
+        alpha = 1.0 if t < 10 else 0.0
         p_e_c = (nce + alpha) / (nc + 2 * alpha)
         not_c = t - nc
         p_e_nc = (ne - nce + alpha) / (not_c + 2 * alpha)

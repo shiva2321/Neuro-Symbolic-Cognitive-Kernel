@@ -1,19 +1,41 @@
 """
-NSCK Comprehensive Testing Dashboard
-=====================================
-A complete web-based dashboard for testing all capabilities of the NSCK
-cognitive system.  Provides:
+NSCK Unified Scientific Dashboard
+====================================
 
-* **Chat** – Submit text samples and chat interactively with the system.
-* **Game Simulations** – Attach Snake / Pong / Maze simulations
-  (sequentially or simultaneously) and watch the system play & learn.
-* **System Monitor** – Observe emotions, reasoning traces, self-model
-  metrics, metacognition, curiosity, and consciousness in real time.
-* **Log Export** – Export every log, metric, reasoning trace, and system
-  state to a downloadable text file for examination.
+A comprehensive, production-grade web dashboard for testing, monitoring,
+and analyzing all capabilities of the NSCK cognitive system.
 
-The dashboard is a self-contained Flask application with an embedded
-single-page HTML/JS front-end.
+DESIGN PHILOSOPHY: Scientific/Lab Instrument Aesthetic
+- Clean, data-first interface with neutral tones
+- Monospace fonts for data, sans-serif for labels  
+- Real-time metrics and live telemetry
+- Structured logging for analysis and peer review
+
+FEATURES:
+* **Interactive Chat** – Natural language dialogue with learned knowledge integration
+* **Text Learning** – Upload documents, extract knowledge, query learned facts
+* **Game Simulations** – Snake, Pong, Maze with teacher/student modes
+* **Real-Time Monitoring** – Emotions, self-model, global workspace, memory stats
+* **Brain Visualization** – Visual attention and motor intent heatmaps
+* **Structured Logging** – Enterprise-grade logging for analysis and review
+* **Data Export** – JSON, CSV, and human-readable formats for documentation
+
+LOGGING SYSTEM:
+All events are logged with:
+- Timestamp (ISO 8601 UTC)
+- Category (system, cognitive, game, learning, error)
+- Severity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+- Structured metadata for analysis
+- Persistent file logging + in-memory buffer
+- Multiple export formats
+
+SESSION TRACKING:
+Every dashboard session creates a unique log file in /workspaces/Node_network/logs/
+for detailed analysis, debugging, and sharing with reviewers.
+
+AUTHOR: NSCK Development Team
+VERSION: 2.0 (Unified Dashboard)
+DATE: February 2026
 """
 
 import os
@@ -27,11 +49,13 @@ from collections import deque
 from typing import Dict, Any, List, Optional
 
 from flask import Flask, request, jsonify, send_file, render_template_string
+from flask_cors import CORS
 
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
 import numpy as np
+from pathlib import Path
 
 from knowledge_integration import KnowledgeIntegration, CognitiveResponse
 from multimodal_processor import MultimodalInput
@@ -53,9 +77,24 @@ class LearnedPolicy:
     """
     def __init__(self):
         self.policy = defaultdict(lambda: defaultdict(int))
+        self.training_count = 0
 
     def train(self, state_hash: str, action: str):
+        is_new_state = state_hash not in self.policy
         self.policy[state_hash][action] += 1
+        self.training_count += 1
+        
+        # Log learning milestones for cognitive transparency
+        if is_new_state:
+            get_logger().log("cognitive", f"Policy learned NEW state: {state_hash[:50]}... → {action}", "INFO", {
+                "state": state_hash[:100],
+                "action": action,
+                "states_learned": len(self.policy),
+                "training_count": self.training_count
+            })
+        elif self.training_count % 50 == 0:  # Log every 50 training steps
+            stats = self.get_stats()
+            get_logger().log("cognitive", f"Policy training milestone: {self.training_count} experiences", "INFO", stats)
 
     def predict(self, state_hash: str) -> Optional[str]:
         if state_hash not in self.policy:
@@ -66,8 +105,25 @@ class LearnedPolicy:
 
     def reset(self):
         """Clear all learned state-action mappings."""
+        old_states = len(self.policy)
         self.policy.clear()
+        self.training_count = 0
         print("[POLICY] Dashboard learned policy reset.")
+        get_logger().log("cognitive", f"Policy reset: cleared {old_states} learned states", "INFO", {
+            "cleared_states": old_states
+        })
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get policy learning statistics."""
+        total_experiences = sum(
+            sum(actions.values()) for actions in self.policy.values()
+        )
+        return {
+            "states_seen": len(self.policy),
+            "total_experiences": total_experiences,
+            "training_count": self.training_count,
+            "avg_experiences_per_state": total_experiences / len(self.policy) if self.policy else 0
+        }
 
 # Global Policy Instance
 _dashboard_policy = LearnedPolicy()
@@ -83,20 +139,192 @@ try:
 except Exception:
     CuriosityModule = None
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
+# ==============================================================================
+# STRUCTURED LOGGING SYSTEM
+# ==============================================================================
+
+class StructuredLogger:
+    """
+    Enterprise-grade structured logging for analysis and review.
+    
+    Features:
+    - Multi-level categorization (system, cognitive, game, learning, error)
+    - Severity levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+    - Structured metadata for each event
+    - Circular buffer with configurable retention
+    - Export to JSON, CSV, and human-readable formats
+    - File persistence for session archival
+    """
+    
+    def __init__(self, max_entries: int = 10000):
+        self.entries = deque(maxlen=max_entries)
+        self.session_start = datetime.now(timezone.utc)
+        self.stats = defaultdict(int)
+        self.lock = threading.Lock()
+        
+        # Category-specific buffers for efficient filtering
+        self.by_category = defaultdict(lambda: deque(maxlen=1000))
+        self.by_severity = defaultdict(lambda: deque(maxlen=1000))
+        
+        # Python logging integration
+        self.logger = logging.getLogger("nsck_unified")
+        self.logger.setLevel(logging.DEBUG)
+        
+        # File handler for persistent logs
+        log_dir = Path("/workspaces/Node_network/logs")
+        log_dir.mkdir(exist_ok=True)
+        
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        log_file = log_dir / f"nsck_session_{timestamp}.log"
+        
+        fh = logging.FileHandler(log_file)
+        fh.setLevel(logging.DEBUG)
+        fh.setFormatter(logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(category)s | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        ))
+        self.logger.addHandler(fh)
+        
+        # Console handler
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.INFO)
+        ch.setFormatter(logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(message)s',
+            datefmt='%H:%M:%S'
+        ))
+        self.logger.addHandler(ch)
+        
+        self.log_file_path = str(log_file)
+        self._log_internal(f"Session started. Logging to: {log_file}")
+    
+    def _log_internal(self, message: str):
+        """Internal logging without recursion."""
+        self.logger.info(message, extra={"category": "system"})
+    
+    def log(self, category: str, message: str, severity: str = "INFO", 
+            metadata: Optional[Dict[str, Any]] = None):
+        """
+        Log a structured event.
+        
+        Args:
+            category: Event category (system, cognitive, game, learning, error)
+            message: Human-readable message
+            severity: DEBUG, INFO, WARNING, ERROR, CRITICAL
+            metadata: Additional structured data
+        """
+        entry = {
+            "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
+            "category": category,
+            "severity": severity,
+            "message": message,
+            "metadata": metadata or {},
+            "session_age_seconds": (datetime.now(timezone.utc) - self.session_start).total_seconds()
+        }
+        
+        with self.lock:
+            self.entries.append(entry)
+            self.by_category[category].append(entry)
+            self.by_severity[severity].append(entry)
+            self.stats[f"{category}_{severity}"] += 1
+            self.stats["total_events"] += 1
+        
+        # Log to Python logger
+        log_level = getattr(logging, severity, logging.INFO)
+        self.logger.log(log_level, message, extra={"category": category})
+    
+    def get_recent(self, limit: int = 100, category: Optional[str] = None,
+                   severity: Optional[str] = None) -> List[Dict]:
+        """Get recent log entries with optional filtering."""
+        with self.lock:
+            if category:
+                entries = list(self.by_category[category])
+            elif severity:
+                entries = list(self.by_severity[severity])
+            else:
+                entries = list(self.entries)
+        
+        return entries[-limit:]
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get logging statistics."""
+        with self.lock:
+            return {
+                "session_duration_seconds": (datetime.now(timezone.utc) - self.session_start).total_seconds(),
+                "total_events": self.stats["total_events"],
+                "by_category": {k: v for k, v in self.stats.items() if k != "total_events"},
+                "buffer_utilization": len(self.entries) / self.entries.maxlen,
+                "log_file": self.log_file_path
+            }
+    
+    def export_json(self) -> str:
+        """Export all logs as JSON."""
+        with self.lock:
+            data = {
+                "session_start": self.session_start.isoformat() + "Z",
+                "session_duration_seconds": (datetime.now(timezone.utc) - self.session_start).total_seconds(),
+                "stats": dict(self.stats),
+                "entries": list(self.entries)
+            }
+        return json.dumps(data, indent=2)
+    
+    def export_csv(self) -> str:
+        """Export logs as CSV."""
+        lines = ["timestamp,category,severity,message,metadata"]
+        with self.lock:
+            for entry in self.entries:
+                metadata_str = json.dumps(entry['metadata']).replace('"', '""')
+                message_str = entry['message'].replace('"', '""')
+                lines.append(f"{entry['timestamp']},{entry['category']},{entry['severity']},"
+                           f"\"{message_str}\",\"{metadata_str}\"")
+        return "\n".join(lines)
+    
+    def export_human_readable(self) -> str:
+        """Export logs in human-readable format for documentation."""
+        lines = [
+            "=" * 80,
+            "NSCK SYSTEM SESSION LOG",
+            "=" * 80,
+            f"Session Start: {self.session_start.strftime('%Y-%m-%d %H:%M:%S UTC')}",
+            f"Duration: {(datetime.now(timezone.utc) - self.session_start).total_seconds():.1f} seconds",
+            f"Total Events: {self.stats['total_events']}",
+            f"Log File: {self.log_file_path}",
+            "=" * 80,
+            ""
+        ]
+        
+        with self.lock:
+            for entry in self.entries:
+                # Handle timestamps with +00:00Z format (strip trailing Z if present)
+                ts_str = entry['timestamp'].rstrip('Z')
+                ts = datetime.fromisoformat(ts_str)
+                lines.append(f"[{ts.strftime('%H:%M:%S')}] {entry['severity']:8s} | "
+                           f"{entry['category']:12s} | {entry['message']}")
+                if entry['metadata']:
+                    for key, value in entry['metadata'].items():
+                        lines.append(f"    └─ {key}: {value}")
+                lines.append("")
+        
+        return "\n".join(lines)
+
+# ==============================================================================
+# LOGGING CONFIGURATION
+# ==============================================================================
+
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger("nsck_testing_dashboard")
+logger = logging.getLogger("nsck_unified_dashboard")
 
-# ---------------------------------------------------------------------------
-# Flask app
-# ---------------------------------------------------------------------------
+# ==============================================================================
+# FLASK APP INITIALIZATION  
+# ==============================================================================
+
 app = Flask(__name__)
+CORS(app)  # Enable CORS for development and remote access
 
-# ---------------------------------------------------------------------------
-# Global state
-# ---------------------------------------------------------------------------
+# ==============================================================================
+# GLOBAL STATE
+# ==============================================================================
+
+_structured_logger: Optional[StructuredLogger] = None
 _system: Optional[KnowledgeIntegration] = None
 _emotion: Optional[EmotionSystem] = None
 _self_model: Optional[SelfModel] = None
@@ -104,7 +332,6 @@ _language: Optional[LanguageModule] = None
 _dialogue: Optional[DialogueManager] = None
 _text_learner: Optional[TextKnowledgeLearner] = None
 
-_activity_log: deque = deque(maxlen=2000)
 _chat_history: List[Dict[str, str]] = []
 
 # Game simulation state
@@ -112,78 +339,79 @@ _game_sessions: Dict[str, Dict[str, Any]] = {}
 _game_lock = threading.Lock()
 _game_threads: Dict[str, threading.Event] = {}
 
-# Game simulation constants
-EXPLORATION_PROBABILITY = 0.1   # Chance of random action in snake
-MAZE_EXPLORATION_PROBABILITY = 0.2  # Chance of random action in maze
-MIN_POLL_INTERVAL_MS = 200  # Minimum polling interval for game state updates
+# Dashboard learned policy
+_dashboard_policy = LearnedPolicy()
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+def get_logger() -> StructuredLogger:
+    """Get or create structured logger."""
+    global _structured_logger
+    if _structured_logger is None:
+        _structured_logger = StructuredLogger()
+    return _structured_logger
 
-def _log(category: str, message: str, data: Dict[str, Any] = None):
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
-        "category": category,
-        "message": message,
-    }
-    if data:
-        entry["data"] = data
-    _activity_log.append(entry)
-    logger.info("[%s] %s", category, message)
+
+def _log(category: str, message: str, severity: str = "INFO", **metadata):
+    """Convenience logging function."""
+    get_logger().log(category, message, severity, metadata)
 
 
 def _get_system() -> KnowledgeIntegration:
     global _system
     if _system is None:
+        _log("system", "Initializing KnowledgeIntegration...")
         _system = KnowledgeIntegration()
-        _log("system", "KnowledgeIntegration initialised")
+        _log("system", "KnowledgeIntegration initialized successfully")
     return _system
 
 
 def _get_emotion() -> EmotionSystem:
     global _emotion
     if _emotion is None:
+        _log("system", "Initializing EmotionSystem...")
         _emotion = EmotionSystem()
-        _log("system", "EmotionSystem initialised")
+        _log("system", "EmotionSystem initialized successfully")
     return _emotion
 
 
 def _get_self_model() -> SelfModel:
     global _self_model
     if _self_model is None:
+        _log("system", "Initializing SelfModel...")
         _self_model = SelfModel()
-        _log("system", "SelfModel initialised")
+        _log("system", "SelfModel initialized successfully")
     return _self_model
 
 
 def _get_language() -> LanguageModule:
     global _language
     if _language is None:
+        _log("system", "Initializing LanguageModule...")
         _language = LanguageModule()
-        _log("system", f"LanguageModule initialised (mock={_language.mock_mode})")
+        _log("system", f"LanguageModule initialized (mock_mode={_language.mock_mode})")
     return _language
 
 
 def _get_dialogue() -> DialogueManager:
     global _dialogue
     if _dialogue is None:
+        _log("system", "Initializing DialogueManager...")
         _dialogue = DialogueManager(None, _get_language())
-        _log("system", "DialogueManager initialised")
+        _log("system", "DialogueManager initialized successfully")
     return _dialogue
 
 
 def _get_text_learner() -> TextKnowledgeLearner:
     global _text_learner
     if _text_learner is None:
+        _log("system", "Initializing TextKnowledgeLearner...")
         system = _get_system()
         _text_learner = TextKnowledgeLearner(
             semantic_memory=system.semantic,
             episodic_memory=system.episodic,
             context_engine=system.context
         )
-        _log("system", "TextKnowledgeLearner initialised")
+        _log("system", "TextKnowledgeLearner initialized successfully")
     return _text_learner
 
 
@@ -326,18 +554,15 @@ def solve_snake_bfs(head, food, body, width=10, height=10):
                     
     return None # No path found
 
-def _choose_action_for_game(game_state: Dict) -> str:
-    """Use Teacher (Solver) or Student (Learned Policy) to pick action."""
+def _choose_action_for_game(game_state: Dict) -> tuple[str, str]:
+    """Use Teacher (Solver) or Student (Learned Policy) to pick action.
+    Returns: (action, reasoning) tuple for cognitive transparency."""
     game_type = game_state["type"]
     teacher_active = game_state.get("teacher_active", True) # Default to ON
     
     # helper to hash state
     def get_state_hash(gs):
         if gs["type"] == "snake":
-            # Relative food position + immediate danger? 
-            # Or just head/food relative?
-            # For robust learning we need local view. 
-            # Simple absolute state:
             return f"snake:{gs['head']}:{gs['food']}"
         elif gs["type"] == "maze":
             return f"maze:{gs['player']}"
@@ -347,36 +572,56 @@ def _choose_action_for_game(game_state: Dict) -> str:
 
     state_hash = get_state_hash(game_state)
     suggested_action = None
+    reasoning = ""
 
     if teacher_active:
         # --- TEACHER MODE: SOLVE & TRAIN ---
         if game_type == "snake":
-            suggested_action = solve_snake_bfs(game_state["head"], game_state["food"], game_state["body"])
-            if not suggested_action: # Fallback if no path
-                 # naive
-                 hx, hy = game_state["head"]
-                 fx, fy = game_state["food"]
-                 dx, dy = fx - hx, fy - hy
-                 if abs(dx) > abs(dy): suggested_action = "RIGHT" if dx > 0 else "LEFT"
-                 else: suggested_action = "DOWN" if dy > 0 else "UP"
+            head = game_state["head"]
+            food = game_state["food"]
+            body = game_state["body"]
+            suggested_action = solve_snake_bfs(head, food, body)
+            if suggested_action:
+                reasoning = f"BFS pathfinding: {head}→{food}, chose {suggested_action}"
+            else: 
+                # Fallback if no path
+                hx, hy = head
+                fx, fy = food
+                dx, dy = fx - hx, fy - hy
+                if abs(dx) > abs(dy): 
+                    suggested_action = "RIGHT" if dx > 0 else "LEFT"
+                else: 
+                    suggested_action = "DOWN" if dy > 0 else "UP"
+                reasoning = f"No BFS path, heuristic toward food at {food}"
 
         elif game_type == "maze":
-            # Convert set of walls to list for checking
+            player = game_state["player"]
+            exit_pos = game_state["exit"]
             walls = game_state["walls"]
-            suggested_action = solve_maze_astar(game_state["player"], game_state["exit"], walls)
-            if not suggested_action: suggested_action = "UP" # Stuck?
+            suggested_action = solve_maze_astar(player, exit_pos, walls)
+            if suggested_action:
+                reasoning = f"A* pathfinding: {player}→{exit_pos}, chose {suggested_action}"
+            else:
+                suggested_action = "UP"
+                reasoning = "No A* path found, random fallback"
 
         elif game_type == "pong":
-            # Perfect tracking
             ball_y = game_state["ball_y"]
             p1_y = game_state["p1_y"]
-            if ball_y < p1_y: suggested_action = "UP"
-            elif ball_y > p1_y + 6: suggested_action = "DOWN"
-            else: suggested_action = "UP" if np.random.random() < 0.5 else "DOWN"
+            if ball_y < p1_y: 
+                suggested_action = "UP"
+                reasoning = f"Paddle y={p1_y}, ball y={ball_y}, chase UP"
+            elif ball_y > p1_y + 6: 
+                suggested_action = "DOWN"
+                reasoning = f"Paddle y={p1_y}, ball y={ball_y}, chase DOWN"
+            else: 
+                suggested_action = "UP" if np.random.random() < 0.5 else "DOWN"
+                reasoning = "Ball aligned, random adjustment"
 
         # Train Policy
         if suggested_action:
             _dashboard_policy.train(state_hash, suggested_action)
+            reasoning += f" | Training policy: state={state_hash[:30]}..."
             
         action = suggested_action if suggested_action else "UP"
 
@@ -386,11 +631,13 @@ def _choose_action_for_game(game_state: Dict) -> str:
         
         if learned_action:
             action = learned_action
+            reasoning = f"Policy recall: {action} for state {state_hash[:30]}..."
         else:
             # Cold Start / Unknown State -> Random Exploration
             action = np.random.choice(["UP", "DOWN", "LEFT", "RIGHT"])
+            reasoning = f"Unknown state {state_hash[:30]}..., exploring with {action}"
             
-    return action
+    return action, reasoning
 
 
 def _step_game(session_id: str) -> Dict[str, Any]:
@@ -400,12 +647,15 @@ def _step_game(session_id: str) -> Dict[str, Any]:
         if gs is None or gs["done"]:
             return {"error": "session not found or game over"}
 
+        teacher_active = gs.get("teacher_active", True)
+        
         # manual intervention?
         if gs.get("manual_action"):
             action = gs.pop("manual_action")
+            reasoning = "Manual override by user"
             # Clear it so we don't repeat
         else:
-            action = _choose_action_for_game(gs)
+            action, reasoning = _choose_action_for_game(gs)
             
         game_type = gs["type"]
         reward = 0.0
@@ -492,7 +742,7 @@ def _step_game(session_id: str) -> Dict[str, Any]:
         sm = _get_self_model()
         success = reward > 0
         sm.update(game_type, 0.5, success, action, reward)
-
+        
         step_info = {
             "session_id": session_id,
             "game_type": game_type,
@@ -501,18 +751,65 @@ def _step_game(session_id: str) -> Dict[str, Any]:
             "reward": reward,
             "score": gs["score"],
             "done": done,
-            "reasoning": f"Chose {action} based on target-seeking heuristic + exploration",
+            "reasoning": reasoning
         }
         gs["history"].append(step_info)
-        _log("game", f"[{game_type}] step={gs['steps']} action={action} reward={reward} score={gs['score']}", step_info)
+        
+        # Log with detailed reasoning for cognitive transparency
+        _log("game", f"{game_type.upper()} step {gs['steps']}: {action} → reward={reward:.2f}, score={gs['score']}",
+             "DEBUG",
+            session_id=session_id,
+            game_type=game_type,
+            step=gs['steps'],
+            action=action,
+            reward=reward,
+            score=gs['score'],
+            done=done,
+            teacher_active=teacher_active,
+            reasoning=reasoning
+        )
+        
+        # Log significant cognitive events for visibility
+        if reward > 0:
+            _log("cognitive", f"{game_type.upper()} SUCCESS: {reasoning}", "INFO",
+                 session_id=session_id,
+                 action=action,
+                 reward=reward,
+                 new_score=gs['score'])
+        elif reward < 0:
+            if game_type == "snake":
+                collision_reason = "wall" if gs["head"] in gs["body"] else "self-collision"
+                _log("cognitive", f"{game_type.upper()} COLLISION: {collision_reason} after {action} | {reasoning}", "WARNING",
+                     session_id=session_id,
+                     action=action,
+                     head=gs["head"],
+                     failure_type=collision_reason)
+            else:
+                _log("cognitive", f"{game_type.upper()} FAILURE: {reasoning}", "WARNING",
+                     session_id=session_id,
+                     action=action,
+                     reward=reward)
+        
+        if done:
+            _log("game", f"{game_type.upper()} session {session_id} completed",
+                 "INFO",
+                 session_id=session_id,
+                 final_score=gs['score'],
+                 total_steps=gs['steps'],
+                 reason="collision" if reward < 0 else "success" if reward > 0 else "timeout"
+            )
+        
         return step_info
 
 
 def _run_game_loop(session_id: str, stop_event: threading.Event, speed: float = 0.3):
     """Background thread that auto-steps a game."""
+    _log("game", f"Auto-play started for session {session_id}", "INFO", session_id=session_id, speed=speed)
+    
     while not stop_event.is_set():
         result = _step_game(session_id)
         if result.get("error"):
+            _log("game", f"Game loop error: {result['error']}", "WARNING", session_id=session_id)
             break
             
         if result.get("done"):
@@ -521,6 +818,13 @@ def _run_game_loop(session_id: str, stop_event: threading.Event, speed: float = 
             with _game_lock:
                 gs = _game_sessions.get(session_id)
                 if gs:
+                    _log("game", f"Auto-restarting {gs['type']} session {session_id}",
+                         "INFO",
+                         session_id=session_id,
+                         previous_score=gs['score'],
+                         previous_steps=gs['steps']
+                    )
+                    
                     # Reset generic state
                     gs["score"] = 0
                     gs["steps"] = 0
@@ -533,7 +837,6 @@ def _run_game_loop(session_id: str, stop_event: threading.Event, speed: float = 
                         gs["body"] = [(5, 5)]
                         gs["food"] = (np.random.randint(0, 10), np.random.randint(0, 10))
                     elif gs["type"] == "pong":
-                        gs["score"] = 0 # distinct from generic score?
                         gs["ball_x"] = 15
                         gs["ball_y"] = 15
                     elif gs["type"] == "maze":
@@ -542,9 +845,10 @@ def _run_game_loop(session_id: str, stop_event: threading.Event, speed: float = 
                         gs["player"] = new_maze["player"]
                         gs["exit"] = new_maze["exit"]
                         gs["walls"] = new_maze["walls"]
-            _log("game", f"Auto-restarting session {session_id}")
             continue
         stop_event.wait(speed)
+    
+    _log("game", f"Auto-play stopped for session {session_id}", "INFO", session_id=session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -568,7 +872,7 @@ def api_chat():
     if not user_msg:
         return jsonify({"error": "empty message"}), 400
 
-    _log("chat", f"User: {user_msg}")
+    _log("chat", f"User query: {user_msg[:100]}...", "INFO", message_length=len(user_msg))
 
     system = _get_system()
     emo = _get_emotion()
@@ -650,11 +954,10 @@ def api_chat():
     }
     _chat_history.append(assistant_entry)
 
-    _log("chat", f"Assistant: {combined[:120]}...", {
-        "confidence": confidence,
-        "trace_len": len(reasoning_trace),
-        "learned_facts": len(learned_response.get('related_facts', [])),
-    })
+    _log("chat", f"Assistant: {combined[:120]}...", "INFO",
+         confidence=confidence,
+         trace_len=len(reasoning_trace),
+         learned_facts=len(learned_response.get('related_facts', [])))
 
     return jsonify({
         "answer": combined,
@@ -718,11 +1021,19 @@ def api_learn_upload():
                         'sentences': session.sentences_processed
                     })
                     
-                    _log("learning", f"Learned from file: {file.filename}", {
-                        "session_id": session.session_id,
-                        "concepts": session.concepts_learned,
-                        "facts": session.facts_stored
-                    })
+                    # Get sample of learned concepts
+                    concept_names = list(text_learner.semantic.concept_hvs.keys())
+                    recent_concepts = concept_names[-min(10, len(concept_names)):] if concept_names else []
+                    
+                    _log("learning", f"Learned from file: {file.filename}", "INFO",
+                         session_id=session.session_id,
+                         concepts=session.concepts_learned,
+                         facts=session.facts_stored,
+                         sample_concepts=recent_concepts)
+                    
+                    if recent_concepts:
+                        _log("cognitive", f"Extracted concepts: {', '.join(recent_concepts)}", "INFO",
+                             session_id=session.session_id)
                 finally:
                     # Clean up temp file
                     os.unlink(tmp_path)
@@ -759,11 +1070,21 @@ def api_learn_upload():
             # Learn from text
             session = text_learner.learn_from_text_file(tmp_path, max_sentences=max_sentences)
             
-            _log("learning", f"Learned from text input: {filename}", {
-                "session_id": session.session_id,
-                "concepts": session.concepts_learned,
-                "facts": session.facts_stored
-            })
+            # Get sample of learned concepts for visibility
+            concept_names = list(text_learner.semantic.concept_hvs.keys())
+            recent_concepts = concept_names[-min(10, len(concept_names)):] if concept_names else []
+            
+            _log("learning", f"Learned from text input: {filename}", "INFO",
+                 session_id=session.session_id,
+                 concepts=session.concepts_learned,
+                 facts=session.facts_stored,
+                 sample_concepts=recent_concepts)
+            
+            # Log detailed concept learning
+            if recent_concepts:
+                _log("cognitive", f"Extracted {len(recent_concepts)} new concepts: {', '.join(recent_concepts)}", "INFO",
+                     session_id=session.session_id,
+                     total_concepts_in_memory=len(concept_names))
             
             return jsonify({
                 "success": True,
@@ -809,10 +1130,24 @@ def api_learn_query():
     text_learner = _get_text_learner()
     result = text_learner.query_learned_knowledge(query, top_k=10)
     
-    _log("query", f"Queried learned knowledge: {query}", {
-        "confidence": result['confidence'],
-        "facts_found": len(result['related_facts'])
-    })
+    # Extract concept matches for cognitive transparency
+    matched_concepts = result.get('concepts', [])
+    concept_names = [c['concept'] for c in matched_concepts[:5]] if matched_concepts else []
+    concept_sims = [f"{c['concept']}({c['similarity']:.3f})" for c in matched_concepts[:5]] if matched_concepts else []
+    
+    _log("query", f"Queried learned knowledge: {query}", "INFO",
+         confidence=result['confidence'],
+         facts_found=len(result['related_facts']),
+         top_concepts=concept_names)
+    
+    if concept_sims:
+        _log("cognitive", f"Query '{query}' matched concepts: {', '.join(concept_sims)}", "INFO",
+             query=query,
+             num_matches=len(matched_concepts))
+    else:
+        _log("cognitive", f"Query '{query}' found NO matching concepts in memory", "WARNING",
+             query=query,
+             total_concepts=len(text_learner.semantic.concept_hvs))
     
     return jsonify({
         "success": True,
@@ -1088,7 +1423,92 @@ def api_stats():
 
 @app.route("/api/logs")
 def api_logs():
-    return jsonify({"logs": list(_activity_log)})
+    """Get recent log entries with optional filtering."""
+    category = request.args.get("category", None)
+    severity = request.args.get("severity", None)
+    limit = int(request.args.get("limit", "100"))
+    
+    logger = get_logger()
+    entries = logger.get_recent(limit=limit, category=category, severity=severity)
+    
+    return jsonify({
+        "logs": entries,
+        "count": len(entries),
+        "stats": logger.get_stats()
+    })
+
+
+@app.route("/api/logs/export/json")
+def api_logs_export_json():
+    """Export all logs as JSON."""
+    logger = get_logger()
+    json_data = logger.export_json()
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"nsck_logs_{timestamp}.json"
+    
+    buf = io.BytesIO(json_data.encode('utf-8'))
+    buf.seek(0)
+    
+    _log("system", f"Exported logs as JSON: {filename}", "INFO")
+    
+    return send_file(
+        buf,
+        mimetype='application/json',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route("/api/logs/export/csv")
+def api_logs_export_csv():
+    """Export all logs as CSV."""
+    logger = get_logger()
+    csv_data = logger.export_csv()
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"nsck_logs_{timestamp}.csv"
+    
+    buf = io.BytesIO(csv_data.encode('utf-8'))
+    buf.seek(0)
+    
+    _log("system", f"Exported logs as CSV: {filename}", "INFO")
+    
+    return send_file(
+        buf,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route("/api/logs/export/txt")
+def api_logs_export_txt():
+    """Export logs in human-readable format."""
+    logger = get_logger()
+    txt_data = logger.export_human_readable()
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"nsck_session_{timestamp}.txt"
+    
+    buf = io.BytesIO(txt_data.encode('utf-8'))
+    buf.seek(0)
+    
+    _log("system", f"Exported logs as TXT: {filename}", "INFO")
+    
+    return send_file(
+        buf,
+        mimetype='text/plain',
+        as_attachment=True,
+        download_name=filename
+    )
+
+
+@app.route("/api/logs/stats")
+def api_logs_stats():
+    """Get logging statistics."""
+    logger = get_logger()
+    return jsonify(logger.get_stats())
 
 
 @app.route("/api/knowledge")
@@ -1456,27 +1876,119 @@ DASHBOARD_HTML = r"""<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NSCK Testing Dashboard</title>
+<title>NSCK Unified Scientific Dashboard</title>
 <style>
+/* ==================================================================
+   NSCK SCIENTIFIC LAB INSTRUMENT THEME
+   Design Philosophy: Clean, data-first, neutral tones
+   ================================================================== */
+
 :root {
-  --bg: #0d1117; --panel: #161b22; --border: #30363d;
-  --text: #c9d1d9; --accent: #58a6ff; --green: #3fb950;
-  --red: #f85149; --yellow: #d29922; --purple: #bc8cff;
-  --orange: #f0883e; --cyan: #39d2c0;
+  /* Base Colors - Lab Instrument Palette */
+  --bg: #1a1a1a;              /* Charcoal black */
+  --bg-primary: #1a1a1a;      /* Charcoal black */
+  --bg-secondary: #252525;    /* Dark gray */
+  --panel: #2a2a2a;           /* Panel gray */
+  --bg-panel: #2a2a2a;        /* Panel gray */
+  --bg-input: #1e1e1e;        /* Input background */
+  
+  /* Border and Dividers */
+  --border: #3a3a3a;          /* Subtle borders */
+  --border-color: #3a3a3a;    /* Subtle borders */
+  --border-accent: #4a7ba7;   /* Steel blue accent */
+  
+  /* Text Colors */
+  --text: #e0e0e0;            /* Main text */
+  --text-primary: #e0e0e0;    /* Main text */
+  --text-secondary: #a0a0a0;  /* Secondary text */
+  --text-tertiary: #707070;   /* Tertiary/disabled */
+  
+  /* Data Colors - Lab instrument readouts */
+  --accent: #4a9eff;          /* Primary data (like oscilloscope trace) */
+  --data-blue: #4a9eff;       /* Primary data (like oscilloscope trace) */
+  --green: #3fb950;           /* Success/active */
+  --data-green: #3fb950;      /* Success/active */
+  --yellow: #f39c12;          /* Warning/attention */
+  --data-yellow: #f39c12;     /* Warning/attention */
+  --red: #e74c3c;             /* Error/critical */
+  --data-red: #e74c3c;        /* Error/critical */
+  --data-cyan: #39d2c0;       /* Information */
+  --data-purple: #bc8cff;     /* Special/advanced */
+  --data-orange: #f0883e;     /* Alert */
+  
+  /* Font Stacks */
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+body { 
+  font-family: var(--font-sans);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.6;
+}
 
 /* ---- HEADER ---- */
 .header {
-  background: linear-gradient(135deg, #161b22, #1c2333);
-  border-bottom: 2px solid var(--accent);
-  padding: 12px 24px; display: flex; align-items: center; gap: 20px;
-  position: sticky; top: 0; z-index: 100;
+  background: linear-gradient(135deg, var(--bg-panel), var(--bg-secondary));
+  border-bottom: 2px solid var(--border-accent);
+  padding: 14px 28px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
 }
-.header h1 { font-size: 20px; color: var(--accent); white-space: nowrap; }
-.header .status { font-size: 13px; color: var(--green); }
-.header-actions { display: flex; gap: 8px; margin-left: auto; }
+
+.header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--data-blue);
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.header h1::before {
+  content: '⬢';
+  color: var(--data-green);
+  font-size: 18px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.header .status {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--data-green);
+  padding: 4px 12px;
+  background: rgba(63, 185, 80, 0.15);
+  border-radius: 12px;
+  border: 1px solid var(--data-green);
+}
+
+.header .session-info {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
 
 /* ---- TABS ---- */
 .tab-bar {
@@ -1644,13 +2156,15 @@ button:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
 <!-- ========== HEADER ========== -->
 <div class="header">
-  <h1>🧠 NSCK Testing Dashboard</h1>
-  <div class="status" id="sys-status">● System Ready</div>
+  <h1>NSCK Unified Scientific Dashboard</h1>
+  <div class="status" id="sys-status">● System Online</div>
+  <div class="session-info" id="session-info">Session: Loading...</div>
   <div class="header-actions">
-    <button class="secondary" onclick="refreshAll()">↻ Refresh All</button>
-    <button class="warn" onclick="exportText()">📄 Export TXT</button>
-    <button class="secondary" onclick="exportJSON()">📥 Export JSON</button>
-    <button class="danger" onclick="fullReset()">⚠ RESET BRAIN</button>
+    <button class="secondary" onclick="refreshAll()">↻ Refresh</button>
+    <button class="secondary" onclick="window.location.href='/api/logs/export/txt'">📄 Export TXT</button>
+    <button class="secondary" onclick="window.location.href='/api/logs/export/json'">📥 Export JSON</button>
+    <button class="secondary" onclick="window.location.href='/api/logs/export/csv'">📊 Export CSV</button>
+    <button class="danger" onclick="fullReset()">⚠ RESET</button>
   </div>
 </div>
 
@@ -2359,7 +2873,7 @@ async function startGame() {
   const speed = parseInt(document.getElementById('game-speed').value);
 
   try {
-    const resp = await fetch('/api/game/start', {
+    const resp = await fetch(API + '/api/game/start', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({
@@ -2671,6 +3185,24 @@ async function refreshMonitor() {
   try {
     const resp = await fetch(API + '/api/monitor');
     const data = await resp.json();
+    
+    // Update session status in header
+    try {
+      const logsResp = await fetch(API + '/api/logs?limit=1');
+      const logsData = await logsResp.json();
+      const duration = logsData.stats?.session_duration_seconds || 0;
+      const hours = Math.floor(duration / 3600);
+      const minutes = Math.floor((duration % 3600) / 60);
+      const seconds = Math.floor(duration % 60);
+      const timeStr = hours > 0 
+        ? `${hours}h ${minutes}m ${seconds}s`
+        : minutes > 0 
+          ? `${minutes}m ${seconds}s`
+          : `${seconds}s`;
+      document.getElementById('session-info').textContent = `Session: ${timeStr}`;
+    } catch(e) {
+      console.error('Session update error:', e);
+    }
 
     // Emotion
     const emo = data.emotion || {};
@@ -2962,6 +3494,26 @@ setInterval(() => {
     refreshMonitor();
   }
 }, 3000);
+
+// ---- Auto refresh session status every 2s (always) ----
+setInterval(async () => {
+  try {
+    const logsResp = await fetch(API + '/api/logs?limit=1');
+    const logsData = await logsResp.json();
+    const duration = logsData.stats?.session_duration_seconds || 0;
+    const hours = Math.floor(duration / 3600);
+    const minutes = Math.floor((duration % 3600) / 60);
+    const seconds = Math.floor(duration % 60);
+    const timeStr = hours > 0 
+      ? `${hours}h ${minutes}m ${seconds}s`
+      : minutes > 0 
+        ? `${minutes}m ${seconds}s`
+        : `${seconds}s`;
+    document.getElementById('session-info').textContent = `Session: ${timeStr}`;
+  } catch(e) {
+    console.error('Session update error:', e);
+  }
+}, 2000);
 
 // Initial load
 refreshAll();
