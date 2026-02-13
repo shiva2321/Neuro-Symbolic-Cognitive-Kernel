@@ -43,7 +43,11 @@ from semantic_memory import SemanticMemory
 from episodic_memory import EpisodicMemory, LiveEpisode
 from context_engine import ContextEngine
 from causal_reasoning import CausalGraph, CausalReasoner
-
+# [AGI] Phase 4: Language Integration
+try:
+    from language_module import LanguageModule
+except ImportError:
+    LanguageModule = None
 
 @dataclass
 class LearnedFact:
@@ -80,17 +84,18 @@ class TextKnowledgeLearner:
     - Episodic memory for experiences
     - Rule-based relation extraction
     """
-    
     def __init__(
         self,
         semantic_memory: Optional[SemanticMemory] = None,
         episodic_memory: Optional[EpisodicMemory] = None,
-        context_engine: Optional[ContextEngine] = None
+        context_engine: Optional[ContextEngine] = None,
+        language_module: Optional[Any] = None # [AGI] Phase 4: NLU Parser
     ):
         # Core cognitive modules
         self.semantic = semantic_memory or SemanticMemory()
         self.episodic = episodic_memory or EpisodicMemory()
         self.context = context_engine or ContextEngine(self.semantic)
+        self.language_module = language_module
         
         # Language cortex for text encoding (NOT an LLM!)
         self.lingua = get_lingua_cortex()
@@ -105,12 +110,13 @@ class TextKnowledgeLearner:
         self.concept_frequencies: Counter = Counter()
         self.relation_patterns: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
         
+        
         # Semantic folding state for relation discovery
         self.concept_cooccurrence: Dict[Tuple[str, str], int] = defaultdict(int)
         self.concept_context_hvs: Dict[str, hypervec_rs.HyperVector] = {}  # Accumulated context
         self.folding_window_size = 7  # Words before/after for context
-        self.relation_threshold = 0.65  # Similarity threshold for implicit relations
-        self.min_cooccurrence = 3  # Minimum co-occurrences to consider relation
+        self.relation_threshold = 0.55  # [Refactor] Lowered threshold for greater recall
+        self.min_cooccurrence = 1  # [Refactor] Lowered to 1 for One-Shot Learning
         
         print("[TextLearner] Initialized with VSA-based cognitive architecture + semantic folding")
     
@@ -164,6 +170,14 @@ class TextKnowledgeLearner:
         print(f"[TextLearner]   Facts: {session.facts_stored}")
         
         return session
+
+    def learn_from_text(self, text: str, source: str = "string_input") -> LearningSession:
+        """Convenience method to learn from a string."""
+        import hashlib
+        import time
+        
+        session_id = hashlib.md5(f"{time.time()}_{source}".encode()).hexdigest()[:8]
+        return self._learn_from_text(text, source, session_id)
     
     def _learn_from_text(
         self,
@@ -221,6 +235,7 @@ class TextKnowledgeLearner:
         1. Encode sentence using LinguaCortex (semantic folding)
         2. Extract concepts (nouns, entities)
         3. Extract relations (patterns, verb phrases)
+          - [NEW] If LanguageModule available, use deep parsing for frames/conditions
         4. Store in semantic and episodic memory
         """
         stats = {'concepts': 0, 'relations': 0, 'facts': 0}
@@ -248,9 +263,63 @@ class TextKnowledgeLearner:
                 self.concept_frequencies[concept] += 1
         
         # Extract relations between concepts
-        relations = self._extract_relations(sentence, concepts)
+        relations = []
+        
+        # [A] Deep Parsing via LanguageModule (Prioritize if available)
+        if self.language_module:
+            try:
+                understanding = self.language_module.understand(sentence)
+                structured = understanding.get("structured_output", {})
+                frames = structured.get("frames", {})
+                
+                # 1. Standard Agent-Action-Patient
+                if frames.get("agent") and frames.get("action") and frames.get("patient"):
+                     relations.append((frames["agent"].capitalize(), frames["action"], frames["patient"].capitalize()))
+                
+                # 2. Conditional Logic (The nuance we missed before)
+                if frames.get("condition"):
+                    # Rule: Condition -> (Agent Action Patient)
+                    # Rule: Condition -> (Agent Action Patient)
+                    condition_text = frames["condition"]
+                    
+                    # Handle None values safely
+                    ag = frames.get('agent') or 'something'
+                    ac = frames.get('action') or 'does'
+                    pa = frames.get('patient') or ''
+                    
+                    consequence_text = f"{ag} {ac} {pa}".strip()
+                    
+                    # Store as a causal relation: Condition -> "implies" -> Consequence
+                    # We treat the condition itself as a high-level concept for now
+                    relations.append((condition_text.capitalize(), "implies", consequence_text.capitalize()))
+                    
+                    # Also try to extract core concepts from condition
+                    cond_concepts = self._extract_concepts(condition_text)
+                    for cc in cond_concepts:
+                         # Link condition concept to the consequence
+                         relations.append((cc, "leads_to", consequence_text.capitalize()))
+
+                # 3. Causal Logic (Because...)
+                if frames.get("cause"):
+                    cause_text = frames["cause"]
+                    effect_text = f"{frames.get('agent')} {frames.get('action')} {frames.get('patient')}"
+                    relations.append((cause_text.capitalize(), "causes", effect_text.capitalize()))
+
+            except Exception as e:
+                print(f"[TextLearner] Deep parsing failed: {e}")
+        
+        # [B] Fallback / Augment with Heuristics
+        heuristic_relations = self._extract_relations(sentence, concepts)
+        relations.extend(heuristic_relations)
+        
+        # Deduplicate matches
+        relations = list(set(relations))
         
         # Store relations in semantic memory and causal graph
+        current_time = time.time()
+        sim_time = getattr(self, 'current_simulated_time', 0.0)
+        ts = sim_time if sim_time > 0 else current_time
+        
         for subj, rel, obj in relations:
             # Ensure concepts exist before adding relation
             for concept in (subj, obj):
@@ -262,32 +331,32 @@ class TextKnowledgeLearner:
                         hv_override=concept_hv
                     )
 
-            # Add relation to semantic memory
-            self.semantic.add_relation(subj, rel, obj)
+            # Add relation to semantic memory (with timestamp)
+            self.semantic.add_relation(subj, rel, obj, timestamp=ts)
             
-            # If causal relation, add to causal graph
-            if rel in ['causes', 'results_in', 'leads_to', 'produces']:
+            # Causal Graph
+            if rel in ["causes", "leads_to", "implies", "results_in"]:
                 try:
                     self.causal_graph.add_causes(
                         cause=subj,
                         effect=obj,
                         mechanism=f"learned from text: {sentence[:50]}",
-                        confidence=0.7
+                        confidence=0.7,
+                        timestamp=ts
                     )
-                except Exception as e:
-                    # If causal graph fails, just skip it
+                except Exception:
                     pass
             
-            # Store fact
-            fact = LearnedFact(
+            # Learn Fact (Symbolic)
+            new_fact = LearnedFact(
                 subject=subj,
                 relation=rel,
                 object=obj,
-                source_text=sentence,
-                confidence=0.7,  # Base confidence for text extraction
-                timestamp=time.time()
+                confidence=0.9,
+                source_text=f"{source[:30]}...",
+                timestamp=ts
             )
-            self.learned_facts.append(fact)
+            self._store_fact(new_fact)
             
             # Track relation patterns
             self.relation_patterns[rel].append((subj, obj))
@@ -297,7 +366,7 @@ class TextKnowledgeLearner:
         
         # Store experience in episodic memory
         episode = LiveEpisode(
-            timestamp=time.time(),
+            timestamp=ts, # Use the simulated timestamp for episode too
             task_tag='text_learning',
             situation_hv=sentence_hv,
             state={
@@ -375,12 +444,26 @@ class TextKnowledgeLearner:
         
         # Extract words that appear important (longer words, domain terms)
         words = self._tokenize(sentence)
+        stop_words = {'the', 'and', 'for', 'that', 'this', 'with', 'from', 'but', 'not', 'are', 'was', 'were', 'has', 'had', 'can', 'may', 'its', 'his', 'her', 'our', 'their', 'she', 'him', 'you', 'who', 'how', 'why', 'any', 'all', 'one', 'two', 'six', 'ten', 'yes', 'no', 'nor', 'yet', 'per', 'via', 'etc', 'viz', 'i.e', 'e.g', 'non', 'sub', 'pre', 'pro', 'con', 'sur', 'co'}
+        
         for word in words:
-            if len(word) >= 5 and word not in concepts:
+            w_lower = word.lower()
+            if w_lower in stop_words:
+                continue
+                
+            # Allow length >= 3 (e.g. Sky, Red, Sun, Eye, Ear)
+            if len(word) >= 3 and word.capitalize() not in concepts:
                 concepts.append(word.capitalize())
         
-        # Deduplicate
-        return list(set(concepts))
+        # Deduplicate while preserving order
+        seen = set()
+        ordered_concepts = []
+        for c in concepts:
+            if c not in seen:
+                seen.add(c)
+                ordered_concepts.append(c)
+                
+        return ordered_concepts
     
     def _extract_relations(
         self,
@@ -390,22 +473,27 @@ class TextKnowledgeLearner:
         """
         Extract relations using semantic folding and co-occurrence analysis.
         
-        Phase 1 (Bootstrapping): Uses lightweight regex patterns for obvious relations
+        Phase 1 (Bootstrapping): Uses linguistic patterns and S-V-O heuristics
         Phase 2 (Semantic Folding): Discovers relations via context similarity
         
         Returns list of (subject, relation, object) tuples.
         """
         relations = []
         
-        # Phase 1: Bootstrap with explicit linguistic patterns (only for unambiguous cases)
+        sentence_lower = sentence.lower()
+        
+        # --- Phase 1: Explicit Linguistic Patterns ---
+        
+        # 1. Definitive patterns (High confidence)
         explicit_patterns = [
             (r'(\w+)\s+is\s+(?:a|an|the)?\s*(?:type\s+of\s+)?(\w+)', 'is_a'),
             (r'(\w+)\s+are\s+(?:a|an|the)?\s*(\w+)', 'is_a'),
             (r'(\w+)\s+causes\s+(\w+)', 'causes'),
             (r'(\w+)\s+produces\s+(\w+)', 'produces'),
+            (r'(\w+)\s+leads\s+to\s+(\w+)', 'leads_to'),
+            (r'(\w+)\s+results\s+in\s+(\w+)', 'results_in'),
+            (r'(\w+)\s+made\s+(?:entirely\s+|partially\s+)?of\s+(\w+)', 'made_of'),
         ]
-        
-        sentence_lower = sentence.lower()
         
         for pattern, relation_type in explicit_patterns:
             matches = re.finditer(pattern, sentence_lower)
@@ -413,9 +501,64 @@ class TextKnowledgeLearner:
                 subj = match.group(1).capitalize()
                 obj = match.group(2).capitalize()
                 
-                if (subj in concepts or len(subj) > 3) and (obj in concepts or len(obj) > 3):
+                # Validation: Concepts must be somewhat significant (length >= 3 or known)
+                if (len(subj) >= 3) and (len(obj) >= 3):
                     relations.append((subj, relation_type, obj))
+
+        # 2. Generic S-V-O Heuristic (Medium confidence)
+        # Look for "Noun Verb Noun" patterns where Nouns are in our extracted concepts
+        # This allows capturing "Resonance attracts space_whales" -> (Resonance, attracts, Space_whales)
         
+        words = self._tokenize(sentence)
+        # Map words to concepts if possible
+        tokens = []
+        for w in words:
+            cap = w.capitalize()
+            if cap in concepts:
+                tokens.append({'text': cap, 'type': 'CONCEPT'})
+            elif w in ['is', 'are', 'was', 'were']:
+                tokens.append({'text': w, 'type': 'AUX'})
+            elif w in ['a', 'an', 'the']:
+                tokens.append({'text': w, 'type': 'DET'})
+            elif len(w) >= 3: # Potential verb or other
+                tokens.append({'text': w, 'type': 'WORD'})
+        
+        # Scan for Concept - Word(Verb) - Concept
+        for i in range(len(tokens) - 2):
+            t1 = tokens[i]
+            t2 = tokens[i+1]
+            t3 = tokens[i+2]
+            
+            # Pattern: Concept - [Verb/Relation] - Concept
+            if t1['type'] == 'CONCEPT' and t3['type'] == 'CONCEPT':
+                
+                # Check middle token
+                is_valid_relation = False
+                relation_text = t2['text']
+                
+                # 1. It's a generic word
+                if t2['type'] == 'WORD':
+                    is_valid_relation = True
+                    
+                # 2. It's a concept (verbs like 'Attracts' might be auto-tagged as concepts)
+                # But we must ensure it's not just a list like "Apples, Oranges, Bananas"
+                elif t2['type'] == 'CONCEPT':
+                    # Heuristic: If it ends in 's' or 'ed' or 'ing', likely a verb
+                    if relation_text.endswith('s') or relation_text.endswith('ed') or relation_text.endswith('ing'):
+                        is_valid_relation = True
+                        
+                # 3. It's 'is_a' helper
+                elif t2['type'] == 'AUX' and (i+2 < len(tokens)):
+                     # Handle "X is Y" where Y is concept
+                     relations.append((t1['text'], 'is_a', t3['text']))
+                     continue
+
+                if is_valid_relation:
+                    relations.append((t1['text'], relation_text, t3['text']))
+        
+        # Deduplicate
+        relations = list(set(relations))
+
         # Phase 2: Semantic folding - discover implicit relations via co-occurrence
         folded_relations = self._discover_relations_via_folding(sentence, concepts)
         relations.extend(folded_relations)
@@ -477,11 +620,18 @@ class TextKnowledgeLearner:
                             self.concept_context_hvs[concept_b]
                         )
                         
-                        if similarity > self.relation_threshold:
-                            # High similarity + co-occurrence = implicit relation
-                            relation_type = self._infer_relation_type(
-                                concept_a, concept_b, similarity, sentence
-                            )
+                        # [Refactor] Relation Inference with Override
+                        # 1. Infer potential relationship type from context
+                        relation_type = self._infer_relation_type(
+                            concept_a, concept_b, similarity, sentence
+                        )
+
+                        # 2. Check criteria
+                        is_strong_relation = relation_type not in ['semantically_related', 'strongly_related']
+                        
+                        if is_strong_relation or (similarity > self.relation_threshold):
+                            # If specific linguistic marker exists (e.g. 'made of'), trust it even if similarity is low
+                            # Or if vector similarity is high, trust generic relation
                             relations.append((concept_a, relation_type, concept_b))
                     except Exception:
                         pass  # Skip if similarity calculation fails
@@ -548,13 +698,13 @@ class TextKnowledgeLearner:
         a_lower = concept_a.lower()
         b_lower = concept_b.lower()
         
+        # [Refactor] Check for composition/material indicators (Priority)
+        if any(word in sentence_lower for word in ['made of', 'made from', 'consist', 'material']):
+            return 'made_of'
+
         # Check for causal indicators in surrounding context
         if any(word in sentence_lower for word in ['cause', 'because', 'due to', 'result', 'lead']):
             return 'causes'
-        
-        # Check for taxonomic indicators
-        if any(word in sentence_lower for word in ['type of', 'kind of', 'is a', 'are']):
-            return 'is_a'
         
         # Check for part-whole indicators
         if any(word in sentence_lower for word in ['part of', 'contain', 'compos', 'include']):
@@ -563,6 +713,10 @@ class TextKnowledgeLearner:
         # Check for similarity indicators
         if any(word in sentence_lower for word in ['similar', 'like', 'resemble', 'analogous']):
             return 'similar_to'
+        
+        # Check for taxonomic indicators (Low priority, 'are' is common)
+        if any(word in sentence_lower for word in ['type of', 'kind of', 'is a', 'are']):
+            return 'is_a'
         
         # Very high similarity suggests strong semantic relation
         if similarity > 0.8:
@@ -667,9 +821,14 @@ class TextKnowledgeLearner:
         # Search semantic memory
         similar_concepts = self.semantic.query(query_hv, k=top_k)
         
-        # Spreading activation from query concepts
-        activated = self.semantic.spread_activation(query_concepts, steps=3)
-        top_activated = sorted(activated.items(), key=lambda x: x[1], reverse=True)[:top_k]
+        # 2. Spreading Activation
+        # Activate concepts strongly associated with query terms
+        activation = self.semantic.spread_activation(
+            query_concepts,
+            steps=6,  # [Adv Reasoning] Increased from 3 to 6 for 5-step transitive chains
+            decay=0.7 # [Adv Reasoning] Reduced decay slightly (0.6 -> 0.7) to keep signal alive
+        )
+        top_activated = sorted(activation.items(), key=lambda x: x[1], reverse=True)[:top_k]
         
         # Search episodic memory
         recalled_episodes = []
@@ -692,6 +851,9 @@ class TextKnowledgeLearner:
                 if any(qc.lower() in fc.lower() or fc.lower() in qc.lower() for fc in fact_concepts):
                     related_facts.append(fact)
                     break
+        
+        # Sort facts by timestamp (most recent first) to prioritize current beliefs
+        related_facts.sort(key=lambda x: x.timestamp, reverse=True)
         
         # Build reasoning trace
         reasoning_trace = [
@@ -744,6 +906,27 @@ class TextKnowledgeLearner:
             'reasoning_trace': reasoning_trace
         }
     
+    def _store_fact(self, new_fact: LearnedFact):
+        """Store a fact, handling updates and duplicates based on timestamp."""
+        # Check if identical fact exists (same S-R-O)
+        existing_idx = -1
+        for i, fact in enumerate(self.learned_facts):
+            if (fact.subject == new_fact.subject and 
+                fact.relation == new_fact.relation and 
+                fact.object == new_fact.object):
+                existing_idx = i
+                break
+        
+        if existing_idx >= 0:
+            # Fact exists. Only update if new one is more recent.
+            existing_fact = self.learned_facts[existing_idx]
+            if new_fact.timestamp >= existing_fact.timestamp:
+                self.learned_facts[existing_idx] = new_fact # Update source/conf
+            # Else: Ignore regression (old fact trying to overwrite new)
+        else:
+            # New fact
+            self.learned_facts.append(new_fact)
+
     def _calculate_confidence(
         self,
         similar_concepts: List[Tuple[str, float]],
@@ -833,3 +1016,32 @@ class TextKnowledgeLearner:
         output.append("="*80)
         
         return "\n".join(output)
+
+if __name__ == "__main__":
+    # Internal Demo / Test
+    import os
+    
+    # 1. Initialize
+    lang_mod = LanguageModule()
+    learner = TextKnowledgeLearner(language_module=lang_mod)
+    
+    # 2. Find planetary corpus
+    data_dir = os.path.join(os.path.dirname(__file__), "..", "data", "test_corpus")
+    corpus_file = os.path.join(data_dir, "xylophone_planets.txt")
+    
+    if os.path.exists(corpus_file):
+        print(f"\n[Demo] Learning from {os.path.basename(corpus_file)}...")
+        learner.learn_from_text_file(corpus_file)
+        
+        # 3. Test Query (The one that used to fail)
+        query = "What are Xylophone planets made of?"
+        print(f"\n[Demo] Query: '{query}'")
+        response = learner.query_learned_knowledge(query)
+        print(f"Result:\n{response['answer']}")
+        
+        # 4. Check status of the internal graph
+        print(f"\n[Demo] Memory Stats:")
+        print(f"  Concepts: {len(learner.semantic.concept_hvs)}")
+        print(f"  Facts:    {len(learner.learned_facts)}")
+    else:
+        print(f"ERROR: Corpus not found at {corpus_file}")

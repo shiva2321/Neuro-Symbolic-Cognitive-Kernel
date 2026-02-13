@@ -344,17 +344,49 @@ class MultimodalProcessor:
             descriptors.append("high_contrast")
         elif stats["std"] < 20:
             descriptors.append("uniform")
+        if stats["mean"] < 1:  # Absolute black/empty
+            descriptors.append("black")
+            return ModalityResult(
+                modality="image",
+                hv=result_hv,
+                features={
+                    "stats": stats,
+                    "descriptors": descriptors,
+                    "hog_bins": 0,
+                    "color_bins": 0,
+                    "lbp_bins": 0,
+                },
+                confidence=1.0,
+                raw_summary=f"Image({h}×{w}): Black/Empty",
+            )
+
         if edge_density > 0.3:
             descriptors.append("detailed")
         elif edge_density < 0.05:
             descriptors.append("smooth")
+            
+        # [Phase 3] Texture detection via LBP variance/entropy
+        lbp_variance = float(np.var(lbp_features))
+        if lbp_variance > 0.005:  # High variance in LBP codes = textured
+            descriptors.append("textured")
+        else:
+            descriptors.append("smooth_texture")
+
+        # [Phase 3] Circularity detection via HOG orientation uniformity
+        # A circle has gradients in all directions. 
+        # Sum of HOG bins across all cells should be relatively uniform.
+        hog_sums = np.sum(hog_features.reshape(-1, n_orient_bins), axis=0)
+        hog_uniformity = float(np.std(hog_sums) / (np.mean(hog_sums) + 1e-8))
+        if hog_uniformity < 0.4 and edge_density > 0.01:
+            descriptors.append("circular")
+
         if is_color:
             descriptors.append("color")
         else:
             descriptors.append("greyscale")
         # Dominant orientation
-        dom_bin = int(np.argmax(np.sum(hog_features.reshape(-1, n_orient_bins), axis=0)))
-        orient_names = ["→", "↗", "↑", "↖", "←", "↙", "↓", "↘"]
+        dom_bin = int(np.argmax(hog_sums))
+        orient_names = ["R", "UR", "U", "UL", "L", "DL", "D", "DR"]
         descriptors.append(f"orient:{orient_names[dom_bin]}")
 
         return ModalityResult(

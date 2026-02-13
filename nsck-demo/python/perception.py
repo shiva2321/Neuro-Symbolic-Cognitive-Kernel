@@ -98,3 +98,34 @@ class FusionEngine:
             
         return memory.query(query_vec)
 
+class SpatialAnalyzer:
+    """
+    Analyzes spatial relationships between objects based on quadrants.
+    Quadrants: 0=TL, 1=TR, 2=BL, 3=BR
+    """
+    @staticmethod
+    def get_predicates(obj_a_quads: np.ndarray, obj_b_quads: np.ndarray) -> List[str]:
+        """
+        Compare two objects (represented by their 4-quadrant intensities).
+        Returns list of predicates: ["LeftOf", "Above", etc.]
+        """
+        # quads is [TL_mean, TL_std, TR_mean, TR_std, ...]
+        # Grab means
+        a_tl, a_tr, a_bl, a_br = obj_a_quads[0], obj_a_quads[2], obj_a_quads[4], obj_a_quads[6]
+        b_tl, b_tr, b_bl, b_br = obj_b_quads[0], obj_b_quads[2], obj_b_quads[4], obj_b_quads[6]
+        
+        # Weighted center of mass (rough estimate)
+        a_x = (a_tr + a_br) - (a_tl + a_bl)
+        a_y = (a_bl + a_br) - (a_tl + a_tr)
+        
+        b_x = (b_tr + b_br) - (b_tl + b_bl)
+        b_y = (b_bl + b_br) - (b_tl + b_tr)
+        
+        predicates = []
+        if a_x < b_x: predicates.append("LeftOf")
+        if a_x > b_x: predicates.append("RightOf")
+        if a_y < b_y: predicates.append("Above")
+        if a_y > b_y: predicates.append("Below")
+        
+        return predicates
+

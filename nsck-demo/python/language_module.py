@@ -205,7 +205,8 @@ class LanguageModule:
         original_text = text.strip()
 
         # ── 1. Tokenise ──────────────────────────────────────────────
-        tokens = re.findall(r"[A-Za-z0-9]+(?:'[a-z]+)?", text_lower)
+        # Include commas for clause splitting
+        tokens = re.findall(r"[A-Za-z0-9]+(?:'[a-z]+)?|,", text_lower)
         if not tokens:
             return {"structured_output": {"intent": "unknown", "entities": [],
                     "relation": "none", "deps": {}, "frames": {}, "clauses": []},
@@ -257,17 +258,36 @@ class LanguageModule:
         clauses = []
         current_clause_tokens = []
         current_clause_type = "main"
+        
         for tok, tag in zip(tokens, tags):
-            if tag == "SCONJ" and current_clause_tokens:
-                clauses.append({"type": current_clause_type,
-                               "tokens": list(current_clause_tokens)})
+            # Split on SCONJ (start of dependent clause)
+            if tag == "SCONJ":
+                if current_clause_tokens:
+                    # If we have tokens, flush them as previous clause
+                    clauses.append({"type": current_clause_type,
+                                   "tokens": [t for t in current_clause_tokens if t != ","]}) # Strip commas from content
+                
+                # Start new clause
                 current_clause_tokens = [tok]
                 current_clause_type = tok  # e.g. "if", "because"
+            
+            # Split on Comma (if we are in a dependent clause, return to main?)
+            # Or simplified: Comma often ends a dependent clause like "If X, Y"
+            elif tok == "," and current_clause_type in ("if", "when", "although", "since"):
+                # Flush the dependent clause
+                clauses.append({"type": current_clause_type,
+                               "tokens": [t for t in current_clause_tokens if t != ","]})
+                
+                # Start new MAIN clause
+                current_clause_tokens = []
+                current_clause_type = "main"
+            
             else:
                 current_clause_tokens.append(tok)
+                
         if current_clause_tokens:
             clauses.append({"type": current_clause_type,
-                           "tokens": list(current_clause_tokens)})
+                           "tokens": [t for t in current_clause_tokens if t != ","]})
 
         # ── 4. Bottom-up phrase chunking ─────────────────────────────
         def chunk_np(toks, tgs, start):
@@ -289,8 +309,16 @@ class LanguageModule:
             return {"span": np_str, "det": det, "adjs": adjs,
                     "head": nouns[-1], "nouns": nouns, "end": i}
 
-        # Parse the main clause (first clause, or all tokens if no clauses)
-        main_tokens = clauses[0]["tokens"] if clauses else tokens
+        # Parse the main clause (find clause with type 'main', or use first if strictly one, or all tokens)
+        main_tokens = tokens
+        if clauses:
+             for cl in clauses:
+                 if cl["type"] == "main":
+                     main_tokens = cl["tokens"]
+                     break
+             else:
+                 # Fallback if no main clause found (e.g. only fragments)
+                 main_tokens = clauses[0]["tokens"]
         main_tags = [pos_tag(t) for t in main_tokens]
 
         # Full dependency structure

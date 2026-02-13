@@ -59,11 +59,26 @@ class SemanticMemory:
         self.concept_hvs[concept_name] = hv
         self.concept_graph.add_node(concept_name, **properties)
     
-    def add_relation(self, concept1: str, relation: str, concept2: str):
-        """Add relation between concepts."""
+    def add_relation(self, concept1: str, relation: str, concept2: str, timestamp: float = 0.0):
+        """
+        Add relation between concepts with temporal validation.
+        Only updates if the new information is more recent or same time.
+        """
         if concept1 not in self.concept_graph or concept2 not in self.concept_graph:
             return
-        self.concept_graph.add_edge(concept1, concept2, relation=relation)
+            
+        # Check if edge exists
+        if self.concept_graph.has_edge(concept1, concept2):
+            existing_data = self.concept_graph.get_edge_data(concept1, concept2)
+            existing_time = existing_data.get('timestamp', 0.0)
+            
+            # If explicit timestamp provided and it's older than existing knowledge, IGNORE
+            if timestamp > 0 and timestamp < existing_time:
+                # [Belief Revision] Reject outdated info
+                return
+
+        # Update or create edge
+        self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
     
     def query(self, query_hv: hypervec_rs.HyperVector, k: int = 5) -> List[Tuple[str, float]]:
         """Find concepts most similar to query HV."""
