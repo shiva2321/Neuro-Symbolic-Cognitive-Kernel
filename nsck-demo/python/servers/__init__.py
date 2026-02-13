@@ -1,5 +1,5 @@
 """Backend Servers - API, Logging"""
-from .python_server import app as server_app
-from .logger_service import LoggerService
+# Direct imports required to prevent circular dependencies:
+# from python.servers.python_server import app as server_app
+# from python.servers.logger_service import LoggerService
 
-__all__ = ["server_app", "LoggerService"]
