@@ -21,10 +21,10 @@ class TestDynamicBrain(unittest.TestCase):
         # Check shapes
         # Actor: 128 -> 6 (corrected from 256)
         actor_head = self.brain.heads["alien_invaders"].actor
-        self.assertEqual(actor_head.out_features, 6)
+        self.assertEqual(actor_head.out_features if hasattr(actor_head, 'out_features') else actor_head[-1].out_features, 6)
         # Critic: 128 -> 1
         critic_head = self.brain.heads["alien_invaders"].critic
-        self.assertEqual(critic_head.out_features, 1)
+        self.assertEqual(critic_head.out_features if hasattr(critic_head, 'out_features') else critic_head[-1].out_features, 1)
         print("Success: Brain grew new lobes for Alien Invaders (6 actions).")
 
     def test_multimodal_forward(self):

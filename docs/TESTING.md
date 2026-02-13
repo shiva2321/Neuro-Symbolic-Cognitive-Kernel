@@ -43,14 +43,18 @@ NSCK's test suite is a **capability test**, not just a unit test suite. It answe
 3. **End-to-end integration**: Test 15 ingests the full corpus and verifies cross-module retrieval.
 4. **Quantitative thresholds**: Similarity values, timing benchmarks, and accuracy rates are reported with concrete numbers.
 5. **Complete transparency**: Every test reports its measured values, not just pass/fail.
+6. **Parity validation**: Rust optimization validated with 5 parity tests ensuring mathematical equivalence with Python reference.
+7. **Error-free execution**: All critical type errors fixed and validated (see [ERROR_FIXES_SUMMARY.md](../ERROR_FIXES_SUMMARY.md)).
 
 ### What the Tests Do NOT Test
 
 - Real-world image/audio/video processing (no JPEG/WAV files)
 - Extended learning over thousands of episodes
 - Multi-agent interaction
-- Web dashboard functionality
+- Web dashboard functionality (tested separately in unified_dashboard_summary.md)
 - Persistence across restarts (tested implicitly via BrainStore)
+- Phase 2 perception modules (vision_encoder, audio_encoder - experimental, not yet implemented)
+- ZMQ server integration (intentionally skipped for CI/local runs)
 
 ---
 

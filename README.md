@@ -12,13 +12,15 @@ An experimental research prototype for exploring neuro-symbolic AI. NSCK combine
 **Latest Update (Feb 13, 2026):** System validated with **581 comprehensive tests (99.0% pass rate)** and **Rust acceleration enabled** for 6-29× faster VSA operations. All critical errors fixed, system production-ready.
 
 **Documentation Highlights:**
-- 📊 **TEST_RESULTS_SUMMARY.md:** Complete test results analysis (575 passed, 2 skipped, 4 xfailed)
-- 🚀 **RUST_ENABLED_REPORT.md:** Rust optimization performance analysis (23× average speedup)
-- 🔧 **ERROR_FIXES_SUMMARY.md:** All type errors fixed and validated
-- 📐 **FORMULAS_AND_PROOFS.md:** Complete mathematical derivations with test evidence
-- 🏗️ **ARCHITECTURE.md:** System architecture with proven capabilities and test references
-- 📚 **MODULE_REFERENCE.md:** Complete API documentation for all modules
-- 🧪 **TESTING.md:** Test infrastructure and verification procedures
+- 📊 **[TEST_RESULTS_SUMMARY.md](docs/TEST_RESULTS_SUMMARY.md):** Complete test results analysis (575 passed, 2 skipped, 4 xfailed)
+- 🚀 **[RUST_ENABLED_REPORT.md](RUST_ENABLED_REPORT.md):** Rust optimization enabled - 6-29× speedup validated
+- 🔧 **[ERROR_FIXES_SUMMARY.md](ERROR_FIXES_SUMMARY.md):** All type errors fixed (6 issues resolved)
+- 📈 **[RUST_OPTIMIZATION_ANALYSIS.md](RUST_OPTIMIZATION_ANALYSIS.md):** Cost-benefit analysis and performance predictions
+- 🔍 **[SKIPPED_TESTS_ANALYSIS.md](SKIPPED_TESTS_ANALYSIS.md):** Analysis of 8 skipped tests (6 Rust parity now enabled)
+- 📐 **[FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md):** Complete mathematical derivations with test evidence
+- 🏗️ **[ARCHITECTURE.md](docs/ARCHITECTURE.md):** System architecture with proven capabilities and test references
+- 📚 **[MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md):** Complete API documentation for all modules
+- 🧪 **[TESTING.md](docs/TESTING.md):** Test infrastructure and verification procedures
 
 See [Test Results](docs/TEST_RESULTS_SUMMARY.md), [Architecture](docs/ARCHITECTURE.md), [Phase History](docs/PHASE_HISTORY.md), and [Benchmarks](docs/BENCHMARK_RESULTS.md).
 

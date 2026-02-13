@@ -99,28 +99,42 @@ The system includes an optional Rust-accelerated VSA backend that provides signi
 | Similarity | 7.56 μs | 0.32 μs | **23.6×** |
 | Permute | 8.80 μs | 0.83 μs | **10.6×** |
 
-**Installation:**
+**Installation (Updated Feb 13, 2026):**
 
 ```bash
-# 1. Install Rust toolchain (if not already installed)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# 1. Install Rust toolchain
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 source $HOME/.cargo/env
+rustc --version  # Verify: rustc 1.93.1+ expected
 
-# 2. Build and install the Rust VSA extension
+# 2. Build the Rust VSA extension with release optimizations
 cd nsck-demo/rust_vsa
-maturin build --release --interpreter python3
-pip install target/wheels/hypervec_rs-*.whl
+maturin build --release --interpreter /bin/python3
 
-# 3. Verify installation
-python3 -c "import hypervec_rs; print('✅ Rust extension loaded')"
+# 3. Install the wheel
+pip install --break-system-packages target/wheels/hypervec_rs-*.whl
+# Note: Use --break-system-packages on system-managed Python environments
+# or install in a virtual environment
 
-# 4. Run parity tests (optional but recommended)
+# 4. Verify installation
+python3 -c "import hypervec_rs; hv = hypervec_rs.HyperVector(42); print('✅ Rust extension loaded'); print(hv)"
+# Expected output: >> [VSA] Using Rust Accelerator (hypervec_rs) [Patched Direction]
+
+# 5. Run parity tests to validate correctness
 cd ../..
 pytest nsck-demo/tests/unit/vsa/test_hypervec_parity.py -v
-# Expected: 5 passed, 1 xfailed (RNG difference is expected)
+# Expected: 5 passed, 1 xfailed (RNG difference is expected and documented)
 ```
 
-**Automatic Fallback:** If Rust is not available, the system automatically uses the Python implementation with zero code changes. See [RUST_OPTIMIZATION_ANALYSIS.md](../RUST_OPTIMIZATION_ANALYSIS.md) for detailed cost-benefit analysis and [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md) for performance benchmarks.
+**Validation:**
+- ✅ All 5 parity tests pass (XOR, bundle, permute, similarity, from_bits)
+- ✅ 1 xfail expected (different RNG algorithms: PCG64 vs ChaCha8)
+- ✅ 575/581 full test suite passes with Rust enabled
+
+**Automatic Fallback:** If Rust is not available, the system automatically uses the Python implementation with zero code changes. See:
+- [RUST_OPTIMIZATION_ANALYSIS.md](../RUST_OPTIMIZATION_ANALYSIS.md) - Detailed cost-benefit analysis
+- [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md) - Measured performance benchmarks
+- [SKIPPED_TESTS_ANALYSIS.md](../SKIPPED_TESTS_ANALYSIS.md) - Test coverage analysis
 
 ---
 
