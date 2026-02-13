@@ -1,0 +1,62 @@
+{
+  "total": 8,
+  "passed": 6,
+  "failed": 2,
+  "elapsed": 0.02052593231201172,
+  "results": [
+    {
+      "test": "Semantic memory basic ops",
+      "status": "\u2717 FAIL",
+      "message": "'SemanticMemory' object has no attribute 'concept_map'",
+      "metrics": {}
+    },
+    {
+      "test": "Episodic memory initialized",
+      "status": "\u2713 PASS",
+      "message": "Episodic memory system ready",
+      "metrics": {}
+    },
+    {
+      "test": "Text learning extracts concepts",
+      "status": "\u2713 PASS",
+      "message": "Concepts: 18, Relations: 30, Facts: 30",
+      "metrics": {
+        "concepts": 18,
+        "relations": 30,
+        "facts": 30
+      }
+    },
+    {
+      "test": "Multimodal processes text",
+      "status": "\u2713 PASS",
+      "message": "HV generated: True, Concepts: 9 (the, quick, brown...)",
+      "metrics": {}
+    },
+    {
+      "test": "Multimodal processes images",
+      "status": "\u2713 PASS",
+      "message": "HV generated: True, Confidence: 0.80",
+      "metrics": {
+        "confidence": 0.8
+      }
+    },
+    {
+      "test": "Context engine initialized",
+      "status": "\u2713 PASS",
+      "message": "Context system ready",
+      "metrics": {}
+    },
+    {
+      "test": "Knowledge query returns results",
+      "status": "\u2713 PASS",
+      "message": "Results found: dict",
+      "metrics": {}
+    },
+    {
+      "test": "Integrated workflow",
+      "status": "\u2717 FAIL",
+      "message": "'SemanticMemory' object has no attribute 'concept_map'",
+      "metrics": {}
+    }
+  ]
+}

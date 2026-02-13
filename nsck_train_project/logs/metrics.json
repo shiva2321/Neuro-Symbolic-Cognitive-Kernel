@@ -1,0 +1,35 @@
+{
+  "start_time": "2026-02-13T20:54:28.222402",
+  "text_samples": 27,
+  "image_samples": 30,
+  "concepts_learned": 1211,
+  "relations_learned": 8228,
+  "facts_stored": 8228,
+  "errors": 0,
+  "training_time": 4.808384895324707,
+  "phases": [
+    {
+      "name": "text_learning",
+      "samples": 30,
+      "concepts": 1211,
+      "relations": 8228,
+      "facts": 8228,
+      "errors": 0,
+      "start_time": "2026-02-13T20:54:29.332738",
+      "duration": 3.9751393795013428,
+      "end_time": "2026-02-13T20:54:33.307879"
+    },
+    {
+      "name": "image_learning",
+      "samples": 30,
+      "processed": 30,
+      "features_extracted": 95,
+      "errors": 0,
+      "start_time": "2026-02-13T20:54:33.308220",
+      "duration": 0.8326447010040283,
+      "end_time": "2026-02-13T20:54:34.140865"
+    }
+  ],
+  "model_path": "/workspaces/Node_network/nsck_train_project/models/trained_system.pkl",
+  "end_time": "2026-02-13T20:54:34.282847"
+}
