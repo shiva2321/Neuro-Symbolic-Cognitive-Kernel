@@ -698,7 +698,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="NSCK Image Generation Dashboard")
     parser.add_argument('--host', type=str, default='0.0.0.0', help='Host address')
-    parser.add_argument('--port', type=int, default=5555, help='Port number')
+    parser.add_argument('--port', type=int, default=5556, help='Port number')
     parser.add_argument('--debug', action='store_true', help='Enable debug mode')
     
     args = parser.parse_args()
