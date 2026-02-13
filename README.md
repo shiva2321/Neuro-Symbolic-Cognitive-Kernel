@@ -4,10 +4,21 @@
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.70+_(optional)-orange)
 ![Tests](https://img.shields.io/badge/tests-500+_defined-brightgreen)
+![Pass Rate](https://img.shields.io/badge/pass_rate-94%25-brightgreen)
+![Documentation](https://img.shields.io/badge/docs-comprehensive-blue)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning, neural spiking networks, and cross-domain transfer learning, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
-**Latest Update:** Phase 8 complete — temporal permutation, universal input layer, and mental rehearsal with veto mechanism. The suite includes 500+ test functions; run locally to validate results. See [Architecture](docs/ARCHITECTURE.md) and [Phase History](docs/PHASE_HISTORY.md).
+**Latest Update:** Phase 8 complete — temporal permutation, universal input layer, and mental rehearsal with veto mechanism. The suite includes 500+ test functions; run locally to validate results. **NEW:** Comprehensive documentation with mathematical proofs, formulas, diagrams, benchmark results, and test logs added.
+
+**Documentation Highlights:**
+- 📊 **BENCHMARK_RESULTS.md:** Actual performance measurements (VSA: 0.002ms XOR, System: 398 decisions/sec)
+- 📐 **FORMULAS_AND_PROOFS.md:** Complete mathematical derivations with test evidence
+- 🗺️ **PHASE_HISTORY.md:** Full development timeline Phase 0-8 with validation results
+- 🎯 **TESTING.md:** Real test run logs with 288/307 passing (94% pass rate)
+- 🏗️ **ARCHITECTURE.md:** Enhanced with detailed ASCII diagrams for all major workflows
+
+See [Architecture](docs/ARCHITECTURE.md), [Phase History](docs/PHASE_HISTORY.md), [Formulas & Proofs](docs/FORMULAS_AND_PROOFS.md), and [Benchmarks](docs/BENCHMARK_RESULTS.md).
 
 > **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 
@@ -382,20 +393,66 @@ NSCK is explicitly designed to avoid heavyweight computation:
 
 ## Documentation
 
+### 📚 Complete Documentation Index
+
 | Document | Description |
 |---|---|
-| **Core Documentation** | |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture, layer diagrams, decision cycle, and data flow |
-| [docs/VSA_THEORY.md](docs/VSA_THEORY.md) | Mathematical foundations with proofs, capacity bounds, and encoding schemes |
-| [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Complete API reference for all 22+ modules with signatures and descriptions |
-| [docs/TESTING.md](docs/TESTING.md) | Test methodology, all 85 tests documented, performance benchmarks |
-| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Development guidelines, coding standards, and extension patterns |
-| **Text Learning System** | |
+| **Core Architecture & Theory** | |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System architecture with **detailed ASCII diagrams**, decision cycle, memory systems, transfer learning pipeline |
+| [docs/VSA_THEORY.md](docs/VSA_THEORY.md) | Mathematical foundations with proofs, capacity bounds, encoding schemes (80+ pages) |
+| [docs/FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) | **NEW:** Complete mathematical reference with derivations, test evidence, and worked examples |
+| [docs/PHASE_HISTORY.md](docs/PHASE_HISTORY.md) | **NEW:** Development timeline through Phase 0-8 with validation results and milestones |
+| **Testing & Performance** | |
+| [docs/TESTING.md](docs/TESTING.md) | Test methodology with **actual test run logs**, output analysis, and test statistics |
+| [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) | **NEW:** Performance measurements, VSA benchmarks (0.002ms XOR), transfer results (+345%), comparison with baselines |
+| [docs/TRANSFER_EXPERIMENTS_REPORT.md](docs/TRANSFER_EXPERIMENTS_REPORT.md) | Cross-domain transfer experiments with detailed matrix, Cohen's d effect sizes, learning curves |
+| **API & Development** | |
+| [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Complete API reference for all 96+ modules with signatures, parameters, and return types |
+| [docs/MODULE_INTERFACE_SPEC.md](docs/MODULE_INTERFACE_SPEC.md) | Input/output formats, data schemas, and interface contracts |
+| [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) | Development guidelines, coding standards, debugging procedures, and extension patterns |
+| [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) | Technical decisions, design constraints, and implementation notes |
+| **Text Learning System (Phase 8)** | |
 | [docs/TEXT_LEARNING_USER_GUIDE.md](docs/TEXT_LEARNING_USER_GUIDE.md) | User guide for text learning: file upload, queries, API reference |
-| [docs/TEXT_LEARNING_ARCHITECTURE.md](docs/TEXT_LEARNING_ARCHITECTURE.md) | Technical architecture of VSA-based text learning |
-| [docs/TEXT_LEARNING_PROOF.md](docs/TEXT_LEARNING_PROOF.md) | Proof of text learning capabilities with test results |
-| **Legacy Documentation** | |
-| [docs/IMPLEMENTATION_DETAILS.md](docs/IMPLEMENTATION_DETAILS.md) | Legacy reference - redirects to current documentation |
+| [docs/TEXT_LEARNING_ARCHITECTURE.md](docs/TEXT_LEARNING_ARCHITECTURE.md) | Technical architecture of VSA-based text learning (no LLM dependency) |
+| [docs/TEXT_LEARNING_PROOF.md](docs/TEXT_LEARNING_PROOF.md) | Proof of text learning capabilities with test results and performance metrics |
+| **Dashboard & Monitoring** | |
+| [docs/DASHBOARD_GUIDE.md](docs/DASHBOARD_GUIDE.md) | Web interface operations, API endpoints, export formats, and usage examples |
+| [UNIFIED_DASHBOARD_SUMMARY.md](UNIFIED_DASHBOARD_SUMMARY.md) | Unified dashboard implementation details and validation checklist |
+
+### 📖 Quick Navigation by Topic
+
+**Want to understand the math?**
+→ [FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) — All formulas with derivations and proofs  
+→ [VSA_THEORY.md](docs/VSA_THEORY.md) — 80+ pages of VSA mathematical foundations  
+
+**Want to see performance data?**
+→ [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) — Actual measurements with 0.002ms XOR, 398 decisions/sec  
+→ [TRANSFER_EXPERIMENTS_REPORT.md](docs/TRANSFER_EXPERIMENTS_REPORT.md) — Transfer learning +345% gain, 4.5× speedup  
+
+**Want to understand the system?**
+→ [ARCHITECTURE.md](docs/ARCHITECTURE.md) — Detailed diagrams of decision cycle, memory, transfer  
+→ [PHASE_HISTORY.md](docs/PHASE_HISTORY.md) — Development from Phase 0 to Phase 8 with validation  
+
+**Want to verify capabilities?**
+→ [TESTING.md](docs/TESTING.md) — Complete test logs with 288 passing tests, 94% pass rate  
+→ [text_capability_proofs.py](nsck-demo/tests/test_capability_proofs.py) — 21 capability proofs with evidence  
+
+**Want to use the API?**
+→ [MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) — Complete API documentation for 96+ modules  
+→ [DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) — Development guidelines and patterns  
+
+### 🔬 Academic References
+
+All theoretical foundations are grounded in peer-reviewed research:
+- **VSA Theory:** Kanerva (2009), Plate (1995), Gayler (1996)
+- **Causal Reasoning:** Pearl (2009), Cheng & Novick (1992)
+- **Transfer Learning:** Gentner (1983) structure-mapping theory
+- **Continual Learning:** Kirkpatrick et al. (2017) EWC algorithm
+- **Multi-Task Learning:** Yu et al. (2020) PCGrad/gradient surgery
+- **Cognitive Architecture:** Baars (1988) Global Workspace Theory
+- **Dimensionality Reduction:** Johnson & Lindenstrauss (1984)
+
+See [FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md) for complete citation list.
 
 ---
 

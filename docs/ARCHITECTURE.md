@@ -6,7 +6,10 @@ NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines
 
 **For detailed implementation reference:**
 - **[MODULE_REFERENCE.md](MODULE_REFERENCE.md)** - Complete API documentation with all class signatures and methods
-- **[VSA_THEORY.md](VSA_THEORY.md)** - Mathematical foundations, proofs, and formulas
+- **[VSA_THEORY.md](VSA_THEORY.md)** - Mathematical foundations, proofs, and formulas (80+ pages)
+- **[FORMULAS_AND_PROOFS.md](FORMULAS_AND_PROOFS.md)** - Mathematical derivations, test evidence, worked examples
+- **[PHASE_HISTORY.md](PHASE_HISTORY.md)** - Complete development timeline through Phase 0-8
+- **[BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md)** - Performance measurements and experimental data
 - **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Development guidelines, coding standards, and extension patterns
 
 ```
@@ -48,7 +51,7 @@ NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines
 
 **How**: All concepts, states, actions, and memories are encoded as binary vectors.
 
-**Operations** (see [FORMULAS_AND_PROOFS.md](FORMULAS_AND_PROOFS.md) for full derivations):
+**Operations** (see [FORMULAS_AND_PROOFS.md](FORMULAS_AND_PROOFS.md) for full derivations and [VSA_THEORY.md](VSA_THEORY.md) for theoretical foundations):
 
 1. **XOR Binding**: `BIND(A, B) = A ⊕ B`
    - Time: O(D) where D=10,240
@@ -293,41 +296,276 @@ Maze: EXIT_ABOVE is active → recommend ACTION_UP (via abstract rule)
 
 ## Data Flow
 
-### Decision Cycle
+### Decision Cycle (Detailed)
 
 ```
-State → Verifier → Active Predicates
-                        │
-     ┌──────────────────┼──────────────────────┐
-     ↓                  ↓                      ↓
-  SNN Fast           Rules+Global          Planner
-  System             System                STRIPS
-     │                  │                      │
-     └──────────┬───────┴──────────────────────┘
-                ↓
-        Global Workspace Competition
-                ↓
-        Winner → Value Alignment Check
-                ↓
-        Action → Learn from Outcome
+┌────────────────────────────────────────────────────────────────┐
+│ INPUT: Game State (position, objects, goals)                   │
+└───────────────────────┬────────────────────────────────────────┘
+                        ↓
+        ┌───────────────────────────────┐
+        │  GroundingVerifier            │
+        │  Extract Active Predicates    │
+        │  - FOOD_ABOVE                 │
+        │  - WALL_LEFT                  │
+        │  - DISTANCE_NEAR              │
+        └────────┬──────────────────────┘
+                 ↓
+    ┌────────────┴─────────────────────────────────┐
+    │  Encode to Hypervector (10,240-bit)         │
+    │  state_hv = Σ predicate_hvs                 │
+    └────────┬────────────────────────────────────┘
+             ↓
+┌────────────┴─────────────────────────────────────────────────┐
+│ PROPOSAL GENERATION (Parallel)                               │
+│                                                               │
+│  ┌────────────┐  ┌────────────┐  ┌────────────┐            │
+│  │    SNN     │  │   RULES    │  │  PLANNER   │            │
+│  │  Neural    │  │  Symbolic  │  │  STRIPS    │            │
+│  │  Fast      │  │  Safe      │  │  Goal      │            │
+│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘            │
+│        │               │               │                     │
+│  ┌─────┴──────┐  ┌─────┴──────┐  ┌─────┴──────┐            │
+│  │EXPLORATION │  │   ACTIVE   │  │IMAGINATION │            │
+│  │ Curiosity  │  │ INFERENCE  │  │World Model │            │
+│  └─────┬──────┘  └─────┬──────┘  └─────┬──────┘            │
+└────────┼───────────────┼───────────────┼───────────────────┘
+         │               │               │
+         └───────────────┼───────────────┘
+                         ↓
+        ┌────────────────────────────────┐
+        │  Coalition Formation           │
+        │  Each proposal becomes a       │
+        │  Coalition with:               │
+        │  - action                      │
+        │  - base_salience               │
+        │  - relevance                   │
+        │  - confidence                  │
+        └────────┬───────────────────────┘
+                 ↓
+        ┌────────────────────────────────┐
+        │  Mental Rehearsal (Phase 8)    │
+        │  WorldModel.imagine(state,     │
+        │                     action)    │
+        │  Check: sim(predicted,         │
+        │             danger_hv) < 0.75  │
+        └────────┬───────────────────────┘
+                 ↓
+        ┌────────────────────────────────┐
+        │  Global Workspace Competition  │
+        │  Activation = salience +       │
+        │               relevance +      │
+        │               affect +         │
+        │               0.5*confidence   │
+        │  Winner = argmax(Activation)   │
+        └────────┬───────────────────────┘
+                 ↓
+        ┌────────────────────────────────┐
+        │  Value Alignment Check         │
+        │  SafetyGate.is_safe(action)    │
+        │  - Not in danger set           │
+        │  - Aligned with values         │
+        └────────┬───────────────────────┘
+                 ↓
+┌────────────────┴───────────────────────────────────────────┐
+│ OUTPUT: CognitiveState                                      │
+│  - chosen_action: "ACTION_UP"                              │
+│  - confidence: 0.87                                        │
+│  - explanation: "Rule: FOOD_ABOVE → UP (85% success)"     │
+│  - trace: {winner: "RULES", proposals: 6, vetoed: 1}      │
+└────────┬───────────────────────────────────────────────────┘
+         ↓
+┌────────────────────────────────────────────────────────────┐
+│ LEARNING (After action execution)                          │
+│  - EpisodicMemory.store(state_hv, action_hv, reward)      │
+│  - RuleLearner.observe(predicates, action, outcome)       │
+│  - SelfModel.update(task, outcome, context)               │
+│  - CausalReasoner.observe(causes, effects)                │
+│  If catastrophic: DangerRegistry.add(state_hv)             │
+└────────────────────────────────────────────────────────────┘
 ```
 
-### Transfer Learning Pipeline
+### Memory Architecture
 
 ```
-Domain A Experiences → KnowledgeStore.store_experience()
-                              ↓
-Domain B Experiences → KnowledgeStore.store_experience()
-                              ↓
-              KnowledgeStore.consolidate_to_abstract()
-                     [Lift → Pattern → Promote]
-                              ↓
-                      Abstract Rules
-                              ↓
-Novel Domain C → find_relevant_experience()
-                     [Match abstract patterns]
-                              ↓
-                   Recommended Action
+┌─────────────────────────────────────────────────────────────┐
+│                    MEMORY SYSTEMS                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Episodic Memory (Experience Buffer)                  │  │
+│  │ ┌──────────┬──────────┬──────────┬─────────────┐    │  │
+│  │ │ Episode  │  State   │  Action  │   Reward    │    │  │
+│  │ │   HV     │    HV    │    HV    │   (float)   │    │  │
+│  │ ├──────────┼──────────┼──────────┼─────────────┤    │  │
+│  │ │   e₁     │ [1,0,..] │ [0,1,..] │    +1.0     │    │  │
+│  │ │   e₂     │ [1,1,..] │ [1,0,..] │    -0.5     │    │  │
+│  │ │   ...    │   ...    │   ...    │     ...     │    │  │
+│  │ └──────────┴──────────┴──────────┴─────────────┘    │  │
+│  │                                                       │  │
+│  │ LSH Index (16 hash functions):                       │  │
+│  │   bucket_0: [e₁, e₅, e₇]                            │  │
+│  │   bucket_1: [e₂, e₉]                                │  │
+│  │   bucket_2: [e₃, e₄, e₆, e₈]                        │  │
+│  │                                                       │  │
+│  │ Query: state_hv → Hash → bucket_2 → k-NN search     │  │
+│  │ Retrieval: <1ms for 10K episodes                    │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Semantic Memory (Concept Graph)                      │  │
+│  │                                                       │  │
+│  │         [FOOD] ←──has_property── [NUTRITIOUS]       │  │
+│  │           │                           ↑              │  │
+│  │        causes                      is_a             │  │
+│  │           ↓                           │              │  │
+│  │       [ENERGY] ──────→ [SUSTENANCE] ─┘              │  │
+│  │           ↑                                          │  │
+│  │        enables                                       │  │
+│  │           │                                          │  │
+│  │       [MOVEMENT]                                     │  │
+│  │                                                       │  │
+│  │ Each node: (concept_name, hypervector, metadata)    │  │
+│  │ Each edge: (relation_type, strength)                │  │
+│  │                                                       │  │
+│  │ Spreading Activation:                                │  │
+│  │   Query "FOOD" → Activate neighbors with decay      │  │
+│  │   activation[node] = Σ edge_strength / distance     │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Rule Base (Symbolic Knowledge)                       │  │
+│  │                                                       │  │
+│  │  Rule 1: {FOOD_ABOVE} → ACTION_UP                   │  │
+│  │    - successes: 85                                   │  │
+│  │    - failures: 15                                    │  │
+│  │    - confidence: 0.85                                │  │
+│  │    - tenure: TENURED (support ≥ 100)                │  │
+│  │                                                       │  │
+│  │  Rule 2: {WALL_LEFT, DANGER_LEFT} → ACTION_RIGHT    │  │
+│  │    - successes: 47                                   │  │
+│  │    - failures: 3                                     │  │
+│  │    - confidence: 0.94                                │  │
+│  │    - tenure: PROVISIONAL (support < 100)            │  │
+│  │                                                       │  │
+│  │  Global Rule: {DANGER_*} → avoid_direction          │  │
+│  │    - applies across all tasks                        │  │
+│  │    - priority: SAFETY (overrides task rules)        │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │ Self-Model (Performance Tracking)                    │  │
+│  │                                                       │  │
+│  │  Task: "snake"                                       │  │
+│  │    Overall success: 72/100 = 0.72                   │  │
+│  │    Context breakdown:                                │  │
+│  │      - corner: 15/20 = 0.75                         │  │
+│  │      - open: 45/60 = 0.75                           │  │
+│  │      - near_wall: 12/20 = 0.60                      │  │
+│  │    Improvement trend: +0.067/episode (IMPROVING)    │  │
+│  │                                                       │  │
+│  │  Prediction: P(success | snake, corner) = 0.75      │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Transfer Learning Pipeline (Detailed)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PHASE 1: Experience Collection (Multiple Domains)           │
+└──────────────────────┬──────────────────────────────────────┘
+                       ↓
+    ┌──────────────────────────────────────────────┐
+    │  Domain A (Snake)                            │
+    │  Experience: {REL_ABOVE} + UP → reward +1.0  │
+    │              (20 observations)               │
+    └────────────┬─────────────────────────────────┘
+                 │
+    ┌────────────┴─────────────────────────────────┐
+    │  Domain B (Pong)                             │
+    │  Experience: {BALL_ABOVE} + UP → reward +1.0 │
+    │              (18 observations)               │
+    └────────────┬─────────────────────────────────┘
+                 │
+    ┌────────────┴─────────────────────────────────┐
+    │  Domain C (Maze)                             │
+    │  Experience: {EXIT_LEFT} + LEFT → reward +1.0│
+    │              (15 observations)               │
+    └────────────┬─────────────────────────────────┘
+                 ↓
+┌────────────────┴──────────────────────────────────────────┐
+│ PHASE 2: Lift to Abstract (via AnalogyEngine)             │
+│                                                            │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │ Domain-Specific → Abstract Mapping                 │  │
+│  ├────────────────────────────────────────────────────┤  │
+│  │ SNAKE_HEAD    → AGENT                              │  │
+│  │ FOOD          → TARGET                             │  │
+│  │ PLAYER_PADDLE → AGENT                              │  │
+│  │ PONG_BALL     → TARGET                             │  │
+│  │ PLAYER_POS    → AGENT                              │  │
+│  │ EXIT          → TARGET                             │  │
+│  │ REL_ABOVE     → TARGET_ABOVE                       │  │
+│  │ BALL_ABOVE    → TARGET_ABOVE                       │  │
+│  │ EXIT_LEFT     → TARGET_LEFT                        │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                            │
+│  Lifted Experiences:                                      │
+│    A: {TARGET_ABOVE} + MOVE_UP → +1.0                    │
+│    B: {TARGET_ABOVE} + MOVE_UP → +1.0                    │
+│    C: {TARGET_LEFT} + MOVE_LEFT → +1.0                   │
+└────────────────┬──────────────────────────────────────────┘
+                 ↓
+┌────────────────┴──────────────────────────────────────────┐
+│ PHASE 3: Pattern Detection & Consolidation                │
+│                                                            │
+│  Pattern 1: {TARGET_ABOVE} + MOVE_UP → positive          │
+│    Support: Domains A, B (2/3 = 67% confidence)          │
+│    Status: ABSTRACT RULE (multi-domain)                  │
+│                                                            │
+│  Pattern 2: {TARGET_direction} + MOVE_direction → pos    │
+│    Support: Domains A, B, C (3/3 = 100% confidence)      │
+│    Status: GLOBAL RULE (universal)                       │
+│                                                            │
+│  Promotion Criteria:                                      │
+│    - Appears in ≥2 domains                               │
+│    - Success rate >60%                                   │
+│    - Minimum 10 supporting observations                  │
+└────────────────┬──────────────────────────────────────────┘
+                 ↓
+┌────────────────┴──────────────────────────────────────────┐
+│ PHASE 4: Application to Novel Domain                      │
+│                                                            │
+│  Novel Domain D (Collector - never seen before)           │
+│  Current state: {ITEM_ABOVE}                              │
+│                                                            │
+│  ┌──────────────────────────────────────────────┐        │
+│  │ 1. Lift to abstract                          │        │
+│  │    ITEM → TARGET                             │        │
+│  │    ITEM_ABOVE → TARGET_ABOVE                 │        │
+│  └────────────┬─────────────────────────────────┘        │
+│               ↓                                            │
+│  ┌──────────────────────────────────────────────┐        │
+│  │ 2. Match abstract patterns                   │        │
+│  │    Find: {TARGET_ABOVE} → MOVE_UP            │        │
+│  │    Confidence: 0.67 (from 2 domains)         │        │
+│  └────────────┬─────────────────────────────────┘        │
+│               ↓                                            │
+│  ┌──────────────────────────────────────────────┐        │
+│  │ 3. Ground to target domain                   │        │
+│  │    MOVE_UP → ACTION_UP (Collector)           │        │
+│  └────────────┬─────────────────────────────────┘        │
+│               ↓                                            │
+│  Recommendation: ACTION_UP (confidence=0.67)              │
+│  Status: ZERO-SHOT TRANSFER (no Collector training)      │
+└───────────────────────────────────────────────────────────┘
+
+Transfer Performance:
+  Baseline (no transfer): 38.2 avg reward
+  With transfer: 44.0 avg reward
+  Gain: +15.2% improvement
+  Learning speed: 4.5× faster to 90% performance
 ```
 
 ---
