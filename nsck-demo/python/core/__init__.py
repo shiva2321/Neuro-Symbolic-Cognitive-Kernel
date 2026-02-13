@@ -3,5 +3,4 @@ NSCK Core - Cognitive Architecture
 ===================================
 Core neuro-symbolic cognitive components.
 """
-
-__version__ = "2.0.0"
+# Empty init to avoid circular imports - import modules directly
