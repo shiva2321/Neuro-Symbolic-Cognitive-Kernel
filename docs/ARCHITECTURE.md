@@ -6,7 +6,10 @@ NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines
 
 **For detailed implementation reference:**
 - **[MODULE_REFERENCE.md](MODULE_REFERENCE.md)** - Complete API documentation with all class signatures and methods
-- **[VSA_THEORY.md](VSA_THEORY.md)** - Mathematical foundations, proofs, and formulas
+- **[VSA_THEORY.md](VSA_THEORY.md)** - Mathematical foundations, proofs, and formulas (80+ pages)
+- **[FORMULAS_AND_PROOFS.md](FORMULAS_AND_PROOFS.md)** - Mathematical derivations, test evidence, worked examples
+- **[PHASE_HISTORY.md](PHASE_HISTORY.md)** - Complete development timeline through Phase 0-8
+- **[BENCHMARK_RESULTS.md](BENCHMARK_RESULTS.md)** - Performance measurements and experimental data
 - **[DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)** - Development guidelines, coding standards, and extension patterns
 
 ```
@@ -48,7 +51,7 @@ NSCK (Neuro-Symbolic Cognitive Kernel) is a cognitive architecture that combines
 
 **How**: All concepts, states, actions, and memories are encoded as binary vectors.
 
-**Operations** (see [FORMULAS_AND_PROOFS.md](FORMULAS_AND_PROOFS.md) for full derivations):
+**Operations** (see [FORMULAS_AND_PROOFS.md](FORMULAS_AND_PROOFS.md) for full derivations and [VSA_THEORY.md](VSA_THEORY.md) for theoretical foundations):
 
 1. **XOR Binding**: `BIND(A, B) = A ⊕ B`
    - Time: O(D) where D=10,240
