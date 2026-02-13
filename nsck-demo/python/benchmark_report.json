@@ -1,0 +1,138 @@
+{
+  "timestamp": "2026-02-13T02:20:11.322326+00:00",
+  "duration_seconds": 0.23,
+  "results": [
+    {
+      "game": "balancer",
+      "agent": "teacher",
+      "episodes": 100,
+      "avg_score": 7.95,
+      "median_score": 3,
+      "max_score": 49,
+      "min_score": 2,
+      "avg_steps": 103.6,
+      "avg_reward": -0.015,
+      "success_rate": 1.0,
+      "first_success_episode": 0
+    },
+    {
+      "game": "catcher",
+      "agent": "teacher",
+      "episodes": 100,
+      "avg_score": 20.0,
+      "median_score": 20,
+      "max_score": 20,
+      "min_score": 20,
+      "avg_steps": 340.5,
+      "avg_reward": 24.5,
+      "success_rate": 1.0,
+      "first_success_episode": 0
+    },
+    {
+      "game": "balancer",
+      "agent": "random",
+      "episodes": 100,
+      "avg_score": 43.08,
+      "median_score": 43,
+      "max_score": 49,
+      "min_score": 34,
+      "avg_steps": 500.0,
+      "avg_reward": 48.551,
+      "success_rate": 1.0,
+      "first_success_episode": 0
+    },
+    {
+      "game": "catcher",
+      "agent": "random",
+      "episodes": 100,
+      "avg_score": 1.23,
+      "median_score": 1,
+      "max_score": 6,
+      "min_score": 0,
+      "avg_steps": 126.5,
+      "avg_reward": -8.77,
+      "success_rate": 0.72,
+      "first_success_episode": 0
+    },
+    {
+      "game": "balancer",
+      "agent": "teacher",
+      "episodes": 100,
+      "avg_score": 10.91,
+      "median_score": 3,
+      "max_score": 49,
+      "min_score": 2,
+      "avg_steps": 132.4,
+      "avg_reward": 3.997,
+      "success_rate": 1.0,
+      "first_success_episode": 0
+    },
+    {
+      "game": "catcher",
+      "agent": "transfer(balancer->catcher)",
+      "episodes": 100,
+      "avg_score": 1.59,
+      "median_score": 1,
+      "max_score": 6,
+      "min_score": 0,
+      "avg_steps": 131.8,
+      "avg_reward": -8.41,
+      "success_rate": 0.83,
+      "first_success_episode": 2
+    },
+    {
+      "game": "catcher",
+      "agent": "random",
+      "episodes": 100,
+      "avg_score": 1.1,
+      "median_score": 1,
+      "max_score": 4,
+      "min_score": 0,
+      "avg_steps": 124.5,
+      "avg_reward": -8.9,
+      "success_rate": 0.69,
+      "first_success_episode": 1
+    }
+  ],
+  "transfer_test": {
+    "source_training": {
+      "game": "balancer",
+      "agent": "teacher",
+      "episodes": 100,
+      "avg_score": 10.91,
+      "median_score": 3,
+      "max_score": 49,
+      "min_score": 2,
+      "avg_steps": 132.4,
+      "avg_reward": 3.997,
+      "success_rate": 1.0,
+      "first_success_episode": 0
+    },
+    "transfer": {
+      "game": "catcher",
+      "agent": "transfer(balancer->catcher)",
+      "episodes": 100,
+      "avg_score": 1.59,
+      "median_score": 1,
+      "max_score": 6,
+      "min_score": 0,
+      "avg_steps": 131.8,
+      "avg_reward": -8.41,
+      "success_rate": 0.83,
+      "first_success_episode": 2
+    },
+    "random_baseline": {
+      "game": "catcher",
+      "agent": "random",
+      "episodes": 100,
+      "avg_score": 1.1,
+      "median_score": 1,
+      "max_score": 4,
+      "min_score": 0,
+      "avg_steps": 124.5,
+      "avg_reward": -8.9,
+      "success_rate": 0.69,
+      "first_success_episode": 1
+    }
+  }
+}

@@ -412,3 +412,174 @@ def create_maze_verifier() -> GroundingVerifier:
     )
     
     return verifier
+
+
+def _obstacle_at(state: Dict, dx: int, dy: int) -> bool:
+    """Check if there's an obstacle at offset from head/player."""
+    head = state.get("head", (5, 5))
+    obstacles = state.get("obstacles", state.get("walls", []))
+    obs_set = set(tuple(o) for o in obstacles)
+    target = (head[0] + dx, head[1] + dy)
+    width = state.get("width", 10)
+    height = state.get("height", 10)
+    # Out of bounds counts as obstacle
+    if not (0 <= target[0] < width and 0 <= target[1] < height):
+        return True
+    return target in obs_set
+
+
+def create_collector_verifier() -> GroundingVerifier:
+    """
+    Create a grounding verifier with Collector-specific predicates.
+
+    Uses the same predicate vocabulary as Snake/Maze to enable transfer:
+    - REL_ABOVE/BELOW/LEFT/RIGHT -> relative to next target item
+    - OBSTACLE_UP/DOWN/LEFT/RIGHT -> static obstacle detection
+    - ACTION_UP/DOWN/LEFT/RIGHT -> movement effects
+
+    Returns:
+        Configured GroundingVerifier for Collector game
+    """
+    verifier = GroundingVerifier()
+
+    # Target relative positions (next item to collect)
+    verifier.register_predicate(
+        "REL_ABOVE",
+        lambda s: (s.get("target") or s.get("food") or (0, 0))[1] < s.get("head", (0, 0))[1],
+        context="collector"
+    )
+    verifier.register_predicate(
+        "REL_BELOW",
+        lambda s: (s.get("target") or s.get("food") or (0, 0))[1] > s.get("head", (0, 0))[1],
+        context="collector"
+    )
+    verifier.register_predicate(
+        "REL_LEFT",
+        lambda s: (s.get("target") or s.get("food") or (0, 0))[0] < s.get("head", (0, 0))[0],
+        context="collector"
+    )
+    verifier.register_predicate(
+        "REL_RIGHT",
+        lambda s: (s.get("target") or s.get("food") or (0, 0))[0] > s.get("head", (0, 0))[0],
+        context="collector"
+    )
+
+    # Obstacle detection (maps to Snake's DANGER_* and Maze's WALL_AT_*)
+    verifier.register_predicate("OBSTACLE_UP", lambda s: _obstacle_at(s, 0, -1), context="collector")
+    verifier.register_predicate("OBSTACLE_DOWN", lambda s: _obstacle_at(s, 0, 1), context="collector")
+    verifier.register_predicate("OBSTACLE_LEFT", lambda s: _obstacle_at(s, -1, 0), context="collector")
+    verifier.register_predicate("OBSTACLE_RIGHT", lambda s: _obstacle_at(s, 1, 0), context="collector")
+
+    # Action effects
+    verifier.register_action(
+        "ACTION_UP",
+        lambda b, a: a.get("head", (0, 0))[1] < b.get("head", (0, 0))[1],
+        context="collector"
+    )
+    verifier.register_action(
+        "ACTION_DOWN",
+        lambda b, a: a.get("head", (0, 0))[1] > b.get("head", (0, 0))[1],
+        context="collector"
+    )
+    verifier.register_action(
+        "ACTION_LEFT",
+        lambda b, a: a.get("head", (0, 0))[0] < b.get("head", (0, 0))[0],
+        context="collector"
+    )
+    verifier.register_action(
+        "ACTION_RIGHT",
+        lambda b, a: a.get("head", (0, 0))[0] > b.get("head", (0, 0))[0],
+        context="collector"
+    )
+
+    return verifier
+
+
+def create_balancer_verifier() -> GroundingVerifier:
+    """
+    Create verifier for Balancer game.
+
+    Shared predicates with Catcher for transfer:
+    - OBJECT_LEFT/RIGHT -> ball position relative to center
+    - MOVING_LEFT/RIGHT -> ball velocity direction
+    - DANGER_LEFT/RIGHT -> ball near edge
+    """
+    verifier = GroundingVerifier()
+
+    verifier.register_predicate(
+        "OBJECT_LEFT",
+        lambda s: s.get("object_x", 0.0) < -0.1,
+        context="balancer"
+    )
+    verifier.register_predicate(
+        "OBJECT_RIGHT",
+        lambda s: s.get("object_x", 0.0) > 0.1,
+        context="balancer"
+    )
+    verifier.register_predicate(
+        "MOVING_LEFT",
+        lambda s: s.get("object_vel", 0.0) < -0.005,
+        context="balancer"
+    )
+    verifier.register_predicate(
+        "MOVING_RIGHT",
+        lambda s: s.get("object_vel", 0.0) > 0.005,
+        context="balancer"
+    )
+    verifier.register_predicate(
+        "DANGER_LEFT",
+        lambda s: s.get("object_x", 0.0) < -0.7,
+        context="balancer"
+    )
+    verifier.register_predicate(
+        "DANGER_RIGHT",
+        lambda s: s.get("object_x", 0.0) > 0.7,
+        context="balancer"
+    )
+
+    return verifier
+
+
+def create_catcher_verifier() -> GroundingVerifier:
+    """
+    Create verifier for Catcher game.
+
+    Shared predicates with Balancer for transfer:
+    - OBJECT_LEFT/RIGHT -> nearest object relative to paddle
+    - MOVING_LEFT/RIGHT -> object horizontal drift
+    - DANGER_LEFT/RIGHT -> paddle near wall
+    """
+    verifier = GroundingVerifier()
+
+    verifier.register_predicate(
+        "OBJECT_LEFT",
+        lambda s: s.get("object_x", 0.5) < s.get("paddle_x", 0.5) - 0.05,
+        context="catcher"
+    )
+    verifier.register_predicate(
+        "OBJECT_RIGHT",
+        lambda s: s.get("object_x", 0.5) > s.get("paddle_x", 0.5) + 0.05,
+        context="catcher"
+    )
+    verifier.register_predicate(
+        "MOVING_LEFT",
+        lambda s: s.get("object_vel", 0.0) < -0.002,
+        context="catcher"
+    )
+    verifier.register_predicate(
+        "MOVING_RIGHT",
+        lambda s: s.get("object_vel", 0.0) > 0.002,
+        context="catcher"
+    )
+    verifier.register_predicate(
+        "DANGER_LEFT",
+        lambda s: s.get("paddle_x", 0.5) < 0.15,
+        context="catcher"
+    )
+    verifier.register_predicate(
+        "DANGER_RIGHT",
+        lambda s: s.get("paddle_x", 0.5) > 0.85,
+        context="catcher"
+    )
+
+    return verifier

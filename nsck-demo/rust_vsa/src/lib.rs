@@ -57,11 +57,16 @@ impl HyperVector {
     // Given the constraints (binary hypervectors), bundling 2 vectors usually requires a random tie-break 
     // for every bit where they differ.
     fn bundle(&self, other: &HyperVector) -> HyperVector {
-        // Implementation: For each bit, if they are same, keep it. If differ, random choice (or fixed deterministic per dimension).
-        // A common trick for binary bundling of A and B is to use a permutation or just random selection.
-        // Let's use a seeded random choice based on the index to be deterministic but "fair".
+        // For each bit: if both agree, keep it. If they differ, random tie-break.
+        // Seed is derived from the content of BOTH vectors so that:
+        //   1. bundle(A, B) is deterministic (same inputs → same output)
+        //   2. bundle(A, B) vs bundle(C, D) use DIFFERENT masks (fair per-pair)
         
-        let mut rng = ChaCha8Rng::seed_from_u64(0xDEADBEEF); // Fixed seed for reproducibility of operation
+        let pair_seed = self.bits[0]
+            ^ other.bits[0]
+            ^ self.bits[1].wrapping_mul(0x9E3779B97F4A7C15)
+            ^ other.bits[1].wrapping_mul(0x517CC1B727220A95);
+        let mut rng = ChaCha8Rng::seed_from_u64(pair_seed);
         
         let fused: Vec<u64> = self.bits.iter()
             .zip(other.bits.iter())
@@ -93,9 +98,12 @@ impl HyperVector {
     /// weight=0.9 -> 90% of bits from self, 10% from other (similarity ~0.95)
     #[pyo3(signature = (other, weight, seed = None))]
     fn weighted_bundle(&self, other: &HyperVector, weight: f64, seed: Option<u64>) -> HyperVector {
+        let pair_seed = self.bits[0]
+            ^ other.bits[0]
+            ^ self.bits[1].wrapping_mul(0x9E3779B97F4A7C15);
         let mut rng = match seed {
             Some(s) => ChaCha8Rng::seed_from_u64(s),
-            None => ChaCha8Rng::seed_from_u64(0xCAFEBABE),
+            None => ChaCha8Rng::seed_from_u64(pair_seed),
         };
         
         // weight determines probability of picking from self vs other

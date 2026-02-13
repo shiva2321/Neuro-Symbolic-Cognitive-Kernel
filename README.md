@@ -100,6 +100,8 @@ All components are designed to work together through a central cognitive engine,
 
 The following capabilities are implemented and covered by the test suite. See [Testing](docs/TESTING.md) for evidence and reproduction guidance.
 
+**New:** See the [Transfer Learning Experiments Report](docs/TRANSFER_EXPERIMENTS_REPORT.md) for detailed results on cross-domain transfer (+345%) and language generalization (+2000%).
+
 ### Phase 0: Foundation
 | Capability | Description |
 |---|---|
@@ -158,6 +160,8 @@ The following capabilities are implemented and covered by the test suite. See [T
 | **Cross-Domain Transfer** | Learn in Snake, apply in Pong/Maze via structural analogy |
 | **Knowledge Consolidation** | Multi-domain experiences → abstract domain-independent rules |
 | **Global Rules** | Domain-independent safety rules apply across all tasks |
+| **Grounding Verification** | **NEW:** `GroundingVerifier` ensures symbols match reality across games |
+| **Transfer Experiments** | **NEW:** +345% transfer efficiency (Catcher ↔ Balancer), +2000% via language |
 | **LLM Translator** | Phi3 translates system state to natural language (peripheral only) |
 | **Full Integration** | All phases working as unified cognitive architecture |
 

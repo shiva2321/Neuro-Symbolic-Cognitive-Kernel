@@ -42,6 +42,7 @@ from self_model import SelfModel
 from language_module import LanguageModule
 from dialogue_manager import DialogueManager
 from maze_game import MazeGame
+from collector_game import CollectorGame
 from text_knowledge_learner import TextKnowledgeLearner
 import heapq
 from collections import defaultdict
@@ -243,8 +244,29 @@ def _init_maze() -> Dict[str, Any]:
     }
 
 
-def solve_maze_astar(start, goal, walls, width=10, height=10):
-    """A* Solver for Maze."""
+def _init_collector() -> Dict[str, Any]:
+    game = CollectorGame(width=10, height=10, num_items=4)
+    state_dict = game.state.to_dict()
+    obstacles = set()
+    for o in state_dict["obstacles"]:
+        obstacles.add(tuple(o))
+    items = [tuple(i) for i in state_dict["items"]]
+    return {
+        "type": "collector",
+        "player": tuple(state_dict["player_pos"]),
+        "items": items,
+        "collected": 0,
+        "obstacles": obstacles,
+        "size": 10,
+        "score": 0,
+        "steps": 0,
+        "done": False,
+        "history": [],
+    }
+
+
+def solve_astar(start, goal, walls, width=10, height=10):
+    """A* Solver for grid navigation (Maze + Collector)."""
     def heuristic(a, b):
         return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
@@ -288,6 +310,9 @@ def solve_maze_astar(start, goal, walls, width=10, height=10):
                     if neighbor not in [i[1] for i in open_set]:
                         heapq.heappush(open_set, (f_score[neighbor], neighbor))
     return None # No path
+
+# Backward-compat alias
+solve_maze_astar = solve_astar
 
 def solve_snake_bfs(head, food, body, width=10, height=10):
     """BFS Solver for Snake."""
@@ -363,8 +388,17 @@ def _choose_action_for_game(game_state: Dict) -> str:
         elif game_type == "maze":
             # Convert set of walls to list for checking
             walls = game_state["walls"]
-            suggested_action = solve_maze_astar(game_state["player"], game_state["exit"], walls)
+            suggested_action = solve_astar(game_state["player"], game_state["exit"], walls)
             if not suggested_action: suggested_action = "UP" # Stuck?
+
+        elif game_type == "collector":
+            # Navigate to next uncollected item using A*
+            items = game_state.get("items", [])
+            collected = game_state.get("collected", 0)
+            if collected < len(items):
+                target = tuple(items[collected])
+                suggested_action = solve_astar(game_state["player"], target, game_state.get("obstacles", set()))
+            if not suggested_action: suggested_action = "UP"
 
         elif game_type == "pong":
             # Perfect tracking
@@ -486,6 +520,33 @@ def _step_game(session_id: str) -> Dict[str, Any]:
             if gs["steps"] >= 200:
                 done = True
 
+        elif game_type == "collector":
+            px, py = gs["player"]
+            nx, ny = px, py
+            if action == "UP":
+                ny -= 1
+            elif action == "DOWN":
+                ny += 1
+            elif action == "LEFT":
+                nx -= 1
+            elif action == "RIGHT":
+                nx += 1
+            if (nx, ny) not in gs.get("obstacles", set()) and 0 <= nx < gs["size"] and 0 <= ny < gs["size"]:
+                gs["player"] = (nx, ny)
+            # Check item collection
+            items = gs.get("items", [])
+            collected = gs.get("collected", 0)
+            if collected < len(items) and gs["player"] == tuple(items[collected]):
+                gs["collected"] = collected + 1
+                gs["score"] += 1
+                reward = 1.0
+                if gs["collected"] >= len(items):
+                    done = True
+                    reward = 5.0
+            gs["steps"] += 1
+            if gs["steps"] >= 300:
+                done = True
+
         gs["done"] = done
 
         # Update self-model with result
@@ -542,6 +603,12 @@ def _run_game_loop(session_id: str, stop_event: threading.Event, speed: float = 
                         gs["player"] = new_maze["player"]
                         gs["exit"] = new_maze["exit"]
                         gs["walls"] = new_maze["walls"]
+                    elif gs["type"] == "collector":
+                        new_coll = _init_collector()
+                        gs["player"] = new_coll["player"]
+                        gs["items"] = new_coll["items"]
+                        gs["collected"] = 0
+                        gs["obstacles"] = new_coll["obstacles"]
             _log("game", f"Auto-restarting session {session_id}")
             continue
         stop_event.wait(speed)
