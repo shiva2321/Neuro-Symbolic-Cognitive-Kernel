@@ -27,7 +27,8 @@ from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any, Tuple
 
 # Ensure nsck-demo/python is on the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
+
 
 import numpy as np
 
