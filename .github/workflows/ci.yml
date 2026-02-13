@@ -35,9 +35,5 @@ jobs:
         run: |
           python -m pytest nsck-demo/tests/ -v \
             --ignore=nsck-demo/tests/test_dashboard.py \
-            --ignore=nsck-demo/tests/test_deep_dreaming.py \
-            --ignore=nsck-demo/tests/test_dynamic_brain.py \
-            --ignore=nsck-demo/tests/test_saliency.py \
-            --ignore=nsck-demo/tests/test_transfer.py \
             --ignore=nsck-demo/tests/test_server_a2c.py \
             --tb=short
