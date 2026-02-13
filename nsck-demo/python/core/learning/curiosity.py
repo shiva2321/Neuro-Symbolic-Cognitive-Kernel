@@ -8,7 +8,7 @@ import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 
 @dataclass

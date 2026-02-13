@@ -1,5 +1,5 @@
 import unittest
-from self_model import SelfModel
+from python.core.cognitive.self_model import SelfModel
 
 class TestSelfModel(unittest.TestCase):
     def test_cold_start(self):

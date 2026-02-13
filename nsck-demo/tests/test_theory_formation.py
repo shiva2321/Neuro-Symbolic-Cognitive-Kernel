@@ -1,5 +1,5 @@
 import unittest
-from causal_reasoning import TheoryModule, CausalLink, CausalRelation
+from python.core.reasoning.causal_reasoning import TheoryModule, CausalLink, CausalRelation
 
 class TestTheoryFormation(unittest.TestCase):
     def setUp(self):

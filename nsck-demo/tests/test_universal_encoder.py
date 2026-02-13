@@ -4,9 +4,8 @@ import sys
 import os
 
 # Add python directory to path
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'python'))
 
-from universal_encoder import UniversalEncoder
+from python.core.vsa.universal_encoder import UniversalEncoder
 
 class TestUniversalEncoder(unittest.TestCase):
     def setUp(self):

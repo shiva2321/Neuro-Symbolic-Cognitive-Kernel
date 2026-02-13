@@ -7,7 +7,6 @@ import os
 import json
 import io
 import zipfile
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 from python.cognitive_dashboard import app, get_system, _activity_log
 

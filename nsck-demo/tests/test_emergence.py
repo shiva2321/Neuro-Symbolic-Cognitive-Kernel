@@ -4,10 +4,9 @@ import unittest
 from unittest.mock import MagicMock, patch
 
 # Add project root to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from cognitive_engine import create_cognitive_engine
-from persistence import Rule
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
+from python.core.integration.persistence import Rule
 
 class TestEmergence(unittest.TestCase):
     def setUp(self):

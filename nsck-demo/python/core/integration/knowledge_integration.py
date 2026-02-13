@@ -21,23 +21,23 @@ import time
 import numpy as np
 
 try:
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
-    from hypervec_py import HyperVector as _HV
+    from python.core.vsa.hypervec_py import HyperVector as _HV
 
     class _Shim:
         HyperVector = _HV
     hypervec_rs = _Shim()
 
-from semantic_memory import SemanticMemory
-from episodic_memory import EpisodicMemory, LiveEpisode
-from context_engine import ContextEngine, ContextFrame, DisambiguatedMeaning
-from multimodal_processor import (
+from python.core.memory.semantic_memory import SemanticMemory
+from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
+from python.core.reasoning.context_engine import ContextEngine, ContextFrame, DisambiguatedMeaning
+from python.core.multimodal.multimodal_processor import (
     MultimodalProcessor,
     MultimodalInput,
     ProcessedInput,
 )
-from causal_reasoning import CausalGraph, CausalDiscovery, CausalReasoner
+from python.core.reasoning.causal_reasoning import CausalGraph, CausalDiscovery, CausalReasoner
 
 
 # ---------------------------------------------------------------------------

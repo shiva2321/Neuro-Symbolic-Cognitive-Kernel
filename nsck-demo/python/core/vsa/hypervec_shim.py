@@ -6,7 +6,7 @@ transparently to the pure-Python implementation in ``hypervec_py``.
 
 Modules throughout the codebase should import via::
 
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 
 This guarantees they get the fastest available backend without crashing
 when the Rust build is missing.
@@ -28,7 +28,7 @@ except ImportError:
 
 if _ext is None:
     # Fall back to the pure-Python implementation.
-    from hypervec_py import HyperVectorPy as _FallbackHV  # noqa: E402
+    from python.core.vsa.hypervec_py import HyperVectorPy as _FallbackHV  # noqa: E402
 
     if multiprocessing.current_process().name == "MainProcess":
         print(">> [VSA] Using Python Fallback (via shim)")

@@ -10,7 +10,6 @@ Run with:  python -m pytest tests/test_capability_proofs.py -v -s
 """
 
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import pytest
 import numpy as np
@@ -32,7 +31,7 @@ class TestContextAwareSelfModel:
         WHY:  A flat task-level average hides situational weaknesses.
               Context-aware prediction reveals "I'm bad at corners".
         """
-        from self_model import SelfModel
+        from python.core.cognitive.self_model import SelfModel
 
         model = SelfModel()
 
@@ -74,7 +73,7 @@ class TestContextAwareSelfModel:
         WHY:  Knowing whether performance is improving or declining enables
               intelligent curriculum decisions.
         """
-        from self_model import SelfModel
+        from python.core.cognitive.self_model import SelfModel
 
         model = SelfModel()
 
@@ -105,7 +104,7 @@ class TestContextAwareSelfModel:
         HOW:  Multiple contexts fed, then get_context_performance() summarizes.
         WHY:  Detailed diagnostics for agent self-awareness.
         """
-        from self_model import SelfModel
+        from python.core.cognitive.self_model import SelfModel
 
         model = SelfModel()
         for _ in range(10):
@@ -146,7 +145,7 @@ class TestEmotionBlendingAndMood:
         WHY:  Real emotions are rarely pure; blends capture nuance
               (e.g., 70 % joy + 20 % anticipation + 10 % surprise).
         """
-        from emotion_system import EmotionSystem
+        from python.core.cognitive.emotion_system import EmotionSystem
 
         emo = EmotionSystem()
         emo.update_from_drives({"curiosity": 0.6}, reward=0.8)
@@ -178,7 +177,7 @@ class TestEmotionBlendingAndMood:
         WHY:  Mood represents sustained emotional tendency, useful for
               long-term behavioral adaptation.
         """
-        from emotion_system import EmotionSystem
+        from python.core.cognitive.emotion_system import EmotionSystem
 
         emo = EmotionSystem()
 
@@ -212,7 +211,7 @@ class TestEmotionBlendingAndMood:
               step, emotion, valence, arousal, intensity.
         WHY:  Trajectory analysis supports "What was I feeling 10 steps ago?"
         """
-        from emotion_system import EmotionSystem
+        from python.core.cognitive.emotion_system import EmotionSystem
 
         emo = EmotionSystem()
         for i in range(5):
@@ -239,7 +238,7 @@ class TestEmotionBlendingAndMood:
         HOW:  Keyword-based matcher checks surprise, trust, disgust, anticipation.
         WHY:  Broader coverage means better user-emotion detection.
         """
-        from emotion_system import EmotionSystem
+        from python.core.cognitive.emotion_system import EmotionSystem
 
         emo = EmotionSystem()
 
@@ -280,7 +279,7 @@ class TestEnhancedCounterfactualReasoning:
               The counterfactual compares risk of UP vs DOWN.
         WHY:  Risk/benefit quantification enables safer decision-making.
         """
-        from causal_reasoning import create_snake_causal_graph, CausalReasoner
+        from python.core.reasoning.causal_reasoning import create_snake_causal_graph, CausalReasoner
 
         graph = create_snake_causal_graph()
         reasoner = CausalReasoner(graph)
@@ -316,7 +315,7 @@ class TestEnhancedCounterfactualReasoning:
         HOW:  Compare snake and pong causal graphs, show both produce results.
         WHY:  Domain-general counterfactual reasoning.
         """
-        from causal_reasoning import (
+        from python.core.reasoning.causal_reasoning import (
             create_snake_causal_graph,
             create_pong_causal_graph,
             CausalReasoner
@@ -444,7 +443,7 @@ class TestTheoryOfMindProofs:
         WHY:  First-order Theory of Mind — understanding that others can
               hold incorrect beliefs — is a hallmark of social cognition.
         """
-        from theory_of_mind import TheoryOfMind
+        from python.core.cognitive.theory_of_mind import TheoryOfMind
 
         tom = TheoryOfMind()
 
@@ -486,7 +485,7 @@ class TestTheoryOfMindProofs:
         WHY:  Real social environments involve multiple actors with
               different knowledge states.
         """
-        from theory_of_mind import TheoryOfMind
+        from python.core.cognitive.theory_of_mind import TheoryOfMind
 
         tom = TheoryOfMind()
 
@@ -568,7 +567,7 @@ class TestCognitiveMetrics:
         WHY:  Proves all 7 phases work together in sequence.
         """
         from train_phase7_demo import IntegratedNSCKSystem
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         system = IntegratedNSCKSystem()
 
@@ -644,7 +643,7 @@ class TestCausalDiscoveryProofs:
               CausalDiscovery uses Delta-P to identify real causes vs. noise.
         WHY:  Causal learning from data is more general than hand-coded graphs.
         """
-        from causal_reasoning import CausalDiscovery
+        from python.core.reasoning.causal_reasoning import CausalDiscovery
 
         disc = CausalDiscovery()
 
@@ -684,7 +683,7 @@ class TestCausalDiscoveryProofs:
         WHY:  Theories enable prediction in novel situations by abstracting
               away domain-specific details.
         """
-        from causal_reasoning import TheoryModule, CausalLink, CausalRelation
+        from python.core.reasoning.causal_reasoning import TheoryModule, CausalLink, CausalRelation
 
         theory_mod = TheoryModule()
 
@@ -728,7 +727,7 @@ class TestPerceptionProofs:
         WHY:  HV representation enables efficient similarity search, binding,
               and downstream reasoning using O(n) VSA operations.
         """
-        from multimodal_processor import MultimodalProcessor, MultimodalInput
+        from python.core.multimodal.multimodal_processor import MultimodalProcessor, MultimodalInput
 
         proc = MultimodalProcessor()
         result = proc.process(MultimodalInput(text="The cat sat on the mat"))
@@ -754,8 +753,8 @@ class TestPerceptionProofs:
         WHY:  If HV similarity tracks meaning, the system can reason about
               semantic relatedness without an LLM.
         """
-        from multimodal_processor import MultimodalProcessor, MultimodalInput
-        import hypervec_shim as hvs
+        from python.core.multimodal.multimodal_processor import MultimodalProcessor, MultimodalInput
+        import python.core.vsa.hypervec_shim as hvs
 
         proc = MultimodalProcessor()
         hv_a = proc.process(MultimodalInput(text="The dog ran fast")).fused_hv
@@ -791,8 +790,8 @@ class TestWorldModelProofs:
         HOW:  WorldModel.imagine(state_hv, action_hv) returns (next_state, reward).
         WHY:  Mental simulation enables look-ahead planning without trial-and-error.
         """
-        from world_model import WorldModel
-        import hypervec_shim as hvs
+        from python.core.neural.world_model import WorldModel
+        import python.core.vsa.hypervec_shim as hvs
 
         wm = WorldModel(hv_dim=10240)
         state = hvs.HyperVector()
@@ -832,7 +831,7 @@ class TestContinualLearningProofs:
         WHY:  Without EWC, learning Task B would overwrite Task A knowledge
               (catastrophic forgetting).
         """
-        from continual_learning import ContinualLearner
+        from python.core.learning.continual_learning import ContinualLearner
         import torch
         import torch.nn as nn
 

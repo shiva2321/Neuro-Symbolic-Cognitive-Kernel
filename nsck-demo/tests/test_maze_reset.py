@@ -4,9 +4,8 @@ import time
 import random
 
 # Add python dir to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'python')))
 
-from maze_game import MazeGame
+from python.games.maze.maze_game import MazeGame
 
 def test_maze_reset_stress():
     print("Starting Maze Reset Stress Test (100 iterations)...")

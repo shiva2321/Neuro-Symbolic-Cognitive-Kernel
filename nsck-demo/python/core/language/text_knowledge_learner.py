@@ -31,21 +31,21 @@ from dataclasses import dataclass
 import numpy as np
 
 try:
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
-    from hypervec_py import HyperVector as _HV
+    from python.core.vsa.hypervec_py import HyperVector as _HV
     class _Shim:
         HyperVector = _HV
     hypervec_rs = _Shim()
 
-from lingua_cortex import get_lingua_cortex, SemanticFingerprint
-from semantic_memory import SemanticMemory
-from episodic_memory import EpisodicMemory, LiveEpisode
-from context_engine import ContextEngine
-from causal_reasoning import CausalGraph, CausalReasoner
+from python.core.language.lingua_cortex import get_lingua_cortex, SemanticFingerprint
+from python.core.memory.semantic_memory import SemanticMemory
+from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
+from python.core.reasoning.context_engine import ContextEngine
+from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner
 # [AGI] Phase 4: Language Integration
 try:
-    from language_module import LanguageModule
+    from python.core.language.language_module import LanguageModule
 except ImportError:
     LanguageModule = None
 

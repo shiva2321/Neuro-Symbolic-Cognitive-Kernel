@@ -17,8 +17,8 @@ import numpy as np
 import cv2
 
 # Import maze game from parent
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from maze_game import MazeGame, Cell
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))))
+from python.games.maze.maze_game import MazeGame, Cell
 
 # --- CONFIG ---
 CELL_SIZE = 30

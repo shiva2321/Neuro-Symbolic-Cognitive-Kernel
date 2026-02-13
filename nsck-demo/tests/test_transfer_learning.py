@@ -15,12 +15,11 @@ import sys
 import os
 import unittest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python'))
 
-from analogy import AnalogyEngine
+from python.core.reasoning.analogy import AnalogyEngine
 from train_phase7_demo import IntegratedNSCKSystem, KnowledgeStore
-from persistence import Rule
-from cognitive_engine import create_cognitive_engine
+from python.core.integration.persistence import Rule
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
 from unittest.mock import patch
 
 

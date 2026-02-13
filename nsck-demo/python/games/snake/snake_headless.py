@@ -10,9 +10,9 @@ import sys
 import os
 
 # Imports from our new brains
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
-from homeostasis import HomeostaticMonitor
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../'))))
+from python.utilities.agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
+from python.utilities.homeostasis import HomeostaticMonitor
 
 def main():
     context = zmq.Context()

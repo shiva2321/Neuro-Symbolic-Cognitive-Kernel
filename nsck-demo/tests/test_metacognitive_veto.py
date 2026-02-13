@@ -1,6 +1,6 @@
 import unittest
 from unittest.mock import MagicMock
-from cognitive_engine import create_cognitive_engine
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
 
 class TestMetacognitiveVeto(unittest.TestCase):
     def test_confidence_passthrough(self):

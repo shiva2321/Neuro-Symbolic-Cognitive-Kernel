@@ -11,11 +11,10 @@ import sys
 import os
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from balancer_game import BalancerGame, sim_balancer
-from catcher_game import CatcherGame, sim_catcher
-from grounding_verifier import create_balancer_verifier, create_catcher_verifier
+from python.games.physics.balancer_game import BalancerGame, sim_balancer
+from python.games.physics.catcher_game import CatcherGame, sim_catcher
+from python.core.perception.grounding_verifier import create_balancer_verifier, create_catcher_verifier
 
 
 class TestBalancerGame:
@@ -119,7 +118,7 @@ class TestCatcherGame:
         game = CatcherGame()
         game.state.objects = []
         # Place object directly on paddle at ground level
-        from catcher_game import FallingObject
+        from python.games.physics.catcher_game import FallingObject
         game.state.objects.append(FallingObject(
             x=game.state.paddle_x, y=0.04, vx=0.0, vy=-0.02
         ))
@@ -129,7 +128,7 @@ class TestCatcherGame:
     def test_miss_increments_misses(self):
         game = CatcherGame()
         game.state.objects = []
-        from catcher_game import FallingObject
+        from python.games.physics.catcher_game import FallingObject
         # Place object far from paddle at ground level
         game.state.objects.append(FallingObject(
             x=0.9, y=0.04, vx=0.0, vy=-0.02
@@ -142,7 +141,7 @@ class TestCatcherGame:
         game = CatcherGame()
         game.state.catches = 19
         game.state.objects = []
-        from catcher_game import FallingObject
+        from python.games.physics.catcher_game import FallingObject
         game.state.objects.append(FallingObject(
             x=game.state.paddle_x, y=0.04, vx=0.0, vy=-0.02
         ))
@@ -212,19 +211,19 @@ class TestBenchmarkIntegration:
     """Tests for BalancerEnv and CatcherEnv in benchmark."""
 
     def test_balancer_env_runs(self):
-        from benchmark import BalancerEnv
+        from python.benchmarks.benchmark import BalancerEnv
         env = BalancerEnv()
         state = env.reset()
         assert state["type"] == "balancer"
 
     def test_catcher_env_runs(self):
-        from benchmark import CatcherEnv
+        from python.benchmarks.benchmark import CatcherEnv
         env = CatcherEnv()
         state = env.reset()
         assert state["type"] == "catcher"
 
     def test_teacher_survives_balancer(self):
-        from benchmark import BalancerEnv, TeacherAgent
+        from python.benchmarks.benchmark import BalancerEnv, TeacherAgent
         env = BalancerEnv()
         agent = TeacherAgent()
         state = env.reset()
@@ -237,7 +236,7 @@ class TestBenchmarkIntegration:
         assert env.steps >= 30
 
     def test_teacher_catches_in_catcher(self):
-        from benchmark import CatcherEnv, TeacherAgent
+        from python.benchmarks.benchmark import CatcherEnv, TeacherAgent
         env = CatcherEnv()
         agent = TeacherAgent()
         state = env.reset()
@@ -249,13 +248,13 @@ class TestBenchmarkIntegration:
         assert env.score >= 1
 
     def test_both_in_envs_dict(self):
-        from benchmark import ENVS
+        from python.benchmarks.benchmark import ENVS
         assert "balancer" in ENVS
         assert "catcher" in ENVS
 
     def test_predicate_hash_shared(self):
         """Balancer and Catcher produce the same hash format for transfer."""
-        from benchmark import StudentAgent
+        from python.benchmarks.benchmark import StudentAgent
         bal_state = {"type": "balancer", "object_x": 0.3, "object_vel": 0.01, "ball_pos": 0.3, "ball_vel": 0.01}
         cat_state = {"type": "catcher", "object_x": 0.3, "object_vel": 0.01, "paddle_x": 0.5}
         h1 = StudentAgent._hash("balancer", bal_state)
@@ -271,7 +270,7 @@ class TestTransferExperiment:
     """End-to-end transfer test: train on Balancer, test on Catcher."""
 
     def test_transfer_balancer_to_catcher(self):
-        from benchmark import BalancerEnv, CatcherEnv, TeacherAgent, StudentAgent, LearnedPolicy
+        from python.benchmarks.benchmark import BalancerEnv, CatcherEnv, TeacherAgent, StudentAgent, LearnedPolicy
 
         # 1. Train on Balancer
         env = BalancerEnv()

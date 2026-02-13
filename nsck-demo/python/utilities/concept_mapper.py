@@ -1,5 +1,5 @@
 import numpy as np
-from hypervec_py import HyperVector
+from python.core.vsa.hypervec_py import HyperVector
 
 class ConceptMapper:
     """

@@ -5,10 +5,9 @@ Tests the circular bitwise shift (permute/permute_inverse) added to the
 HyperVector class in both Rust and Python backends.
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import unittest
-import hypervec_shim as hv
+import python.core.vsa.hypervec_shim as hv
 
 
 class TestPermutation(unittest.TestCase):

@@ -20,13 +20,13 @@ import numpy as np
 from typing import Dict, List
 
 # Import continual learning modules
-from continual_learning import (
+from python.core.learning.continual_learning import (
     ContinualLearner,
     PackNetManager,
     ProgressiveNetwork,
     MemoryReplayManager
 )
-from meta_learning import MAMLLearner, ReptileLearner
+from python.core.learning.meta_learning import MAMLLearner, ReptileLearner
 
 
 class SimpleTaskNetwork(nn.Module):

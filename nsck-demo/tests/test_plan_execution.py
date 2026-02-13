@@ -1,5 +1,5 @@
 import unittest
-from cognitive_engine import create_cognitive_engine
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
 
 class TestPlanExecution(unittest.TestCase):
     def test_plan_caching(self):

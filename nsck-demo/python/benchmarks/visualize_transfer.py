@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from symbol_grounding import ActionSemantics
+from python.core.perception.symbol_grounding import ActionSemantics
 
 def plot_grounding():
     # Setup 2 Dummy States

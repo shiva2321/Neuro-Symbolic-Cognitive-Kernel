@@ -7,7 +7,6 @@ import sys
 import os
 import json
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 from python.testing_dashboard import app
 

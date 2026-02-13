@@ -21,7 +21,7 @@ import numpy as np
 
 # Use our lightweight VSA shim (Auto-selects Rust or Python)
 try:
-    from hypervec_py import HyperVector
+    from python.core.vsa.hypervec_py import HyperVector
 except ImportError:
     # Fallback if module not in path
     print("WARNING: hypervec_py not found. Using minimal mocks.")

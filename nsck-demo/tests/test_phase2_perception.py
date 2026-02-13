@@ -44,9 +44,9 @@ from multimodal_integration import (
 )
 
 try:
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
-    from hypervec_py import HyperVector
+    from python.core.vsa.hypervec_py import HyperVector
     class _Shim:
         HyperVector = HyperVector
     hypervec_rs = _Shim()

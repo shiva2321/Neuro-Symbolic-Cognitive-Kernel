@@ -5,13 +5,12 @@ Tests the compete_with_rehearsal() mechanism in GlobalWorkspace, including
 danger vector registration, veto logic, and deadlock fallback.
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import unittest
 import numpy as np
-import hypervec_shim as hv
-from hypervec_py import HyperVectorPy
-from global_workspace import GlobalWorkspace, Coalition
+import python.core.vsa.hypervec_shim as hv
+from python.core.vsa.hypervec_py import HyperVectorPy
+from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
 
 
 class FakeWorldModel:

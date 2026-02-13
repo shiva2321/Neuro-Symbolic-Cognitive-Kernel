@@ -5,7 +5,7 @@ Validates SNN training, Hebbian learning, and concept activation mapping.
 import unittest
 import torch
 import torch.nn as nn
-from snn_training_pipeline import (
+from python.training.snn_training_pipeline import (
     HebbianLayer,
     ConceptActivationMapper,
     SNNTrainingPipeline,

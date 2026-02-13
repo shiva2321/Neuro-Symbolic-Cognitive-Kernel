@@ -1,7 +1,7 @@
 import argparse
 import os
 import sys
-from lingua_cortex import SemanticMap, SemanticFoldingTrainer, get_lingua_cortex
+from python.core.language.lingua_cortex import SemanticMap, SemanticFoldingTrainer, get_lingua_cortex
 
 # Small demo corpus for testing without 10GB Wikipedia
 DEMO_CORPUS = [

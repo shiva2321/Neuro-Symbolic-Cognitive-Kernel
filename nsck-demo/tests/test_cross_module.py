@@ -5,10 +5,9 @@ from unittest.mock import MagicMock
 import numpy as np
 
 # Add project root to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from curiosity import CuriosityModule
-import hypervec_shim as hypervec_rs
+from python.core.learning.curiosity import CuriosityModule
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 class TestCrossModule(unittest.TestCase):
     def test_planner_guided_icm(self):

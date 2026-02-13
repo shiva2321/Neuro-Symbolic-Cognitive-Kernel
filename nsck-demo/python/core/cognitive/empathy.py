@@ -6,8 +6,8 @@ Uses Theory of Mind to infer others' states, and EmotionSystem to "feel" them.
 """
 
 from typing import Dict, Any, Optional
-from emotion_system import EmotionSystem
-from theory_of_mind import TheoryOfMind, MentalStateModel
+from python.core.cognitive.emotion_system import EmotionSystem
+from python.core.cognitive.theory_of_mind import TheoryOfMind, MentalStateModel
 
 class EmpathyModule:
     """

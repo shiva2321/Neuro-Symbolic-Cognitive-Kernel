@@ -7,7 +7,7 @@ NO NEURAL EMBEDDINGS - uses VSA binding and symbolic mapping.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Any
 from collections import defaultdict
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 
 @dataclass

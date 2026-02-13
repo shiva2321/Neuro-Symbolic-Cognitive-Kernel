@@ -39,7 +39,7 @@ class TestVSACoreOperations:
         In a 10240-bit space, random vectors have expected similarity 0.5.
         XOR(A, B) should also be ~0.5-similar to A and B (i.e. quasi-orthogonal).
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(1)
         b = hypervec_rs.HyperVector(2)
@@ -54,7 +54,7 @@ class TestVSACoreOperations:
 
     def test_xor_is_own_inverse(self):
         """XOR binding is its own inverse: XOR(XOR(A, B), B) == A."""
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(42)
         b = hypervec_rs.HyperVector(99)
@@ -68,7 +68,7 @@ class TestVSACoreOperations:
         For two vectors, bundle resolves ties randomly, so result should be
         ~0.75-similar to each input on average.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(10)
         b = hypervec_rs.HyperVector(20)
@@ -87,7 +87,7 @@ class TestVSACoreOperations:
 
         Identical vectors → 1.0, orthogonal random vectors → ~0.5.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(7)
 
@@ -106,7 +106,7 @@ class TestVSACoreOperations:
         self_n=7 and other_n=1 (clamped to max(1,...)), so self dominates.
         With weight=0.5, self_n=4 and other_n=3 → balanced.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(100)
         b = hypervec_rs.HyperVector(200)
@@ -137,7 +137,7 @@ class TestVSACoreOperations:
 
     def test_lsh_hash_determinism(self):
         """lsh_hash with same seed should always produce the same hash."""
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         hv = hypervec_rs.HyperVector(55)
 
@@ -158,7 +158,7 @@ class TestVSACoreOperations:
         We prove this by timing ops on HVs (dim=10240).  Each op should take
         <1ms even on slow hardware since it's just element-wise bitops.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(1)
         b = hypervec_rs.HyperVector(2)
@@ -187,7 +187,7 @@ class TestVSACoreOperations:
 
     def test_seed_reproducibility(self):
         """Same seed produces identical HyperVectors."""
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         a = hypervec_rs.HyperVector(12345)
         b = hypervec_rs.HyperVector(12345)
@@ -195,7 +195,7 @@ class TestVSACoreOperations:
 
     def test_different_seeds_produce_different_hvs(self):
         """Different seeds produce quasi-orthogonal HyperVectors."""
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         hvs = [hypervec_rs.HyperVector(i) for i in range(10)]
         for i in range(len(hvs)):
@@ -216,8 +216,8 @@ class TestMemorySystems:
 
     def _make_episode(self, seed, task="test", reward=0.0, outcome="neutral", action="ACTION_UP"):
         """Helper to create a LiveEpisode without persistence dependency."""
-        import hypervec_shim as hypervec_rs
-        from episodic_memory import LiveEpisode
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.memory.episodic_memory import LiveEpisode
 
         return LiveEpisode(
             timestamp=time.time(),
@@ -231,7 +231,7 @@ class TestMemorySystems:
 
     def test_episode_storage_and_retrieval(self):
         """Episodes can be stored and retrieved from memory."""
-        from episodic_memory import EpisodicMemory
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None, recent_capacity=100)
 
@@ -247,7 +247,7 @@ class TestMemorySystems:
 
     def test_memory_capacity_eviction(self):
         """Memory respects capacity limit using deque maxlen."""
-        from episodic_memory import EpisodicMemory
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         capacity = 50
         mem = EpisodicMemory(store=None, recent_capacity=capacity)
@@ -262,8 +262,8 @@ class TestMemorySystems:
 
     def test_vsa_based_memory_search(self):
         """recall_similar returns episodes with HVs closest to query."""
-        import hypervec_shim as hypervec_rs
-        from episodic_memory import EpisodicMemory
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None, recent_capacity=200)
 
@@ -284,7 +284,7 @@ class TestMemorySystems:
 
     def test_recall_by_outcome(self):
         """Can filter episodes by outcome label."""
-        from episodic_memory import EpisodicMemory
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None, recent_capacity=100)
         for i in range(10):
@@ -297,7 +297,7 @@ class TestMemorySystems:
 
     def test_recall_by_reward(self):
         """Can retrieve high-reward episodes sorted by reward."""
-        from episodic_memory import EpisodicMemory
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None, recent_capacity=100)
         for i in range(20):
@@ -311,7 +311,7 @@ class TestMemorySystems:
 
     def test_sample_random_episodes(self):
         """sample() returns a random subset of episodes."""
-        from episodic_memory import EpisodicMemory
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None, recent_capacity=100)
         for i in range(50):
@@ -322,7 +322,7 @@ class TestMemorySystems:
 
     def test_memory_statistics(self):
         """get_statistics returns valid metrics."""
-        from episodic_memory import EpisodicMemory
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None, recent_capacity=100)
         for i in range(10):
@@ -344,7 +344,7 @@ class TestRuleLearning:
 
     def _make_verifier(self):
         """Create a GroundingVerifier with some test predicates."""
-        from grounding_verifier import GroundingVerifier
+        from python.core.perception.grounding_verifier import GroundingVerifier
 
         v = GroundingVerifier()
         v.register_predicate("FOOD_ABOVE", lambda s: s.get("food_y", 0) < s.get("head_y", 0))
@@ -354,7 +354,7 @@ class TestRuleLearning:
 
     def test_rule_induction_from_experience(self):
         """Rules are induced when pattern reaches min_support with high success rate."""
-        from rule_learner import RuleLearner
+        from python.core.reasoning.rule_learner import RuleLearner
 
         verifier = self._make_verifier()
         learner = RuleLearner(verifier=verifier, store=None, min_support=5, min_success_rate=0.7)
@@ -375,7 +375,7 @@ class TestRuleLearning:
 
     def test_rule_not_induced_below_threshold(self):
         """Rules are NOT induced when support is below min_support."""
-        from rule_learner import RuleLearner
+        from python.core.reasoning.rule_learner import RuleLearner
 
         verifier = self._make_verifier()
         learner = RuleLearner(verifier=verifier, store=None, min_support=10, min_success_rate=0.7)
@@ -390,7 +390,7 @@ class TestRuleLearning:
 
     def test_rule_application(self):
         """Learned rules can be retrieved and matched against active predicates."""
-        from rule_learner import RuleLearner
+        from python.core.reasoning.rule_learner import RuleLearner
 
         verifier = self._make_verifier()
         learner = RuleLearner(verifier=verifier, store=None, min_support=3, min_success_rate=0.6)
@@ -409,8 +409,8 @@ class TestRuleLearning:
 
     def test_rule_pruning(self):
         """Low-performing rules can be pruned."""
-        from rule_learner import RuleLearner
-        from persistence import Rule
+        from python.core.reasoning.rule_learner import RuleLearner
+        from python.core.integration.persistence import Rule
 
         verifier = self._make_verifier()
         learner = RuleLearner(verifier=verifier, store=None, min_support=3, min_success_rate=0.6)
@@ -439,7 +439,7 @@ class TestCausalReasoning:
 
     def test_causal_graph_construction(self):
         """CausalGraph can store links and retrieve them."""
-        from causal_reasoning import CausalGraph
+        from python.core.reasoning.causal_reasoning import CausalGraph
 
         g = CausalGraph()
         g.add_causes("rain", "wet_ground")
@@ -452,7 +452,7 @@ class TestCausalReasoning:
 
     def test_forward_chaining(self):
         """Forward chaining traverses cause→effect chains."""
-        from causal_reasoning import CausalGraph
+        from python.core.reasoning.causal_reasoning import CausalGraph
 
         g = CausalGraph()
         g.add_causes("A", "B", strength=0.9)
@@ -470,7 +470,7 @@ class TestCausalReasoning:
 
     def test_backward_chaining(self):
         """Backward chaining finds root causes of an effect."""
-        from causal_reasoning import CausalGraph
+        from python.core.reasoning.causal_reasoning import CausalGraph
 
         g = CausalGraph()
         g.add_causes("X", "Y")
@@ -483,7 +483,7 @@ class TestCausalReasoning:
 
     def test_causal_discovery_delta_p(self):
         """CausalDiscovery learns causal links from statistical contingency (Delta-P)."""
-        from causal_reasoning import CausalDiscovery
+        from python.core.reasoning.causal_reasoning import CausalDiscovery
 
         cd = CausalDiscovery()
 
@@ -500,7 +500,7 @@ class TestCausalReasoning:
 
     def test_counterfactual_reasoning(self):
         """CausalReasoner can compare actual vs hypothetical action outcomes."""
-        from causal_reasoning import CausalGraph, CausalReasoner
+        from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner
 
         g = CausalGraph()
         g.add_causes("ACTION_UP", "MOVED_UP", context="test")
@@ -519,7 +519,7 @@ class TestCausalReasoning:
 
     def test_find_path(self):
         """find_path discovers a causal chain between two nodes."""
-        from causal_reasoning import CausalGraph
+        from python.core.reasoning.causal_reasoning import CausalGraph
 
         g = CausalGraph()
         g.add_causes("EAT", "GROW")
@@ -533,7 +533,7 @@ class TestCausalReasoning:
 
     def test_snake_causal_graph(self):
         """Pre-built snake causal graph has expected structure."""
-        from causal_reasoning import create_snake_causal_graph
+        from python.core.reasoning.causal_reasoning import create_snake_causal_graph
 
         g = create_snake_causal_graph()
         assert len(g.all_links) > 0, "Snake graph should have links"
@@ -554,8 +554,8 @@ class TestBrainFusion:
 
     def test_multi_task_knowledge_organization(self):
         """BrainFusion keeps task-specific concepts isolated while sharing primitives."""
-        import hypervec_shim as hypervec_rs
-        from brain_fusion import TaskBrain, BrainFusion, GLOBAL_PRIMITIVES
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.integration.brain_fusion import TaskBrain, BrainFusion, GLOBAL_PRIMITIVES
 
         snake_brain = TaskBrain("snake")
         snake_brain.add_concept("ACTION_UP", hypervec_rs.HyperVector(10))
@@ -583,8 +583,8 @@ class TestBrainFusion:
 
     def test_concept_promotion(self):
         """Concepts appearing in multiple tasks with same seed get promoted to global."""
-        import hypervec_shim as hypervec_rs
-        from brain_fusion import TaskBrain, BrainFusion
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.integration.brain_fusion import TaskBrain, BrainFusion
 
         seed = 9999
         snake_brain = TaskBrain("snake")
@@ -605,8 +605,8 @@ class TestBrainFusion:
 
     def test_rule_resolution(self):
         """FusedBrain.resolve_rules returns ranked actions for active predicates."""
-        import hypervec_shim as hypervec_rs
-        from brain_fusion import TaskBrain, BrainFusion
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.integration.brain_fusion import TaskBrain, BrainFusion
 
         brain = TaskBrain("test")
         brain.add_concept("DANGER_UP", hypervec_rs.HyperVector(500))
@@ -626,8 +626,8 @@ class TestBrainFusion:
 
     def test_forward_chain_multi(self):
         """FusedBrain forward chaining deduces new facts from rules."""
-        import hypervec_shim as hypervec_rs
-        from brain_fusion import TaskBrain, BrainFusion
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.integration.brain_fusion import TaskBrain, BrainFusion
 
         brain = TaskBrain("test")
         brain.add_concept("WET", hypervec_rs.HyperVector(700))
@@ -657,8 +657,8 @@ class TestMetacognition:
 
     def _make_fused_brain_with_rules(self):
         """Build a FusedBrain with conflicting rules for testing."""
-        import hypervec_shim as hypervec_rs
-        from brain_fusion import TaskBrain, BrainFusion
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.integration.brain_fusion import TaskBrain, BrainFusion
 
         brain = TaskBrain("test")
         brain.add_concept("FOOD_ABOVE", hypervec_rs.HyperVector(300))
@@ -680,8 +680,8 @@ class TestMetacognition:
 
     def test_confidence_scoring(self):
         """MetacognitiveEngine computes confidence from query results."""
-        from brain_fusion import QueryResult
-        from metacognition import MetacognitiveEngine, std_dev
+        from python.core.integration.brain_fusion import QueryResult
+        from python.core.cognitive.metacognition import MetacognitiveEngine, std_dev
 
         fused = self._make_fused_brain_with_rules()
         engine = MetacognitiveEngine(fused)
@@ -699,8 +699,8 @@ class TestMetacognition:
 
     def test_conflict_detection(self):
         """Detect conflict when two close-scoring results suggest different actions."""
-        from brain_fusion import QueryResult
-        from metacognition import MetacognitiveEngine
+        from python.core.integration.brain_fusion import QueryResult
+        from python.core.cognitive.metacognition import MetacognitiveEngine
 
         fused = self._make_fused_brain_with_rules()
         engine = MetacognitiveEngine(fused)
@@ -722,8 +722,8 @@ class TestMetacognition:
 
     def test_no_conflict_when_clear_winner(self):
         """No conflict when top result clearly dominates."""
-        from brain_fusion import QueryResult
-        from metacognition import MetacognitiveEngine
+        from python.core.integration.brain_fusion import QueryResult
+        from python.core.cognitive.metacognition import MetacognitiveEngine
 
         fused = self._make_fused_brain_with_rules()
         engine = MetacognitiveEngine(fused)
@@ -752,8 +752,8 @@ class TestPlanning:
 
     def test_strips_planning_with_causal_reasoner(self):
         """Planner finds action sequence to reach goal state using causal model."""
-        from planner import STRIPSPlanner
-        from causal_reasoning import CausalGraph, CausalReasoner
+        from python.core.reasoning.planner import STRIPSPlanner
+        from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner
 
         g = CausalGraph()
         g.add_causes("ACTION_UP", "AT_GOAL", context="maze")
@@ -772,7 +772,7 @@ class TestPlanning:
 
     def test_planning_returns_none_when_impossible(self):
         """Planner returns None when goal is unreachable."""
-        from planner import STRIPSPlanner
+        from python.core.reasoning.planner import STRIPSPlanner
 
         planner = STRIPSPlanner()
         # No operators → can't change state
@@ -785,7 +785,7 @@ class TestPlanning:
 
     def test_plan_already_satisfied(self):
         """Planner returns empty plan when goal is already satisfied."""
-        from planner import STRIPSPlanner
+        from python.core.reasoning.planner import STRIPSPlanner
 
         planner = STRIPSPlanner()
         plan = planner.plan(
@@ -798,8 +798,8 @@ class TestPlanning:
 
     def test_simulate_sequence(self):
         """simulate_sequence applies a sequence of actions to state."""
-        from planner import STRIPSPlanner
-        from causal_reasoning import CausalGraph, CausalReasoner
+        from python.core.reasoning.planner import STRIPSPlanner
+        from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner
 
         g = CausalGraph()
         g.add_causes("ACTION_UP", "MOVED_UP")
@@ -827,7 +827,7 @@ class TestEfficiencyProofs:
 
     def test_hypervector_memory_footprint(self):
         """A single HyperVector should use ~10KB (10240 bits = 1280 bytes + overhead)."""
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         hv = hypervec_rs.HyperVector(1)
         # The internal .bits is a numpy int8 array of size 10240
@@ -842,7 +842,7 @@ class TestEfficiencyProofs:
 
         Comparing XOR on 10240-bit vectors vs matmul on 10240-dim float vectors.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         hv_a = hypervec_rs.HyperVector(1)
         hv_b = hypervec_rs.HyperVector(2)
@@ -877,7 +877,7 @@ class TestEfficiencyProofs:
         element-wise bitwise operations — no matmul or einsum.
         """
         import inspect
-        from hypervec_py import HyperVectorPy
+        from python.core.vsa.hypervec_py import HyperVectorPy
 
         for method_name in ("xor", "bundle", "similarity"):
             method = getattr(HyperVectorPy, method_name)
@@ -893,7 +893,7 @@ class TestEfficiencyProofs:
     def test_intrinsic_motivation_param_count(self):
         """ICM module should have <25K parameters (lightweight design)."""
         import torch
-        from intrinsic_motivation import IntrinsicCuriosityModule
+        from python.utilities.intrinsic_motivation import IntrinsicCuriosityModule
 
         icm = IntrinsicCuriosityModule(num_actions=4)
         total_params = sum(p.numel() for p in icm.parameters())
@@ -907,7 +907,7 @@ class TestEfficiencyProofs:
         The projection matrix should have ~90% zeros (10% non-zero by design).
         """
         import torch
-        from world_model import DynamicsPredictor, WorldModelConfig
+        from python.core.neural.world_model import DynamicsPredictor, WorldModelConfig
 
         config = WorldModelConfig()
         predictor = DynamicsPredictor(config)
@@ -924,7 +924,7 @@ class TestEfficiencyProofs:
     def test_world_model_param_count(self):
         """WorldModel MLP should be small — well under 100K parameters."""
         import torch
-        from world_model import DynamicsPredictor, WorldModelConfig
+        from python.core.neural.world_model import DynamicsPredictor, WorldModelConfig
 
         config = WorldModelConfig()
         predictor = DynamicsPredictor(config)
@@ -936,8 +936,8 @@ class TestEfficiencyProofs:
 
     def test_episodic_memory_lsh_bucketing(self):
         """LSH index creates buckets for O(1) candidate lookup instead of O(n) scan."""
-        import hypervec_shim as hypervec_rs
-        from episodic_memory import EpisodicMemory, LiveEpisode
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
 
         mem = EpisodicMemory(store=None, recent_capacity=500)
 
@@ -978,7 +978,7 @@ class TestKnownLimitations:
         This test verifies that HyperVectors don't support autograd.
         """
         import torch
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         hv = hypervec_rs.HyperVector(1)
 
@@ -1000,7 +1000,7 @@ class TestKnownLimitations:
         It has no tokenizer, no word embeddings, no language model.
         Concepts are symbols (strings) mapped to HVs by hash — not semantics.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         # "dog" and "puppy" are semantically similar in natural language
         # but will be orthogonal in NSCK because they're different hash seeds
@@ -1022,7 +1022,7 @@ class TestKnownLimitations:
         in the core VSA pipeline. The ICM has a tiny feature net for 10x10
         grids but that's not real vision.
         """
-        import hypervec_shim as hypervec_rs
+        import python.core.vsa.hypervec_shim as hypervec_rs
 
         # A real vision system would create meaningful, distinct HVs from
         # visually similar images. NSCK can't do this from raw pixels.
@@ -1047,8 +1047,8 @@ class TestKnownLimitations:
         RuleLearner requires pre-extracted predicates; it can't learn
         features from raw sensor data. This is by design (symbolic AI).
         """
-        from grounding_verifier import GroundingVerifier
-        from rule_learner import RuleLearner
+        from python.core.perception.grounding_verifier import GroundingVerifier
+        from python.core.reasoning.rule_learner import RuleLearner
 
         verifier = GroundingVerifier()
         # No predicates registered → verifier returns empty list
@@ -1069,7 +1069,7 @@ class TestKnownLimitations:
 
         With too few observations, the induced graph is empty.
         """
-        from causal_reasoning import CausalDiscovery
+        from python.core.reasoning.causal_reasoning import CausalDiscovery
 
         cd = CausalDiscovery()
         # Only 2 observations — not enough
@@ -1092,8 +1092,8 @@ class TestCrossModuleIntegration:
 
     def test_episodic_memory_with_situation_hv_creation(self):
         """EpisodicMemory.create_situation_hv creates valid HVs from predicates."""
-        import hypervec_shim as hypervec_rs
-        from episodic_memory import EpisodicMemory
+        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.memory.episodic_memory import EpisodicMemory
 
         mem = EpisodicMemory(store=None)
         state = {"head": (5, 5), "food": (5, 3)}
@@ -1110,7 +1110,7 @@ class TestCrossModuleIntegration:
 
     def test_causal_theory_formation(self):
         """TheoryModule generalizes specific causal links into abstract theories."""
-        from causal_reasoning import (
+        from python.core.reasoning.causal_reasoning import (
             CausalLink, CausalRelation, TheoryModule, create_snake_causal_graph,
         )
 
@@ -1128,8 +1128,8 @@ class TestCrossModuleIntegration:
 
     def test_planner_with_causal_graph(self):
         """Planner can use causal graph to find multi-step plans."""
-        from planner import STRIPSPlanner
-        from causal_reasoning import CausalGraph, CausalReasoner
+        from python.core.reasoning.planner import STRIPSPlanner
+        from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner
 
         g = CausalGraph()
         g.add_causes("ACTION_UP", "AT_ROW_4")

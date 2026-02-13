@@ -15,11 +15,10 @@ import json
 from typing import List, Dict, Any
 
 # Ensure we can import from local python dir
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from text_knowledge_learner import TextKnowledgeLearner, LearnedFact
-from semantic_memory import SemanticMemory
-from episodic_memory import EpisodicMemory
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner, LearnedFact
+from python.core.memory.semantic_memory import SemanticMemory
+from python.core.memory.episodic_memory import EpisodicMemory
 
 def run_test():
     print("="*60)
@@ -38,7 +37,7 @@ def run_test():
             print(f"ERROR: Corpus file not found at {corpus_file}")
             return
 
-    from language_module import LanguageModule # [AGI] Phase 4: NLU Parser
+    from python.core.language.language_module import LanguageModule # [AGI] Phase 4: NLU Parser
 
     # Initialize learner (Fresh memory for this test)
     print("\n[1] Initializing Cognitive Architecture...")

@@ -24,22 +24,22 @@ except (ImportError, AttributeError):
     pass
  # Import F
 from collections import defaultdict, deque
-from symbol_grounding import ActionSemantics
-from simulation import sim_snake, sim_pong
-from maze_game import sim_maze  # For maze veto logic
-from character_dataset import get_dataloader # New Import
-from concept_mapper import ConceptMapper
+from python.core.perception.symbol_grounding import ActionSemantics
+from python.games.pong.simulation import sim_snake, sim_pong
+from python.games.maze.maze_game import sim_maze  # For maze veto logic
+from python.scripts.character_dataset import get_dataloader # New Import
+from python.utilities.concept_mapper import ConceptMapper
 import threading
 import queue
-import hypervec_shim as hypervec_rs
-from curiosity import CuriosityModule
-from symbol_grounding import GLOBAL_PRIMITIVES_MAP
-from intelligent_buffer import IntelligentReplayBuffer, Experience # [NEW] Import Buffer
-from saliency import SaliencyVisualizer # [NEW] Import Saliency
-from intrinsic_motivation import CombinedIntrinsicMotivation  # [AGI] Phase 1: Intrinsic Motivation
-from teacher_interface import TeacherInterface, HeuristicTeacher, NullTeacher # [AGI] Phase 1: Modular Teacher
-from learning_progress import LearningProgressTracker # [AGI] Phase 1.4: Self-Curriculum
-from logger_service import get_logger # [AGI] Phase 1.5: Central Logging
+import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.learning.curiosity import CuriosityModule
+from python.core.perception.symbol_grounding import GLOBAL_PRIMITIVES_MAP
+from python.core.memory.intelligent_buffer import IntelligentReplayBuffer, Experience # [NEW] Import Buffer
+from python.core.perception.saliency import SaliencyVisualizer # [NEW] Import Saliency
+from python.utilities.intrinsic_motivation import CombinedIntrinsicMotivation  # [AGI] Phase 1: Intrinsic Motivation
+from python.utilities.teacher_interface import TeacherInterface, HeuristicTeacher, NullTeacher # [AGI] Phase 1: Modular Teacher
+from python.utilities.learning_progress import LearningProgressTracker # [AGI] Phase 1.4: Self-Curriculum
+from python.servers.logger_service import get_logger # [AGI] Phase 1.5: Central Logging
 
 # [AGI] Phase 1.3: Telemetry Logging
 import csv
@@ -98,9 +98,9 @@ CONFIDENCE_THRESHOLD = 0.6 # Low Entropy = High Confidence. Threshold for "Confu
 # 0.6 is reasonably confident. 
 
 # Import SNN
-from snn_qat import TaskAwareSNN, ternarize_weight
-from simulation import sim_snake, sim_pong # Import Simulation Logic
-from symbol_grounding import ActionSemantics # Import Grounding Logic
+from python.core.neural.snn_qat import TaskAwareSNN, ternarize_weight
+from python.games.pong.simulation import sim_snake, sim_pong # Import Simulation Logic
+from python.core.perception.symbol_grounding import ActionSemantics # Import Grounding Logic
 
 class LogAggregator:
     def __init__(self, interval=5.0, zmq_pub=None):
@@ -168,7 +168,7 @@ class LogAggregator:
                         ])
                     
                     # Also log to SQLite via StructuredLogger (if available)
-                    from logger_service import get_logger
+                    from python.servers.logger_service import get_logger
                     sql_logger = get_logger()
                     sql_logger.telemetry(game, "agree_pct", agree_pct, step=steps_total)
                     sql_logger.telemetry(game, "score", score, step=steps_total)
@@ -217,7 +217,7 @@ INTRINSIC_MOTIVATION = None  # Initialized in main() after device selection
 CURIOSITY_TRACKER = LearningProgressTracker(window_size=50) # [AGI] Phase 1.4
 
 # [AGI] Phase 2: Cognitive Engine
-from cognitive_engine import create_cognitive_engine
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
 COGNITIVE_ENGINE = create_cognitive_engine()
 
 # [AGI] Phase 3: Dashboard Broadcasting
@@ -597,7 +597,7 @@ def train_character_thread(model, optimizer_global, device, model_lock, epochs=1
         optimizer_local = torch.optim.Adam(trainable_params, lr=0.001)
         
         if text or mode == "typed":
-            from character_dataset import get_text_dataloader
+            from python.scripts.character_dataset import get_text_dataloader
             target_text = text if text else "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
             dl = get_text_dataloader(target_text, batch_size=32, num_repeats=200)
         else:

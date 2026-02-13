@@ -25,7 +25,7 @@ except ImportError:
     LLAMA_AVAILABLE = False
 
 # Import Core Semantics
-from lingua_cortex import get_lingua_cortex, SemanticFingerprint
+from python.core.language.lingua_cortex import get_lingua_cortex, SemanticFingerprint
 
 # Fallback config
 DEFAULT_MODEL_PATH = "models/phi-3-mini-4k-instruct.Q4_K_M.gguf"

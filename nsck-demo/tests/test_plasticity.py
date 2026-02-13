@@ -7,9 +7,8 @@ import numpy as np
 import random
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from plastic_snn import PlasticSNN, SparseLinear
+from python.core.neural.plastic_snn import PlasticSNN, SparseLinear
 
 def set_seed(seed=42):
     torch.manual_seed(seed)

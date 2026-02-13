@@ -8,9 +8,8 @@ from pathlib import Path
 import copy
 
 # Add python/ directory to sys.path
-sys.path.append(str(Path(__file__).parent.parent / "python"))
 
-from snn_qat import TaskAwareSNN, UniversalEncoder
+from python.core.neural.snn_qat import TaskAwareSNN, UniversalEncoder
 
 def check_weights_changed(state_dict_before, state_dict_after, layer_name):
     """Returns True if weights in the specified layer have changed."""

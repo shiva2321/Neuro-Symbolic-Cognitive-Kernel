@@ -12,11 +12,11 @@ Phase 6 Components:
 """
 import sys
 import os
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../')))
 
 import numpy as np
-from emotion_system import EmotionSystem
-from theory_of_mind import TheoryOfMind, MentalStateModel
+from python.core.cognitive.emotion_system import EmotionSystem
+from python.core.cognitive.theory_of_mind import TheoryOfMind, MentalStateModel
 
 
 def demo_emotion_system():

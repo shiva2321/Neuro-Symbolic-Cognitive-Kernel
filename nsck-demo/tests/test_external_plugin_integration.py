@@ -9,11 +9,9 @@ from pathlib import Path
 import numpy as np
 
 # Add project paths for plugin imports
-sys.path.insert(0, str(Path(__file__).parent.parent / "python"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from python.module_registry import ModuleRegistry
-from global_workspace import GlobalWorkspace, Coalition
+from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
 
 
 def _write_plugin_file(tmp_path: Path) -> Path:

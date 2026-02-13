@@ -2,12 +2,11 @@
 Quick verification that RuleLearner implements WorkspaceModule interface correctly.
 """
 import sys
-sys.path.insert(0, '/workspaces/Node_network/nsck-demo/python')
 
-from rule_learner import RuleLearner
-from global_workspace import WorkspaceModule, Coalition
-from grounding_verifier import GroundingVerifier
-from persistence import BrainStore
+from python.core.reasoning.rule_learner import RuleLearner
+from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
+from python.core.perception.grounding_verifier import GroundingVerifier
+from python.core.integration.persistence import BrainStore
 import numpy as np
 
 def test_rule_learner_interface():

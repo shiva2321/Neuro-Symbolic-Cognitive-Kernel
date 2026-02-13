@@ -69,8 +69,8 @@ def main() -> None:
     import torch
     from torchvision import datasets
 
-    from snn_qat import TaskAwareSNN
-    from concept_mapper import ConceptMapper
+    from python.core.neural.snn_qat import TaskAwareSNN
+    from python.utilities.concept_mapper import ConceptMapper
 
     model = TaskAwareSNN(beta=0.5)
     model.register_task("char_recognition", 62)

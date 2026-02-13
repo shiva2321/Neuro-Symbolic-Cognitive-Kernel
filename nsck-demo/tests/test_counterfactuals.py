@@ -1,6 +1,6 @@
 import unittest
-from cognitive_engine import CognitiveEngine
-from config import NSCKConfig
+from python.core.reasoning.cognitive_engine import CognitiveEngine
+from python.utilities.config import NSCKConfig
 
 class TestCounterfactuals(unittest.TestCase):
     def setUp(self):

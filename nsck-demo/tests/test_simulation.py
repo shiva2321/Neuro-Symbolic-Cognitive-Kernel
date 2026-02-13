@@ -1,4 +1,4 @@
-from simulation import sim_snake, sim_pong
+from python.games.pong.simulation import sim_snake, sim_pong
 import unittest
 
 class TestSimulation(unittest.TestCase):

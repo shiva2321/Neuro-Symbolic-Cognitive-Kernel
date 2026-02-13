@@ -18,9 +18,8 @@ import zipfile
 from pathlib import Path
 
 # Add nsck-demo/python to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from persistence import BrainStore, Rule, Concept, Episode, BrainVersion
+from python.core.integration.persistence import BrainStore, Rule, Concept, Episode, BrainVersion
 
 
 @pytest.fixture

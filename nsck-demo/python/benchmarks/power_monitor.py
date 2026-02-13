@@ -5,9 +5,9 @@ import os
 import sys
 
 # Add python directory to path
-sys.path.append(os.path.dirname(__file__))
-from text_knowledge_learner import TextKnowledgeLearner
-from language_module import LanguageModule
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
+from python.core.language.language_module import LanguageModule
 
 class PowerMonitor:
     def __init__(self, tdp_watts=65.0, idle_watts=10.0, poll_interval=0.1):

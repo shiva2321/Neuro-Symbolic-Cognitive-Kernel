@@ -29,21 +29,21 @@ from typing import Dict, Any, List, Optional
 from flask import Flask, request, jsonify, send_file, render_template_string
 
 import sys
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
 
 import numpy as np
 
-from knowledge_integration import KnowledgeIntegration, CognitiveResponse
-from multimodal_processor import MultimodalInput
-from context_engine import ContextFrame
-from simulation import sim_snake, sim_pong
-from emotion_system import EmotionSystem
-from self_model import SelfModel
-from language_module import LanguageModule
-from dialogue_manager import DialogueManager
-from maze_game import MazeGame
-from collector_game import CollectorGame
-from text_knowledge_learner import TextKnowledgeLearner
+from python.core.integration.knowledge_integration import KnowledgeIntegration, CognitiveResponse
+from python.core.multimodal.multimodal_processor import MultimodalInput
+from python.core.reasoning.context_engine import ContextFrame
+from python.games.pong.simulation import sim_snake, sim_pong
+from python.core.cognitive.emotion_system import EmotionSystem
+from python.core.cognitive.self_model import SelfModel
+from python.core.language.language_module import LanguageModule
+from python.core.language.dialogue_manager import DialogueManager
+from python.games.maze.maze_game import MazeGame
+from python.games.collector.collector_game import CollectorGame
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
 import heapq
 from collections import defaultdict
 
@@ -75,12 +75,12 @@ _dashboard_policy = LearnedPolicy()
 
 # Optional imports – gracefully degrade if not available
 try:
-    from cognitive_engine import CognitiveEngine
+    from python.core.reasoning.cognitive_engine import CognitiveEngine
 except ImportError:
     CognitiveEngine = None
 
 try:
-    from curiosity import CuriosityModule
+    from python.core.learning.curiosity import CuriosityModule
 except Exception:
     CuriosityModule = None
 

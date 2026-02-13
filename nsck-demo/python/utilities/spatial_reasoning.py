@@ -28,7 +28,7 @@ class CoordinateReasoner:
         pass
 
 # We will actually define the GridPlanner here for use in CognitiveEngine
-from planner import STRIPSPlanner
+from python.core.reasoning.planner import STRIPSPlanner
 
 class GridPlanner(STRIPSPlanner):
     """

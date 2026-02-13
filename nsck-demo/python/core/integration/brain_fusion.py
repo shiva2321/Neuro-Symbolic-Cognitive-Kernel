@@ -2,7 +2,7 @@
 Brain Fusion Module for NSGA
 Strategy: tagged_conservative (task-specific isolated, primitives merged)
 """
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Tuple, Set, Optional

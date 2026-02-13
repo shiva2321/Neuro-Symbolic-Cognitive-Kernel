@@ -1,4 +1,4 @@
-from symbol_grounding import ActionSemantics
+from python.core.perception.symbol_grounding import ActionSemantics
 import unittest
 import numpy as np
 

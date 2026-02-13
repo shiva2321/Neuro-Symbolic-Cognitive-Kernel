@@ -5,13 +5,12 @@ import sys
 import os
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from benchmark import (
+from python.benchmarks.benchmark import (
     SymbolicHasher, InvertedCatcherEnv, EasyCatcherEnv, HardCatcherEnv,
     RandomAgent, ENVS, TeacherAgent, LearnedPolicy, StudentAgent,
 )
-from transfer_experiments import (
+from python.benchmarks.transfer_experiments import (
     run_training, run_testing, run_random_baseline,
     exp1_transfer_matrix, exp2_significance, exp3_scaling,
     exp4_ablation, exp5_negative_transfer, exp6_curriculum, exp7_continual,
@@ -121,7 +120,7 @@ class TestLanguageTeacher:
     """Tests for natural language parsing."""
 
     def test_parse_move_left(self):
-        from benchmark import NaturalLanguageTeacher
+        from python.benchmarks.benchmark import NaturalLanguageTeacher
         teacher = NaturalLanguageTeacher()
         teacher.teach("If object is to the left then move left")
         # should produce rule: obj_x < -0.05 -> TILT_LEFT
@@ -130,7 +129,7 @@ class TestLanguageTeacher:
         assert action == "TILT_LEFT"
 
     def test_parse_avoid_danger(self):
-        from benchmark import NaturalLanguageTeacher
+        from python.benchmarks.benchmark import NaturalLanguageTeacher
         teacher = NaturalLanguageTeacher()
         teacher.teach("Avoid danger on the left")
         # "danger" implies object_type="danger".
@@ -140,7 +139,7 @@ class TestLanguageTeacher:
         assert action == "TILT_LEFT"
 
     def test_synonyms(self):
-        from benchmark import NaturalLanguageTeacher
+        from python.benchmarks.benchmark import NaturalLanguageTeacher
         teacher = NaturalLanguageTeacher()
         teacher.teach("If ball is left go left")
         state = {"ball_pos": -0.2}

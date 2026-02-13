@@ -27,15 +27,15 @@ from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional, Any, Tuple
 
 # Ensure nsck-demo/python is on the path
-sys.path.insert(0, os.path.dirname(__file__))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
 
 import numpy as np
 
-from simulation import sim_snake, sim_pong
-from maze_game import MazeGame
-from collector_game import CollectorGame
-from balancer_game import BalancerGame, CognitiveBalancerGame
-from catcher_game import CatcherGame, CognitiveCatcherGame
+from python.games.pong.simulation import sim_snake, sim_pong
+from python.games.maze.maze_game import MazeGame
+from python.games.collector.collector_game import CollectorGame
+from python.games.physics.balancer_game import BalancerGame, CognitiveBalancerGame
+from python.games.physics.catcher_game import CatcherGame, CognitiveCatcherGame
 
 
 # =============================================================================

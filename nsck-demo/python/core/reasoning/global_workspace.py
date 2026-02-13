@@ -224,11 +224,11 @@ class GlobalWorkspace:
                 # Convert predicted bits back to HV for similarity check
                 # pred_state_bits is a numpy float array; threshold at 0.5 → binary
                 import numpy as np
-                import hypervec_shim as hv_mod
+                import python.core.vsa.hypervec_shim as hv_mod
 
                 binary = (np.array(pred_state_bits) > 0.5).astype(np.int8)
                 # Build a temporary HV from the predicted bits
-                from hypervec_py import HyperVectorPy
+                from python.core.vsa.hypervec_py import HyperVectorPy
                 pred_hv = HyperVectorPy.from_bits(binary)
 
                 is_danger, sim = self._is_dangerous(pred_hv)

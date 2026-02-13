@@ -9,8 +9,8 @@ import numpy as np
 from collections import deque
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any, Tuple
-import hypervec_shim as hypervec_rs
-from persistence import BrainStore, Episode
+import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.integration.persistence import BrainStore, Episode
 import random
 
 

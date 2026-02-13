@@ -1,5 +1,5 @@
 import unittest
-from global_workspace import GlobalWorkspace, WorkspaceModule, Coalition
+from python.core.reasoning.global_workspace import GlobalWorkspace, WorkspaceModule, Coalition
 
 class MockModule(WorkspaceModule):
     def __init__(self, name):

@@ -1,6 +1,6 @@
 import numpy as np
 from collections import OrderedDict, defaultdict
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 class StagedRecall:
     """

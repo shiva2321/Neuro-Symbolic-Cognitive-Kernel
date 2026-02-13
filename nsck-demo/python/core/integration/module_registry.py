@@ -15,7 +15,7 @@ import sys
 from typing import List, Dict, Type, Optional, Any
 from pathlib import Path
 
-from global_workspace import WorkspaceModule
+from python.core.reasoning.global_workspace import WorkspaceModule
 
 
 class ModuleRegistry:

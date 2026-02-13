@@ -4,7 +4,6 @@ Verifies: contextual disambiguation, learning, domain inference.
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 from python.context_engine import ContextEngine, ContextFrame, DisambiguatedMeaning
 from python.semantic_memory import SemanticMemory

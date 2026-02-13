@@ -15,11 +15,9 @@ import tempfile
 import shutil
 
 # Add parent directories to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "python"))
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from python.module_registry import ModuleRegistry, get_registry
-from global_workspace import WorkspaceModule, Coalition
+from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
 import numpy as np
 from typing import Optional, Dict, Any
 

@@ -22,7 +22,7 @@ import numpy as np
 from collections import deque
 from typing import List, Tuple, Dict, Any, Optional
 from dataclasses import dataclass
-from persistence import BrainStore, Episode
+from python.core.integration.persistence import BrainStore, Episode
 import torch
 
 @dataclass

@@ -30,7 +30,7 @@ import collections
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
-import hypervec_shim as hv
+import python.core.vsa.hypervec_shim as hv
 
 # ---------------------------------------------------------------------------
 # Constants

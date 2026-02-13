@@ -26,9 +26,9 @@ from flask import Flask, request, jsonify, send_file, render_template_string
 import sys
 sys.path.insert(0, os.path.dirname(__file__))
 
-from knowledge_integration import KnowledgeIntegration, CognitiveResponse
-from multimodal_processor import MultimodalInput
-from context_engine import ContextFrame
+from python.core.integration.knowledge_integration import KnowledgeIntegration, CognitiveResponse
+from python.core.multimodal.multimodal_processor import MultimodalInput
+from python.core.reasoning.context_engine import ContextFrame
 import numpy as np
 
 # ---------------------------------------------------------------------------

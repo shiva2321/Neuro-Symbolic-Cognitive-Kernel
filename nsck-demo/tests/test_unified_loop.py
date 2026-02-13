@@ -5,9 +5,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 # Add project root to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from cognitive_engine import create_cognitive_engine
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
 
 class TestUnifiedLoop(unittest.TestCase):
     def setUp(self):

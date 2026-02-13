@@ -4,10 +4,9 @@ import os
 import numpy as np
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from perception import FusionEngine, CleanupMemory, HV_DIM
-from voice_hd import VoiceHDEngine # To generate audio vectors
+from python.core.perception.perception import FusionEngine, CleanupMemory, HV_DIM
+from python.interfaces.voice_hd import VoiceHDEngine # To generate audio vectors
 
 def test_fusion():
     print("Initializing Sensor Fusion...")

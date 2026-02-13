@@ -6,10 +6,10 @@ Demonstrates the full communication loop.
 """
 
 import numpy as np
-from voice_interface import VoiceInterface
-from dialogue_manager import DialogueManager
-from language_module import LanguageModule
-from lingua_cortex import get_lingua_cortex
+from python.interfaces.voice_interface import VoiceInterface
+from python.core.language.dialogue_manager import DialogueManager
+from python.core.language.language_module import LanguageModule
+from python.core.language.lingua_cortex import get_lingua_cortex
 
 class MockHomeostasis:
     def __init__(self):

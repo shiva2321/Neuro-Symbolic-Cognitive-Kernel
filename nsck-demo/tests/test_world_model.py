@@ -4,9 +4,9 @@ Verification test for Phase 5.1: World Model (Dynamics Predictor)
 import unittest
 import torch
 import numpy as np
-from cognitive_engine import CognitiveEngine
-from world_model import WorldModel
-import hypervec_shim as hypervec_rs
+from python.core.reasoning.cognitive_engine import CognitiveEngine
+from python.core.neural.world_model import WorldModel
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 class TestWorldModel(unittest.TestCase):
     def test_dynamics_learning(self):
@@ -41,7 +41,7 @@ class TestWorldModel(unittest.TestCase):
         s1_preds = verifier.get_active_predicates(state_1, "snake")
         s1_hv = engine.episodic_memory.create_situation_hv(state_1, "snake", s1_preds)
         
-        from symbol_grounding import GLOBAL_PRIMITIVES_MAP
+        from python.core.perception.symbol_grounding import GLOBAL_PRIMITIVES_MAP
         a_hv = hypervec_rs.HyperVector(GLOBAL_PRIMITIVES_MAP[action])
         
         pred_ns_hv_bits, pred_reward = engine.world_model.imagine(s1_hv, a_hv)

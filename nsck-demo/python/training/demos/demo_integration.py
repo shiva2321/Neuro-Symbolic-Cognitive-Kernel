@@ -16,41 +16,41 @@ unified system capable of learning, reasoning, planning, and social interaction.
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../')), '..', 'python'))
 
 import torch
 import numpy as np
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 from typing import Dict, List, Tuple, Any
 
 # Phase 1: Neural Learning
-from multi_task_learning import create_multitask_network, MultiTaskTrainer
-from rule_extraction import create_dual_inference_system
+from python.core.learning.multi_task_learning import create_multitask_network, MultiTaskTrainer
+from python.scripts.rule_extraction import create_dual_inference_system
 
 # Phase 2: Perception
-from multimodal_processor import MultimodalProcessor, MultimodalInput
+from python.core.multimodal.multimodal_processor import MultimodalProcessor, MultimodalInput
 
 # Phase 3: Continual Learning
-from continual_learning import ContinualLearner, ProgressiveNetwork, MemoryReplayManager, PackNetManager
-from meta_learning import MAMLLearner
+from python.core.learning.continual_learning import ContinualLearner, ProgressiveNetwork, MemoryReplayManager, PackNetManager
+from python.core.learning.meta_learning import MAMLLearner
 
 # Phase 4: World Models & Planning
-from world_model import WorldModel
+from python.core.neural.world_model import WorldModel
 
 # Phase 5: Self-Model & Metacognition
-from self_model import SelfModel
-from metacognition import MetacognitiveEngine
+from python.core.cognitive.self_model import SelfModel
+from python.core.cognitive.metacognition import MetacognitiveEngine
 
 # Phase 6: Social & Emotional Intelligence
-from emotion_system import EmotionSystem
-from theory_of_mind import TheoryOfMind
+from python.core.cognitive.emotion_system import EmotionSystem
+from python.core.cognitive.theory_of_mind import TheoryOfMind
 
 # Transfer Learning & Knowledge Persistence
-from analogy import AnalogyEngine
-from semantic_memory import SemanticMemory
+from python.core.reasoning.analogy import AnalogyEngine
+from python.core.memory.semantic_memory import SemanticMemory
 
 # LLM as Translator Peripheral
-from language_module import LanguageModule
+from python.core.language.language_module import LanguageModule
 
 
 class KnowledgeStore:
@@ -221,7 +221,7 @@ class IntegratedNSCKSystem:
         print("[Phase 5] Initializing Self-Model & Metacognition...")
         self.self_model = SelfModel()
         # Metacognition needs a brain object, so we'll use a simple placeholder
-        from brain_fusion import TaskBrain
+        from python.core.integration.brain_fusion import TaskBrain
         placeholder_brain = TaskBrain("placeholder")
         self.metacognition = MetacognitiveEngine(placeholder_brain)
         

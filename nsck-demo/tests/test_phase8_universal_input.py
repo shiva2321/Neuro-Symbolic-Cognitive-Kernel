@@ -5,12 +5,11 @@ Tests that scalars, categories, dicts, and lists are correctly grounded
 into 10 240-bit hypervectors with the expected similarity properties.
 """
 import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import unittest
 import numpy as np
-import hypervec_shim as hv
-from universal_input import UniversalInput
+import python.core.vsa.hypervec_shim as hv
+from python.core.language.universal_input import UniversalInput
 
 
 class TestScalarGrounding(unittest.TestCase):

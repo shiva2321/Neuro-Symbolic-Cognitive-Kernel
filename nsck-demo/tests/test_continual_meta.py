@@ -6,14 +6,14 @@ import unittest
 import torch
 import torch.nn as nn
 from torch.utils.data import TensorDataset, DataLoader
-from continual_learning import (
+from python.core.learning.continual_learning import (
     ContinualLearner,
     PackNetManager,
     ProgressiveNetwork,
     ProgressiveColumn,
     MemoryReplayManager,
 )
-from meta_learning import MAMLLearner, ReptileLearner
+from python.core.learning.meta_learning import MAMLLearner, ReptileLearner
 
 
 class SimpleNet(nn.Module):

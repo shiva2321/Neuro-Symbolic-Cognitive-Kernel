@@ -4,7 +4,6 @@ Verifies: unified cognitive pipeline, learning, self-correction, transfer.
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 from python.knowledge_integration import (
     KnowledgeIntegration,

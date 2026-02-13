@@ -7,10 +7,9 @@ import sys
 from pathlib import Path
 
 # Add python/ directory to sys.path
-sys.path.append(str(Path(__file__).parent.parent / "python"))
 
-from intelligent_buffer import IntelligentReplayBuffer, Experience
-from persistence import BrainStore
+from python.core.memory.intelligent_buffer import IntelligentReplayBuffer, Experience
+from python.core.integration.persistence import BrainStore
 
 # Mock DB path for testing
 TEST_DB_PATH = "test_brain_archive.db"

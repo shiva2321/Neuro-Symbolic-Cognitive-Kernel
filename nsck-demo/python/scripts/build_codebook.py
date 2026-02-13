@@ -6,7 +6,7 @@ import os
 # In a real scenario, maturin develop would install it to site-packages.
 # Here we assume it's installed or we might need to point sys.path if built locally in place.
 try:
-    import hypervec_py
+    import python.core.vsa.hypervec_py
 except ImportError:
     print("hypervec_py not found. Ensure you have built the rust crate with 'maturin develop'.")
     sys.exit(1)

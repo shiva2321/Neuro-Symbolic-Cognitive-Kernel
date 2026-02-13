@@ -18,38 +18,38 @@ import numpy as np
 import json
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple, Set
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 # Import all cognitive modules
-from config import NSCKConfig
-from grounding_verifier import GroundingVerifier, create_snake_verifier, create_pong_verifier, create_maze_verifier
-from rule_learner import RuleLearner
-from episodic_memory import EpisodicMemory, LiveEpisode
-from curiosity import CuriosityModule
-from explanation import ExplanationGenerator, Explanation
-from semantic_coherence import SemanticCoherence
-from analogy import AnalogyEngine
-from brain_fusion import BrainFusion, TaskBrain # [AGI] Phase 2: Logic Integration
-from planner import STRIPSPlanner 
-from spatial_reasoning import GridPlanner # [AGI] Phase 2.3: Spatial Reasoning
-from persistence import BrainStore
-from global_workspace import GlobalWorkspace # [AGI] Phase 3.1: Global Workspace
-from self_model import SelfModel # [AGI] Phase 3.2: Self-Model
-from causal_reasoning import (
+from python.utilities.config import NSCKConfig
+from python.core.perception.grounding_verifier import GroundingVerifier, create_snake_verifier, create_pong_verifier, create_maze_verifier
+from python.core.reasoning.rule_learner import RuleLearner
+from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
+from python.core.learning.curiosity import CuriosityModule
+from python.utilities.explanation import ExplanationGenerator, Explanation
+from python.scripts.semantic_coherence import SemanticCoherence
+from python.core.reasoning.analogy import AnalogyEngine
+from python.core.integration.brain_fusion import BrainFusion, TaskBrain # [AGI] Phase 2: Logic Integration
+from python.core.reasoning.planner import STRIPSPlanner 
+from python.utilities.spatial_reasoning import GridPlanner # [AGI] Phase 2.3: Spatial Reasoning
+from python.core.integration.persistence import BrainStore
+from python.core.reasoning.global_workspace import GlobalWorkspace # [AGI] Phase 3.1: Global Workspace
+from python.core.cognitive.self_model import SelfModel # [AGI] Phase 3.2: Self-Model
+from python.core.reasoning.causal_reasoning import (
     CausalGraph, CausalReasoner, create_snake_causal_graph, 
     create_pong_causal_graph, create_maze_causal_graph, CausalDiscovery # [AGI] Phase 4.1
 )
-from homeostasis import HomeostaticMonitor
-from emotion_system import EmotionSystem
-from theory_of_mind import TheoryOfMind
-from semantic_memory import SemanticMemory
+from python.utilities.homeostasis import HomeostaticMonitor
+from python.core.cognitive.emotion_system import EmotionSystem
+from python.core.cognitive.theory_of_mind import TheoryOfMind
+from python.core.memory.semantic_memory import SemanticMemory
 import os
-from agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
-from consciousness_metrics import GlobalWorkspaceMetrics
-from universal_input import UniversalInput  # [AGI] Phase 8
-from logger_service import get_logger
-from language_module import LanguageModule
-from dialogue_manager import DialogueManager
+from python.utilities.agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
+from python.utilities.consciousness_metrics import GlobalWorkspaceMetrics
+from python.core.language.universal_input import UniversalInput  # [AGI] Phase 8
+from python.servers.logger_service import get_logger
+from python.core.language.language_module import LanguageModule
+from python.core.language.dialogue_manager import DialogueManager
 
 
 @dataclass
@@ -174,9 +174,9 @@ class CognitiveEngine:
             
         # [AGI] Phase 4: Continual Learning (EWC & Meta-Learning)
         try:
-            from continual_learning import ContinualLearner, ProgressiveNetwork, MemoryReplayManager
-            from meta_learning import MAMLLearner
-            from curriculum import CurriculumDesigner
+            from python.core.learning.continual_learning import ContinualLearner, ProgressiveNetwork, MemoryReplayManager
+            from python.core.learning.meta_learning import MAMLLearner
+            from python.utilities.curriculum import CurriculumDesigner
             # We assume self.snn is part of self.perception or similar
             # For now, if we have an snn, we use it. 
             self.continual_learner = ContinualLearner(self.snn) if hasattr(self, 'snn') else None
@@ -190,7 +190,7 @@ class CognitiveEngine:
 
         # [AGI] Phase 1: RL Engine (A2C/PPO + Neural-Symbolic Bridge)
         try:
-            from rl_engine import NeuralSymbolicBridge
+            from python.core.learning.rl_engine import NeuralSymbolicBridge
             self.neural_symbolic_bridge = NeuralSymbolicBridge(
                 rule_learner=self.rule_learner,
                 safety_threshold=0.3,
@@ -201,9 +201,9 @@ class CognitiveEngine:
 
         # [AGI] Phase 5: Consciousness & Self-Evolution
         try:
-            from consciousness_metrics import ConsciousnessMonitor
-            from self_modifier import SelfModifier
-            from value_alignment import ValueAlignmentSystem
+            from python.utilities.consciousness_metrics import ConsciousnessMonitor
+            from python.utilities.self_modifier import SelfModifier
+            from python.core.cognitive.value_alignment import ValueAlignmentSystem
             self.consciousness = ConsciousnessMonitor(self.global_workspace)
             self.self_modifier = SelfModifier(os.getcwd())
             self.value_alignment = ValueAlignmentSystem()
@@ -221,7 +221,7 @@ class CognitiveEngine:
 
         # [AGI] Phase 5.1 (Legacy): World Model (Imagination)
         try:
-            from world_model import WorldModel
+            from python.core.neural.world_model import WorldModel
             self.world_model = WorldModel()
             print("[AGI] WorldModel Initialized.")
         except ImportError:
@@ -248,7 +248,7 @@ class CognitiveEngine:
         # [AGI] Phase 2: Brain Fusion for Chains
         self.fusion = BrainFusion() 
         try:
-            from brain_fusion import TaskBrain
+            from python.core.integration.brain_fusion import TaskBrain
             self.task_brains = {
                 "snake": TaskBrain("snake"),
                 "pong": TaskBrain("pong"),
@@ -361,7 +361,7 @@ class CognitiveEngine:
             elif act_dx == 1 and act_dy == 0: active_inf_action = "ACTION_RIGHT"
         
         # [AGI] Phase 3.1: Global Workspace Competition
-        from global_workspace import Coalition
+        from python.core.reasoning.global_workspace import Coalition
         coalitions: List[Coalition] = []
         
         # A. SNN Proposal (Fast System)
@@ -1067,7 +1067,7 @@ class CognitiveEngine:
 
     def _get_action_name(self, action_hv: hypervec_rs.HyperVector) -> str:
         """Reverse lookup for action name."""
-        from symbol_grounding import GLOBAL_PRIMITIVES_MAP
+        from python.core.perception.symbol_grounding import GLOBAL_PRIMITIVES_MAP
         for name, seed in GLOBAL_PRIMITIVES_MAP.items():
             if seed == getattr(action_hv, 'seed', -1):
                 return name.replace("ACTION_", "")
@@ -1075,7 +1075,7 @@ class CognitiveEngine:
 
     def _get_action_hv(self, action_str: str) -> hypervec_rs.HyperVector:
         """Get hypervector representation for a symbolic action."""
-        from symbol_grounding import GLOBAL_PRIMITIVES_MAP
+        from python.core.perception.symbol_grounding import GLOBAL_PRIMITIVES_MAP
         seed = GLOBAL_PRIMITIVES_MAP.get(action_str, 0)
         return hypervec_rs.HyperVector(seed)
 

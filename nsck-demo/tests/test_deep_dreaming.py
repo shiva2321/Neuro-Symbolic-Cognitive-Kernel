@@ -7,15 +7,14 @@ import sys
 from pathlib import Path
 
 # Add python/ directory to sys.path
-sys.path.append(str(Path(__file__).parent.parent / "python"))
 
-from intelligent_buffer import IntelligentReplayBuffer, Experience
-from python_server import perform_dreaming_cycle, REPLAY_BUFFER
-import snn_qat
-from snn_qat import TaskAwareSNN, UniversalEncoder
+from python.core.memory.intelligent_buffer import IntelligentReplayBuffer, Experience
+from python.servers.python_server import perform_dreaming_cycle, REPLAY_BUFFER
+import python.core.neural.snn_qat
+from python.core.neural.snn_qat import TaskAwareSNN, UniversalEncoder
 
 # Mock global variables
-import python_server
+import python.servers.python_server
 import threading
 python_server.REPLAY_BUFFER = REPLAY_BUFFER 
 python_server.REPLAY_BATCH_SIZE = 2

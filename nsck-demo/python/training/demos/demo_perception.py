@@ -17,8 +17,8 @@ from typing import Dict, List, Optional, Any
 
 # Import existing modules
 try:
-    import hypervec_shim as hypervec_rs
-    from multimodal_processor import MultimodalProcessor, MultimodalInput
+    import python.core.vsa.hypervec_shim as hypervec_rs
+    from python.core.multimodal.multimodal_processor import MultimodalProcessor, MultimodalInput
 except ImportError:
     print("Warning: Could not import required modules")
     hypervec_rs = None

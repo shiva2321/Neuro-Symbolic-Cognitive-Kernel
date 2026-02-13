@@ -1,8 +1,8 @@
 import numpy as np
 from typing import List, Set
-import hypervec_shim as hypervec_rs
-from brain_fusion import FusedBrain, TaskBrain, Rule, ConceptType
-from metacognition import MetacognitiveEngine, inference_to_probs
+import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.integration.brain_fusion import FusedBrain, TaskBrain, Rule, ConceptType
+from python.core.cognitive.metacognition import MetacognitiveEngine, inference_to_probs
 
 # --- CONCEPT CODEBOOK (CONSTANTS) ---
 # Keeping constants for reference, though Brain handles them dynamically now.
@@ -53,7 +53,7 @@ def bootstrap_metacognitive_brain() -> MetacognitiveEngine:
     # For now, relying on Simulation Veto inside MetacognitiveEngine.
     
     # 5. Fuse
-    from brain_fusion import BrainFusion
+    from python.core.integration.brain_fusion import BrainFusion
     fusion = BrainFusion()
     fusion.register_brain(snake_brain)
     fusion.register_brain(pong_brain)

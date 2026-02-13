@@ -15,16 +15,15 @@ import pytest
 import numpy as np
 
 # Add nsck-demo/python to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from universal_input import (
+from python.core.language.universal_input import (
     UniversalInput,
     _classify_verb_semantics,
     _chunk_phrases,
     _assign_semantic_roles,
     _role_hv,
 )
-import hypervec_shim as hv
+import python.core.vsa.hypervec_shim as hv
 
 
 def test_verb_classification():

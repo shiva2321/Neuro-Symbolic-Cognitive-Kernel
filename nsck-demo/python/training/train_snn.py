@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
-from snn_qat import QuantizedSNN
+from python.core.neural.snn_qat import QuantizedSNN
 import numpy as np
 import os
 

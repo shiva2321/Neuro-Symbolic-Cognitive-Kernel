@@ -10,8 +10,8 @@ import math
 import hashlib
 from dataclasses import dataclass, field
 from typing import List, Tuple, Dict, Optional, Callable
-import hypervec_shim as hypervec_rs
-from brain_fusion import FusedBrain, QueryResult
+import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.integration.brain_fusion import FusedBrain, QueryResult
 
 # --- Constants & Configuration ---
 
@@ -139,7 +139,7 @@ class SafetyGate:
         Wraps collision logic from simulation.py
         """
         # Lazy import to avoid circular dependencies if possible, or assume imports at top
-        from simulation import sim_snake, sim_pong
+        from python.games.pong.simulation import sim_snake, sim_pong
         
         # Standardize action
         action_core = action.replace("ACTION_", "")

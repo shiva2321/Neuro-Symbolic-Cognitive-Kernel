@@ -15,10 +15,10 @@ import numpy as np
 from typing import Dict, List, Tuple
 import argparse
 
-from multi_task_learning import (
+from python.core.learning.multi_task_learning import (
     create_multitask_network, MultiTaskTrainer, MultiTaskMetrics
 )
-from rule_extraction import (
+from python.scripts.rule_extraction import (
     create_dual_inference_system, NeuralRuleExtractor
 )
 

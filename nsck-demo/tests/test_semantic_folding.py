@@ -9,12 +9,11 @@ This test demonstrates that the system can:
 """
 import sys
 import os
-sys.path.insert(0, '/workspaces/Node_network/nsck-demo/python')
 
-from text_knowledge_learner import TextKnowledgeLearner
-from semantic_memory import SemanticMemory
-from episodic_memory import EpisodicMemory
-from context_engine import ContextEngine
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
+from python.core.memory.semantic_memory import SemanticMemory
+from python.core.memory.episodic_memory import EpisodicMemory
+from python.core.reasoning.context_engine import ContextEngine
 import tempfile
 
 

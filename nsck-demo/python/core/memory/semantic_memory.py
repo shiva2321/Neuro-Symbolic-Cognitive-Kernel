@@ -8,7 +8,7 @@ Implements abstracted knowledge (Schemas) and spreading activation.
 import networkx as nx
 import numpy as np
 from typing import Dict, List, Any, Optional, Tuple
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 class SemanticMemory:
     """

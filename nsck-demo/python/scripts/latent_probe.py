@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-from snn_qat import TaskAwareSNN
+from python.core.neural.snn_qat import TaskAwareSNN
 import numpy as np
 
 def cosine_similarity(v1, v2):

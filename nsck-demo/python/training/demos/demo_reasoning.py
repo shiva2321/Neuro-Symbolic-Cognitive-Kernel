@@ -20,12 +20,12 @@ from collections import defaultdict
 import math
 
 # Import world model
-from world_model import WorldModel, WorldModelConfig, DynamicsPredictor
+from python.core.neural.world_model import WorldModel, WorldModelConfig, DynamicsPredictor
 
 try:
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
-    from hypervec_py import HyperVector as _HV
+    from python.core.vsa.hypervec_py import HyperVector as _HV
     class _Shim:
         HyperVector = _HV
     hypervec_rs = _Shim()

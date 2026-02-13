@@ -8,7 +8,7 @@ When this feature is implemented, tests should be added back using the
 actual CausalDiscovery API (observe, get_hypotheses, delta_p).
 """
 import unittest
-from causal_reasoning import CausalDiscovery
+from python.core.reasoning.causal_reasoning import CausalDiscovery
 
 class TestInterventionalLearning(unittest.TestCase):
     def test_hypothesis_generation(self):

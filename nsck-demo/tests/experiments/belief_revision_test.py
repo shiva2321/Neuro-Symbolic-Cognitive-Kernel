@@ -3,10 +3,9 @@ import os
 import time
 
 # Add python directory to path
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from text_knowledge_learner import TextKnowledgeLearner
-from language_module import LanguageModule
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
+from python.core.language.language_module import LanguageModule
 
 def run_test():
     print("=== Phase 1, Test 1: Belief Revision (Unreliable Witness) ===")

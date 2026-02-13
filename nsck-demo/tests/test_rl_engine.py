@@ -5,7 +5,7 @@ Validates the reinforcement learning implementations from ROADMAP_TO_AGI.md.
 import unittest
 import torch
 import torch.nn as nn
-from rl_engine import (
+from python.core.learning.rl_engine import (
     RolloutBuffer,
     Transition,
     A2CTrainer,

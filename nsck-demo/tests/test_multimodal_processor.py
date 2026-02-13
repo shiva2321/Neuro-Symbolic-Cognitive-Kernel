@@ -4,7 +4,6 @@ Verifies: text, image, audio, structured data encoding and fusion.
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import numpy as np
 from python.multimodal_processor import (

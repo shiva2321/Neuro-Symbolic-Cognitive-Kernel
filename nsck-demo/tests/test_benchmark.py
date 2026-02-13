@@ -10,9 +10,8 @@ import os
 import json
 import tempfile
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from benchmark import (
+from python.benchmarks.benchmark import (
     SnakeEnv, PongEnv, MazeEnv,
     TeacherAgent, StudentAgent, LearnedPolicy, BenchmarkRunner,
     generate_report, save_json_report,

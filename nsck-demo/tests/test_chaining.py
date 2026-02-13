@@ -1,5 +1,5 @@
 import unittest
-from brain_fusion import BrainFusion, TaskBrain, ConceptType
+from python.core.integration.brain_fusion import BrainFusion, TaskBrain, ConceptType
 
 class TestForwardChaining(unittest.TestCase):
     def test_forward_chain(self):

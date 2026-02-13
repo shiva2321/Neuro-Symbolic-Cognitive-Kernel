@@ -1,5 +1,5 @@
 import unittest
-from cognitive_engine import create_cognitive_engine
+from python.core.reasoning.cognitive_engine import create_cognitive_engine
 
 class TestIntegratedMetacognition(unittest.TestCase):
     def test_learn_loop_updates_confidence(self):

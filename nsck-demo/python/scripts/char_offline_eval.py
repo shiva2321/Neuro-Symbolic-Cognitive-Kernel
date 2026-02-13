@@ -28,7 +28,7 @@ import numpy as np
 import torch
 from torchvision import datasets
 
-from snn_qat import TaskAwareSNN, ternarize_weight
+from python.core.neural.snn_qat import TaskAwareSNN, ternarize_weight
 
 
 @dataclass

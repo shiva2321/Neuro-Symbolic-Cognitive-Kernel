@@ -3,9 +3,8 @@ import sys
 import os
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from lingua_cortex import SemanticMap
+from python.core.language.lingua_cortex import SemanticMap
 
 def test_semantic_learning():
     print("Initializing Semantic Cortex...")

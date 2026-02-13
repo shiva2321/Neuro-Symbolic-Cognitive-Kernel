@@ -4,9 +4,8 @@ import os
 import time
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from homeostasis import HomeostaticMonitor
+from python.utilities.homeostasis import HomeostaticMonitor
 
 def test_proto_self():
     print("Initializing Proto-Self...")

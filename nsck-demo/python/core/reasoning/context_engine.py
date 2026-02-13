@@ -18,9 +18,9 @@ from dataclasses import dataclass, field
 import numpy as np
 
 try:
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
-    from hypervec_py import HyperVector as _HV
+    from python.core.vsa.hypervec_py import HyperVector as _HV
 
     class _Shim:
         HyperVector = _HV

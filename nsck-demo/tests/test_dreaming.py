@@ -6,11 +6,10 @@ import torch
 import numpy as np
 
 # Add project root to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from cognitive_engine import create_cognitive_engine, CognitiveState
-import hypervec_shim as hypervec_rs
-from symbol_grounding import GLOBAL_PRIMITIVES_MAP
+from python.core.reasoning.cognitive_engine import create_cognitive_engine, CognitiveState
+import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.perception.symbol_grounding import GLOBAL_PRIMITIVES_MAP
 
 class TestDreaming(unittest.TestCase):
     def setUp(self):

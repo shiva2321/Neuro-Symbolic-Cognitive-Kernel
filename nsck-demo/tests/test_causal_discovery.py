@@ -1,5 +1,5 @@
 import unittest
-from causal_reasoning import CausalDiscovery, CausalRelation
+from python.core.reasoning.causal_reasoning import CausalDiscovery, CausalRelation
 
 class TestCausalDiscovery(unittest.TestCase):
     def test_strong_causality(self):

@@ -5,12 +5,11 @@ Tests for emotion system, theory of mind, social learning, and empathy.
 """
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
 import pytest
 import numpy as np
-from emotion_system import EmotionSystem
-from theory_of_mind import TheoryOfMind, MentalStateModel
+from python.core.cognitive.emotion_system import EmotionSystem
+from python.core.cognitive.theory_of_mind import TheoryOfMind, MentalStateModel
 
 
 class TestEmotionSystem:

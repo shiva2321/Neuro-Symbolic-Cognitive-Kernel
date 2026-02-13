@@ -7,8 +7,8 @@ module level in test_phase4_planning.py instead.
 """
 import unittest
 import numpy as np
-from cognitive_engine import CognitiveEngine
-import hypervec_shim as hypervec_rs
+from python.core.reasoning.cognitive_engine import CognitiveEngine
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 class TestImagination(unittest.TestCase):
     def test_world_model_prediction(self):

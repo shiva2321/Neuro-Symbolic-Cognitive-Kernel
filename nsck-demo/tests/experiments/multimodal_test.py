@@ -3,12 +3,11 @@ import os
 import numpy as np
 import time
 
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from multimodal_processor import MultimodalProcessor, MultimodalInput
-from perception import SpatialAnalyzer
-from language_module import LanguageModule
-from text_knowledge_learner import TextKnowledgeLearner
+from python.core.multimodal.multimodal_processor import MultimodalProcessor, MultimodalInput
+from python.core.perception.perception import SpatialAnalyzer
+from python.core.language.language_module import LanguageModule
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
 
 def generate_textured_circle(size=32):
     # A circular mask with random noise (texture)

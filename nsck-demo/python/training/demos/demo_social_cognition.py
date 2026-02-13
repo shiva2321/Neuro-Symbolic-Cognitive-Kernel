@@ -18,13 +18,13 @@ from collections import defaultdict
 import random
 
 # Import Phase 5 modules
-from self_model import SelfModel
-from metacognition import MetacognitiveEngine, InferenceResult
+from python.core.cognitive.self_model import SelfModel
+from python.core.cognitive.metacognition import MetacognitiveEngine, InferenceResult
 
 try:
-    import hypervec_shim as hypervec_rs
+    import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
-    from hypervec_py import HyperVector as _HV
+    from python.core.vsa.hypervec_py import HyperVector as _HV
     class _Shim:
         HyperVector = _HV
     hypervec_rs = _Shim()

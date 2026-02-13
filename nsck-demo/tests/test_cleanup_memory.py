@@ -4,7 +4,7 @@ Verifies denoising and associative memory functionality
 """
 import pytest
 import numpy as np
-from hypervec_py import HyperVector, CleanupMemory, bundle_with_cleanup, unbind_with_cleanup, DIMENSION
+from python.core.vsa.hypervec_py import HyperVector, CleanupMemory, bundle_with_cleanup, unbind_with_cleanup, DIMENSION
 
 
 class TestCleanupMemory:

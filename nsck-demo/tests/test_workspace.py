@@ -3,10 +3,9 @@ import sys
 import os
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from global_workspace import GlobalWorkspace, Coalition
-from homeostasis import HomeostaticMonitor
+from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
+from python.utilities.homeostasis import HomeostaticMonitor
 
 def test_consciousness_competition():
     print("Initializing Global Workspace (LIDA-Lite)...")

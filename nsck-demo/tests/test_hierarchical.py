@@ -1,5 +1,5 @@
 import unittest
-from spatial_reasoning import GridPlanner
+from python.utilities.spatial_reasoning import GridPlanner
 
 class TestHierarchicalPlanning(unittest.TestCase):
     def test_long_path_decomposition(self):

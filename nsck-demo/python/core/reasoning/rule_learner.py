@@ -12,10 +12,10 @@ import numpy as np
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Dict, List, Set, FrozenSet, Optional, Tuple, Any
-import hypervec_shim as hypervec_rs
-from persistence import BrainStore, Episode, Rule
-from grounding_verifier import GroundingVerifier
-from global_workspace import WorkspaceModule, Coalition
+import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.integration.persistence import BrainStore, Episode, Rule
+from python.core.perception.grounding_verifier import GroundingVerifier
+from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
 
 
 @dataclass

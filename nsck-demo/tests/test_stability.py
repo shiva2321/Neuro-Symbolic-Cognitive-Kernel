@@ -6,15 +6,14 @@ import os
 import shutil
 
 # Add python folder to path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../python')))
 
-from rule_learner import RuleLearner, RuleCandidate
+from python.core.reasoning.rule_learner import RuleLearner, RuleCandidate
 
 # Mock hypervec_rs if not available
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
-from persistence import Rule, Episode, BrainStore
-from episodic_memory import LiveEpisode
+from python.core.integration.persistence import Rule, Episode, BrainStore
+from python.core.memory.episodic_memory import LiveEpisode
 
 class TestStability(unittest.TestCase):
     def setUp(self):

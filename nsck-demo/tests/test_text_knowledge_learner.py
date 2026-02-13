@@ -7,11 +7,10 @@ and answer queries without relying on LLMs for core cognition.
 
 import sys
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'python'))
 
 import pytest
 import tempfile
-from text_knowledge_learner import TextKnowledgeLearner, LearnedFact
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner, LearnedFact
 
 
 class TestTextKnowledgeLearner:

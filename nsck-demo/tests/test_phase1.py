@@ -11,11 +11,11 @@ import unittest
 import torch
 import torch.nn as nn
 import numpy as np
-from multi_task_learning import (
+from python.core.learning.multi_task_learning import (
     SharedEncoder, TaskHead, MultiTaskNetwork, MultiTaskTrainer,
     GradientSurgery, create_multitask_network
 )
-from rule_extraction import (
+from python.scripts.rule_extraction import (
     Rule, RuleSet, NeuralRuleExtractor, DualInferenceEngine,
     create_dual_inference_system
 )

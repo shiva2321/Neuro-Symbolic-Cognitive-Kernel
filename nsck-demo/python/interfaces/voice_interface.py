@@ -13,7 +13,7 @@ import scipy.signal
 from typing import Dict, Any, Optional
 import os
 
-from voice_hd import VoiceHDEngine
+from python.interfaces.voice_hd import VoiceHDEngine
 
 class ProsodyAnalyzer:
     """

@@ -3,9 +3,8 @@ import unittest
 import sys
 import os
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'python'))
 
-from snn_qat import TaskAwareSNN
+from python.core.neural.snn_qat import TaskAwareSNN
 
 class TestDynamicBrain(unittest.TestCase):
     def setUp(self):

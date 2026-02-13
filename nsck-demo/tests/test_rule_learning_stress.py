@@ -10,16 +10,15 @@ Tests rule learning robustness with noisy observations:
 Validates that external developers can trust rule learning even with imperfect sensors.
 """
 import sys
-sys.path.insert(0, '/workspaces/Node_network/nsck-demo/python')
 
 import random
 import numpy as np
 from collections import defaultdict
 from typing import Dict, List, Set, Any
 
-from rule_learner import RuleLearner
-from grounding_verifier import GroundingVerifier
-from persistence import Rule
+from python.core.reasoning.rule_learner import RuleLearner
+from python.core.perception.grounding_verifier import GroundingVerifier
+from python.core.integration.persistence import Rule
 
 
 class NoisyRuleLearningTest:

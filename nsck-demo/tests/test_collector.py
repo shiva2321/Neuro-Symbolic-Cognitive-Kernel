@@ -11,10 +11,9 @@ import os
 import pytest
 
 # Ensure nsck-demo/python is on the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "python"))
 
-from collector_game import CollectorGame, CollectorState, sim_collector
-from grounding_verifier import create_collector_verifier
+from python.games.collector.collector_game import CollectorGame, CollectorState, sim_collector
+from python.core.perception.grounding_verifier import create_collector_verifier
 
 
 class TestCollectorGame:
@@ -206,14 +205,14 @@ class TestBenchmarkIntegration:
     """Tests for CollectorEnv and teacher agent in benchmark."""
 
     def test_collector_env_runs(self):
-        from benchmark import CollectorEnv
+        from python.benchmarks.benchmark import CollectorEnv
         env = CollectorEnv()
         state = env.reset()
         assert state["type"] == "collector"
         assert not env.done
 
     def test_teacher_solves_collector(self):
-        from benchmark import CollectorEnv, TeacherAgent
+        from python.benchmarks.benchmark import CollectorEnv, TeacherAgent
         env = CollectorEnv()
         agent = TeacherAgent()
         state = env.reset()
@@ -226,5 +225,5 @@ class TestBenchmarkIntegration:
         assert env.score >= 1
 
     def test_collector_in_envs_dict(self):
-        from benchmark import ENVS
+        from python.benchmarks.benchmark import ENVS
         assert "collector" in ENVS

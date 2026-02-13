@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import snntorch as snn
 from snntorch import surrogate
-from universal_encoder import UniversalEncoder
+from python.core.vsa.universal_encoder import UniversalEncoder
 
 # --- TERNARY QUANTIZATION LOGIC ---
 class TernaryQuantize(torch.autograd.Function):

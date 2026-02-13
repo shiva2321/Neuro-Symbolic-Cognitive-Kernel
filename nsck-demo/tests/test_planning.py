@@ -1,6 +1,6 @@
 import unittest
-from planner import STRIPSPlanner
-from causal_reasoning import CausalGraph, CausalReasoner
+from python.core.reasoning.planner import STRIPSPlanner
+from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner
 
 class MockCausalGraph(CausalGraph):
     """

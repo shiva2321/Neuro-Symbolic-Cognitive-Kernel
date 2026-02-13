@@ -7,10 +7,9 @@ import os
 from pathlib import Path
 
 # Add python/ directory to sys.path
-sys.path.append(str(Path(__file__).parent.parent / "python"))
 
-from snn_qat import TaskAwareSNN, UniversalEncoder
-from saliency import SaliencyVisualizer
+from python.core.neural.snn_qat import TaskAwareSNN, UniversalEncoder
+from python.core.perception.saliency import SaliencyVisualizer
 
 def test_saliency_heatmap_generation():
     """Verify Grad-CAM heatmap generation."""

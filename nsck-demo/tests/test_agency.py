@@ -6,9 +6,8 @@ import random
 from scipy import stats
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
+from python.utilities.agency import ActiveAgent, TILE_UNKNOWN, TILE_EMPTY, TILE_WALL, TILE_FOOD
 
 # --- MOCK ENVIRONMENT ---
 class GridEnv:

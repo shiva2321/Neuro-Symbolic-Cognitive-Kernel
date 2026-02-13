@@ -16,7 +16,7 @@ import logging
 # Configure logging
 logger = logging.getLogger(__name__)
 
-import hypervec_shim as hypervec_rs
+import python.core.vsa.hypervec_shim as hypervec_rs
 
 
 def _extract_context_key(state: Any) -> Optional[str]:

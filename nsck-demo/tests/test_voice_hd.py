@@ -4,9 +4,8 @@ import os
 import numpy as np
 
 # Ensure we can import from the current directory
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from voice_hd import VoiceHDEngine, SAMPLE_RATE
+from python.interfaces.voice_hd import VoiceHDEngine, SAMPLE_RATE
 
 def generate_sine_wave(freq_start, freq_end, duration_sec=1.0, noise_std=0.0):
     t = np.linspace(0, duration_sec, int(SAMPLE_RATE * duration_sec))
