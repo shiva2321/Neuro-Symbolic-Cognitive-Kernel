@@ -1,10 +1,12 @@
-# Logs and metrics
-logs/
+# Logs and metrics (keep directory structure)
+logs/*
+!logs/.gitkeep
 *.log
-*.json
 
-# Models
-models/*.pkl
+# Models (keep directory structure)  
+models/*
+!models/.gitkeep
+*.pkl
 
 # Generated images (keep directory structure)
 results/*.png
