@@ -359,7 +359,9 @@ class ImageGenerator:
         
         if not all_features:
             print("  No visual features found, generating random image")
-            return self._generate_random_image()
+            image = self._generate_random_image()
+            self.generation_count += 1
+            return image
         
         # Bundle visual features (average)
         combined_features = self._bundle_features(all_features)
