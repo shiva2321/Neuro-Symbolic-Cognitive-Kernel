@@ -29,7 +29,7 @@ from typing import Dict, Any, List, Optional
 from flask import Flask, request, jsonify, send_file, render_template_string
 
 import sys
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../')))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../'))
 
 import numpy as np
 

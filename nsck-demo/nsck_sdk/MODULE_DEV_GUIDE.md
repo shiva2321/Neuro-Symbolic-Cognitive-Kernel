@@ -62,8 +62,8 @@ python nsck_sdk/domain_expert.py
 ```python
 import numpy as np
 from typing import Optional, Dict, Any
-from global_workspace import WorkspaceModule, Coalition
-import hypervec_shim as hv
+from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
+import python.core.vsa.hypervec_shim as hv
 
 class MyFirstModule(WorkspaceModule):
     \"\"\"A simple module that detects when the agent is tired.\"\"\"
@@ -505,7 +505,7 @@ def test_telemetry_includes_expected_metrics():
 ### Integration Testing with ModuleRegistry
 
 ```python
-from python.module_registry import ModuleRegistry
+from python.core.integration.module_registry import ModuleRegistry
 from my_module import MyModule
 
 def test_module_registration():
@@ -531,8 +531,8 @@ def test_module_instantiation():
 ### Manual Registration
 
 ```python
-from python.cognitive_engine import CognitiveEngine
-from python.persistence import BrainStore
+from python.core.reasoning.cognitive_engine import CognitiveEngine
+from python.core.integration.persistence import BrainStore
 from my_module import MyModule
 
 # Initialize engine
@@ -551,8 +551,8 @@ engine.step()
 ### Automatic Discovery
 
 ```python
-from python.module_registry import ModuleRegistry
-from python.cognitive_engine import CognitiveEngine
+from python.core.integration.module_registry import ModuleRegistry
+from python.core.reasoning.cognitive_engine import CognitiveEngine
 
 # Discover modules from directory
 registry = ModuleRegistry()
@@ -573,7 +573,7 @@ print(f"Registered {len(registry.get_modules())} custom modules")
 ### 1. Using CleanupMemory for VSA Denoising
 
 ```python
-from python.hypervec_py import CleanupMemory
+from python.core.vsa.hypervec_py import CleanupMemory
 
 class AdvancedModule(WorkspaceModule):
     def __init__(self, brain_store):
@@ -628,7 +628,7 @@ class LearningModule(WorkspaceModule):
 ### 3. Semantic Roles in Action Proposals
 
 ```python
-from python.universal_input import UniversalInput
+from python.core.language.universal_input import UniversalInput
 
 class LanguageModule(WorkspaceModule):
     def __init__(self):

@@ -32,7 +32,7 @@ Unlike traditional LLMs, NSCK runs on **CPU-only** hardware with:
 - **Task**: "If Zog is to the left of Glip, identify Target."
 - **Result**: ✅ **PASS** - Executed conditional symbolic reasoning via quadrant-based spatial predicates.
 
-**Files**: [`python/multimodal_test.py`](python/multimodal_test.py), [`python/multimodal_processor.py`](python/multimodal_processor.py), [`python/perception.py`](python/perception.py)
+**Files**: [`tests/experiments/multimodal_test.py`](tests/experiments/multimodal_test.py), [`python/core/multimodal/multimodal_processor.py`](python/core/multimodal/multimodal_processor.py), [`python/core/perception/perception.py`](python/core/perception/perception.py)
 
 ### Phase 2: Semantic Folding & Relation Extraction ✅
 **The "Logic Scalpel" Refactor**
@@ -40,13 +40,13 @@ Unlike traditional LLMs, NSCK runs on **CPU-only** hardware with:
 - **Solution**: Implemented co-occurrence-based semantic folding that discovers relations via context similarity, bypassing strict grammatical requirements.
 - **Result**: ✅ F1 Test ("What are Xylophone planets made of?") now passes with 100% recall.
 
-**Files**: [`python/text_knowledge_learner.py`](python/text_knowledge_learner.py), [`python/text_reasoning_test.py`](python/text_reasoning_test.py)
+**Files**: [`python/core/language/text_knowledge_learner.py`](python/core/language/text_knowledge_learner.py), [`tests/experiments/text_reasoning_test.py`](tests/experiments/text_reasoning_test.py)
 
 ### Phase 1: Belief Revision & Transitive Reasoning ✅
 - **Belief Revision**: Correctly retracts outdated facts and updates confidence when new contradictory information arrives.
 - **Transitive Reasoning**: Infers multi-hop relationships (A→B, B→C ⇒ A→C) with confidence decay over distance.
 
-**Files**: [`python/belief_revision_test.py`](python/belief_revision_test.py), [`python/transitive_test.py`](python/transitive_test.py)
+**Files**: [`tests/experiments/belief_revision_test.py`](tests/experiments/belief_revision_test.py), [`tests/experiments/transitive_test.py`](tests/experiments/transitive_test.py)
 
 ---
 
@@ -116,9 +116,9 @@ cargo build --release
 cd ..
 
 # Run tests
-python python/multimodal_test.py
-python python/text_reasoning_test.py
-python python/belief_revision_test.py
+python tests/experiments/multimodal_test.py
+python tests/experiments/text_reasoning_test.py
+python tests/experiments/belief_revision_test.py
 ```
 
 ---
@@ -127,8 +127,8 @@ python python/belief_revision_test.py
 
 ### 1. Text Learning (One-Shot)
 ```python
-from text_knowledge_learner import TextKnowledgeLearner
-from language_module import LanguageModule
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
+from python.core.language.language_module import LanguageModule
 
 learner = TextKnowledgeLearner(language_module=LanguageModule())
 
@@ -143,7 +143,7 @@ print(result['answer'])  # → "circular, textured"
 
 ### 2. Multimodal Grounding
 ```python
-from multimodal_processor import MultimodalProcessor, MultimodalInput
+from python.core.multimodal.multimodal_processor import MultimodalProcessor, MultimodalInput
 import numpy as np
 
 processor = MultimodalProcessor()
@@ -158,7 +158,7 @@ print(result.extracted_concepts)
 
 ### 3. Belief Revision
 ```python
-from text_knowledge_learner import TextKnowledgeLearner
+from python.core.language.text_knowledge_learner import TextKnowledgeLearner
 
 learner = TextKnowledgeLearner()
 
@@ -192,19 +192,32 @@ print(learner.query_learned_knowledge("What color is the sky?"))
 ```
 nsck-demo/
 ├── python/
-│   ├── text_knowledge_learner.py    # Core learning engine
-│   ├── multimodal_processor.py       # HOG/LBP/MFCC classical CV
-│   ├── semantic_memory.py            # VSA concept storage
-│   ├── perception.py                 # Spatial analyzer
-│   ├── analogy.py                    # Cross-domain transfer
-│   ├── language_module.py            # NLU parser (mock/phi-3)
-│   └── ...
+│   ├── core/                         # Core cognitive modules
+│   │   ├── vsa/                      # Vector Symbolic Architecture
+│   │   ├── memory/                   # Episodic, semantic, working memory
+│   │   ├── reasoning/                # Cognitive engine, causal reasoning
+│   │   ├── learning/                 # RL, continual, meta-learning
+│   │   ├── perception/               # Symbol grounding, saliency
+│   │   ├── language/                 # NLP, text understanding
+│   │   ├── multimodal/               # Cross-modal processing
+│   │   ├── cognitive/                # Theory of mind, metacognition
+│   │   ├── neural/                   # SNN, world models
+│   │   └── integration/              # Brain fusion, persistence
+│   ├── games/                        # Training environments
+│   ├── benchmarks/                   # Performance measurement
+│   ├── training/                     # Training scripts and demos
+│   ├── interfaces/                   # Dashboards and UIs
+│   ├── servers/                      # Backend services
+│   └── utilities/                    # Helper modules
+├── tests/                            # Test suite
+│   ├── unit/                         # Unit tests
+│   ├── integration/                  # Integration tests
+│   ├── benchmarks/                   # Benchmark tests
+│   └── experiments/                  # Experimental tests
 ├── data/
 │   └── test_corpus/
-│       └── xylophone_planets.txt     # F1 test corpus
-├── tests/
-│   └── test_*.py                     # Unit tests
-└── nsck_sdk/
+│       └──xylophone_planets.txt     # F1 test corpus
+└── nsck_sdk/                         # External module SDK
     ├── README.md                     # Module development guide
     └── MODULE_DEV_GUIDE.md           # 600+ line tutorial
 ```
