@@ -1,13 +1,13 @@
 """
 NSCK Self-Model Module
-Phase 3.2 + 3.3: Self-Performance Modeling with Context-Aware Prediction
+Self-Performance Modeling with Context-Aware Confidence Estimation
 
 Tracks the agent's historical performance on tasks to generate calibrated 
 confidence estimates. This enables the agent to "know what it knows".
 
-Phase 3.3 Enhancement: Context-aware prediction uses state features
-(e.g., action history, situation tags) to provide situational confidence
-rather than a flat task-level average.
+Context-aware prediction uses state features (e.g., action history, situation tags)
+to provide situational confidence rather than a flat task-level average.
+Implements cold-start handling and improvement trend detection.
 """
 from collections import defaultdict
 from typing import Dict, Any, List, Tuple, Optional

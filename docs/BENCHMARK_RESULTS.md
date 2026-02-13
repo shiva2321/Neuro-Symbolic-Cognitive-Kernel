@@ -116,19 +116,46 @@ Execution Time: 0.04s
 ### Core Operations (10,240-bit Hypervectors)
 
 **Measurement Method:** 10,000 iterations, average time reported  
-**Hardware:** CPU-only (no GPU)
+**Hardware:** CPU-only (no GPU)  
+**Backend:** Rust accelerator (hypervec_rs) ✅ Enabled (Feb 13, 2026)
 
-| Operation | Time (ms) | Throughput (ops/sec) | Complexity |
-|-----------|-----------|----------------------|------------|
-| XOR Binding | 0.00198 | 504,000 | O(D) |
-| Bundling (2 HVs) | 0.02590 | 38,600 | O(D) |
-| Similarity | 0.00756 | 132,300 | O(D) |
-| Permutation | 0.00880 | 113,600 | O(D) |
+#### Performance with Rust Optimization
+
+| Operation | Python (μs) | Rust (μs) | Speedup | Throughput (ops/sec) | Complexity |
+|-----------|-------------|-----------|---------|----------------------|------------|
+| **XOR Binding** | 1.98 | **0.29** | **6.8×** | 3,426,069 | O(D) |
+| **Bundling (2 HVs)** | 25.90 | **0.91** | **28.5×** | 1,098,311 | O(D) |
+| **Similarity** | 7.56 | **0.32** | **23.6×** | 3,144,967 | O(D) |
+| **Permutation** | 8.80 | **0.83** | **10.6×** | 1,204,757 | O(D) |
+
+**Performance Summary:**
+- **Average Speedup:** 17.4× faster with Rust
+- **Best Case:** Bundle operation 28.5× faster
+- **Worst Case:** XOR operation 6.8× faster (still significant)
+- **Overall System:** 2-3× faster end-to-end performance
+
+**Technical Details:**
+- **Memory Layout:** 160 × u64 blocks (cache-friendly)
+- **CPU Instructions:** Native bitwise ops, hardware POPCNT
+- **SIMD:** Auto-vectorization with AVX2 (4 u64 per cycle)
+- **Zero-Copy:** No Python object allocation overhead
+
+See [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md) for detailed analysis.
+
+#### Legacy Python Performance (Reference)
+
+| Operation | Time (ms) | Throughput (ops/sec) | Notes |
+|-----------|-----------|----------------------|-------|
+| XOR Binding | 0.00198 | 504,000 | NumPy optimized |
+| Bundling (2 HVs) | 0.02590 | 38,600 | RNG bottleneck |
+| Similarity | 0.00756 | 132,300 | Two-pass algorithm |
+| Permutation | 0.00880 | 113,600 | np.roll overhead |
 
 **Notes:**
 - All operations are linear in dimension D=10,240
 - No matrix multiplication (would be O(D²) or O(D³))
 - Binary operations enable CPU-only efficiency
+- Rust backend automatically used when available (transparent fallback to Python)
 
 ### Random Vector Properties
 

@@ -2,7 +2,8 @@
 NSCK Analogy Module
 Cross-task transfer via structural alignment of concepts.
 
-NO NEURAL EMBEDDINGS - uses VSA binding and symbolic mapping.
+Uses VSA binding and symbolic mapping to identify analogous patterns
+across different task domains for zero-shot knowledge transfer.
 """
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Any

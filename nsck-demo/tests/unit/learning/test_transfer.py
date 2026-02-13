@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import copy
 
-# Add python/ directory to sys.path
 
 from python.core.neural.snn_qat import TaskAwareSNN, UniversalEncoder
 

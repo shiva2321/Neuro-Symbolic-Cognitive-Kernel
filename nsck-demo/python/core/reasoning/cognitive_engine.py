@@ -7,8 +7,8 @@ This is the main entry point that orchestrates:
 - Metacognition (dual inference + confidence)
 - Rule Learning (frequency-based ILP)
 - Episodic Memory (VSA + LSH)
-- Curiosity (novelty detection)
-- Causal Reasoning (forward/backward chains)
+- Curiosity (novelty detection + learning progress)
+- Causal Reasoning (discovery, forward/backward chains, counterfactuals)
 - Explanation Generation
 - Cross-task Transfer (analogical reasoning)
 """
@@ -228,13 +228,13 @@ class CognitiveEngine:
             self.world_model = None
         
         
-        # Causal graphs per task
-        # [VERIFICATION] Tabula Rasa Mode: Start with EMPTY graphs to prove learning.
-        # We disable the hardcoded 'instincts' to force discovery.
+        # Causal graphs per task - initialized with bootstrap knowledge
+        # Bootstrap graphs provide foundational causal relations which are
+        # then extended through online causal discovery during gameplay.
         self.causal_graphs: Dict[str, CausalGraph] = {
             "snake": create_snake_causal_graph(),
             "pong": create_pong_causal_graph(),
-            "maze": CausalGraph(),  # Maze causal graph not yet implemented
+            "maze": CausalGraph(),  # Maze starts empty, learns through exploration
         }
         
         self.causal_reasoners: Dict[str, CausalReasoner] = {}

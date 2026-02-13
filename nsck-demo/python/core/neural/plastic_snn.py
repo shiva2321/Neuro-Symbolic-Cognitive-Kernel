@@ -1,5 +1,5 @@
 """
-NSCK Structural Plasticity (Phase 3)
+NSCK Structural Plasticity: Deep Rewiring and Neurogenesis
 ====================================
 Implements Deep Rewiring (Bellec et al. 2018) and Neurogenesis.
 

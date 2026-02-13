@@ -1,6 +1,9 @@
 """
 NSCK Learning Module
-Handles replay buffer, training loops, and sleep cycles.
+Neural network training utilities: replay buffers, sleep cycles, and stratified sampling.
+
+Provides training infrastructure for multi-task SNNs including experience replay,
+sleep-based consolidation, and priority sampling for continual learning.
 """
 import torch
 import torch.nn as nn

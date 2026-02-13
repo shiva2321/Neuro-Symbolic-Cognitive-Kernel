@@ -1,8 +1,9 @@
 """
 NSCK Curiosity Module
-Intrinsic motivation for exploration through novelty detection.
+Intrinsic motivation for exploration through novelty detection and learning progress.
 
-NO NEURAL NETWORKS for curiosity - uses VSA similarity and counting.
+Implements VSA-based novelty detection, prototype memory maintenance,
+and planner-guided exploration for directed curiosity.
 """
 import time
 from collections import defaultdict, deque

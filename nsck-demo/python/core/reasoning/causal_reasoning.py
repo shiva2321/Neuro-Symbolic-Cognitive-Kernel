@@ -1,8 +1,10 @@
 """
 NSCK Causal Reasoning Module
-Implements causal chains, counterfactual simulation, and "why" inference.
+Implements causal discovery, graph-based forward/backward chaining, 
+counterfactual simulation, and causal explanation generation.
 
-NO NEURAL NETWORKS - uses symbolic graph traversal and simulation.
+Uses contingency-based learning (ΔP) with Laplace smoothing for robust
+causal inference from sparse data (as few as 2-5 observations).
 """
 import time
 from dataclasses import dataclass, field

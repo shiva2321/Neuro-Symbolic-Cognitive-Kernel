@@ -1,6 +1,6 @@
 import numpy as np
 import random
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 
 DIMENSION = 10240
 
@@ -146,7 +146,7 @@ class CleanupMemory:
         if not self.access_count:
             return
         
-        lru_label = min(self.access_count, key=self.access_count.get)
+        lru_label = min(self.access_count.keys(), key=lambda k: self.access_count[k])
         del self.memory[lru_label]
         del self.access_count[lru_label]
     
@@ -233,7 +233,7 @@ class CleanupMemory:
                 hv = HyperVectorPy.from_bits(concept.vector)
                 self.register(concept.name, hv)
     
-    def get_stats(self) -> Dict[str, any]:
+    def get_stats(self) -> Dict[str, Any]:
         """
         Return statistics about cleanup memory usage.
         

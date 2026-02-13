@@ -1,6 +1,7 @@
 """
-Brain Fusion Module for NSGA
-Strategy: tagged_conservative (task-specific isolated, primitives merged)
+Brain Fusion Module for NSCK
+Strategy: tagged_conservative (task-specific knowledge isolated, shared primitives merged)
+Implements two-layer knowledge architecture with conflict resolution and provenance tracking.
 """
 import python.core.vsa.hypervec_shim as hypervec_rs
 from collections import defaultdict

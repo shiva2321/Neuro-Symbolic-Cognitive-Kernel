@@ -3,7 +3,6 @@ import unittest
 import sys
 import os
 
-
 from python.core.neural.snn_qat import TaskAwareSNN
 
 class TestDynamicBrain(unittest.TestCase):
@@ -16,13 +15,16 @@ class TestDynamicBrain(unittest.TestCase):
         self.brain.register_task("alien_invaders", 6)
         
         self.assertTrue("alien_invaders" in self.brain.heads)
-        self.assertTrue("actor" in self.brain.heads["alien_invaders"])
+        # Access ModuleDict properly
+        self.assertTrue(hasattr(self.brain.heads["alien_invaders"], "actor"))
         
         # Check shapes
-        # Actor: 256 -> 6
-        self.assertEqual(self.brain.heads["alien_invaders"]["actor"].weight.shape[0], 6)
-        # Critic: 256 -> 1
-        self.assertEqual(self.brain.heads["alien_invaders"]["critic"].weight.shape[0], 1)
+        # Actor: 128 -> 6 (corrected from 256)
+        actor_head = self.brain.heads["alien_invaders"].actor
+        self.assertEqual(actor_head.out_features, 6)
+        # Critic: 128 -> 1
+        critic_head = self.brain.heads["alien_invaders"].critic
+        self.assertEqual(critic_head.out_features, 1)
         print("Success: Brain grew new lobes for Alien Invaders (6 actions).")
 
     def test_multimodal_forward(self):

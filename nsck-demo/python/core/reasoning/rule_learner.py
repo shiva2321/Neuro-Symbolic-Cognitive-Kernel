@@ -2,7 +2,8 @@
 NSCK Rule Learner Module
 Automatic rule induction from experience using frequency-based ILP.
 
-NO GRADIENT DESCENT - uses counting, set logic, and symbolic induction only.
+Implements pure symbolic learning via predicate counting and confidence thresholding,
+with tenure-based stability for bootstrap/tenured/new rules.
 
 Integration: Implements WorkspaceModule interface for substrate architecture.
 """

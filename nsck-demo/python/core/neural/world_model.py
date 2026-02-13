@@ -6,8 +6,8 @@ Architecture (hybrid symbolic + lightweight numeric):
 ─────────────────────────────────────────────────────
 1. **VSA Transition Memory** (primary, symbolic):
    Stores (state_HV ⊗ action_HV) → (next_state_HV, reward) as bound
-   pairs.  Retrieval via Hamming similarity — O(N·D) lookup, no matrix
-   multiplication.  Generalises to novel situations by finding the most
+   pairs.  Retrieval via Hamming similarity in O(N×D) time where N is the
+   number of stored transitions and D=10,240 (hypervector dimension).  Generalises to novel situations by finding the most
    similar stored transition.
 
 2. **Random-Projection Linear Model** (secondary, lightweight):

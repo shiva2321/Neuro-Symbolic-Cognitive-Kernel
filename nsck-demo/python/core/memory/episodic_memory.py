@@ -2,7 +2,8 @@
 NSCK Episodic Memory Module
 Experience storage and retrieval using VSA for similarity search.
 
-NO ATTENTION MECHANISMS - uses LSH and Hamming similarity only.
+Implements two-tier architecture: hot tier (in-memory) and warm tier (SQLite)
+with LSH indexing for fast approximate nearest-neighbor retrieval.
 """
 import time
 import numpy as np

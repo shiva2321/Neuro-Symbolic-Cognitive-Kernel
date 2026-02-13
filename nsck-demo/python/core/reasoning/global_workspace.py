@@ -1,14 +1,14 @@
 """
 NSCK Global Workspace Module
-Phase 3.1: Global Workspace Architecture
-Phase 8:   Mental Rehearsal & Veto
+Global Workspace Theory implementation with mental rehearsal and veto mechanisms.
 
 Implements the Global Workspace Theory (GWT) architecture where specialized modules
-compete for access to a global broadcast channel (consciousness).
+compete for access to a global broadcast channel (consciousness-like information sharing).
 
-Phase 8 adds mental rehearsal: before committing to an action, the winner is
-"imagined" through the WorldModel.  If the predicted next state is similar to
-a known danger vector the proposal is vetoed and alternatives are tried.
+Mental rehearsal feature: before committing to an action, the winning proposal is
+simulated through the WorldModel. If the predicted next state is similar to
+a known danger vector, the proposal is vetoed and alternatives are evaluated.
+Provides safe decision-making through predictive simulation.
 """
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, Optional, List

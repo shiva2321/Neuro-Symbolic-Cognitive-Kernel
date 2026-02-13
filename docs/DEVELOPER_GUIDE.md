@@ -83,6 +83,45 @@ pip install flask>=2.3.0 flask-socketio>=5.3.0
 pip install sentence-transformers>=2.2.0
 ```
 
+### Rust Optimization (Recommended for Production)
+
+**Status:** ✅ Enabled (as of Feb 13, 2026)  
+**Performance Gain:** 6-29× faster VSA operations  
+**Setup Time:** 5-10 minutes (one-time)
+
+The system includes an optional Rust-accelerated VSA backend that provides significant performance improvements:
+
+**Performance Comparison:**
+| Operation | Python | Rust | Speedup |
+|-----------|--------|------|---------|
+| XOR | 1.98 μs | 0.29 μs | **6.8×** |
+| Bundle | 25.90 μs | 0.91 μs | **28.5×** |
+| Similarity | 7.56 μs | 0.32 μs | **23.6×** |
+| Permute | 8.80 μs | 0.83 μs | **10.6×** |
+
+**Installation:**
+
+```bash
+# 1. Install Rust toolchain (if not already installed)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source $HOME/.cargo/env
+
+# 2. Build and install the Rust VSA extension
+cd nsck-demo/rust_vsa
+maturin build --release --interpreter python3
+pip install target/wheels/hypervec_rs-*.whl
+
+# 3. Verify installation
+python3 -c "import hypervec_rs; print('✅ Rust extension loaded')"
+
+# 4. Run parity tests (optional but recommended)
+cd ../..
+pytest nsck-demo/tests/unit/vsa/test_hypervec_parity.py -v
+# Expected: 5 passed, 1 xfailed (RNG difference is expected)
+```
+
+**Automatic Fallback:** If Rust is not available, the system automatically uses the Python implementation with zero code changes. See [RUST_OPTIMIZATION_ANALYSIS.md](../RUST_OPTIMIZATION_ANALYSIS.md) for detailed cost-benefit analysis and [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md) for performance benchmarks.
+
 ---
 
 ## 2. Repository Layout

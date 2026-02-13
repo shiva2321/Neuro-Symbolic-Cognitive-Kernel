@@ -16,20 +16,21 @@ from __future__ import annotations
 
 import hashlib
 import multiprocessing
-from typing import Optional
+import types
+from typing import Any, Optional
+
+from python.core.vsa.hypervec_py import HyperVectorPy as _FallbackHV
 
 _USE_RUST = False
+_ext: types.ModuleType | None = None
 
 try:
-    import hypervec_rs as _ext  # compiled Rust extension
+    import hypervec_rs as _ext  # type: ignore[no-redef]  # compiled Rust extension
     _USE_RUST = True
 except ImportError:
-    _ext = None
+    pass
 
-if _ext is None:
-    # Fall back to the pure-Python implementation.
-    from python.core.vsa.hypervec_py import HyperVectorPy as _FallbackHV  # noqa: E402
-
+if not _USE_RUST:
     if multiprocessing.current_process().name == "MainProcess":
         print(">> [VSA] Using Python Fallback (via shim)")
 
@@ -38,7 +39,7 @@ def _hv_repr_bytes(hv) -> bytes:
     return repr(hv).encode("utf-8")
 
 
-def _install_compat_methods(HV):
+def _install_compat_methods(HV: Any) -> None:
     """Add helper methods that may be missing from the Rust class."""
     import numpy as _np
 
@@ -150,8 +151,8 @@ def _install_compat_methods(HV):
                     src_lo = (i + num_u64 - word_shift - 1) % num_u64
                     new_bits[i] = ((state[src_hi] << bit_shift) | (state[src_lo] >> complement)) & mask
 
-            result = type(self).__new__(type(self))
-            result.__setstate__(new_bits)
+            result = object.__new__(type(self))
+            result.__setstate__(new_bits)  # type: ignore[attr-defined]
             return result
 
         setattr(HV, "permute", permute)
@@ -164,14 +165,14 @@ def _install_compat_methods(HV):
         setattr(HV, "permute_inverse", permute_inverse)
 
 
-if _USE_RUST:
+if _USE_RUST and _ext is not None:
     _install_compat_methods(_ext.HyperVector)
     HyperVector = _ext.HyperVector
     
-    # PATCH: Align permute direction with Python (Left-Shift for positive)
-    # Python: permute(1) -> np.roll(-1) (Left)
-    # Rust:   permute(1) -> Right Shift
-    # Fix: Negate shift called on Rust
+    # PATCH: Align permute direction with Python convention
+    # Python: permute(1) -> np.roll(-1) (roll left, positions move left)
+    # Rust:   permute(1) -> rotate right (positions move right)
+    # Fix: Negate shift parameter to match Python's np.roll direction
     
     _rust_permute = HyperVector.permute
     def _aligned_permute(self, shift: int):
@@ -190,7 +191,9 @@ if _USE_RUST:
     if multiprocessing.current_process().name == "MainProcess":
         print(">> [VSA] Using Rust Accelerator (hypervec_rs) [Patched Direction]")
 else:
-    _install_compat_methods(_FallbackHV)
+    # The Python fallback already has native bits, from_bits, permute, etc.
+    # Do NOT call _install_compat_methods — it would overwrite the instance
+    # attribute 'bits' with a read-only property designed for the Rust u64 layout.
     HyperVector = _FallbackHV
 
 __all__ = ["HyperVector"]
