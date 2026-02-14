@@ -7,16 +7,6 @@ Verifies all components of the image generation project.
 
 import sys
 import os
-
-# Add parent directory paths
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(parent_dir, 'nsck-demo'))
-sys.path.insert(0, os.path.join(parent_dir, 'nsck-demo/python'))
-
-# Add project source
-project_dir = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(project_dir, 'src'))
-
 import subprocess
 from pathlib import Path
 
