@@ -646,7 +646,8 @@ def main():
                         help="Pre-train before starting the dashboard")
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO)
+    if not logging.root.handlers:
+        logging.basicConfig(level=logging.INFO)
 
     if args.train != "none":
         engine = _get_engine()

@@ -60,7 +60,7 @@ logger = logging.getLogger("nsck_ai.engine")
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-DIMENSION = 10240       # Hypervector dimensionality (binary, 10 240 bits)
+DIMENSION = 10240       # Hypervector dimensionality (binary, 10,240 bits)
 MAX_CONTEXT = 20        # Maximum conversation context window
 SIMILARITY_THRESHOLD = 0.35  # Minimum similarity to consider a match
 
@@ -70,11 +70,11 @@ SIMILARITY_THRESHOLD = 0.35  # Minimum similarity to consider a match
 # ═══════════════════════════════════════════════════════════════════════════
 
 class HyperVector:
-    """A 10 240-dimensional binary vector for holographic reduced
+    """A 10,240-dimensional binary vector for holographic reduced
     representations.
 
     Why binary?
-    - XOR binding is O(D) and self-inverse  (A ⊕ A = 𝟎)
+    - XOR binding is O(D) and self-inverse (A ⊕ A = 𝟎)
     - Majority-rule bundling preserves information from all constituents
     - Hamming-distance similarity is a simple bit-count
     - No floating-point arithmetic needed
@@ -1013,12 +1013,21 @@ class NSCKAIEngine:
     # Chat — glass-box, traced, fully autonomous
     # ------------------------------------------------------------------
 
-    def chat(self, user_input: str) -> Dict[str, Any]:
+    def chat(self, user_input: str, auto_learn: bool = True) -> Dict[str, Any]:
         """Process user input and generate a response.
 
         Every cognitive step is recorded in a ThoughtTrace.
         No hardcoded templates, intents, or patterns are used.
         The response is built entirely from learned knowledge.
+
+        Parameters
+        ----------
+        user_input : str
+            The user's message.
+        auto_learn : bool
+            If True (default), the engine will also train on the user's
+            input when it looks like a factual statement.  Set to False
+            to keep training and inference fully separate.
         """
         trace = ThoughtTrace(user_input)
         start = time.time()
@@ -1092,6 +1101,11 @@ class NSCKAIEngine:
             "response_preview": response[:200]})
 
         # --- Record & update history ---
+        # Auto-learn: if the user made a factual statement and we had no
+        # relevant knowledge, learn from it.
+        if auto_learn and not user_input.strip().endswith('?') and not matched:
+            self.train_on_text(user_input)
+
         self.knowledge.record_episode(
             text=user_input, hv=query_hv,
             concepts=query_concepts, response=response)
@@ -1203,12 +1217,13 @@ class NSCKAIEngine:
         if gen:
             return gen[0].upper() + gen[1:] + "."
 
-        # --- Fallback: learn from the input if it's a statement ---
+        # --- Fallback: if this looks like a statement (not a question),
+        # offer to learn from it.  Note: actual training is done in
+        # chat() only when auto_learn is True (the default). ---
         if not user_input.strip().endswith('?'):
-            self.train_on_text(user_input)
             if query_concepts:
-                return (f"I've learned about {', '.join(query_concepts[:3])} "
-                        f"and stored it in my knowledge base.")
+                return (f"I've noted information about "
+                        f"{', '.join(query_concepts[:3])}.")
 
         return ("I don't have enough knowledge about that yet. "
                 "If you share some facts with me, I'll learn and "

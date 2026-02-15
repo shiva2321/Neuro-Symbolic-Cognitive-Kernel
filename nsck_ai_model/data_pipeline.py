@@ -64,7 +64,7 @@ _SEED_CORPUS = [
     "The Sun is a star.",
     "Plants use photosynthesis to convert sunlight into energy.",
     "Gravity is a force that attracts objects toward each other.",
-    "Light travels at approximately 300000 kilometres per second.",
+    "Light travels at approximately 300,000 kilometres per second.",
     "DNA carries genetic information in living organisms.",
     "Atoms are the basic building blocks of matter.",
     "The speed of sound in air is about 343 metres per second.",
