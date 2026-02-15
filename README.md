@@ -82,8 +82,8 @@ All system activities are logged with structured metadata suitable for sharing w
 - **Launch Options**: Run `python launch_dashboard.py --help` for CLI options (port, host, debug mode)
 
 ### Example: Export Session Logs
-
 ```bash
+
 # After running experiments in the dashboard:
 curl http://localhost:5000/api/logs/export/json > session_analysis.json
 curl http://localhost:5000/api/logs/export/csv > session_data.csv
