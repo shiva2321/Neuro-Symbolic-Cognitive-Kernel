@@ -53,12 +53,316 @@ import re
 import time
 import hashlib
 import logging
+import uuid
 from typing import List, Dict, Set, Tuple, Any, Optional
 from collections import defaultdict, Counter, deque
 from dataclasses import dataclass, field
 import numpy as np
 
 logger = logging.getLogger("nsck_ai.engine")
+
+
+# ---------------------------------------------------------------------------
+# Glass-Box Thought Trace — records every cognitive step end-to-end
+# ---------------------------------------------------------------------------
+
+@dataclass
+class TraceStep:
+    """One atomic cognitive step in the reasoning pipeline.
+
+    Why record every step?
+    Because this is a glass-box architecture: a human observer must be able
+    to see *exactly* why the model produced a particular response, which
+    knowledge was consulted, which rules fired, and what confidence level
+    was assigned at every stage.
+    """
+    stage: str          # e.g. "encode", "retrieve", "reason", "generate"
+    action: str         # human-readable description of what happened
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    outputs: Dict[str, Any] = field(default_factory=dict)
+    duration_ms: float = 0.0
+    timestamp: float = field(default_factory=time.time)
+
+
+class ThoughtTrace:
+    """Complete end-to-end trace of a single cognitive cycle.
+
+    Every call to ``NSCKAIEngine.chat()`` creates one ``ThoughtTrace``.  The
+    trace records every intermediate step — encoding, retrieval, rule
+    evaluation, causal inference, response assembly — so the dashboard can
+    display a full *reasoning chain* from user input to final output.
+
+    How it works:
+    1. ``begin(stage)`` starts timing a new stage.
+    2. Code does its work and logs inputs/outputs.
+    3. ``end(stage, outputs)`` stops timing and records the step.
+    4. The final trace is attached to the chat response dict.
+    """
+
+    def __init__(self, query: str):
+        self.trace_id: str = uuid.uuid4().hex[:12]
+        self.query: str = query
+        self.steps: List[TraceStep] = []
+        self.start_time: float = time.time()
+        self._pending_stage: Optional[str] = None
+        self._pending_start: float = 0.0
+        self._pending_inputs: Dict[str, Any] = {}
+
+    def begin(self, stage: str, inputs: Optional[Dict[str, Any]] = None):
+        """Start timing a new cognitive stage."""
+        self._pending_stage = stage
+        self._pending_start = time.time()
+        self._pending_inputs = inputs or {}
+
+    def end(self, action: str, outputs: Optional[Dict[str, Any]] = None):
+        """Finish the current stage and record the step."""
+        elapsed = (time.time() - self._pending_start) * 1000
+        step = TraceStep(
+            stage=self._pending_stage or "unknown",
+            action=action,
+            inputs=self._pending_inputs,
+            outputs=outputs or {},
+            duration_ms=round(elapsed, 3),
+        )
+        self.steps.append(step)
+        self._pending_stage = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialise for JSON transport to the dashboard."""
+        return {
+            'trace_id': self.trace_id,
+            'query': self.query,
+            'total_ms': round((time.time() - self.start_time) * 1000, 2),
+            'step_count': len(self.steps),
+            'steps': [
+                {
+                    'stage': s.stage,
+                    'action': s.action,
+                    'inputs': _safe_serialise(s.inputs),
+                    'outputs': _safe_serialise(s.outputs),
+                    'duration_ms': s.duration_ms,
+                }
+                for s in self.steps
+            ],
+        }
+
+
+def _safe_serialise(obj: Any, depth: int = 0) -> Any:
+    """Recursively convert an object to JSON-safe types."""
+    if depth > 4:
+        return str(obj)
+    if isinstance(obj, dict):
+        return {str(k): _safe_serialise(v, depth + 1) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_safe_serialise(v, depth + 1) for v in obj]
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating, float)):
+        return round(float(obj), 4)
+    if isinstance(obj, np.ndarray):
+        return f"<ndarray shape={obj.shape}>"
+    if isinstance(obj, HyperVector):
+        return repr(obj)
+    if isinstance(obj, (str, int, bool)) or obj is None:
+        return obj
+    return str(obj)
+
+
+# ---------------------------------------------------------------------------
+# Causal Rule Store — autonomous rule learning & inference
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CausalRule:
+    """A learned causal rule: IF antecedent concepts → THEN consequent concepts.
+
+    How rules are learned:
+    When the engine sees text like "Rain causes flooding", it extracts a
+    causal rule (rain → flooding).  Rules accumulate evidence counts; rules
+    with more evidence are trusted more.
+
+    How rules are used:
+    During reasoning, the engine checks if any antecedent concepts match the
+    current query.  If so, the consequent concepts are added to the response
+    context, enabling forward-chaining inference.
+    """
+    antecedent: List[str]
+    consequent: List[str]
+    relation: str = "causes"
+    evidence_count: int = 1
+    confidence: float = 0.5
+    source_text: str = ""
+
+    @property
+    def strength(self) -> float:
+        """Rule strength grows logarithmically with evidence."""
+        return min(1.0, self.confidence + 0.1 * np.log1p(self.evidence_count))
+
+
+class CausalRuleStore:
+    """Stores and indexes causal rules for forward-chaining inference.
+
+    Why a separate rule store?
+    Relations in the KnowledgeStore are individual edges in a concept graph.
+    Causal rules are *compound*: they link sets of concepts to sets of
+    consequences, with confidence scores.  This separation keeps the graph
+    clean while enabling multi-hop inference.
+    """
+
+    def __init__(self):
+        self.rules: List[CausalRule] = []
+        self._antecedent_index: Dict[str, List[int]] = defaultdict(list)
+
+    def add_rule(self, antecedent: List[str], consequent: List[str],
+                 relation: str = "causes", source_text: str = "") -> CausalRule:
+        """Add or reinforce a causal rule."""
+        ant_key = tuple(sorted(antecedent))
+        # Check for existing rule with same antecedent & consequent
+        for idx in self._antecedent_index.get(ant_key[0], []):
+            r = self.rules[idx]
+            if set(r.antecedent) == set(antecedent) and set(r.consequent) == set(consequent):
+                r.evidence_count += 1
+                r.confidence = min(1.0, r.confidence + 0.05)
+                return r
+
+        rule = CausalRule(
+            antecedent=list(antecedent),
+            consequent=list(consequent),
+            relation=relation,
+            source_text=source_text,
+        )
+        idx = len(self.rules)
+        self.rules.append(rule)
+        for a in antecedent:
+            self._antecedent_index[a].append(idx)
+        return rule
+
+    def forward_chain(self, active_concepts: List[str],
+                      max_depth: int = 3) -> List[Tuple[CausalRule, int]]:
+        """Fire rules whose antecedents match active concepts.
+
+        Returns (rule, depth) pairs for every rule that fires, including
+        rules triggered transitively by consequents of earlier rules.
+        """
+        fired: List[Tuple[CausalRule, int]] = []
+        frontier = set(active_concepts)
+        visited_rules: Set[int] = set()
+
+        for depth in range(max_depth):
+            new_concepts: Set[str] = set()
+            for concept in list(frontier):
+                for idx in self._antecedent_index.get(concept, []):
+                    if idx in visited_rules:
+                        continue
+                    rule = self.rules[idx]
+                    # Check if ALL antecedents are satisfied
+                    if all(a in (frontier | set(active_concepts)) for a in rule.antecedent):
+                        fired.append((rule, depth))
+                        visited_rules.add(idx)
+                        new_concepts.update(rule.consequent)
+            if not new_concepts:
+                break
+            frontier = new_concepts
+
+        return fired
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            'total_rules': len(self.rules),
+            'indexed_concepts': len(self._antecedent_index),
+            'avg_confidence': (
+                round(np.mean([r.confidence for r in self.rules]), 3)
+                if self.rules else 0.0
+            ),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Knowledge Abstractor — generalises specific facts into categories
+# ---------------------------------------------------------------------------
+
+class KnowledgeAbstractor:
+    """Generalises specific facts into higher-level abstractions.
+
+    Why abstraction matters:
+    If the engine learns "Paris is the capital of France" and "Berlin is
+    the capital of Germany", abstraction creates a general concept "capital"
+    linked to "country" by an "is_capital_of" relation.  This allows the
+    engine to answer "What is a capital?" even though it was never told
+    directly.
+
+    How it works:
+    1. Group relations by type (e.g. all "is_a" relations).
+    2. If a relation type has N+ instances with the same target, create
+       an abstraction: "<target> is a category that includes <sources>".
+    3. Store the abstraction as a new concept in the knowledge store.
+    """
+
+    def __init__(self, min_instances: int = 2):
+        self.min_instances = min_instances
+        self.abstractions: Dict[str, Dict[str, Any]] = {}
+
+    def abstract(self, relations: List['Relation'],
+                 knowledge: 'KnowledgeStore') -> List[Dict[str, Any]]:
+        """Scan relations and create category abstractions.
+
+        Only considers meaningful relation types (is_a, has, located_in,
+        etc.) — co-occurrence relations are too noisy for abstraction.
+        """
+        # Only abstract from semantically meaningful relation types
+        _ABSTRACTABLE = {'is_a', 'has', 'located_in', 'part_of', 'used_for',
+                         'made_of', 'causes', 'similar_to', 'created_by'}
+
+        # Group by (relation_type, target)
+        groups: Dict[Tuple[str, str], List[str]] = defaultdict(list)
+        for r in relations:
+            if r.relation_type in _ABSTRACTABLE:
+                groups[(r.relation_type, r.target)].append(r.source)
+
+        new_abstractions = []
+        for (rel_type, target), sources in groups.items():
+            if len(sources) < self.min_instances:
+                continue
+            abs_key = f"category:{target}:{rel_type}"
+            if abs_key in self.abstractions:
+                existing = self.abstractions[abs_key]
+                existing['members'] = list(set(existing['members']) | set(sources))
+                continue
+
+            abstraction = {
+                'category': target,
+                'relation': rel_type,
+                'members': list(set(sources)),
+                'member_count': len(set(sources)),
+            }
+            self.abstractions[abs_key] = abstraction
+            new_abstractions.append(abstraction)
+
+            # Store as a concept in the knowledge store
+            member_hvs = []
+            for src in sources:
+                if src in knowledge.concepts:
+                    member_hvs.append(knowledge.concepts[src].hv)
+            if member_hvs:
+                category_hv = HyperVector.bundle(member_hvs)
+                knowledge.add_concept(
+                    name=f"{target} (category)",
+                    hv=category_hv,
+                    properties={
+                        'type': 'abstraction',
+                        'relation': rel_type,
+                        'members': ", ".join(sources[:5]),
+                    },
+                    source_text=f"Abstracted from {len(sources)} {rel_type} relations",
+                )
+
+        return new_abstractions
+
+    def get_stats(self) -> Dict[str, Any]:
+        return {
+            'total_abstractions': len(self.abstractions),
+            'categories': list(self.abstractions.keys())[:10],
+        }
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -611,9 +915,15 @@ class KnowledgeStore:
 # Knowledge Extractor (Concepts and Relations from Text)
 # ---------------------------------------------------------------------------
 
-# Relation patterns: (regex, relation_type)
+# ---------------------------------------------------------------------------
+# Relation patterns (extended for richer knowledge extraction)
+# ---------------------------------------------------------------------------
+
 _RELATION_PATTERNS = [
-    (r'(\w+(?:\s+\w+)?)\s+is\s+(?:a|an)\s+(\w+(?:\s+\w+)?)', 'is_a'),
+    # "X is a Y" / "X is an Y" — the object can be up to 3 words
+    (r'(\w+(?:\s+\w+)?)\s+is\s+(?:a|an)\s+(\w+(?:\s+\w+){0,2})', 'is_a'),
+    # "X are Y" — for plural forms like "Dogs are mammals"
+    (r'(\w+)\s+are\s+(\w+(?:\s+\w+)?)', 'is_a'),
     (r'(\w+(?:\s+\w+)?)\s+(?:is|are)\s+(?:the\s+)?(\w+(?:\s+\w+)?)\s+of\s+(\w+)', 'property_of'),
     (r'(\w+(?:\s+\w+)?)\s+(?:has|have)\s+(?:a\s+)?(\w+(?:\s+\w+)?)', 'has'),
     (r'(\w+(?:\s+\w+)?)\s+(?:is|are)\s+(?:located\s+)?in\s+(\w+(?:\s+\w+)?)', 'located_in'),
@@ -623,6 +933,12 @@ _RELATION_PATTERNS = [
     (r'(\w+(?:\s+\w+)?)\s+(?:is|are)\s+(?:used|useful)\s+for\s+(\w+(?:\s+\w+)?)', 'used_for'),
     (r'(\w+(?:\s+\w+)?)\s+(?:is|are)\s+(?:similar|like|related)\s+to\s+(\w+(?:\s+\w+)?)', 'similar_to'),
     (r'(\w+(?:\s+\w+)?)\s+(?:was|were)\s+(?:created|invented|founded)\s+(?:by|in)\s+(\w+(?:\s+\w+)?)', 'created_by'),
+    # Causal patterns for rule learning
+    (r'if\s+(.+?)\s*,?\s*then\s+(.+)', 'if_then'),
+    (r'(\w+(?:\s+\w+)?)\s+(?:results?\s+in|produces?)\s+(\w+(?:\s+\w+)?)', 'causes'),
+    (r'(\w+(?:\s+\w+)?)\s+(?:prevents?|stops?)\s+(\w+(?:\s+\w+)?)', 'prevents'),
+    (r'(\w+(?:\s+\w+)?)\s+(?:requires?|needs?)\s+(\w+(?:\s+\w+)?)', 'requires'),
+    (r'(\w+(?:\s+\w+)?)\s+(?:enables?|allows?)\s+(\w+(?:\s+\w+)?)', 'enables'),
 ]
 
 
@@ -669,6 +985,16 @@ class KnowledgeExtractor:
                     if (subject not in _STOP_WORDS and obj not in _STOP_WORDS
                             and len(subject) > 1 and len(obj) > 1):
                         relations.append((subject, rel_type, obj))
+                        # For property_of with 3 groups, also store the
+                        # property itself as a relation:
+                        # "Paris is the capital of France" →
+                        #   (paris, property_of, france)  AND
+                        #   (obj=france, has, property=capital)
+                        if rel_type == 'property_of' and len(groups) == 3:
+                            prop = groups[1].strip()
+                            if prop not in _STOP_WORDS and len(prop) > 1:
+                                relations.append((obj, 'has', prop))
+                                relations.append((subject, 'is_a', prop))
 
         return relations
 
@@ -1031,10 +1357,28 @@ class NSCKAIEngine:
     """
     The main AI engine that orchestrates all components.
 
-    Usage:
+    Glass-box architecture
+    ----------------------
+    Every call to ``chat()`` produces a ``ThoughtTrace`` that records the
+    complete reasoning chain — from input encoding through knowledge retrieval,
+    causal inference, and response assembly.  The trace is returned alongside
+    the response so the dashboard can display it.
+
+    Autonomous cognition
+    --------------------
+    The engine autonomously:
+    * **Learns** — extracts concepts, relations, and causal rules from text
+    * **Reasons** — forward-chains causal rules, infers missing knowledge
+    * **Abstracts** — creates category concepts from recurring patterns
+    * **Applies** — uses all of the above to answer novel questions
+
+    Usage::
+
         engine = NSCKAIEngine()
-        engine.train_on_text("Paris is the capital of France.")
-        response = engine.chat("What is the capital of France?")
+        engine.train_on_text("Paris is the capital of France. Berlin is the capital of Germany.")
+        result = engine.chat("What is a capital?")
+        print(result['response'])  # sensible answer from learned knowledge
+        print(result['trace'])     # full glass-box reasoning chain
     """
 
     def __init__(self):
@@ -1043,21 +1387,30 @@ class NSCKAIEngine:
         self.extractor = KnowledgeExtractor()
         self.assembler = ResponseAssembler()
         self.emotion = EmotionTracker()
+        self.causal_rules = CausalRuleStore()
+        self.abstractor = KnowledgeAbstractor(min_instances=2)
         self.conversation_history: deque = deque(maxlen=MAX_CONTEXT)
         self._training_stats = {
             'texts_trained': 0,
             'total_concepts': 0,
             'total_relations': 0,
             'total_episodes': 0,
+            'total_causal_rules': 0,
+            'total_abstractions': 0,
             'training_time_seconds': 0.0,
         }
         self._query_count = 0
-        logger.info("NSCK AI Engine initialized")
+        logger.info("NSCK AI Engine initialized (glass-box mode)")
+
+    # ------------------------------------------------------------------
+    # Training
+    # ------------------------------------------------------------------
 
     def train_on_text(self, text: str) -> Dict[str, Any]:
         """
-        Learn from a text passage. Extracts concepts, relations, and
-        language patterns, storing everything in the knowledge systems.
+        Learn from a text passage.  Extracts concepts, relations, causal
+        rules, and language patterns, storing everything in the knowledge
+        systems.  Also runs the abstractor to create category concepts.
         """
         start = time.time()
 
@@ -1068,6 +1421,7 @@ class NSCKAIEngine:
         sentences = self.encoder._split_sentences(text)
         concepts_added = 0
         relations_added = 0
+        rules_added = 0
 
         for sentence in sentences:
             # Extract and store concepts
@@ -1091,6 +1445,17 @@ class NSCKAIEngine:
                 )
                 relations_added += 1
 
+                # Learn causal rules from causal relation types
+                if rel_type in ('causes', 'prevents', 'enables', 'requires', 'if_then'):
+                    ant = self.extractor.extract_concepts(subject)
+                    con = self.extractor.extract_concepts(obj)
+                    if ant and con:
+                        self.causal_rules.add_rule(
+                            antecedent=ant, consequent=con,
+                            relation=rel_type, source_text=sentence,
+                        )
+                        rules_added += 1
+
             # Store co-occurrence relations
             co_occ = self.extractor.extract_co_occurrences(sentence)
             for c1, c2 in co_occ:
@@ -1108,71 +1473,174 @@ class NSCKAIEngine:
         # 3. Learn language patterns for natural generation
         self.assembler.learn_language_patterns(text)
 
+        # 4. Run abstractor to create category concepts
+        new_abs = self.abstractor.abstract(self.knowledge.relations, self.knowledge)
+
         elapsed = time.time() - start
         self._training_stats['texts_trained'] += 1
         self._training_stats['total_concepts'] += concepts_added
         self._training_stats['total_relations'] += relations_added
         self._training_stats['total_episodes'] += len(sentences)
+        self._training_stats['total_causal_rules'] += rules_added
+        self._training_stats['total_abstractions'] += len(new_abs)
         self._training_stats['training_time_seconds'] += elapsed
 
         result = {
             'sentences_processed': len(sentences),
             'concepts_added': concepts_added,
             'relations_added': relations_added,
+            'causal_rules_added': rules_added,
+            'abstractions_created': len(new_abs),
             'encoder_stats': encoder_stats,
             'elapsed_seconds': round(elapsed, 4),
         }
         logger.info(f"Trained on text: {result}")
         return result
 
+    # ------------------------------------------------------------------
+    # Chat — glass-box, traced, with autonomous reasoning
+    # ------------------------------------------------------------------
+
     def chat(self, user_input: str) -> Dict[str, Any]:
         """
         Process a user message and generate a response.
 
+        Every cognitive step is recorded in a ``ThoughtTrace`` for full
+        glass-box transparency.  The trace is included in the returned
+        dict under the ``'trace'`` key.
+
         Returns a dict with:
-        - response: The natural language response text
-        - emotion: Current emotional state
-        - confidence: How confident we are in the answer
-        - reasoning: Trace of what knowledge was used
+        - response:   natural language response text
+        - emotion:    current emotional state
+        - confidence: how confident we are in the answer (0–1)
+        - reasoning:  summary of what knowledge was used
+        - trace:      full glass-box ThoughtTrace (list of steps)
+        - latency_ms: response time in milliseconds
         """
+        trace = ThoughtTrace(user_input)
         start = time.time()
         self._query_count += 1
 
-        # 1. Update emotion from user input
+        # --- Stage 1: Emotion detection ---
+        trace.begin("emotion", {"input": user_input[:200]})
         detected_emotion = self.emotion.update_from_text(user_input)
+        trace.end("Detected emotional tone from input", {
+            "emotion": detected_emotion,
+            "valence": self.emotion.valence,
+            "arousal": self.emotion.arousal,
+        })
 
-        # 2. Encode the query as a hypervector
+        # --- Stage 2: Intent classification ---
+        trace.begin("intent", {"input": user_input[:200]})
+        intent = self._classify_intent(user_input)
+        trace.end(f"Classified intent as '{intent}'", {"intent": intent})
+
+        # --- Stage 3: Encode query to hypervector ---
+        trace.begin("encode", {"text_length": len(user_input)})
         query_hv = self.encoder.encode_sentence(user_input)
+        trace.end("Encoded query to hypervector via semantic folding", {
+            "dimension": DIMENSION,
+        })
 
-        # 3. Search for relevant knowledge
-        matched_concepts = self.knowledge.search_concepts(query_hv, top_k=5)
-        matched_episodes = self.knowledge.search_episodes(query_hv, top_k=3)
-
-        # 4. Get related concepts via spreading activation
-        related = []
+        # --- Stage 4: Extract query concepts ---
+        trace.begin("extract", {"input": user_input[:200]})
         query_concepts = self.extractor.extract_concepts(user_input)
+        trace.end("Extracted content concepts from query", {
+            "concepts": query_concepts,
+        })
+
+        # --- Stage 5: Knowledge retrieval (semantic) ---
+        trace.begin("retrieve_semantic", {"concepts": query_concepts})
+        matched_concepts = self.knowledge.search_concepts(query_hv, top_k=8)
+        trace.end("Searched semantic memory by hypervector similarity", {
+            "matches": [(n, round(s, 3)) for n, s in matched_concepts],
+        })
+
+        # --- Stage 6: Knowledge retrieval (episodic) ---
+        trace.begin("retrieve_episodic", {"query_concepts": query_concepts})
+        matched_episodes = self.knowledge.search_episodes(query_hv, top_k=5)
+        trace.end("Searched episodic memory via LSH index", {
+            "episodes_found": len(matched_episodes),
+            "best_similarity": round(matched_episodes[0][1], 3) if matched_episodes else 0,
+        })
+
+        # --- Stage 7: Spreading activation (graph traversal) ---
+        trace.begin("spread_activation", {"seed_concepts": query_concepts})
+        related = []
         for concept in query_concepts:
             if concept in self.knowledge.concepts:
                 rels = self.knowledge.get_related_concepts(concept, max_depth=2)
                 related.extend(rels)
+        # Deduplicate and keep top
+        seen = set()
+        unique_related = []
+        for item in related:
+            key = (item[0], item[1], item[2])
+            if key not in seen:
+                seen.add(key)
+                unique_related.append(item)
+        related = sorted(unique_related, key=lambda x: x[3], reverse=True)[:10]
+        trace.end("Spread activation through concept graph", {
+            "relations_found": len(related),
+            "relation_types": list(set(r[1] for r in related)),
+        })
 
-        # 5. Assemble response
-        response_text = self.assembler.generate_response(
-            query=user_input,
+        # --- Stage 8: Causal inference (forward chaining) ---
+        trace.begin("causal_inference", {"active_concepts": query_concepts})
+        fired_rules = self.causal_rules.forward_chain(query_concepts, max_depth=2)
+        inferred_concepts = []
+        for rule, depth in fired_rules:
+            inferred_concepts.extend(rule.consequent)
+        trace.end("Forward-chained causal rules", {
+            "rules_fired": len(fired_rules),
+            "inferred_concepts": list(set(inferred_concepts))[:10],
+            "rule_details": [
+                {
+                    "antecedent": r.antecedent,
+                    "consequent": r.consequent,
+                    "confidence": round(r.strength, 3),
+                    "depth": d,
+                }
+                for r, d in fired_rules[:5]
+            ],
+        })
+
+        # --- Stage 9: Conversation context ---
+        trace.begin("context", {"history_length": len(self.conversation_history)})
+        context_concepts = self._get_context_concepts()
+        trace.end("Retrieved conversation context", {
+            "context_concepts": context_concepts[:10],
+        })
+
+        # --- Stage 10: Response assembly ---
+        trace.begin("generate", {
+            "matched_concepts_count": len(matched_concepts),
+            "related_count": len(related),
+            "intent": intent,
+        })
+        response_text = self._assemble_response(
+            user_input=user_input,
+            intent=intent,
+            query_concepts=query_concepts,
             matched_concepts=matched_concepts,
             matched_episodes=matched_episodes,
             related=related,
+            fired_rules=fired_rules,
+            inferred_concepts=inferred_concepts,
+            context_concepts=context_concepts,
             emotion=detected_emotion,
         )
+        trace.end("Assembled natural language response", {
+            "response_length": len(response_text),
+            "response_preview": response_text[:200],
+        })
 
-        # 6. Record this interaction as an episode
+        # --- Record episode & update history ---
         self.knowledge.record_episode(
             text=user_input, hv=query_hv,
             concepts=query_concepts, response=response_text,
             emotion=detected_emotion,
         )
-
-        # 7. Update conversation history
         self.conversation_history.append({
             'role': 'user', 'content': user_input,
             'timestamp': time.time(),
@@ -1184,29 +1652,263 @@ class NSCKAIEngine:
 
         elapsed = time.time() - start
 
-        # Calculate confidence based on match quality
+        # Calculate confidence
         confidence = 0.0
         if matched_concepts:
             confidence = max(sim for _, sim in matched_concepts)
         if matched_episodes:
             ep_conf = max(sim for _, sim in matched_episodes)
             confidence = max(confidence, ep_conf)
+        if fired_rules:
+            rule_conf = max(r.strength for r, _ in fired_rules)
+            confidence = max(confidence, rule_conf)
 
         result = {
             'response': response_text,
             'emotion': self.emotion.get_state(),
             'confidence': round(confidence, 3),
             'reasoning': {
+                'intent': intent,
                 'matched_concepts': [(n, round(s, 3)) for n, s in matched_concepts],
                 'matched_episodes': len(matched_episodes),
                 'related_facts': len(related),
+                'causal_rules_fired': len(fired_rules),
+                'inferred_concepts': list(set(inferred_concepts))[:10],
                 'query_concepts': query_concepts,
             },
+            'trace': trace.to_dict(),
             'latency_ms': round(elapsed * 1000, 1),
         }
 
-        logger.debug(f"Chat response: {result}")
+        logger.debug(f"Chat response: confidence={confidence:.3f}")
         return result
+
+    # ------------------------------------------------------------------
+    # Intent classification (autonomous, no hardcoded responses)
+    # ------------------------------------------------------------------
+
+    _GREETING_WORDS = frozenset({
+        'hello', 'hi', 'hey', 'greetings', 'howdy', 'hola',
+    })
+    _QUESTION_WORDS = frozenset({
+        'what', 'who', 'where', 'when', 'why', 'how', 'which',
+        'is', 'are', 'can', 'does', 'do', 'could', 'would', 'will',
+    })
+    _FAREWELL_WORDS = frozenset({
+        'bye', 'goodbye', 'farewell', 'see', 'later', 'quit', 'exit',
+    })
+    _THANKS_WORDS = frozenset({
+        'thank', 'thanks', 'thx', 'appreciate', 'grateful',
+    })
+
+    def _classify_intent(self, text: str) -> str:
+        """Classify user intent from text.
+
+        Returns one of: greeting, question, statement, farewell,
+        thanks, command, or general.
+        """
+        # Strip punctuation for word matching
+        clean = re.sub(r'[^\w\s]', '', text.lower())
+        words = set(clean.split())
+        text_lower = text.lower().strip()
+
+        if words & self._GREETING_WORDS and len(words) < 6:
+            return 'greeting'
+        if words & self._FAREWELL_WORDS and len(words) < 6:
+            return 'farewell'
+        if words & self._THANKS_WORDS:
+            return 'thanks'
+        if text_lower.endswith('?') or (words & self._QUESTION_WORDS and clean.split()[0] in self._QUESTION_WORDS):
+            return 'question'
+        # Check for imperative (starts with a verb-like word)
+        first_word = clean.split()[0] if clean.split() else ''
+        if first_word in {'tell', 'explain', 'describe', 'show', 'list', 'find', 'help'}:
+            return 'command'
+
+        return 'statement'
+
+    # ------------------------------------------------------------------
+    # Context-aware response assembly
+    # ------------------------------------------------------------------
+
+    def _get_context_concepts(self) -> List[str]:
+        """Extract concepts from recent conversation history."""
+        concepts = []
+        for entry in list(self.conversation_history)[-6:]:
+            if entry.get('role') == 'user':
+                concepts.extend(self.extractor.extract_concepts(entry['content']))
+        return list(dict.fromkeys(concepts))
+
+    def _assemble_response(self, user_input: str, intent: str,
+                           query_concepts: List[str],
+                           matched_concepts: List[Tuple[str, float]],
+                           matched_episodes: List[Tuple[Episode, float]],
+                           related: List[Tuple[str, str, str, float]],
+                           fired_rules: List[Tuple[CausalRule, int]],
+                           inferred_concepts: List[str],
+                           context_concepts: List[str],
+                           emotion: str) -> str:
+        """Build a natural language response from all retrieved knowledge.
+
+        This method is the *heart* of the conversation system.  It takes
+        everything the engine knows that is relevant to the query and
+        weaves it into a coherent, natural response.  The logic is:
+
+        1. Handle social intents (greeting, farewell, thanks) directly.
+        2. For questions: find the best factual answer from relations and
+           concepts, supplement with causal inference and episodic recall.
+        3. For statements: acknowledge and connect to existing knowledge.
+        4. For commands: attempt to answer using the knowledge base.
+
+        Critically, every part of the response is traceable to specific
+        stored knowledge — no hallucination.
+        """
+        # --- Social intents ---
+        if intent == 'greeting':
+            return "Hello! I'm the NSCK AI model. I understand and learn from text using hypervector algebra — no neural networks needed. What would you like to talk about?"
+        if intent == 'farewell':
+            return "Goodbye! I've enjoyed our conversation. Everything I learned is stored and ready for next time."
+        if intent == 'thanks':
+            learned = self._training_stats['total_concepts']
+            return f"You're welcome! I'm always learning — I currently know about {learned} concepts."
+
+        # --- Collect knowledge fragments ---
+        fragments: List[Tuple[str, float]] = []  # (text, relevance_score)
+
+        # Helper to title-case concept names
+        def _tc(s: str) -> str:
+            return s.title() if s == s.lower() else s
+
+        # From direct relations
+        for source, rel_type, target, weight in related:
+            s, t = _tc(source), _tc(target)
+            if rel_type == 'is_a':
+                fragments.append((f"{s} is a {t}", weight))
+            elif rel_type == 'property_of':
+                # property_of stores (subject, property_of, owner) — already
+                # decomposed into has + is_a by the extractor, so skip here
+                # to avoid duplicate "Paris is the France" fragments.
+                continue
+            elif rel_type == 'has':
+                fragments.append((f"{s} has {t.lower()}", weight))
+            elif rel_type == 'located_in':
+                fragments.append((f"{s} is located in {t}", weight))
+            elif rel_type == 'causes':
+                fragments.append((f"{s} causes {t.lower()}", weight))
+            elif rel_type == 'part_of':
+                fragments.append((f"{s} is part of {t}", weight))
+            elif rel_type == 'used_for':
+                fragments.append((f"{s} is used for {t.lower()}", weight))
+            elif rel_type == 'co_occurs_with':
+                # Skip mere co-occurrence to avoid noise
+                continue
+            else:
+                rel_text = rel_type.replace('_', ' ')
+                fragments.append((f"{s} {rel_text} {t}", weight))
+
+        # From causal inference
+        for rule, depth in fired_rules:
+            ant_text = " and ".join(rule.antecedent)
+            con_text = " and ".join(rule.consequent)
+            if rule.relation == 'causes':
+                fragments.append((f"{ant_text} can lead to {con_text}", rule.strength))
+            elif rule.relation == 'prevents':
+                fragments.append((f"{ant_text} prevents {con_text}", rule.strength))
+            elif rule.relation == 'requires':
+                fragments.append((f"{ant_text} requires {con_text}", rule.strength))
+            elif rule.relation == 'enables':
+                fragments.append((f"{ant_text} enables {con_text}", rule.strength))
+            else:
+                fragments.append((f"{ant_text} relates to {con_text}", rule.strength * 0.7))
+
+        # From concept properties (only high-similarity concepts)
+        query_concept_set = set(query_concepts)
+        for name, sim in matched_concepts[:5]:
+            if sim < 0.45:
+                continue
+            concept = self.knowledge.concepts.get(name)
+            if concept and concept.properties:
+                for prop_key, prop_val in concept.properties.items():
+                    if prop_key == 'type' and prop_val == 'abstraction':
+                        # Only include if query overlaps with members
+                        members_str = concept.properties.get('members', '')
+                        if members_str and (query_concept_set & set(members_str.split(', '))):
+                            fragments.append(
+                                (f"{_tc(name)} is a category that includes {members_str}", sim),
+                            )
+                        continue
+                    fragments.append(
+                        (f"{_tc(name)} has {prop_key}: {prop_val}", sim * 0.8),
+                    )
+
+        # From episodic memory (source texts of concepts that overlap with query)
+        for name, sim in matched_concepts[:3]:
+            if sim < 0.45 or name not in query_concept_set:
+                continue
+            concept = self.knowledge.concepts.get(name)
+            if concept and concept.source_texts:
+                for src in concept.source_texts[:2]:
+                    fragments.append((src, sim * 0.9))
+
+        # Sort by relevance
+        fragments.sort(key=lambda x: x[1], reverse=True)
+
+        # --- Build response ---
+        if not fragments:
+            # No knowledge at all — honest acknowledgement
+            if intent == 'question':
+                return ("I don't have enough information to answer that question yet. "
+                        "If you teach me about this topic, I'll remember it for next time.")
+            elif intent == 'statement':
+                # Learn from the statement
+                self.train_on_text(user_input)
+                concepts_str = ", ".join(query_concepts[:5]) if query_concepts else "that"
+                return f"Interesting — I've noted that. I now have knowledge about {concepts_str}."
+            elif intent == 'command':
+                return ("I'd like to help, but I don't have enough knowledge about that topic yet. "
+                        "Try teaching me first by telling me facts about it.")
+            else:
+                return "I'm listening. Tell me more, and I'll learn from what you share."
+
+        # Take top fragments (avoid repetition)
+        used_texts: Set[str] = set()
+        top_fragments: List[str] = []
+        for text, score in fragments:
+            normalised = text.lower().strip()
+            if normalised not in used_texts and len(top_fragments) < 4:
+                used_texts.add(normalised)
+                top_fragments.append(text)
+
+        # Format based on intent
+        if intent == 'question':
+            if len(top_fragments) == 1:
+                return f"{top_fragments[0]}."
+            else:
+                main_answer = top_fragments[0]
+                supporting = ". ".join(top_fragments[1:3])
+                return f"{main_answer}. Additionally, {supporting.lower()}."
+        elif intent == 'statement':
+            # Acknowledge and connect to existing knowledge
+            self.train_on_text(user_input)
+            if top_fragments:
+                connection = top_fragments[0]
+                return f"I see — that connects to what I already know: {connection.lower()}. I've stored this new information."
+            concepts_str = ", ".join(query_concepts[:5]) if query_concepts else "that"
+            return f"Got it. I've learned about {concepts_str} and stored it in my knowledge base."
+        elif intent == 'command':
+            if top_fragments:
+                info = ". ".join(top_fragments[:3])
+                return f"Here's what I know: {info}."
+            return "I don't have specific information about that yet."
+        else:
+            # General response
+            if top_fragments:
+                return ". ".join(f"{f}" for f in top_fragments[:3]) + "."
+            return "Tell me more — I'm always learning."
+
+    # ------------------------------------------------------------------
+    # Statistics & export
+    # ------------------------------------------------------------------
 
     def get_system_stats(self) -> Dict[str, Any]:
         """Get comprehensive system statistics for dashboard display."""
@@ -1220,6 +1922,8 @@ class NSCKAIEngine:
             'knowledge': self.knowledge.get_stats(),
             'assembler': self.assembler.get_stats(),
             'emotion': self.emotion.get_state(),
+            'causal_rules': self.causal_rules.get_stats(),
+            'abstractions': self.abstractor.get_stats(),
         }
 
     def export_knowledge(self) -> Dict[str, Any]:
@@ -1243,8 +1947,23 @@ class NSCKAIEngine:
                 }
                 for r in self.knowledge.relations
             ],
+            'causal_rules': [
+                {
+                    'antecedent': r.antecedent,
+                    'consequent': r.consequent,
+                    'relation': r.relation,
+                    'evidence': r.evidence_count,
+                    'strength': round(r.strength, 3),
+                }
+                for r in self.causal_rules.rules
+            ],
+            'abstractions': self.abstractor.abstractions,
             'stats': self.get_system_stats(),
         }
+
+    def get_conversation_history(self) -> List[Dict[str, Any]]:
+        """Return full conversation history."""
+        return list(self.conversation_history)
 
     def reset(self):
         """Reset all knowledge and state (for fresh training)."""
