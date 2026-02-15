@@ -237,7 +237,6 @@ def api_health():
         "relations": stats["knowledge"]["total_relations"],
         "episodes": stats["knowledge"]["total_episodes"],
         "queries": stats["engine"]["query_count"],
-        "uptime_queries": stats["engine"]["query_count"],
     })
 
 

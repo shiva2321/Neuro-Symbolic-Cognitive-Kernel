@@ -1283,7 +1283,9 @@ class NSCKAIEngine:
         concept_specificity: Dict[str, float] = {}
         for c in query_concepts:
             freq = self.encoder.word_freq.get(c, 1)
-            # Inverse frequency: rarer concepts → higher weight
+            # Inverse frequency: log2(freq+2) provides smooth scaling;
+            # +2 prevents division by zero and ensures unseen words
+            # (freq=0) get a high specificity of 1.0
             concept_specificity[c] = 1.0 / np.log2(freq + 2)
 
         scored: List[Tuple[str, float, float]] = []
@@ -1316,7 +1318,9 @@ class NSCKAIEngine:
             if selected and not (sent_concepts & query_set):
                 continue
             # Skip if structurally too similar to already selected text
-            # (e.g. "X is the capital of Y" vs "Z is the capital of W")
+            # (e.g. "X is the capital of Y" vs "Z is the capital of W").
+            # Jaccard > 0.5 means more than half the words overlap,
+            # indicating the sentences are structural variants.
             skip = False
             for existing in used_norms:
                 norm_words = set(norm.split())
