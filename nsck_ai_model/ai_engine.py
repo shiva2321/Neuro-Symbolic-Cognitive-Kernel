@@ -1033,6 +1033,29 @@ class NSCKAIEngine:
         start = time.time()
         self._query_count += 1
 
+        # --- Early validation: if no meaningful words, short-circuit ---
+        stripped = re.sub(r'[^\w\s]', ' ', user_input).strip()
+        meaningful_words = [w for w in stripped.lower().split()
+                           if len(w) > 2 and w not in _FUNCTION_WORDS]
+        if not meaningful_words:
+            trace.begin("validate", {"input_length": len(user_input)})
+            trace.end("No meaningful content in input", {})
+            elapsed = time.time() - start
+            return {
+                'response': "I need more training data to answer that.",
+                'emotion': self.emotion.get_state(),
+                'confidence': 0.0,
+                'reasoning': {
+                    'query_concepts': [],
+                    'matched_concepts': [],
+                    'episodes_found': 0,
+                    'related_facts': 0,
+                    'causal_rules_fired': 0,
+                },
+                'trace': trace.to_dict(),
+                'latency_ms': round(elapsed * 1000, 1),
+            }
+
         # --- Stage 1: Encode input ---
         trace.begin("encode", {"text_length": len(user_input)})
         query_hv = self.encoder.encode_sentence(user_input)
@@ -1047,8 +1070,18 @@ class NSCKAIEngine:
         # --- Stage 3: Extract concepts ---
         trace.begin("extract_concepts", {"input": user_input[:200]})
         query_concepts = self.encoder.extract_concepts(user_input)
-        trace.end("Extracted concepts from input", {
-            "concepts": query_concepts})
+        # Resolve pronouns / references using conversation context
+        resolved = self._resolve_context(user_input, query_concepts)
+        if len(resolved) > len(query_concepts):
+            trace.end("Extracted and resolved concepts", {
+                "raw_concepts": query_concepts,
+                "resolved_concepts": resolved,
+                "context_added": [c for c in resolved
+                                  if c not in query_concepts]})
+            query_concepts = resolved
+        else:
+            trace.end("Extracted concepts from input", {
+                "concepts": query_concepts})
 
         # --- Stage 4: Search semantic memory ---
         trace.begin("search_semantic", {"concepts": query_concepts})
@@ -1140,6 +1173,41 @@ class NSCKAIEngine:
     # Response builder — NO TEMPLATES, all from learned data
     # ------------------------------------------------------------------
 
+    def _resolve_context(self, user_input: str,
+                         query_concepts: List[str]) -> List[str]:
+        """Resolve pronouns and implicit references using conversation
+        history.
+
+        If the user says "she", "he", "it", "they", or "that", look
+        back in the conversation to find the most recently mentioned
+        content concepts and merge them into the query.
+        """
+        pronouns = {'she', 'he', 'it', 'they', 'them', 'that', 'this',
+                     'those', 'these', 'its', 'his', 'her', 'their'}
+        # Common discourse verbs that are concepts but shouldn't be resolved
+        noise = {'tell', 'know', 'think', 'say', 'talk', 'ask', 'want',
+                 'need', 'like', 'make', 'take', 'give', 'get', 'see',
+                 'look', 'find', 'help', 'show', 'try', 'use', 'come',
+                 'let', 'keep', 'set', 'put', 'run', 'read', 'write'}
+        input_words = set(user_input.lower().split())
+        if not (pronouns & input_words):
+            return query_concepts
+
+        # Walk backwards through history — only use the MOST RECENT
+        # user turn's concepts to avoid confusion
+        resolved = list(query_concepts)
+        for entry in reversed(list(self.conversation_history)):
+            if entry['role'] != 'user':
+                continue
+            prev_concepts = self.encoder.extract_concepts(entry['content'])
+            for c in prev_concepts:
+                if (c not in resolved and c not in _FUNCTION_WORDS
+                        and c not in noise):
+                    resolved.append(c)
+            # Only look at the MOST RECENT user turn
+            break
+        return resolved
+
     def _build_response(
             self,
             user_input: str,
@@ -1153,14 +1221,17 @@ class NSCKAIEngine:
 
         Strategy:
         1. Collect *candidate sentences* from all retrieval channels.
-        2. Rank them by relevance to the query.
+        2. Score them by concept overlap with the query (not just raw
+           retrieval score) so the most *relevant* sentence wins.
         3. Select the top 1-3 non-redundant sentences.
         4. If nothing relevant is found, try n-gram continuation.
-        5. If still nothing, acknowledge the gap honestly.
+        5. If still nothing, use the best episodic match verbatim.
 
         No templates, no format strings — every word in the output was
         seen in training data or generated by the learned n-gram model.
         """
+        query_set = set(query_concepts)
+
         # --- Collect candidate sentences with relevance scores ---
         candidates: List[Tuple[str, float]] = []
 
@@ -1172,62 +1243,156 @@ class NSCKAIEngine:
         for rule, depth in fired_rules:
             candidates.append((rule.sentence, rule.strength * (0.8 ** depth)))
 
-        # From episodic memory
+        # From episodic memory — skip episodes that are themselves
+        # queries (questions ending with ?) or that start with common
+        # chat prefixes, as these are user inputs not knowledge.
         for ep, sim in matched_episodes:
-            if ep.text:
-                candidates.append((ep.text, sim))
+            if not ep.text:
+                continue
+            txt = ep.text.strip()
+            if txt.startswith('[Image:'):
+                continue
+            if txt.endswith('?'):
+                continue
+            # Skip if it looks like a previous user query
+            lower = txt.lower()
+            if (lower.startswith('tell me') or lower.startswith('what ')
+                    or lower.startswith('who ') or lower.startswith('where ')
+                    or lower.startswith('when ') or lower.startswith('how ')
+                    or lower.startswith('why ') or lower.startswith('which ')
+                    or lower.startswith('are ') or lower.startswith('is ')
+                    or lower.startswith('do ') or lower.startswith('does ')):
+                continue
+            candidates.append((txt, sim))
 
         # From concept source sentences
-        query_set = set(query_concepts)
         for name, sim in matched_concepts[:5]:
             c = self.knowledge.concepts.get(name)
             if c and c.source_sentences:
                 for src in c.source_sentences[:3]:
-                    candidates.append((src, sim * 0.9))
+                    if not src.startswith('Category with'):
+                        candidates.append((src, sim * 0.9))
 
-        # --- Rank and deduplicate ---
-        candidates.sort(key=lambda x: x[1], reverse=True)
-        used: Set[str] = set()
-        selected: List[str] = []
-        for sent, score in candidates:
-            norm = sent.lower().strip()
-            if norm in used:
-                continue
-            # Relevance check: does this sentence share concepts with query?
+        if not candidates:
+            return self._fallback_response(user_input, query_concepts)
+
+        # --- Score by concept overlap (relevance) ---
+        # Weight rare/specific query concepts more than common ones.
+        # "france" is more discriminative than "capital" when asking
+        # about France's capital.
+        concept_specificity: Dict[str, float] = {}
+        for c in query_concepts:
+            freq = self.encoder.word_freq.get(c, 1)
+            # Inverse frequency: rarer concepts → higher weight
+            concept_specificity[c] = 1.0 / np.log2(freq + 2)
+
+        scored: List[Tuple[str, float, float]] = []
+        for sent, base_score in candidates:
             sent_concepts = set(self.encoder.extract_concepts(sent))
             overlap = sent_concepts & query_set
-            if not overlap and score < 0.6:
+            # Weighted overlap: sum of specificities of matched concepts
+            weighted_overlap = sum(concept_specificity.get(c, 0.5)
+                                   for c in overlap)
+            raw_overlap = len(overlap)
+            # Final relevance combines base score + weighted overlap
+            relevance = base_score * 0.4 + weighted_overlap * 0.6
+            if raw_overlap == 0:
+                relevance *= 0.2
+            scored.append((sent, relevance, weighted_overlap))
+
+        scored.sort(key=lambda x: x[1], reverse=True)
+
+        # --- Deduplicate with fuzzy matching ---
+        used_norms: Set[str] = set()
+        selected: List[str] = []
+        for sent, score, overlap in scored:
+            # Normalise for dedup: lowercase, strip punctuation
+            norm = re.sub(r'[^\w\s]', '', sent.lower()).strip()
+            if norm in used_norms:
                 continue
-            used.add(norm)
+            # Once we have one good result, only add more if they
+            # have actual concept overlap with the query
+            sent_concepts = set(self.encoder.extract_concepts(sent))
+            if selected and not (sent_concepts & query_set):
+                continue
+            # Skip if structurally too similar to already selected text
+            # (e.g. "X is the capital of Y" vs "Z is the capital of W")
+            skip = False
+            for existing in used_norms:
+                norm_words = set(norm.split())
+                exist_words = set(existing.split())
+                if norm_words and exist_words:
+                    jaccard = (len(norm_words & exist_words) /
+                               len(norm_words | exist_words))
+                    if jaccard > 0.5:
+                        skip = True
+                        break
+            if skip:
+                continue
+            used_norms.add(norm)
             # Capitalise first letter
             selected.append(sent[0].upper() + sent[1:] if sent else sent)
-            if len(selected) >= 3:
+            if len(selected) >= 2:
                 break
 
         if selected:
-            # Join selected sentences
+            # Join selected sentences, ensure proper punctuation
             parts = []
             for s in selected:
-                s = s.rstrip('.')
-                parts.append(s)
+                s = s.rstrip('.').strip()
+                if s:
+                    parts.append(s)
             return ". ".join(parts) + "."
 
-        # --- Fallback: n-gram generation ---
+        return self._fallback_response(user_input, query_concepts)
+
+    def _fallback_response(self, user_input: str,
+                           query_concepts: List[str]) -> str:
+        """Generate a fallback when no relevant knowledge is found.
+
+        Uses n-gram continuation if possible, otherwise returns the
+        closest episodic match or a learned acknowledgement.
+        """
+        # If the input has NO meaningful concepts, don't try to
+        # generate from random unrelated n-grams
+        if not query_concepts:
+            return "I need more training data to answer that."
+
+        # Try n-gram generation — but validate the output contains
+        # at least one query concept word (otherwise it's gibberish)
         gen = self.generator.continue_from(query_concepts)
         if gen:
-            return gen[0].upper() + gen[1:] + "."
+            gen_lower = gen.lower()
+            has_relevant = any(c in gen_lower for c in query_concepts)
+            if has_relevant and len(gen.split()) >= 3:
+                return gen[0].upper() + gen[1:] + "."
 
-        # --- Fallback: if this looks like a statement (not a question),
-        # offer to learn from it.  Note: actual training is done in
-        # chat() only when auto_learn is True (the default). ---
+        # For statements (not questions), acknowledge learning
         if not user_input.strip().endswith('?'):
-            if query_concepts:
-                return (f"I've noted information about "
-                        f"{', '.join(query_concepts[:3])}.")
+            # Find the closest stored sentence mentioning these concepts
+            for c in query_concepts:
+                if c in self.knowledge.concepts:
+                    src = self.knowledge.concepts[c].source_sentences
+                    if src:
+                        s = src[-1].strip().rstrip('.')
+                        if s:
+                            return s[0].upper() + s[1:] + "."
+            # No stored sentence found — echo back the user's own input
+            # as acknowledgement (every word traces to user data)
+            s = user_input.strip().rstrip('.')
+            if s:
+                return s[0].upper() + s[1:] + "."
 
-        return ("I don't have enough knowledge about that yet. "
-                "If you share some facts with me, I'll learn and "
-                "remember them.")
+        # Last resort: if we have episodes matching our concepts, use one
+        if self.knowledge.episodes and query_concepts:
+            for ep in reversed(list(self.knowledge.episodes)):
+                ep_concepts = set(ep.concepts)
+                if ep_concepts & set(query_concepts):
+                    s = ep.text.strip().rstrip('.')
+                    if s:
+                        return s[0].upper() + s[1:] + "."
+
+        return "I need more training data to answer that."
 
     # ------------------------------------------------------------------
     # Stats & export

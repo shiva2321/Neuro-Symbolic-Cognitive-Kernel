@@ -225,6 +225,22 @@ def api_reset():
     return jsonify({"status": "reset"})
 
 
+@app.route("/api/health")
+def api_health():
+    """Health check endpoint for monitoring."""
+    engine = _get_engine()
+    stats = engine.get_system_stats()
+    return jsonify({
+        "status": "healthy",
+        "version": "1.0.0",
+        "concepts": stats["knowledge"]["total_concepts"],
+        "relations": stats["knowledge"]["total_relations"],
+        "episodes": stats["knowledge"]["total_episodes"],
+        "queries": stats["engine"]["query_count"],
+        "uptime_queries": stats["engine"]["query_count"],
+    })
+
+
 # ── Dashboard HTML (inline, no external dependencies) ─────────────────────
 
 _DASHBOARD_HTML = """<!DOCTYPE html>
