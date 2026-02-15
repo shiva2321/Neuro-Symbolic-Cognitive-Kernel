@@ -83,7 +83,6 @@ All system activities are logged with structured metadata suitable for sharing w
 
 ### Example: Export Session Logs
 ```bash
-
 # After running experiments in the dashboard:
 curl http://localhost:5000/api/logs/export/json > session_analysis.json
 curl http://localhost:5000/api/logs/export/csv > session_data.csv
@@ -448,7 +447,7 @@ The dashboard provides:
 - **📊 System Monitor** — Real-time emotion tracking, self-model performance, knowledge base browsing
 - **📋 Logs & Export** — Full activity log with filtering, export everything to TXT or JSON
 
-See [docs/TESTING_DASHBOARD.md](docs/TESTING_DASHBOARD.md) for detailed documentation.
+See [docs/DASHBOARD_GUIDE.md](docs/DASHBOARD_GUIDE.md) for detailed documentation.
 
 ---
 
@@ -547,7 +546,7 @@ NSCK is explicitly designed for CPU-only operation with minimal resource require
 **Want to verify capabilities?**
 → [SKIPPED_TESTS_ANALYSIS.md](SKIPPED_TESTS_ANALYSIS.md) — **NEW:** Analysis of skipped tests and recommendations  
 → [TESTING.md](docs/TESTING.md) — Complete test logs and validation procedures  
-→ [test_capability_proofs.py](nsck-demo/tests/test_capability_proofs.py) — 21 capability proofs with evidence  
+→ [test_capability_proofs.py](nsck-demo/tests/integration/test_capability_proofs.py) — 21 capability proofs with evidence  
 
 **Want to use the API?**
 → [MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) — Complete API documentation for 96+ modules  
