@@ -155,55 +155,58 @@ def api_knowledge():
 
 @app.route("/api/knowledge/concepts")
 def api_concepts():
-    """List all concepts."""
+    """List all concepts from NSCK SemanticMemory graph."""
     engine = _get_engine()
     concepts = []
-    for name, c in engine.knowledge.concepts.items():
+    for node in engine.semantic_memory.concept_graph.nodes:
+        node_data = dict(engine.semantic_memory.concept_graph.nodes[node])
+        sents = engine._concept_sentences.get(node.lower(), [])
         concepts.append({
-            'name': name,
-            'frequency': c.frequency,
-            'source_count': len(c.source_sentences),
+            'name': node,
+            'properties': {k: str(v) for k, v in node_data.items()},
+            'source_count': len(sents),
         })
-    concepts.sort(key=lambda x: x['frequency'], reverse=True)
+    concepts.sort(key=lambda x: x['source_count'], reverse=True)
     return jsonify(concepts)
 
 
 @app.route("/api/knowledge/relations")
 def api_relations():
-    """List all relations."""
+    """List all relations from NSCK SemanticMemory graph."""
     engine = _get_engine()
     rels = []
-    for r in engine.knowledge.relations[:200]:
+    edges = list(engine.semantic_memory.concept_graph.edges(data=True))
+    for u, v, data in edges[:200]:
         rels.append({
-            'source': r.source_concept,
-            'target': r.target_concept,
-            'sentence': r.sentence,
-            'weight': r.weight,
-            'evidence': r.evidence_count,
+            'source': u,
+            'target': v,
+            'relation': data.get('relation', 'related'),
+            'timestamp': data.get('timestamp', 0),
         })
     return jsonify(rels)
 
 
 @app.route("/api/knowledge/rules")
 def api_rules():
-    """List all causal rules."""
+    """List learned facts from NSCK TextKnowledgeLearner."""
     engine = _get_engine()
-    rules = []
-    for r in engine.causal_rules.rules[:100]:
-        rules.append({
-            'antecedent': r.antecedent,
-            'consequent': r.consequent,
-            'sentence': r.sentence,
-            'evidence': r.evidence,
-            'strength': round(r.strength, 3),
+    facts = []
+    for f in engine.text_learner.learned_facts[:200]:
+        facts.append({
+            'subject': f.subject,
+            'relation': f.relation,
+            'object': f.object,
+            'confidence': round(f.confidence, 3),
+            'source': f.source_text[:100] if f.source_text else '',
         })
-    return jsonify(rules)
+    return jsonify(facts)
 
 
 @app.route("/api/emotion")
 def api_emotion():
     """Get current emotional state."""
-    return jsonify(_get_engine().emotion.get_state())
+    engine = _get_engine()
+    return jsonify(engine.emotion_system.get_emotion_info())
 
 
 @app.route("/api/logs")
