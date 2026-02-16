@@ -1,0 +1,13 @@
+{
+  "context": "Databases",
+  "turns": [
+    {
+      "user": "What is a database index?",
+      "assistant": "A database index is a data structure that improves query speed. It works like a book index, allowing fast lookups without scanning entire tables."
+    },
+    {
+      "user": "Are there downsides?",
+      "assistant": "Indexes use additional storage space and slow down write operations. Each insert or update must also update the index structures."
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "context": "Climate science",
+  "turns": [
+    {
+      "user": "What causes climate change?",
+      "assistant": "Climate change is primarily caused by greenhouse gas emissions from human activities. Burning fossil fuels releases CO2 that traps heat in the atmosphere."
+    },
+    {
+      "user": "What are the effects?",
+      "assistant": "Effects include rising temperatures, melting ice caps, sea level rise, and more extreme weather events. These changes impact ecosystems and human societies."
+    }
+  ]
+}
