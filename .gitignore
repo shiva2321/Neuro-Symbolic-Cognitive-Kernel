@@ -23,3 +23,8 @@ models/
 *.csv
 *.png
 demo_outputs/
+
+# NSCK AI Model artifacts
+nsck_ai_model/logs/
+nsck_ai_model/models/
+nsck_ai_model/hf_cache/
