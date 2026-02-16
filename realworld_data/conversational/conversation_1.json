@@ -1,0 +1,13 @@
+{
+  "context": "Discussion about renewable energy",
+  "turns": [
+    {
+      "user": "What is solar energy?",
+      "assistant": "Solar energy is power derived from the sun's radiation. It can be converted to electricity using photovoltaic cells or used for heating."
+    },
+    {
+      "user": "How efficient are solar panels?",
+      "assistant": "Modern solar panels typically convert 15-22% of sunlight into electricity. Efficiency depends on panel technology and environmental conditions."
+    }
+  ]
+}
