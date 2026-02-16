@@ -140,7 +140,7 @@ Execution Time: 0.04s
 - **SIMD:** Auto-vectorization with AVX2 (4 u64 per cycle)
 - **Zero-Copy:** No Python object allocation overhead
 
-See [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md) for detailed analysis.
+See [RUST_ENABLED_REPORT.md](../archive/RUST_ENABLED_REPORT.md) for detailed analysis.
 
 #### Legacy Python Performance (Reference)
 

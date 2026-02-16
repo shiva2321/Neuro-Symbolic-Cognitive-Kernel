@@ -501,10 +501,10 @@ NSCK is explicitly designed for CPU-only operation with minimal resource require
 | [docs/PHASE_HISTORY.md](docs/PHASE_HISTORY.md) | Development timeline through Phase 0-8 with validation results and milestones |
 | **Testing & Performance** | |
 | [docs/TEST_RESULTS_SUMMARY.md](docs/TEST_RESULTS_SUMMARY.md) | Comprehensive analysis of all 581 tests with 99.0% pass rate, detailed capability validation |
-| [ERROR_FIXES_SUMMARY.md](ERROR_FIXES_SUMMARY.md) | **NEW:** Type error fixes and validation - all critical errors resolved |
-| [RUST_ENABLED_REPORT.md](RUST_ENABLED_REPORT.md) | **NEW:** Rust acceleration performance analysis - 6-29× speedup achieved |
-| [RUST_OPTIMIZATION_ANALYSIS.md](RUST_OPTIMIZATION_ANALYSIS.md) | **NEW:** Complete cost-benefit analysis of Rust optimization with benchmarks |
-| [SKIPPED_TESTS_ANALYSIS.md](SKIPPED_TESTS_ANALYSIS.md) | **NEW:** Analysis of 8 skipped tests (Rust parity, experimental features) |
+| [ERROR_FIXES_SUMMARY.md](archive/ERROR_FIXES_SUMMARY.md) | **NEW:** Type error fixes and validation - all critical errors resolved |
+| [RUST_ENABLED_REPORT.md](archive/RUST_ENABLED_REPORT.md) | **NEW:** Rust acceleration performance analysis - 6-29× speedup achieved |
+| [RUST_OPTIMIZATION_ANALYSIS.md](archive/RUST_OPTIMIZATION_ANALYSIS.md) | **NEW:** Complete cost-benefit analysis of Rust optimization with benchmarks |
+| [SKIPPED_TESTS_ANALYSIS.md](archive/SKIPPED_TESTS_ANALYSIS.md) | **NEW:** Analysis of 8 skipped tests (Rust parity, experimental features) |
 | [docs/TESTING.md](docs/TESTING.md) | Test methodology with **actual test run logs**, output analysis, and test statistics |
 | [docs/BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) | Performance measurements, VSA benchmarks (0.29μs XOR with Rust), system throughput (100+ decisions/sec) |
 | [docs/TRANSFER_EXPERIMENTS_REPORT.md](docs/TRANSFER_EXPERIMENTS_REPORT.md) | Cross-domain transfer experiments with detailed matrix, Cohen's d effect sizes, learning curves |
@@ -519,18 +519,18 @@ NSCK is explicitly designed for CPU-only operation with minimal resource require
 | [docs/TEXT_LEARNING_PROOF.md](docs/TEXT_LEARNING_PROOF.md) | Proof of text learning capabilities with test results and performance metrics |
 | **Dashboard & Monitoring** | |
 | [docs/DASHBOARD_GUIDE.md](docs/DASHBOARD_GUIDE.md) | Web interface operations, API endpoints, export formats, and usage examples |
-| [UNIFIED_DASHBOARD_SUMMARY.md](UNIFIED_DASHBOARD_SUMMARY.md) | Unified dashboard implementation details and validation checklist |
+| [UNIFIED_DASHBOARD_SUMMARY.md](archive/UNIFIED_DASHBOARD_SUMMARY.md) | Unified dashboard implementation details and validation checklist |
 
 ### 📖 Quick Navigation by Topic
 
 **Want to validate system capabilities?**
 → [TEST_RESULTS_SUMMARY.md](docs/TEST_RESULTS_SUMMARY.md) — All 581 tests analyzed, 99.0% pass rate  
-→ [ERROR_FIXES_SUMMARY.md](ERROR_FIXES_SUMMARY.md) — **NEW:** All type errors fixed and validated  
+→ [ERROR_FIXES_SUMMARY.md](archive/ERROR_FIXES_SUMMARY.md) — **NEW:** All type errors fixed and validated  
 → [TESTING.md](docs/TESTING.md) — Test methodology and reproduction guide  
 
 **Want to see performance data?**
-→ [RUST_ENABLED_REPORT.md](RUST_ENABLED_REPORT.md) — **NEW:** Rust acceleration: 6-29× faster VSA operations  
-→ [RUST_OPTIMIZATION_ANALYSIS.md](RUST_OPTIMIZATION_ANALYSIS.md) — **NEW:** Complete optimization cost-benefit analysis  
+→ [RUST_ENABLED_REPORT.md](archive/RUST_ENABLED_REPORT.md) — **NEW:** Rust acceleration: 6-29× faster VSA operations  
+→ [RUST_OPTIMIZATION_ANALYSIS.md](archive/RUST_OPTIMIZATION_ANALYSIS.md) — **NEW:** Complete optimization cost-benefit analysis  
 → [BENCHMARK_RESULTS.md](docs/BENCHMARK_RESULTS.md) — Actual measurements: 0.29μs XOR, 100+ decisions/sec  
 → [TRANSFER_EXPERIMENTS_REPORT.md](docs/TRANSFER_EXPERIMENTS_REPORT.md) — Transfer learning +345% gain, 4.5× speedup  
 
@@ -543,7 +543,7 @@ NSCK is explicitly designed for CPU-only operation with minimal resource require
 → [PHASE_HISTORY.md](docs/PHASE_HISTORY.md) — Development from Phase 0 to Phase 8 with validation  
 
 **Want to verify capabilities?**
-→ [SKIPPED_TESTS_ANALYSIS.md](SKIPPED_TESTS_ANALYSIS.md) — **NEW:** Analysis of skipped tests and recommendations  
+→ [SKIPPED_TESTS_ANALYSIS.md](archive/SKIPPED_TESTS_ANALYSIS.md) — **NEW:** Analysis of skipped tests and recommendations  
 → [TESTING.md](docs/TESTING.md) — Complete test logs and validation procedures  
 → [test_capability_proofs.py](nsck-demo/tests/integration/test_capability_proofs.py) — 21 capability proofs with evidence  
 

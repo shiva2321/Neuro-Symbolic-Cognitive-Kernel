@@ -132,9 +132,9 @@ pytest nsck-demo/tests/unit/vsa/test_hypervec_parity.py -v
 - ✅ 575/581 full test suite passes with Rust enabled
 
 **Automatic Fallback:** If Rust is not available, the system automatically uses the Python implementation with zero code changes. See:
-- [RUST_OPTIMIZATION_ANALYSIS.md](../RUST_OPTIMIZATION_ANALYSIS.md) - Detailed cost-benefit analysis
-- [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md) - Measured performance benchmarks
-- [SKIPPED_TESTS_ANALYSIS.md](../SKIPPED_TESTS_ANALYSIS.md) - Test coverage analysis
+- [RUST_OPTIMIZATION_ANALYSIS.md](../archive/RUST_OPTIMIZATION_ANALYSIS.md) - Detailed cost-benefit analysis
+- [RUST_ENABLED_REPORT.md](../archive/RUST_ENABLED_REPORT.md) - Measured performance benchmarks
+- [SKIPPED_TESTS_ANALYSIS.md](../archive/SKIPPED_TESTS_ANALYSIS.md) - Test coverage analysis
 
 ---
 
