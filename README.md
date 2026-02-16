@@ -3,26 +3,25 @@
 ![Project Status](https://img.shields.io/badge/status-Production_Ready-green)
 ![Python](https://img.shields.io/badge/python-3.11+-green)
 ![Rust](https://img.shields.io/badge/rust-1.93.1_enabled-brightgreen)
-![Tests](https://img.shields.io/badge/tests-581_total-brightgreen)
-![Pass Rate](https://img.shields.io/badge/pass_rate-99.0%25-brightgreen)
+![Tests](https://img.shields.io/badge/tests-731_total-brightgreen)
+![Pass Rate](https://img.shields.io/badge/pass_rate-99.3%25-brightgreen)
 ![Documentation](https://img.shields.io/badge/docs-comprehensive-blue)
 
 An experimental research prototype for exploring neuro-symbolic AI. NSCK combines Vector Symbolic Architecture (VSA) with symbolic rule-based reasoning, neural spiking networks, and cross-domain transfer learning, designed for energy, processing, and memory efficiency. Runs on CPU only — no GPU required.
 
-**Latest Update (Feb 13, 2026):** System validated with **581 comprehensive tests (99.0% pass rate)** and **Rust acceleration enabled** for 6-29× faster VSA operations. All critical errors fixed, system production-ready.
+**Latest Update (Feb 16, 2026):** Repository cleaned and consolidated with **731 comprehensive tests (99.3% pass rate)**, **Rust acceleration enabled** for 6-29× faster VSA operations, and unified documentation structure. All projects production-ready.
 
 **Documentation Highlights:**
-- 📊 **[TEST_RESULTS_SUMMARY.md](docs/TEST_RESULTS_SUMMARY.md):** Complete test results analysis (575 passed, 2 skipped, 4 xfailed)
-- 🚀 **[RUST_ENABLED_REPORT.md](RUST_ENABLED_REPORT.md):** Rust optimization enabled - 6-29× speedup validated
-- 🔧 **[ERROR_FIXES_SUMMARY.md](ERROR_FIXES_SUMMARY.md):** All type errors fixed (6 issues resolved)
-- 📈 **[RUST_OPTIMIZATION_ANALYSIS.md](RUST_OPTIMIZATION_ANALYSIS.md):** Cost-benefit analysis and performance predictions
-- 🔍 **[SKIPPED_TESTS_ANALYSIS.md](SKIPPED_TESTS_ANALYSIS.md):** Analysis of 8 skipped tests (6 Rust parity now enabled)
+- 📋 **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md):** Complete repository structure with architecture diagrams
+- 🧪 **[TESTING.md](TESTING.md):** Comprehensive test documentation with 731 tests across all projects
+- ⚡ **[PERFORMANCE.md](PERFORMANCE.md):** Performance metrics, benchmarks, and optimization results
+- 📜 **[CHANGELOG.md](CHANGELOG.md):** Complete project history and milestone tracking
 - 📐 **[FORMULAS_AND_PROOFS.md](docs/FORMULAS_AND_PROOFS.md):** Complete mathematical derivations with test evidence
 - 🏗️ **[ARCHITECTURE.md](docs/ARCHITECTURE.md):** System architecture with proven capabilities and test references
 - 📚 **[MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md):** Complete API documentation for all modules
-- 🧪 **[TESTING.md](docs/TESTING.md):** Test infrastructure and verification procedures
+- 📊 **[TEST_RESULTS_SUMMARY.md](docs/TEST_RESULTS_SUMMARY.md):** Latest test results analysis
 
-See [Test Results](docs/TEST_RESULTS_SUMMARY.md), [Architecture](docs/ARCHITECTURE.md), [Phase History](docs/PHASE_HISTORY.md), and [Benchmarks](docs/BENCHMARK_RESULTS.md).
+See [Project Structure](PROJECT_STRUCTURE.md), [Testing](TESTING.md), [Performance](PERFORMANCE.md), [Architecture](docs/ARCHITECTURE.md), and [Changelog](CHANGELOG.md).
 
 > **Note:** This is an active research project, not production software. See [Known Limitations](#known-limitations) for what does not work yet.
 
@@ -78,7 +77,7 @@ All system activities are logged with structured metadata suitable for sharing w
 ### Documentation
 
 - **[Dashboard Guide](docs/DASHBOARD_GUIDE.md)**: Complete user guide with API reference and analysis examples
-- **[Implementation Summary](UNIFIED_DASHBOARD_SUMMARY.md)**: Technical details and validation checklist
+- **[Dashboard Summary](archive/UNIFIED_DASHBOARD_SUMMARY.md)**: Technical details and validation checklist
 - **Launch Options**: Run `python launch_dashboard.py --help` for CLI options (port, host, debug mode)
 
 ### Example: Export Session Logs
@@ -112,7 +111,7 @@ All components are designed to work together through a central cognitive engine,
 
 ## What Actually Works
 
-The following capabilities are implemented and validated by **581 comprehensive tests (99.0% pass rate)** with **Rust acceleration enabled** for maximum performance. See [Test Results Summary](docs/TEST_RESULTS_SUMMARY.md) for detailed evidence and [Rust Performance Report](RUST_ENABLED_REPORT.md) for optimization details.
+The following capabilities are implemented and validated by **731 comprehensive tests (99.3% pass rate)** across all projects with **Rust acceleration enabled** for maximum performance. See [Testing Documentation](TESTING.md) for detailed evidence and [Performance Metrics](PERFORMANCE.md) for optimization details.
 
 ### ✅ Core VSA Operations (100% Pass - 15/15 tests)
 | Capability | Test Evidence |
