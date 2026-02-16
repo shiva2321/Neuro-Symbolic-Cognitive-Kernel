@@ -1,0 +1,13 @@
+{
+  "context": "Astronomy basics",
+  "turns": [
+    {
+      "user": "How do stars form?",
+      "assistant": "Stars form from clouds of gas and dust that collapse under gravity. As material compresses, it heats up until nuclear fusion begins in the core."
+    },
+    {
+      "user": "What happens when they die?",
+      "assistant": "Star death depends on mass. Small stars become white dwarfs, while massive stars explode as supernovae and may form neutron stars or black holes."
+    }
+  ]
+}

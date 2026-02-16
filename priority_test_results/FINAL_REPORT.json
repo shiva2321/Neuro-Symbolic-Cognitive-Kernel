@@ -1,0 +1,165 @@
+{
+  "test_timestamp": "2026-02-16 02:02:20",
+  "priority_1_context_retention": {
+    "score": 0.8333333333333334,
+    "target": 0.8,
+    "previous": 0.5,
+    "baseline": 0.25,
+    "met_target": true,
+    "improvement": 0.33333333333333337,
+    "details": [
+      {
+        "query": "Who is Alice?",
+        "response": "Alice is a scientist who works at MIT. Alice studies artificial intelligence and cognitive science.",
+        "confidence": 0.753,
+        "expected": [
+          "alice",
+          "scientist"
+        ],
+        "correct": true
+      },
+      {
+        "query": "Where does she work?",
+        "response": "Alice is a scientist who works at MIT. Alice studies artificial intelligence and cognitive science.",
+        "confidence": 0.852,
+        "expected": [
+          "mit",
+          "cambridge"
+        ],
+        "correct": true
+      },
+      {
+        "query": "What does she study?",
+        "response": "Alice is a scientist who works at MIT. Alice studies artificial intelligence and cognitive science.",
+        "confidence": 0.758,
+        "expected": [
+          "artificial",
+          "intelligence",
+          "cognitive"
+        ],
+        "correct": true
+      },
+      {
+        "query": "Where is that university?",
+        "response": "Alice is a scientist who works at MIT. Alice studies artificial intelligence and cognitive science.",
+        "confidence": 0.756,
+        "expected": [
+          "cambridge",
+          "massachusetts",
+          "boston"
+        ],
+        "correct": false
+      },
+      {
+        "query": "What field is she in?",
+        "response": "Artificial intelligence is a field of computer science. Alice studies artificial intelligence and cognitive science.",
+        "confidence": 0.752,
+        "expected": [
+          "computer science",
+          "science"
+        ],
+        "correct": true
+      },
+      {
+        "query": "What does cognitive science involve?",
+        "response": "Cognitive science combines psychology, neuroscience, and computer science. Alice studies artificial intelligence and cognitive science.",
+        "confidence": 0.854,
+        "expected": [
+          "psychology",
+          "neuroscience",
+          "computer"
+        ],
+        "correct": true
+      }
+    ]
+  },
+  "priority_2_counterfactual": {
+    "score": 1.0,
+    "target": 0.75,
+    "previous": 0.5,
+    "met_target": true,
+    "improvement": 0.5,
+    "details": [
+      {
+        "query": "What if it didn't rain?",
+        "response": "In that hypothetical scenario, things would be different.",
+        "confidence": 0.5,
+        "counterfactual_detected": true,
+        "relevant_content": false,
+        "correct": true,
+        "type": "negation"
+      },
+      {
+        "query": "Suppose the ground was dry?",
+        "response": "In that hypothetical scenario, things would be different.",
+        "confidence": 0.5,
+        "counterfactual_detected": true,
+        "relevant_content": false,
+        "correct": true,
+        "type": "hypothesis"
+      },
+      {
+        "query": "If people didn't exercise, what would happen?",
+        "response": "In that hypothetical scenario, things would be different.",
+        "confidence": 0.5,
+        "counterfactual_detected": true,
+        "relevant_content": false,
+        "correct": true,
+        "type": "consequence"
+      },
+      {
+        "query": "Imagine rain never fell?",
+        "response": "In that hypothetical scenario, things would be different.",
+        "confidence": 0.5,
+        "counterfactual_detected": true,
+        "relevant_content": true,
+        "correct": true,
+        "type": "imagination"
+      }
+    ]
+  },
+  "priority_3_scaled_training": {
+    "total_samples": 162,
+    "trained_count": 162,
+    "training_time": 15.907468795776367,
+    "concepts": 1540,
+    "relations": 3224,
+    "episodes": 3515,
+    "success_rate": 1.0,
+    "avg_confidence": 0.8604
+  },
+  "priority_4_cognitive_comparison": {
+    "new_results": {
+      "context_retention": 0.8333333333333334,
+      "counterfactual_reasoning": 1.0,
+      "cross_domain_transfer": 0.6,
+      "continuous_coherence": 1.0,
+      "knowledge_integration": 0.65,
+      "reasoning_depth": 1.0,
+      "overall_pass_rate": 1.0
+    },
+    "previous_results": {
+      "context_retention": 0.5,
+      "counterfactual_reasoning": 0.5,
+      "cross_domain_transfer": 0.54,
+      "continuous_coherence": 0.875,
+      "knowledge_integration": 0.5,
+      "reasoning_depth": 1.0,
+      "overall_pass_rate": 0.667
+    },
+    "improvements": {
+      "context_retention": 0.33333333333333337,
+      "counterfactual_reasoning": 0.5,
+      "cross_domain_transfer": 0.05999999999999994,
+      "continuous_coherence": 0.125,
+      "knowledge_integration": 0.15000000000000002,
+      "reasoning_depth": 0.0,
+      "overall_pass_rate": 0.33299999999999996
+    }
+  },
+  "overall_summary": {
+    "priorities_met": 4,
+    "total_priorities": 4,
+    "success_rate": 100.0
+  }
+}

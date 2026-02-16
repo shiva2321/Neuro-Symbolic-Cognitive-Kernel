@@ -1,0 +1,13 @@
+{
+  "context": "Learning a language",
+  "turns": [
+    {
+      "user": "What's the best way to learn a language?",
+      "assistant": "Immersion is most effective - surround yourself with the language through media, conversation, and practice. Consistent daily practice is more important than duration."
+    },
+    {
+      "user": "How long does it take?",
+      "assistant": "It depends on language similarity to your native language and practice intensity. Basic conversational fluency typically takes 6-12 months of consistent study."
+    }
+  ]
+}

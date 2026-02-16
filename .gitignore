@@ -28,3 +28,17 @@ demo_outputs/
 nsck_ai_model/logs/
 nsck_ai_model/models/
 nsck_ai_model/hf_cache/
+
+# Benchmark and evaluation results (generated)
+/benchmark_results/
+/complete_evaluation/
+/telemetry_logs/
+/telemetry_demo/
+/quick_benchmark/
+/eval_results/
+/eval_extended/
+/monitor_demo/
+/my_logs/
+/quick_test/
+/standard_eval/
+/extended_eval/

@@ -1,0 +1,13 @@
+{
+  "context": "Learning about evolution",
+  "turns": [
+    {
+      "user": "How does natural selection work?",
+      "assistant": "Natural selection acts on variation in populations. Individuals with beneficial traits survive and reproduce more successfully, passing these traits to offspring."
+    },
+    {
+      "user": "What creates the variation?",
+      "assistant": "Variation comes from genetic mutations and recombination during sexual reproduction. These create differences in traits among individuals."
+    }
+  ]
+}
