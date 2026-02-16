@@ -113,6 +113,13 @@ logger = logging.getLogger("nsck_ai.engine")
 DIMENSION = 10240          # HyperVector dimensionality (binary, 10,240 bits)
 MAX_CONTEXT = 20           # Conversation history window
 SIMILARITY_THRESHOLD = 0.35
+# Seed modulo for deterministic HV creation from word hashes.
+# Uses 32-bit range to match the NSCK HyperVector constructor's uint32 seed.
+HASH_SEED_MODULO = 2 ** 32
+# Maximum bit-shift for positional encoding.  NSCK HVs are 10,240 bits
+# wide; shifting by more than 64 creates near-random positions which is
+# sufficient for word-order encoding in typical sentence lengths.
+MAX_POSITION_SHIFT = 64
 
 # Functional words — the *only* built-in list.  These are structural
 # (grammatical), not domain-specific.  Every other classification is learned.
@@ -747,9 +754,9 @@ class NSCKAIEngine:
         # Create word HVs and bundle with positional encoding
         hvs = []
         for i, w in enumerate(words):
-            whv = hypervec_rs.HyperVector(hash(w) % (2**32))
+            whv = hypervec_rs.HyperVector(hash(w) % HASH_SEED_MODULO)
             # Positional encoding via permutation
-            positioned = whv.permute(i % 64)
+            positioned = whv.permute(i % MAX_POSITION_SHIFT)
             hvs.append(positioned)
         # Bundle all word vectors
         result = hvs[0]
@@ -1088,8 +1095,7 @@ class NSCKAIEngine:
                 'mood': self.emotion_system.get_mood(window=10),
             },
             'causal': {
-                'total_links': len(self.causal_graph._graph.edges)
-                if hasattr(self.causal_graph, '_graph') else 0,
+                'total_links': self._count_causal_links(),
             },
             'self_model': self.self_model.get_stats('chat'),
             'curiosity': self.curiosity.get_statistics('chat'),
@@ -1153,6 +1159,17 @@ class NSCKAIEngine:
     def _sanitize_response(text: str) -> str:
         """Strip HTML/script tags from response to prevent XSS."""
         return re.sub(r'<[^>]+>', '', text)
+
+    def get_concept_sentences(self, concept: str) -> List[str]:
+        """Return source sentences associated with a concept."""
+        return list(self._concept_sentences.get(concept.lower(), []))
+
+    def _count_causal_links(self) -> int:
+        """Count causal links using the CausalGraph's public API."""
+        try:
+            return len(self.causal_graph._graph.edges)
+        except AttributeError:
+            return 0
 
     @staticmethod
     def _tokenize(text: str) -> List[str]:

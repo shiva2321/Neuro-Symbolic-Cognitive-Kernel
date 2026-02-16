@@ -160,7 +160,7 @@ def api_concepts():
     concepts = []
     for node in engine.semantic_memory.concept_graph.nodes:
         node_data = dict(engine.semantic_memory.concept_graph.nodes[node])
-        sents = engine._concept_sentences.get(node.lower(), [])
+        sents = engine.get_concept_sentences(node)
         # Count edges (degree) as a proxy for frequency/importance
         degree = engine.semantic_memory.concept_graph.degree(node)
         concepts.append({
