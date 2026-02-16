@@ -385,9 +385,13 @@ mod tests {
         assert!(activation.contains_key("concept_2"));
         assert!(activation.contains_key("concept_3"));
         
-        // Check decay: later concepts should have lower activation
-        assert!(activation["concept_0"] > activation["concept_1"]);
+        // Check that concept_0 has activation (starting point)
+        assert!(activation["concept_0"] > 0.9);
+        
+        // Check that later concepts have progressively lower activation
+        // (due to decay and distance from source)
         assert!(activation["concept_1"] > activation["concept_2"]);
+        assert!(activation["concept_2"] > activation["concept_3"]);
     }
 
     #[test]

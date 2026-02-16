@@ -178,6 +178,7 @@ pub fn parallel_bundle(vectors: Vec<HyperVector>) -> PyResult<HyperVector> {
 /// Thread-safe spreading activation accumulator
 /// Used for concurrent accumulation of activation values
 #[pyclass(module = "hypervec_rs")]
+#[derive(Clone)]
 pub struct ActivationAccumulator {
     activations: Arc<DashMap<String, f64>>,
 }
@@ -309,10 +310,10 @@ mod tests {
             handle.join().unwrap();
         }
 
-        // Each of 5 concepts should have accumulated 10*100*0.1 = 100.0
+        // Each of 5 concepts should have accumulated: 2 threads * 100 iterations * 0.1 = 20.0
         for i in 0..5 {
             let val = acc.get_activation(&format!("concept_{}", i));
-            assert!((val - 200.0).abs() < 1e-6); // 10 threads * 100 iterations * 0.1
+            assert!((val - 20.0).abs() < 1e-6); // 2 threads per concept * 100 iterations * 0.1
         }
     }
 }
