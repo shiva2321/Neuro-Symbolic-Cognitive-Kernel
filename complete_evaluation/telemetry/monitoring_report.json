@@ -1,0 +1,80 @@
+{
+  "metadata": {
+    "generated_at": "2026-02-16T01:37:40.465230",
+    "output_directory": "./complete_evaluation/telemetry"
+  },
+  "overall_stats": {
+    "total_queries": 10,
+    "total_training_samples": 13,
+    "avg_confidence": 0.6391,
+    "avg_latency_ms": 3.4299999999999997,
+    "recent_confidence": 0.6391,
+    "recent_latency_ms": 3.4299999999999997,
+    "query_patterns": {
+      "factual": 4,
+      "explanatory": 6
+    },
+    "anomaly_count": 0
+  },
+  "behavioral_analysis": {
+    "confidence": {
+      "mean": 0.6391,
+      "std": 0.1342091278564912,
+      "min": 0.512,
+      "max": 0.857,
+      "trend": "declining"
+    },
+    "latency": {
+      "mean": 3.4299999999999997,
+      "std": 0.3257299494980465,
+      "min": 3.0,
+      "max": 4.1,
+      "trend": "stable"
+    },
+    "response_quality": {
+      "avg_length": 82.0,
+      "min_length": "41",
+      "max_length": "126"
+    },
+    "query_distribution": {
+      "factual": 4,
+      "explanatory": 6
+    }
+  },
+  "learning_curves": {
+    "total_sessions": 1,
+    "learning_rate": {
+      "mean": 220.7332718251899,
+      "std": 61.222219308392525,
+      "trend": [
+        149.5786140195715,
+        139.16995155617494,
+        279.9001668335002,
+        343.70619647905596,
+        218.32256721234677,
+        252.05648925301978,
+        183.35113963227516,
+        231.3683891164343,
+        244.42900766917643,
+        211.75225670954583
+      ]
+    },
+    "concepts_per_session": {
+      "mean": 5.769230769230769,
+      "total": 75
+    }
+  },
+  "anomalies": {
+    "status": "no_anomalies",
+    "count": 0
+  },
+  "training_sessions": [
+    {
+      "session_id": "standard_training",
+      "samples_processed": 13,
+      "training_time_s": 0.3797118663787842,
+      "total_concepts_learned": 75,
+      "avg_learning_rate": 220.7332718251899
+    }
+  ]
+}
