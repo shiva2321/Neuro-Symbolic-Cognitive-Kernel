@@ -10,6 +10,7 @@ mod semantic;
 mod episodic;
 mod worker_pool;
 mod persistence;
+mod async_runtime;
 
 const DIMENSION: usize = 10240;
 
@@ -271,6 +272,9 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     
     // Persistence
     persistence::register_persistence_module(m)?;
+    
+    // Async runtime
+    async_runtime::register_async_module(m)?;
     
     Ok(())
 }

@@ -96,7 +96,7 @@ impl SemanticMemoryConcurrent {
     }
 
     /// Get number of concepts
-    fn concept_count(&self) -> usize {
+    pub fn concept_count(&self) -> usize {
         self.concepts.len()
     }
 

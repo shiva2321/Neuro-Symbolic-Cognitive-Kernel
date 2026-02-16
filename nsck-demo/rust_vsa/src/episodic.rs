@@ -120,7 +120,7 @@ impl EpisodicMemoryConcurrent {
     }
 
     /// Get number of episodes in hot tier
-    fn size(&self) -> usize {
+    pub fn size(&self) -> usize {
         self.hot_tier.read().len()
     }
 

@@ -22,7 +22,7 @@ rayon = "1.10"           # Data-parallel iterators
 parking_lot = "0.12"     # Faster locks than std
 dashmap = "6.0"          # Concurrent HashMap
 crossbeam = "0.8"        # Lock-free data structures
-tokio = { version = "1", features = ["full"], optional = true }  # Async runtime
+tokio = { version = "1", features = ["full"] }  # Async runtime (enabled)
 
 # Persistence
 rusqlite = { version = "0.31", features = ["bundled"] }
@@ -34,4 +34,3 @@ tempfile = "3.10"        # Temporary files for testing
 
 [features]
 default = []
-async = ["tokio"]        # Optional async support
