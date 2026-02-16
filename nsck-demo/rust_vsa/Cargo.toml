@@ -34,3 +34,7 @@ tempfile = "3.10"        # Temporary files for testing
 
 [features]
 default = []
+
+[[bench]]
+name = "concurrent_bench"
+harness = false
