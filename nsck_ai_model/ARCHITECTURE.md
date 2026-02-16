@@ -1,253 +1,209 @@
-# NSCK AI Model — Architecture Document
+# NSCK AI Model — Architecture Deep Dive
 
-## Overview
+## Why This Architecture?
 
-The NSCK AI model is a **glass-box**, **zero-hardcode** AI system built on
-Vector Symbolic Architecture (VSA).  This document explains every component:
-what it does, how it works, and why it was designed that way.
+The user asked for an AI model that:
+1. Uses the **existing NSCK architecture** (not a reimplementation)
+2. No transformers or neural networks (no heavy matrix multiplication)
+3. Trains on real data (HuggingFace WikiText)
+4. Understands and responds in natural language
+5. Glass-box: every thought traceable end-to-end
+6. No hardcoded patterns — everything learned from data
 
----
+## System Overview
 
-## §1  HyperVector — The Foundation
+```
+┌─────────────────────────────────────────────────────────┐
+│                    NSCKAIEngine                          │
+│                                                         │
+│  ┌──────────────┐   ┌──────────────┐   ┌─────────────┐ │
+│  │TextKnowledge │   │  Semantic    │   │  Episodic   │ │
+│  │   Learner    │──▶│   Memory    │   │   Memory    │ │
+│  │(lingua_cortex│   │ (NetworkX)  │   │ (VSA+LSH)   │ │
+│  └──────────────┘   └──────┬───────┘   └──────┬──────┘ │
+│                            │                   │        │
+│  ┌──────────────┐   ┌──────▼───────┐   ┌──────▼──────┐ │
+│  │   Causal     │   │   Global     │   │  Curiosity  │ │
+│  │  Reasoner    │──▶│  Workspace   │◀──│   Module    │ │
+│  │(CausalGraph) │   │(Competition) │   │ (Novelty)   │ │
+│  └──────────────┘   └──────┬───────┘   └─────────────┘ │
+│                            │                            │
+│  ┌──────────────┐   ┌──────▼───────┐   ┌─────────────┐ │
+│  │   Emotion    │   │  Response    │   │    Self     │ │
+│  │   System     │   │ Generation  │   │   Model     │ │
+│  │ (Plutchik)   │   │  (N-gram)   │   │(Confidence) │ │
+│  └──────────────┘   └─────────────┘   └─────────────┘ │
+│                                                         │
+│  ┌─────────────────────────────────────────────────────┐ │
+│  │              ThoughtTrace (Glass-Box)               │ │
+│  │  Records every step for full traceability           │ │
+│  └─────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────┘
+```
 
-### What
-A 10,240-dimensional binary vector.  Every piece of information in the
-system — words, sentences, concepts, relations, images — is represented
-as a HyperVector (HV).
+## Module Details
 
-### How
-- **Creation**: Random binary vectors (50% ones, 50% zeros).
-- **Binding** (XOR): Creates a new vector dissimilar to both inputs.
-  Used to create "word-in-context" representations.
-- **Bundling** (majority vote): Creates a vector similar to all inputs.
-  Used to combine multiple pieces of information.
-- **Permutation** (bit shift): Encodes position/order.
+### 1. TextKnowledgeLearner (Text Learning)
 
-### Why
-- All operations are O(D) — no matrix multiplication.
-- Self-inverse binding: `A ⊕ B ⊕ B = A`.
-- Hamming similarity is a simple bit-count.
-- CPU-only, ~150 MB RAM.
+**Source**: `nsck-demo/python/core/language/text_knowledge_learner.py`
 
----
+**What it does**: Extracts concepts and relations from text using semantic
+folding (LinguaCortex) — NOT an LLM.
 
-## §2  TextEncoder — Learned Semantic Folding
+**How it works**:
+- Text → sentences → tokenisation
+- Concepts extracted (capitalised nouns, multi-word phrases)
+- Relations discovered via co-occurrence patterns and semantic folding
+- Each concept gets a HyperVector (10,240-bit binary)
+- Concepts stored in SemanticMemory graph
+- Episodes stored in EpisodicMemory
 
-### What
-Converts text into HVs.  Words that appear in similar contexts develop
-similar HVs through training.
+**Why we use it**: This is the NSCK's actual text learning module. It
+uses VSA (not neural networks) to learn from text.
 
-### How
-1. Each word gets a deterministic base HV from its hash.
-2. A context window of ±3 words is bundled with position encoding.
-3. The word HV is bound with its context HV → word-in-context.
-4. All word-in-context HVs are bundled → sentence HV.
-5. During training, context vectors are incrementally updated via
-   bundling with new observations.
+### 2. SemanticMemory (Concept Graph)
 
-### Why not use a pre-trained embedding?
-- No dependency on external models.
-- Incrementally updatable — new words are learned on the fly.
-- Distributional semantics emerge naturally from co-occurrence.
+**Source**: `nsck-demo/python/core/memory/semantic_memory.py`
 
----
+**What it does**: Stores concepts as nodes and relations as edges in a
+NetworkX directed graph.  Each concept also has a HyperVector for
+similarity-based retrieval.
 
-## §3  KnowledgeStore — Dual Memory
+**Key operations**:
+- `add_concept(name, properties, hv_override)` — Add a concept node
+- `add_relation(concept1, relation, concept2)` — Add an edge
+- `query(query_hv, k)` — Find k most similar concepts by HV
+- `spread_activation(seeds, steps, decay)` — Associative retrieval
 
-### What
-Two complementary memory systems:
-- **Semantic memory**: concept graph with learned relations.
-- **Episodic memory**: timestamped experiences with LSH index.
+**Why we use it**: This is the NSCK's actual knowledge graph.  Spreading
+activation is how the system finds related concepts.
 
-### How: Semantic Memory
-- Concepts are named HVs with frequency counts and source sentences.
-- Relations store (source, target, sentence, sentence_hv).  The sentence
-  HV IS the relation type — no hardcoded labels.
-- Spreading activation traverses the graph to find related concepts.
+### 3. EpisodicMemory (Experience Storage)
 
-### How: Episodic Memory
-- Each experience is stored with its HV and timestamp.
-- LSH (Locality-Sensitive Hashing) enables O(1) approximate search.
-- 16-bit random hyperplane LSH → 65,536 possible buckets.
+**Source**: `nsck-demo/python/core/memory/episodic_memory.py`
 
-### Why dual memory?
-- Semantic memory stores what the system knows (facts).
-- Episodic memory stores what happened (experiences).
-- Together they enable both factual recall and experiential learning.
+**What it does**: Stores episodes (experiences) with HyperVector indexing
+and LSH (Locality-Sensitive Hashing) for fast retrieval.
 
----
+**Why we use it**: Episodic memory allows the system to recall similar
+past experiences, which improves response quality.
 
-## §4  CausalRuleStore — Autonomous Rule Learning
+### 4. GlobalWorkspace (Consciousness Model)
 
-### What
-Stores causal rules learned from training data.  Rules link sets of
-antecedent concepts to sets of consequent concepts.
+**Source**: `nsck-demo/python/core/reasoning/global_workspace.py`
 
-### How
-- During training, each sentence with ≥2 concepts generates a rule.
-- The first half of concepts → antecedent; second half → consequent.
-- At query time, forward chaining fires rules whose antecedents match
-  the active concepts, potentially triggering chains of inference.
-- Rule strength grows logarithmically with evidence count.
+**What it does**: Implements Global Workspace Theory (LIDA architecture).
+Multiple modules compete for access to a global broadcast channel.
 
-### Why no hardcoded causal patterns?
-- Any sentence containing multiple concepts is a potential causal rule.
-- The sentence HV captures the relationship semantics.
-- Forward chaining enables multi-hop reasoning.
+**How it works in chat**:
+- Each retrieval channel (semantic, episodic, causal, activation)
+  creates a Coalition object
+- Each Coalition has base_salience, relevance, affect_match, confidence
+- activation = salience + relevance + affect + 0.5*confidence
+- The highest-activation Coalition wins and determines the response
 
----
+**Why we use it**: This gives the system a principled way to decide
+*which* piece of knowledge to use for the response, rather than just
+returning the first match.
 
-## §5  KnowledgeAbstractor — Autonomous Generalisation
+### 5. EmotionSystem (Plutchik Model)
 
-### What
-Creates category concepts from recurring patterns in the data.
+**Source**: `nsck-demo/python/core/cognitive/emotion_system.py`
 
-### How
-1. Groups all relations by target concept.
-2. If a target appears in N+ relations, it becomes a "category".
-3. The category's HV is the bundle of all members' HVs.
-4. The category is stored as a new concept in the knowledge store.
+**What it does**: Tracks emotional state using Plutchik's 8 basic emotions
+(joy, trust, fear, surprise, sadness, disgust, anger, anticipation)
+mapped to a 2D valence-arousal space.
 
-### Why
-- Enables answering "What is X?" even if never directly told.
-- Creates hierarchical knowledge structure automatically.
-- No manual ontology design required.
+**Key operations**:
+- `recognize_emotion_from_text(text)` — Classify text emotion
+- `get_emotion_blend()` — Weighted mix of all emotions
+- `get_mood(window)` — Slow-moving average (mood)
+- `get_emotion_hypervector()` — Emotion as a HyperVector
 
----
+**Why we use it**: Emotion-aware responses are more natural.
 
-## §6  EmotionTracker — Learned Emotional State
+### 6. CausalReasoner + CausalGraph
 
-### What
-Tracks conversational emotional state using a 2D valence-arousal model.
+**Source**: `nsck-demo/python/core/reasoning/causal_reasoning.py`
 
-### How
-- During training, positive/negative feedback signals are associated
-  with specific HVs.
-- At inference time, the input HV is compared to learned positive and
-  negative HVs to estimate valence.
-- The valence-arousal coordinates are mapped to the nearest of 9
-  Plutchik emotions for human-readable display.
+**What it does**: Stores causal links (X causes Y) and performs
+forward/backward chaining and counterfactual reasoning.
 
-### Why learned instead of keyword-based?
-- No hardcoded sentiment lexicon.
-- Adapts to domain-specific language.
-- Emotional classification emerges from data.
+**How it works in chat**:
+- After training on "Rain causes flooding", the system stores
+  a causal link: rain → flooding
+- When asked "What causes flooding?", the system forward-chains
+  from the query concepts to find effects
 
----
+**Why we use it**: Causal reasoning is essential for "why" and
+"what causes" questions.
 
-## §7  ResponseGenerator — Learned N-gram NLG
+### 7. SelfModel (Confidence Calibration)
 
-### What
-Generates natural language responses using learned n-gram patterns
-and retrieved sentences.
+**Source**: `nsck-demo/python/core/cognitive/self_model.py`
 
-### How
-1. Learns bigram and trigram continuation probabilities from training.
-2. At inference time, retrieves relevant stored sentences.
-3. If needed, extends fragments with n-gram continuations.
-4. Weighted random selection from learned probabilities.
+**What it does**: Tracks how well the system's predictions match actual
+outcomes.  Measures calibration error and improvement trends.
 
-### Why not templates?
-- Every word traces back to specific training data.
-- No hallucination — only says things it actually learned.
-- Language style adapts to training corpus.
+**Why we use it**: Self-awareness tells the system (and the user)
+how confident it should be in its answers.
 
----
+### 8. CuriosityModule (Novelty Detection)
 
-## §8  ThoughtTrace — Glass-Box Traceability
+**Source**: `nsck-demo/python/core/learning/curiosity.py`
 
-### What
-Records every cognitive step in a single reasoning cycle.
+**What it does**: Measures how novel an input is compared to what the
+system has seen before.  Novel inputs get higher curiosity scores.
 
-### How
-Each `chat()` call creates a ThoughtTrace with these stages:
-1. **encode** — input text → hypervector
-2. **emotion** — update emotional state from input HV
-3. **extract_concepts** — identify content words
-4. **search_semantic** — find similar concepts by HV similarity
-5. **search_episodic** — find similar experiences via LSH
-6. **spread_activation** — traverse concept graph
-7. **causal_inference** — forward-chain causal rules
-8. **generate** — assemble response from retrieved knowledge
+**Why we use it**: Novelty detection helps the system identify when it's
+encountering something new and needs to learn more.
 
-Each step records inputs, outputs, and timing in milliseconds.
+### 9. HyperVector (10,240-bit VSA)
 
-### Why
-- The user can inspect exactly why the model said what it said.
-- No black box — every word in the response traces to specific data.
-- Dashboard displays the full trace visually.
+**Source**: `nsck-demo/python/core/vsa/hypervec_shim.py`
 
----
+**What it does**: The fundamental data structure.  10,240-bit binary
+vectors with three operations:
+- **XOR binding** — Creates a vector dissimilar to both inputs
+- **Majority-rule bundling** — Creates a vector similar to all inputs
+- **Hamming similarity** — Measures how similar two vectors are
 
-## §9  NSCKAIEngine — The Orchestrator
+**Why we use it**: This is the core VSA that makes NSCK work without
+matrix multiplication.  All representations (words, concepts, emotions,
+episodes) are HyperVectors.
 
-### What
-The main entry point that wires all components together.
+### 10. ResponseGenerator (N-gram Model)
 
-### How
-- `train_on_text(text)` → learns concepts, relations, rules, n-grams.
-- `chat(user_input)` → full cognitive cycle with trace.
-- `get_system_stats()` → comprehensive metrics for dashboard.
-- `export_knowledge()` → serialise all learned knowledge.
+**What it does**: Learns bigram and trigram probabilities from training
+text.  Used as a fallback when the retrieval-based approach doesn't
+find relevant knowledge.
 
-### Why a single orchestrator?
-- Single point of entry for both training and inference.
-- Ensures all components are updated consistently.
-- Makes the system easy to embed in dashboards and APIs.
-
----
-
-## §10  ImageUnderstanding — Cross-Modal VSA
-
-### What
-Encodes images into the same HV space as text for cross-modal retrieval.
-
-### How
-Classical CV features (no neural network):
-1. **Colour histogram** — pixel intensity distribution → HV.
-2. **Edge histogram** — gradient magnitudes → HV.
-3. **Spatial layout** — grid cell mean colours → HV.
-4. All features bundled into a single image HV.
-5. Image HV is bundled with text description HV for joint representation.
-
-### Why not CNN?
-- CNNs require heavy matrix multiplication.
-- Classical features + VSA is interpretable and CPU-only.
-- Cross-modal search works by HV similarity.
-
----
+**Why we use it**: Provides a safety net for generating grammatical
+text when specific knowledge isn't available.
 
 ## Data Flow
 
 ```
 Training:
-  Text → TextEncoder.learn_text()
-       → KnowledgeStore.add_concept()
-       → KnowledgeStore.add_relation()
-       → CausalRuleStore.add_rule()
-       → ResponseGenerator.learn()
-       → KnowledgeAbstractor.abstract()
+  Text → TextKnowledgeLearner → SemanticMemory (graph)
+                               → EpisodicMemory (episodes)
+                               → CausalGraph (causal links)
+                               → ResponseGenerator (n-grams)
+                               → SentenceIndex (response candidates)
 
-Inference:
-  Input → TextEncoder.encode_sentence()
-        → KnowledgeStore.search_concepts()
-        → KnowledgeStore.search_episodes()
-        → KnowledgeStore.find_related()
-        → CausalRuleStore.forward_chain()
-        → _build_response()
-        → Natural Language Output
+Chat:
+  Input → Encode (HV) → Emotion → Concepts → SemanticSearch
+        → SpreadingActivation → KnowledgeQuery → CausalInference
+        → Curiosity → GlobalWorkspace → SelfModel → Generate
+        → ThoughtTrace (glass-box record)
 ```
 
----
+## Why Not Neural Networks?
 
-## Performance
-
-| Metric | Value |
-|---|---|
-| Encoding latency | ~1ms per sentence |
-| Retrieval latency | ~0.3ms per query |
-| Total chat latency | 2–5ms |
-| Memory per concept | ~10 KB |
-| Memory for 10K concepts | ~100 MB |
-| HV dimension | 10,240 bits |
-| LSH buckets | 65,536 (16-bit) |
+The NSCK architecture avoids neural networks because:
+1. **No matrix multiplication** — HV operations are bitwise (XOR, majority)
+2. **No backpropagation** — Learning is incremental (update HVs directly)
+3. **No GPU required** — All operations are O(D) where D=10,240
+4. **Glass-box** — Every step is inspectable (no hidden layers)
+5. **No catastrophic forgetting** — New knowledge is bundled into existing HVs
+6. **Real-time learning** — No training epochs, no batch processing

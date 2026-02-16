@@ -161,12 +161,15 @@ def api_concepts():
     for node in engine.semantic_memory.concept_graph.nodes:
         node_data = dict(engine.semantic_memory.concept_graph.nodes[node])
         sents = engine._concept_sentences.get(node.lower(), [])
+        # Count edges (degree) as a proxy for frequency/importance
+        degree = engine.semantic_memory.concept_graph.degree(node)
         concepts.append({
             'name': node,
+            'frequency': degree,
             'properties': {k: str(v) for k, v in node_data.items()},
             'source_count': len(sents),
         })
-    concepts.sort(key=lambda x: x['source_count'], reverse=True)
+    concepts.sort(key=lambda x: x['frequency'], reverse=True)
     return jsonify(concepts)
 
 
@@ -569,19 +572,20 @@ async function loadRelations() {
   const r = await fetch('/api/knowledge/relations');
   const data = await r.json();
   document.getElementById('relation-list').innerHTML = data.map(rel =>
-    '<div class="card-item"><strong>' + rel.source + '</strong> ↔ <strong>' +
-    rel.target + '</strong><br><span style="color:var(--text2);font-size:11px">' +
-    rel.sentence + ' (w=' + rel.weight.toFixed(1) + ', ev=' + rel.evidence + ')</span></div>'
+    '<div class="card-item"><strong>' + rel.source + '</strong> —<em>' +
+    rel.relation + '</em>→ <strong>' +
+    rel.target + '</strong></div>'
   ).join('');
 }
 
 async function loadRules() {
   const r = await fetch('/api/knowledge/rules');
   const data = await r.json();
-  document.getElementById('rule-list').innerHTML = data.map(rule =>
-    '<div class="card-item">[' + rule.antecedent.join(', ') + '] → [' +
-    rule.consequent.join(', ') + ']<br><span style="color:var(--text2);font-size:11px">' +
-    rule.sentence + ' (str=' + rule.strength + ', ev=' + rule.evidence + ')</span></div>'
+  document.getElementById('rule-list').innerHTML = data.map(fact =>
+    '<div class="card-item"><strong>' + fact.subject + '</strong> —<em>' +
+    fact.relation + '</em>→ <strong>' +
+    fact.object + '</strong><br><span style="color:var(--text2);font-size:11px">' +
+    'confidence: ' + fact.confidence + '</span></div>'
   ).join('');
 }
 
