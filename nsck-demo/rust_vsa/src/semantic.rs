@@ -31,7 +31,7 @@ pub struct SemanticMemoryConcurrent {
 #[pymethods]
 impl SemanticMemoryConcurrent {
     #[new]
-    fn new() -> Self {
+    pub fn new() -> Self {
         SemanticMemoryConcurrent {
             concepts: Arc::new(DashMap::new()),
             graph: Arc::new(DashMap::new()),

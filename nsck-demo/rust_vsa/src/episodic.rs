@@ -43,7 +43,7 @@ pub struct Episode {
 impl Episode {
     #[new]
     #[pyo3(signature = (timestamp, task_tag, situation_hv, action, outcome, reward, impact_score = 0.0))]
-    fn new(
+    pub fn new(
         timestamp: f64,
         task_tag: String,
         situation_hv: HyperVector,
@@ -97,7 +97,7 @@ pub struct EpisodicMemoryConcurrent {
 impl EpisodicMemoryConcurrent {
     #[new]
     #[pyo3(signature = (max_hot_size = 10000))]
-    fn new(max_hot_size: usize) -> Self {
+    pub fn new(max_hot_size: usize) -> Self {
         EpisodicMemoryConcurrent {
             hot_tier: Arc::new(RwLock::new(VecDeque::with_capacity(max_hot_size))),
             max_hot_size,

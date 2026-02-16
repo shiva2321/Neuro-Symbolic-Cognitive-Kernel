@@ -482,7 +482,7 @@ mod tests {
         let semantic = SemanticMemoryConcurrent::new();
         let episodic = EpisodicMemoryConcurrent::new(1000);
         
-        let pool = CognitiveWorkerPool::new(4, semantic, episodic);
+        let pool = CognitiveWorkerPool::new(semantic, episodic, 4);
         assert_eq!(pool.worker_count(), 4);
     }
 }

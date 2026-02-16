@@ -9,6 +9,7 @@ mod concurrent;
 mod semantic;
 mod episodic;
 mod worker_pool;
+mod persistence;
 
 const DIMENSION: usize = 10240;
 
@@ -267,6 +268,9 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     
     // Worker pool
     worker_pool::register_worker_pool_module(m)?;
+    
+    // Persistence
+    persistence::register_persistence_module(m)?;
     
     Ok(())
 }
