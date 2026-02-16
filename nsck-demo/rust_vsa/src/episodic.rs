@@ -131,7 +131,7 @@ impl EpisodicMemoryConcurrent {
 
     /// Parallel k-NN search: find k most similar episodes to query
     #[pyo3(signature = (query_hv, k = 10, task_filter = None))]
-    fn parallel_knn_search(
+    pub fn parallel_knn_search(
         &self,
         query_hv: &HyperVector,
         k: usize,

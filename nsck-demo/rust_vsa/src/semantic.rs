@@ -40,7 +40,7 @@ impl SemanticMemoryConcurrent {
     }
 
     /// Add a concept with its hypervector (thread-safe)
-    fn add_concept(&self, name: String, hv: HyperVector) {
+    pub fn add_concept(&self, name: String, hv: HyperVector) {
         self.concepts.insert(name.clone(), hv);
         // Initialize empty neighbor sets if not present
         self.graph.entry(name.clone()).or_insert_with(HashSet::new);
@@ -117,7 +117,7 @@ impl SemanticMemoryConcurrent {
     /// Returns:
     ///     Dictionary mapping concept names to final activation values
     #[pyo3(signature = (start_concepts, steps = 3, decay = 0.7, min_activation = 0.01, bidirectional = false))]
-    fn parallel_spread_activation(
+    pub fn parallel_spread_activation(
         &self,
         start_concepts: Vec<String>,
         steps: usize,
@@ -226,7 +226,7 @@ impl SemanticMemoryConcurrent {
 
     /// Parallel semantic search: find concepts most similar to query
     #[pyo3(signature = (query_hv, k = 10))]
-    fn parallel_semantic_search(&self, query_hv: &HyperVector, k: usize) -> Vec<(String, f64)> {
+    pub fn parallel_semantic_search(&self, query_hv: &HyperVector, k: usize) -> Vec<(String, f64)> {
         // Collect all concepts for parallel processing
         let concepts: Vec<_> = self.concepts
             .iter()

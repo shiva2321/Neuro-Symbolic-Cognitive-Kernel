@@ -8,6 +8,7 @@ use std::hash::{Hash, Hasher};
 mod concurrent;
 mod semantic;
 mod episodic;
+mod worker_pool;
 
 const DIMENSION: usize = 10240;
 
@@ -263,6 +264,9 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     
     // Episodic memory
     episodic::register_episodic_module(m)?;
+    
+    // Worker pool
+    worker_pool::register_worker_pool_module(m)?;
     
     Ok(())
 }
