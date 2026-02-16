@@ -1,0 +1,186 @@
+{
+  "total_tests": 6,
+  "passed_tests": 4,
+  "failed_tests": 2,
+  "pass_rate": 0.6666666666666666,
+  "average_score": 0.6042777777777778,
+  "results": [
+    {
+      "test_name": "Context Retention",
+      "description": "Tests ability to maintain and recall context over conversation",
+      "passed": false,
+      "score": 0.25,
+      "details": {
+        "correct_answers": 1,
+        "total_questions": 4,
+        "conversation_length": 8,
+        "responses": [
+          "My name is Alice and I am a scientist.",
+          "Machine learning is a subset of artificial intelligence that enables computers to learn from data.",
+          "Sleep deprivation impairs cognitive function and decision making.",
+          "Sleep deprivation impairs cognitive function and decision making.",
+          "My name is Alice and I am a scientist.",
+          "The Fibonacci sequence is a series where each number is the sum of the two preceding ones.",
+          "I need more training data to answer that.",
+          "I need more training data to answer that."
+        ]
+      },
+      "execution_time_s": 0.10591292381286621
+    },
+    {
+      "test_name": "Counter-factual Reasoning",
+      "description": "Tests ability to reason about hypothetical scenarios",
+      "passed": false,
+      "score": 0.0,
+      "details": {
+        "tests_passed": 0,
+        "total_tests": 2,
+        "responses": [
+          {
+            "query": "If water froze at 100 degrees instead, what would happen?",
+            "response": "Water freezes at 0 degrees Celsius. Ice is frozen water.",
+            "confidence": 0.859
+          },
+          {
+            "query": "What if gravity was twice as strong?",
+            "response": "Gravity is the force that attracts two objects with mass toward each other.",
+            "confidence": 0.559
+          }
+        ]
+      },
+      "execution_time_s": 0.03947329521179199
+    },
+    {
+      "test_name": "Cross-Domain Knowledge Transfer",
+      "description": "Tests ability to apply learned concepts across domains",
+      "passed": "True",
+      "score": 0.7090000000000001,
+      "details": {
+        "transfer_tests": 2,
+        "avg_confidence": 0.7090000000000001,
+        "responses": [
+          {
+            "query": "How might the concept of momentum apply to business?",
+            "response": "Momentum is the product of mass and velocity. Conservation of momentum states that total momentum remains constant in a closed system.",
+            "confidence": 0.56
+          },
+          {
+            "query": "Can conservation principles apply to information?",
+            "response": "DNA is the molecule that carries genetic information in all living organisms. Conservation of momentum states that total momentum remains constant in a closed system.",
+            "confidence": 0.858
+          }
+        ]
+      },
+      "execution_time_s": 0.10451698303222656
+    },
+    {
+      "test_name": "Continuous Coherence",
+      "description": "Tests how long model maintains coherent responses",
+      "passed": true,
+      "score": 1.0,
+      "details": {
+        "total_turns": 8,
+        "coherent_turns": 8,
+        "coherence_scores": [
+          0.953,
+          0.8376666666666667,
+          0.953,
+          0.6050000000000001,
+          0.9533333333333333,
+          0.8373333333333334,
+          0.8380000000000001,
+          0.6043333333333333
+        ],
+        "responses": [
+          {
+            "turn": 1,
+            "query": "Tell me about artificial intelligence.",
+            "response": "Machine learning is a subset of artificial intelligence that enables computers to learn from data.",
+            "confidence": 0.859
+          },
+          {
+            "turn": 2,
+            "query": "What are the main components?",
+            "response": "Homeostasis is the maintenance of stable internal conditions in living organisms.",
+            "confidence": 0.513
+          },
+          {
+            "turn": 3,
+            "query": "How do they work together?",
+            "response": "Classical music is a genre that includes works by composers like Mozart and Beethoven.",
+            "confidence": 0.859
+          },
+          {
+            "turn": 4,
+            "query": "What are the challenges?",
+            "response": "I need more training data to answer that.",
+            "confidence": 0.515
+          },
+          {
+            "turn": 5,
+            "query": "What are the applications?",
+            "response": "APIs enable different software applications to communicate with each other.",
+            "confidence": 0.86
+          },
+          {
+            "turn": 6,
+            "query": "How is this field evolving?",
+            "response": "APIs enable different software applications to communicate with each other.",
+            "confidence": 0.512
+          },
+          {
+            "turn": 7,
+            "query": "What are the ethical considerations?",
+            "response": "The Berlin Wall fell in 1989, marking the end of the Cold War era.",
+            "confidence": 0.514
+          },
+          {
+            "turn": 8,
+            "query": "What is the future outlook?",
+            "response": "I need more training data to answer that.",
+            "confidence": 0.513
+          }
+        ]
+      },
+      "execution_time_s": 0.09319853782653809
+    },
+    {
+      "test_name": "Knowledge Integration",
+      "description": "Tests ability to integrate knowledge from multiple sources",
+      "passed": true,
+      "score": 0.6666666666666666,
+      "details": {
+        "keywords_found": 4,
+        "total_keywords": 6,
+        "response": "Better circulation delivers more oxygen to muscles. Oxygen helps muscles produce energy.",
+        "confidence": 0.86
+      },
+      "execution_time_s": 0.06670331954956055
+    },
+    {
+      "test_name": "Reasoning Depth",
+      "description": "Tests multi-step logical reasoning capability",
+      "passed": true,
+      "score": 1.0,
+      "details": {
+        "tests_passed": 2,
+        "total_tests": 2,
+        "responses": [
+          {
+            "query": "Are whales warm-blooded?",
+            "response": "All mammals are warm-blooded. Whales are mammals.",
+            "keywords_found": 4,
+            "total_keywords": 4
+          },
+          {
+            "query": "Do eagles have feathers?",
+            "response": "Eagles are birds. Birds have feathers.",
+            "keywords_found": 3,
+            "total_keywords": 3
+          }
+        ]
+      },
+      "execution_time_s": 0.037908077239990234
+    }
+  ]
+}
