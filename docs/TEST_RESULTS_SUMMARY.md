@@ -11,8 +11,8 @@
 The NSCK system demonstrates **production-ready stability** with a 99.0% test pass rate across 581 comprehensive tests covering all major subsystems. All critical errors have been fixed. The 2 skipped tests are for optional/experimental features. The 4 expected failures (xfail) document known limitations that are by design.
 
 **Recent Updates:**
-- ✅ **All type errors fixed:** 6 critical type errors resolved (see [ERROR_FIXES_SUMMARY.md](../ERROR_FIXES_SUMMARY.md))
-- ✅ **Rust acceleration enabled:** 6-29× faster VSA operations (see [RUST_ENABLED_REPORT.md](../RUST_ENABLED_REPORT.md))
+- ✅ **All type errors fixed:** 6 critical type errors resolved (see [ERROR_FIXES_SUMMARY.md](../archive/ERROR_FIXES_SUMMARY.md))
+- ✅ **Rust acceleration enabled:** 6-29× faster VSA operations (see [RUST_ENABLED_REPORT.md](../archive/RUST_ENABLED_REPORT.md))
 - ✅ **6 Rust parity tests added:** Validates Rust implementation matches Python reference
 - ✅ **LSH edge case failures resolved:** Memory search now fully functional
 - ✅ **Test coverage improved:** From 97.5% to 99.0% pass rate

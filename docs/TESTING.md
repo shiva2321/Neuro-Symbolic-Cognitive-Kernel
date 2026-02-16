@@ -5,8 +5,8 @@
 
 **Quick Links:**
 - [Test Results Summary](TEST_RESULTS_SUMMARY.md) - Complete analysis of all 581 tests
-- [Error Fixes Summary](../ERROR_FIXES_SUMMARY.md) - Type errors resolved and validated
-- [Rust Performance Report](../RUST_ENABLED_REPORT.md) - 6-29× speedup with Rust optimization
+- [Error Fixes Summary](../archive/ERROR_FIXES_SUMMARY.md) - Type errors resolved and validated
+- [Rust Performance Report](../archive/RUST_ENABLED_REPORT.md) - 6-29× speedup with Rust optimization
 
 ---
 
@@ -44,7 +44,7 @@ NSCK's test suite is a **capability test**, not just a unit test suite. It answe
 4. **Quantitative thresholds**: Similarity values, timing benchmarks, and accuracy rates are reported with concrete numbers.
 5. **Complete transparency**: Every test reports its measured values, not just pass/fail.
 6. **Parity validation**: Rust optimization validated with 5 parity tests ensuring mathematical equivalence with Python reference.
-7. **Error-free execution**: All critical type errors fixed and validated (see [ERROR_FIXES_SUMMARY.md](../ERROR_FIXES_SUMMARY.md)).
+7. **Error-free execution**: All critical type errors fixed and validated (see [ERROR_FIXES_SUMMARY.md](../archive/ERROR_FIXES_SUMMARY.md)).
 
 ### What the Tests Do NOT Test
 
