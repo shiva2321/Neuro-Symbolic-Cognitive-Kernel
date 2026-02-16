@@ -4,12 +4,17 @@ use rand_chacha::ChaCha8Rng;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+// Concurrent modules
+mod concurrent;
+mod semantic;
+mod episodic;
+
 const DIMENSION: usize = 10240;
 
 #[pyclass(module = "hypervec_rs")]
 #[derive(Clone, Debug)]
-struct HyperVector {
-    bits: Vec<u64>, // Using u64 blocks for 10240 bits. 10240 / 64 = 160 blocks.
+pub struct HyperVector {
+    pub bits: Vec<u64>, // Using u64 blocks for 10240 bits. 10240 / 64 = 160 blocks.
 }
 
 #[pymethods]
@@ -247,6 +252,17 @@ impl HyperVector {
 
 #[pymodule]
 fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
+    // Core HyperVector class
     m.add_class::<HyperVector>()?;
+    
+    // Concurrent operations
+    concurrent::register_concurrent_module(m)?;
+    
+    // Semantic memory
+    semantic::register_semantic_module(m)?;
+    
+    // Episodic memory
+    episodic::register_episodic_module(m)?;
+    
     Ok(())
 }
