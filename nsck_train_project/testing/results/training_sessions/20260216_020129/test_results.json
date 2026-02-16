@@ -1,0 +1,10 @@
+{
+  "base": {
+    "pass_rate": 0,
+    "passed": 0,
+    "total_tests": 0
+  },
+  "improved": {
+    "error": "maximum recursion depth exceeded"
+  }
+}

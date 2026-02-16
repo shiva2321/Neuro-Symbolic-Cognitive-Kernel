@@ -1,0 +1,417 @@
+{
+  "session_id": "20260216_014408",
+  "total_tests": 31,
+  "passed": 24,
+  "failed": 7,
+  "pass_rate": 0.7741935483870968,
+  "duration_seconds": 1.9399490356445312,
+  "results": [
+    {
+      "test_name": "basic_text_01_physics",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.813657",
+      "details": {
+        "question": "What is gravity?",
+        "domain": "physics",
+        "response_length": 223,
+        "confidence": 1.0,
+        "keyword_match_rate": 0.5,
+        "found_keywords": [
+          "gravity",
+          "objects"
+        ],
+        "response_time_ms": 1.47
+      }
+    },
+    {
+      "test_name": "basic_text_02_biology",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.815007",
+      "details": {
+        "question": "How does photosynthesis work?",
+        "domain": "biology",
+        "response_length": 259,
+        "confidence": 1.0,
+        "keyword_match_rate": 0.25,
+        "found_keywords": [
+          "photosynthesis"
+        ],
+        "response_time_ms": 0.92
+      }
+    },
+    {
+      "test_name": "basic_text_03_chemistry",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.816627",
+      "details": {
+        "question": "What is water made of?",
+        "domain": "chemistry",
+        "response_length": 273,
+        "confidence": 1.0,
+        "keyword_match_rate": 0.5,
+        "found_keywords": [
+          "water",
+          "h2o"
+        ],
+        "response_time_ms": 1.18
+      }
+    },
+    {
+      "test_name": "basic_text_04_technology",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.817827",
+      "details": {
+        "question": "What is artificial intelligence?",
+        "domain": "technology",
+        "response_length": 194,
+        "confidence": 1.0,
+        "keyword_match_rate": 0.333,
+        "found_keywords": [
+          "intelligence"
+        ],
+        "response_time_ms": 0.8
+      }
+    },
+    {
+      "test_name": "basic_text_05_hardware",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.818579",
+      "details": {
+        "question": "What is a CPU?",
+        "domain": "hardware",
+        "response_length": 129,
+        "confidence": 1.0,
+        "keyword_match_rate": 0.333,
+        "found_keywords": [
+          "cpu"
+        ],
+        "response_time_ms": 0.36
+      }
+    },
+    {
+      "test_name": "advanced_01_causal_reasoning",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.821045",
+      "details": {
+        "question": "Why do objects fall to the ground?",
+        "category": "causal_reasoning",
+        "confidence": 1.0,
+        "concept_coverage": 0.333,
+        "response_time_ms": 1.97,
+        "response_preview": "gravity causes objects. therefore, gravity leads to objects. gravity causes objects. furthermore, th"
+      }
+    },
+    {
+      "test_name": "advanced_02_consequential_reasoning",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.824186",
+      "details": {
+        "question": "What happens when plants do not get sunlight?",
+        "category": "consequential_reasoning",
+        "confidence": 1.0,
+        "concept_coverage": 0.0,
+        "response_time_ms": 2.73,
+        "response_preview": "plants is an important concept. the relevant concepts include plants. additionally, this relates to "
+      }
+    },
+    {
+      "test_name": "advanced_03_comparison",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.826571",
+      "details": {
+        "question": "Compare gravity and magnetism",
+        "category": "comparison",
+        "confidence": 1.0,
+        "concept_coverage": 0.5,
+        "response_time_ms": 1.99,
+        "response_preview": "gravity is a fundamental gravity causes objects. gravity is a fundamental gravity causes objects. un"
+      }
+    },
+    {
+      "test_name": "context_01",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.827466",
+      "details": {
+        "question_num": 1,
+        "question": "What is gravity?",
+        "expected_context": "gravity",
+        "context_maintained": true,
+        "response_time_ms": 0.41,
+        "response_preview": "gravity is a fundamental gravity causes objects. gravity is a fundamental. gravi"
+      }
+    },
+    {
+      "test_name": "context_02",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.829383",
+      "details": {
+        "question_num": 2,
+        "question": "Who discovered it?",
+        "expected_context": "newton",
+        "context_maintained": false,
+        "response_time_ms": 1.57,
+        "response_preview": "based on the knowledge base, here's what i can tell you:. i have limited informa"
+      }
+    },
+    {
+      "test_name": "context_03",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.831921",
+      "details": {
+        "question_num": 3,
+        "question": "When did this discovery happen?",
+        "expected_context": null,
+        "context_maintained": true,
+        "response_time_ms": 2.17,
+        "response_preview": "based on the knowledge base, here's what i can tell you:. i have limited informa"
+      }
+    },
+    {
+      "test_name": "context_04",
+      "passed": false,
+      "timestamp": "2026-02-16T01:44:09.835457",
+      "details": {
+        "question_num": 4,
+        "question": "What else did this person discover?",
+        "expected_context": "newton",
+        "context_maintained": false,
+        "response_time_ms": 3.15,
+        "response_preview": "based on the knowledge base, here's what i can tell you:. i have limited informa"
+      }
+    },
+    {
+      "test_name": "counterfactual_01",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.837599",
+      "details": {
+        "question": "What if there was no gravity?",
+        "category": "hypothetical",
+        "confidence": 1.0,
+        "response_length": 190,
+        "response_time_ms": 1.64,
+        "response_preview": "gravity is a fundamental gravity causes objects. gravity is a fundamental gravity causes objects. ad"
+      }
+    },
+    {
+      "test_name": "counterfactual_02",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.839925",
+      "details": {
+        "question": "Photosynthesis does not require light",
+        "category": "false_premise",
+        "confidence": 1.0,
+        "response_length": 212,
+        "response_time_ms": 1.93,
+        "response_preview": "photosynthesis is a process photosynthesis produces glucose. photosynthesis is a process photosynthe"
+      }
+    },
+    {
+      "test_name": "counterfactual_03",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.842796",
+      "details": {
+        "question": "If water was not H2O, what would happen?",
+        "category": "counterfactual",
+        "confidence": 1.0,
+        "response_length": 188,
+        "response_time_ms": 2.48,
+        "response_preview": "water is a h2o water is a molecule. water is a h2o water is a molecule water is a essential. additio"
+      }
+    },
+    {
+      "test_name": "cross_domain_01",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.846461",
+      "details": {
+        "question": "How is CPU processing similar to biological processes?",
+        "domains": "hardware + biology",
+        "transfer_type": "analogy",
+        "domains_referenced": 1,
+        "response_time_ms": 3.15,
+        "response_preview": "photosynthesis is a process. photosynthesis is a process. additionally, related concepts include cpu"
+      }
+    },
+    {
+      "test_name": "cross_domain_02",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.851304",
+      "details": {
+        "question": "What do water molecules and computer systems have in common?",
+        "domains": "chemistry + hardware",
+        "transfer_type": "comparison",
+        "domains_referenced": 2,
+        "response_time_ms": 4.48,
+        "response_preview": "water is a molecule water is a h2o. water is a molecule water is a h2o water is a essential. additio"
+      }
+    },
+    {
+      "test_name": "scaling_Short_query",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.852125",
+      "details": {
+        "complexity": "Short query",
+        "query_length": 8,
+        "response_time_ms": 0.37,
+        "memory_delta_mb": 0.0
+      }
+    },
+    {
+      "test_name": "scaling_Medium_query",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.854319",
+      "details": {
+        "complexity": "Medium query",
+        "query_length": 37,
+        "response_time_ms": 1.82,
+        "memory_delta_mb": 0.0
+      }
+    },
+    {
+      "test_name": "scaling_Long_query",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.865966",
+      "details": {
+        "complexity": "Long query",
+        "query_length": 127,
+        "response_time_ms": 11.29,
+        "memory_delta_mb": 0.0
+      }
+    },
+    {
+      "test_name": "scaling_Multi-concept",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.869811",
+      "details": {
+        "complexity": "Multi-concept",
+        "query_length": 58,
+        "response_time_ms": 3.45,
+        "memory_delta_mb": 0.0
+      }
+    },
+    {
+      "test_name": "memory_efficiency",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.968544",
+      "details": {
+        "initial_memory_mb": 211.7,
+        "final_memory_mb": 211.7,
+        "memory_delta_mb": 0.0,
+        "memory_per_query_kb": 0.0,
+        "growth_rate": 0.0,
+        "num_queries": 50
+      }
+    },
+    {
+      "test_name": "image_learn_red_square",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.973694",
+      "details": {
+        "image_id": "red_square",
+        "description": "A red colored square",
+        "concepts_learned": 3,
+        "learning_time_ms": 4.22
+      }
+    },
+    {
+      "test_name": "image_learn_blue_square",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.975971",
+      "details": {
+        "image_id": "blue_square",
+        "description": "A blue colored square",
+        "concepts_learned": 3,
+        "learning_time_ms": 1.9
+      }
+    },
+    {
+      "test_name": "image_learn_green_square",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.978244",
+      "details": {
+        "image_id": "green_square",
+        "description": "A green colored square",
+        "concepts_learned": 3,
+        "learning_time_ms": 1.83
+      }
+    },
+    {
+      "test_name": "image_search_red",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.978634",
+      "details": {
+        "query": "red",
+        "expected_id": "red_square",
+        "found_in_results": true,
+        "num_results": 3,
+        "top_similarity": 0.639,
+        "search_time_ms": 0.03
+      }
+    },
+    {
+      "test_name": "image_search_blue",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.979091",
+      "details": {
+        "query": "blue",
+        "expected_id": "blue_square",
+        "found_in_results": true,
+        "num_results": 3,
+        "top_similarity": 0.624,
+        "search_time_ms": 0.03
+      }
+    },
+    {
+      "test_name": "image_search_green",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.979587",
+      "details": {
+        "query": "green",
+        "expected_id": "green_square",
+        "found_in_results": true,
+        "num_results": 3,
+        "top_similarity": 0.631,
+        "search_time_ms": 0.02
+      }
+    },
+    {
+      "test_name": "image_describe_red_square",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.982928",
+      "details": {
+        "image_id": "red_square",
+        "original_description": "A red colored square",
+        "generated_description": "A red colored square",
+        "word_overlap": 4,
+        "similarity": 1.0,
+        "description_time_ms": 0.76
+      }
+    },
+    {
+      "test_name": "image_describe_blue_square",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.986054",
+      "details": {
+        "image_id": "blue_square",
+        "original_description": "A blue colored square",
+        "generated_description": "A blue colored square",
+        "word_overlap": 4,
+        "similarity": 1.0,
+        "description_time_ms": 0.83
+      }
+    },
+    {
+      "test_name": "image_describe_green_square",
+      "passed": true,
+      "timestamp": "2026-02-16T01:44:09.989059",
+      "details": {
+        "image_id": "green_square",
+        "original_description": "A green colored square",
+        "generated_description": "A green colored square",
+        "word_overlap": 4,
+        "similarity": 1.0,
+        "description_time_ms": 0.72
+      }
+    }
+  ],
+  "telemetry_samples": 6
+}

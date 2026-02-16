@@ -1,0 +1,56 @@
+[
+  {
+    "operation": "model_load",
+    "timestamp": "2026-02-16T01:44:09.811813",
+    "metrics": {
+      "duration_ms": 1761.1637115478516,
+      "memory_delta_mb": 174.93359375,
+      "final_memory_mb": 211.453125
+    }
+  },
+  {
+    "operation": "query_physics",
+    "timestamp": "2026-02-16T01:44:09.813990",
+    "metrics": {
+      "duration_ms": 1.4698505401611328,
+      "memory_delta_mb": 0.0,
+      "final_memory_mb": 211.453125
+    }
+  },
+  {
+    "operation": "query_biology",
+    "timestamp": "2026-02-16T01:44:09.815365",
+    "metrics": {
+      "duration_ms": 0.9207725524902344,
+      "memory_delta_mb": 0.0,
+      "final_memory_mb": 211.453125
+    }
+  },
+  {
+    "operation": "query_chemistry",
+    "timestamp": "2026-02-16T01:44:09.816941",
+    "metrics": {
+      "duration_ms": 1.1761188507080078,
+      "memory_delta_mb": 0.0,
+      "final_memory_mb": 211.453125
+    }
+  },
+  {
+    "operation": "query_technology",
+    "timestamp": "2026-02-16T01:44:09.818138",
+    "metrics": {
+      "duration_ms": 0.8022785186767578,
+      "memory_delta_mb": 0.0,
+      "final_memory_mb": 211.453125
+    }
+  },
+  {
+    "operation": "query_hardware",
+    "timestamp": "2026-02-16T01:44:09.818883",
+    "metrics": {
+      "duration_ms": 0.35953521728515625,
+      "memory_delta_mb": 0.0,
+      "final_memory_mb": 211.453125
+    }
+  }
+]

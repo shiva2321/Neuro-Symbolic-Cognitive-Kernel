@@ -13,12 +13,10 @@ nsck-demo/10Minute_experiment_video.mp4
 
 data_mnist/
 nsck-demo/data_mnist/
-models/
 *.gguf
 
 # Runtime-generated artifacts – never commit these
 *.db
-*.pkl
 *.pth
 *.csv
 *.png
