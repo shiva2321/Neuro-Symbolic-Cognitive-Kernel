@@ -5,8 +5,14 @@ counterfactual simulation, and causal explanation generation.
 
 Uses contingency-based learning (ΔP) with Laplace smoothing for robust
 causal inference from sparse data (as few as 2-5 observations).
+
+Enhanced with:
+- Automatic hypothesis generation
+- Active experimental design
+- Improved counterfactual reasoning
 """
 import time
+import numpy as np
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple, Set, Callable
 from enum import Enum
@@ -952,3 +958,276 @@ class TheoryModule:
             if theory.cause_type == c_type:
                 predictions.append(theory.effect_type)
         return predictions
+
+# ============================================================================
+# Enhanced Causal Reasoning (Phase 4.3)
+# ============================================================================
+
+@dataclass
+class Hypothesis:
+    """Represents a causal hypothesis to be tested."""
+    cause: str
+    effect: str
+    confidence: float  # Current confidence (0-1)
+    evidence_count: int
+    support_count: int  # How many times observed together
+    refute_count: int   # How many times cause without effect
+    priority: float = 0.0  # For experimental design prioritization
+    
+    @property
+    def testability_score(self) -> float:
+        """How easy/valuable is it to test this hypothesis."""
+        # Higher priority if: low confidence, high impact, testable
+        uncertainty = 1.0 - abs(self.confidence - 0.5) * 2  # Peak at 0.5
+        return uncertainty * (1.0 + self.priority)
+
+
+@dataclass  
+class Experiment:
+    """Represents a designed experiment to test a hypothesis."""
+    hypothesis: Hypothesis
+    intervention: str  # Action to perform
+    predicted_outcome: str
+    control_condition: Dict[str, Any]
+    test_condition: Dict[str, Any]
+    expected_difference: float
+
+
+class EnhancedCausalDiscovery(CausalDiscovery):
+    """
+    Enhanced causal discovery with:
+    1. Automatic hypothesis generation
+    2. Active experimental design
+    3. Theory formation and testing
+    4. Counterfactual reasoning improvement
+    """
+    
+    def __init__(self):
+        super().__init__()
+        self.hypotheses: Dict[Tuple[str, str], Hypothesis] = {}
+        self.experiments: List[Experiment] = []
+        self.tested_hypotheses: Set[Tuple[str, str]] = set()
+    
+    def generate_hypotheses(
+        self,
+        context: str,
+        max_hypotheses: int = 20,
+        min_cooccurrence: int = 2
+    ) -> List[Hypothesis]:
+        """
+        Automatically generate causal hypotheses from observations.
+        
+        Uses three strategies:
+        1. Temporal correlation - things that often occur together
+        2. Contrast set - things that differ between positive/negative outcomes  
+        3. Theoretical prediction - from existing causal schemas
+        
+        Args:
+            context: Task context
+            max_hypotheses: Maximum number to generate
+            min_cooccurrence: Minimum times cause and effect co-occurred
+            
+        Returns:
+            List of hypotheses sorted by testability
+        """
+        new_hypotheses = []
+        
+        # Strategy 1: Find temporal correlations
+        for (c, e), count in self.count_ce[context].items():
+            if count < min_cooccurrence:
+                continue
+            
+            key = (c, e)
+            if key in self.hypotheses or key in self.tested_hypotheses:
+                continue
+            
+            delta_p, evidence = self._calculate_delta_p(context, c, e)
+            
+            # Generate hypothesis for weak-moderate signals (need testing)
+            if 0.15 <= delta_p <= 0.6 and evidence >= min_cooccurrence:
+                hyp = Hypothesis(
+                    cause=c,
+                    effect=e,
+                    confidence=delta_p,
+                    evidence_count=evidence,
+                    support_count=count,
+                    refute_count=self.count_c[context][c] - count,
+                    priority=abs(delta_p - 0.5)  # Maximize information gain
+                )
+                new_hypotheses.append(hyp)
+                self.hypotheses[key] = hyp
+        
+        # Strategy 2: Contrast sets (what distinguishes success from failure)
+        positive_outcomes = self.observed_effects[context] & self._POSITIVE_KEYWORDS
+        negative_outcomes = self.observed_effects[context] & self._NEGATIVE_KEYWORDS
+        
+        if positive_outcomes and negative_outcomes:
+            # Find causes more associated with positive outcomes
+            for cause in self.observed_causes[context]:
+                pos_association = sum(
+                    self.count_ce[context].get((cause, effect), 0)
+                    for effect in positive_outcomes
+                )
+                neg_association = sum(
+                    self.count_ce[context].get((cause, effect), 0)
+                    for effect in negative_outcomes
+                )
+                
+                if pos_association > neg_association * 2:
+                    for effect in positive_outcomes:
+                        key = (cause, effect)
+                        if key not in self.hypotheses and key not in self.tested_hypotheses:
+                            hyp = Hypothesis(
+                                cause=cause,
+                                effect=effect,
+                                confidence=0.5,
+                                evidence_count=pos_association,
+                                support_count=pos_association,
+                                refute_count=neg_association,
+                                priority=1.5  # High priority - discriminative
+                            )
+                            new_hypotheses.append(hyp)
+                            self.hypotheses[key] = hyp
+        
+        # Sort by testability and limit
+        new_hypotheses.sort(key=lambda h: h.testability_score, reverse=True)
+        return new_hypotheses[:max_hypotheses]
+    
+    def design_experiment(
+        self,
+        hypothesis: Hypothesis,
+        current_state: Dict[str, Any]
+    ) -> Optional[Experiment]:
+        """
+        Design an experiment to test a hypothesis.
+        
+        Creates a control/test pair where the cause is manipulated
+        and the effect is measured.
+        
+        Args:
+            hypothesis: Hypothesis to test
+            current_state: Current system state
+            
+        Returns:
+            Designed experiment or None if not testable
+        """
+        # Check if we can manipulate the cause
+        # (In real system, would query action space)
+        if not self._is_manipulable(hypothesis.cause):
+            return None
+        
+        # Design intervention
+        intervention = f"SET_{hypothesis.cause}"
+        
+        # Control: current state without cause active
+        control = current_state.copy()
+        control[hypothesis.cause] = False
+        
+        # Test: activate the cause
+        test = current_state.copy()
+        test[hypothesis.cause] = True
+        
+        # Predict outcome
+        predicted = f"INCREASE_{hypothesis.effect}" if hypothesis.confidence > 0.5 else f"NO_CHANGE_{hypothesis.effect}"
+        
+        experiment = Experiment(
+            hypothesis=hypothesis,
+            intervention=intervention,
+            predicted_outcome=predicted,
+            control_condition=control,
+            test_condition=test,
+            expected_difference=hypothesis.confidence
+        )
+        
+        self.experiments.append(experiment)
+        return experiment
+    
+    def update_hypothesis(
+        self,
+        cause: str,
+        effect: str,
+        observed: bool,
+        context: str
+    ):
+        """
+        Update hypothesis based on experimental result.
+        
+        Args:
+            cause: Cause that was manipulated
+            effect: Effect that was measured
+            observed: Whether effect occurred
+            context: Task context
+        """
+        key = (cause, effect)
+        
+        if key in self.hypotheses:
+            hyp = self.hypotheses[key]
+            
+            if observed:
+                hyp.support_count += 1
+            else:
+                hyp.refute_count += 1
+            
+            hyp.evidence_count += 1
+            
+            # Update confidence with Bayesian update
+            total = hyp.support_count + hyp.refute_count
+            hyp.confidence = hyp.support_count / total if total > 0 else 0.5
+            
+            # If confidence is extreme (very high or very low), mark as tested
+            if hyp.confidence > 0.85 or hyp.confidence < 0.15:
+                self.tested_hypotheses.add(key)
+                del self.hypotheses[key]
+                print(f"[CAUSAL] Hypothesis tested: {cause} -> {effect} (conf={hyp.confidence:.2f})")
+    
+    def suggest_next_experiment(
+        self,
+        current_state: Dict[str, Any],
+        max_trials: int = 5
+    ) -> Optional[Experiment]:
+        """
+        Suggest the most valuable experiment to run next.
+        
+        Uses information gain heuristic: test hypotheses with highest uncertainty
+        and potential impact.
+        
+        Args:
+            current_state: Current system state
+            max_trials: Consider top N candidate experiments
+            
+        Returns:
+            Highest-priority experiment or None
+        """
+        candidates = []
+        
+        for hyp in sorted(self.hypotheses.values(), key=lambda h: h.testability_score, reverse=True)[:max_trials]:
+            exp = self.design_experiment(hyp, current_state)
+            if exp:
+                candidates.append(exp)
+        
+        if not candidates:
+            return None
+        
+        # Return highest priority
+        return candidates[0]  
+    
+    def _is_manipulable(self, cause: str) -> bool:
+        """Check if a cause can be experimentally manipulated."""
+        # Simple heuristic: assume predicates and actions are manipulable
+        # External state variables (e.g., WEATHER) are not
+        unmanipulable = {"TIME", "WEATHER", "EXTERNAL", "RANDOM"}
+        return not any(um in cause.upper() for um in unmanipulable)
+    
+    def get_hypothesis_statistics(self) -> Dict[str, Any]:
+        """Get statistics about hypothesis testing."""
+        return {
+            "active_hypotheses": len(self.hypotheses),
+            "tested_hypotheses": len(self.tested_hypotheses),
+            "experiments_designed": len(self.experiments),
+            "avg_confidence": np.mean([h.confidence for h in self.hypotheses.values()]) if self.hypotheses else 0,
+            "top_hypotheses": [
+                {"cause": h.cause, "effect": h.effect, "confidence": h.confidence, "priority": h.priority}
+                for h in sorted(self.hypotheses.values(), key=lambda h: h.testability_score, reverse=True)[:5]
+            ]
+        }
+

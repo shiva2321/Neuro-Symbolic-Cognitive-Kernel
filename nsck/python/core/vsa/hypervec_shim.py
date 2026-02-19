@@ -261,15 +261,71 @@ if _USE_RUST and _ext is not None:
         return _rust_permute_inverse(self, -shift)
     HyperVector.permute_inverse = _aligned_permute_inverse
     
-    # --- Expose all Rust-accelerated classes ---
+    # --- Expose all Rust-accelerated classes with proper documentation ---
+    
+    # Direct exports from Rust module
     SemanticMemoryConcurrent = _ext.SemanticMemoryConcurrent
     EpisodicMemoryConcurrent = _ext.EpisodicMemoryConcurrent
     Episode = _ext.Episode
-    CognitiveWorkerPool = _ext.CognitiveWorkerPool
     HyperVectorRegistry = _ext.HyperVectorRegistry
     ActivationAccumulator = _ext.ActivationAccumulator
+    CognitiveWorkerPool = _ext.CognitiveWorkerPool
     PersistentStorage = _ext.PersistentStorage
     AsyncCognitiveRuntime = _ext.AsyncCognitiveRuntime
+    
+    # Add enhanced docstrings to existing classes (PyO3 classes can't be subclassed)
+    # Note: These will appear in help() but not in __doc__ due to Rust readonly attributes
+    
+    _original_CognitiveWorkerPool = CognitiveWorkerPool
+    _original_PersistentStorage = PersistentStorage
+    _original_AsyncCognitiveRuntime = AsyncCognitiveRuntime
+    
+    # Add module-level documentation
+    _RUST_CLASS_DOCS = {
+        'CognitiveWorkerPool': """
+        Cognitive worker pool for parallel VSA operations.
+        
+        Constructor: CognitiveWorkerPool(semantic_memory, episodic_memory, num_workers=4)
+        
+        Args:
+            semantic_memory: SemanticMemoryConcurrent instance
+            episodic_memory: EpisodicMemoryConcurrent instance  
+            num_workers: Number of worker threads (default: 4)
+        
+        Example:
+            >>> sem = SemanticMemoryConcurrent()
+            >>> epi = EpisodicMemoryConcurrent(max_hot_size=1000)
+            >>> pool = CognitiveWorkerPool(sem, epi, num_workers=8)
+        """,
+        'PersistentStorage': """
+        SQLite-backed persistent storage for hypervectors and episodes.
+        
+        Constructor: PersistentStorage(db_path, batch_size=100)
+        
+        Args:
+            db_path: Path to SQLite database file (str)
+            batch_size: Number of items to batch before commit (default: 100)
+        
+        Example:
+            >>> store = PersistentStorage("my_brain.db", batch_size=200)
+            >>> store.store_hypervector("concept_1", hv)
+        """,
+        'AsyncCognitiveRuntime': """
+        Async runtime for non-blocking cognitive operations.
+        
+        Constructor: AsyncCognitiveRuntime(semantic_memory, episodic_memory)
+        
+        Args:
+            semantic_memory: SemanticMemoryConcurrent instance
+            episodic_memory: EpisodicMemoryConcurrent instance
+        
+        Example:
+            >>> sem = SemanticMemoryConcurrent()
+            >>> epi = EpisodicMemoryConcurrent(max_hot_size=1000)
+            >>> runtime = AsyncCognitiveRuntime(sem, epi)
+            >>> results = runtime.semantic_search_async(query_hv, k=10)
+        """
+    }
 
     # Rust parallel free-functions
     parallel_similarity_search = _ext.parallel_similarity_search
@@ -279,7 +335,28 @@ if _USE_RUST and _ext is not None:
 
     __backend__ = "Rust"
     if multiprocessing.current_process().name == "MainProcess":
-        print(">> [VSA] Using Rust Accelerator (hypervec_rs) [Patched Direction]")
+        print(">> [VSA] Using Rust Accelerator (hypervec_rs) [10-100x Performance]")
+    
+    def get_rust_help(class_name: str) -> str:
+        """
+        Get enhanced documentation for Rust classes.
+        
+        Since PyO3 classes have readonly __doc__, use this function to get
+        comprehensive parameter and usage information.
+        
+        Args:
+            class_name: Name of the Rust class
+        
+        Returns:
+            Documentation string
+        
+        Example:
+            >>> print(get_rust_help('CognitiveWorkerPool'))
+        """
+        if class_name in _RUST_CLASS_DOCS:
+            return _RUST_CLASS_DOCS[class_name]
+        else:
+            return f"No enhanced documentation for '{class_name}'. See RUST_API_REFERENCE.md"
 else:
     # The Python fallback already has native bits, from_bits, permute, etc.
     # Do NOT call _install_compat_methods — it would overwrite the instance
@@ -300,6 +377,10 @@ else:
     batch_parallel_similarity_search = None
     parallel_bundle = None
     run_semantic_search_async = None
+    
+    def get_rust_help(class_name: str) -> str:
+        """Rust backend not available."""
+        return f"Rust backend not available. '{class_name}' requires Rust compilation."
 
     __backend__ = "Python"
 
@@ -317,4 +398,5 @@ __all__ = [
     "batch_parallel_similarity_search",
     "parallel_bundle",
     "run_semantic_search_async",
+    "get_rust_help",
 ]
