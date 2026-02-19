@@ -69,14 +69,14 @@ def train(mode: str = "seed", hf_limit: int = 500) -> NSCKAIEngine:
                 sys_stats['knowledge']['total_relations'])
     logger.info("Episodes stored  : %d",
                 sys_stats['knowledge']['total_episodes'])
-    logger.info("Causal rules     : %d",
-                sys_stats['causal_rules']['total_rules'])
-    logger.info("Abstractions     : %d",
-                sys_stats['abstractions']['total_abstractions'])
-    logger.info("Vocabulary       : %d words",
-                sys_stats['encoder']['vocabulary_size'])
+    logger.info("Facts stored     : %d",
+                sys_stats['knowledge']['total_facts'])
+    logger.info("Causal links     : %d",
+                sys_stats['causal']['total_links'])
     logger.info("Bigram vocab     : %d",
                 sys_stats['generator']['bigram_vocab'])
+    logger.info("Sentence store   : %d",
+                sys_stats['knowledge']['sentence_store'])
     logger.info("Training time    : %.2fs",
                 sys_stats['training']['training_time_s'])
     logger.info("-" * 40)

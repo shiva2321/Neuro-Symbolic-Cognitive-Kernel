@@ -1,0 +1,15 @@
+The Physics of Sound by Dr. Hz
+
+Sound is a form of energy.
+Sound travels as a wave of vibrations through a medium.
+A medium can be air, water, or solid crystal.
+
+Frequency is the speed of the vibration.
+High frequency creates a high pitch.
+Low frequency creates a low pitch.
+Resonance is a phenomenon where an external vibration matches natural frequency.
+Resonance amplifies the sound.
+
+Harmonics are multiples of a base frequency.
+Music is a collection of ordered harmonics.
+Noise is a collection of disordered vibrations.

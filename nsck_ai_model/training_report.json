@@ -1,0 +1,2882 @@
+{
+  "total_duration_s": 319.4449095726013,
+  "phases": [
+    {
+      "phase": "rich_corpus",
+      "samples_trained": 48,
+      "duration_s": 0.34491777420043945,
+      "errors": 0,
+      "eval_accuracy": 0.6744186046511628
+    },
+    {
+      "phase": "text_knowledge",
+      "samples_trained": 498,
+      "duration_s": 143.9135615825653,
+      "errors": 0,
+      "eval_accuracy": 0.3488372093023256
+    },
+    {
+      "phase": "qa_training",
+      "samples_trained": 100,
+      "duration_s": 5.193382501602173,
+      "errors": 0,
+      "eval_accuracy": 0.37209302325581395
+    },
+    {
+      "phase": "math_training",
+      "samples_trained": 61,
+      "duration_s": 12.00332498550415,
+      "errors": 0,
+      "eval_accuracy": 0.37209302325581395
+    },
+    {
+      "phase": "conversation",
+      "samples_trained": 195,
+      "duration_s": 46.27099323272705,
+      "errors": 0,
+      "eval_accuracy": 0.37209302325581395
+    },
+    {
+      "phase": "image_training",
+      "samples_trained": 50,
+      "duration_s": 2.030103921890259,
+      "errors": 0,
+      "eval_accuracy": 0.37209302325581395
+    },
+    {
+      "phase": "reinforcement",
+      "samples_trained": 30,
+      "duration_s": 15.230931997299194,
+      "errors": 0,
+      "eval_accuracy": 0.46511627906976744
+    }
+  ],
+  "final_eval": {
+    "accuracy": 0.46511627906976744,
+    "avg_score": 0.4965522332964193,
+    "total_questions": 43,
+    "categories": {
+      "factual": {
+        "accuracy": 0.4,
+        "correct": 6,
+        "total": 15
+      },
+      "reasoning": {
+        "accuracy": 0.4,
+        "correct": 2,
+        "total": 5
+      },
+      "math": {
+        "accuracy": 1.0,
+        "correct": 10,
+        "total": 10
+      },
+      "conversation": {
+        "accuracy": 0.0,
+        "correct": 0,
+        "total": 5
+      },
+      "science": {
+        "accuracy": 0.4,
+        "correct": 2,
+        "total": 5
+      },
+      "technology": {
+        "accuracy": 0.0,
+        "correct": 0,
+        "total": 3
+      }
+    }
+  },
+  "engine_stats": {
+    "engine": {
+      "query_count": 297,
+      "conversation_length": 20
+    },
+    "training": {
+      "texts_trained": 1027,
+      "sentences_processed": 5108,
+      "concepts_learned": 8370,
+      "relations_learned": 93650,
+      "facts_stored": 93650,
+      "causal_links": 1888,
+      "training_time_s": 207.58864450454712,
+      "images_trained": 50,
+      "images_described": 0,
+      "images_generated": 0
+    },
+    "semantic_memory": {
+      "total_concepts": 8408,
+      "total_relations": 67843,
+      "concept_hvs": 8408
+    },
+    "knowledge": {
+      "total_concepts": 8408,
+      "total_relations": 67843,
+      "total_episodes": 71666,
+      "total_facts": 71666,
+      "sentence_store": 4479
+    },
+    "generator": {
+      "bigram_vocab": 7588,
+      "trigram_contexts": 35988,
+      "corpus_size": 70797
+    },
+    "emotion": {
+      "emotion": "neutral",
+      "valence": 0.0,
+      "arousal": 0.0,
+      "blend": {
+        "neutral": 1.0
+      },
+      "mood": {
+        "avg_valence": 0.0,
+        "avg_arousal": 0.0,
+        "dominant_emotion": "neutral",
+        "stability": 1.0
+      }
+    },
+    "causal": {
+      "total_links": 0
+    },
+    "context": {
+      "turns_tracked": 20,
+      "entities_tracked": 179,
+      "context_summary": "Topics: computer, program, cloud, computing, machine | Entities: Some, Mercury, H2O, Developed, Which | Turns: 20"
+    },
+    "counterfactual": {
+      "scenarios_processed": 0
+    },
+    "self_model": {
+      "attempts": 297,
+      "successes": 297,
+      "total_reward": 297.0,
+      "confidence_errors": [
+        [
+          0.85888671875,
+          1.0
+        ],
+        [
+          0.8591145833333333,
+          1.0
+        ],
+        [
+          0.8590462239583332,
+          1.0
+        ],
+        [
+          0.8593196614583334,
+          1.0
+        ],
+        [
+          0.8600032552083333,
+          1.0
+        ],
+        [
+          0.8596842447916666,
+          1.0
+        ],
+        [
+          0.8611881510416666,
+          1.0
+        ],
+        [
+          0.85943359375,
+          1.0
+        ],
+        [
+          0.8600032552083333,
+          1.0
+        ],
+        [
+          0.8584537760416666,
+          1.0
+        ],
+        [
+          0.8602766927083333,
+          1.0
+        ],
+        [
+          0.8605729166666667,
+          1.0
+        ],
+        [
+          0.8588639322916667,
+          1.0
+        ],
+        [
+          0.8623730468749999,
+          1.0
+        ],
+        [
+          0.8597298177083332,
+          1.0
+        ],
+        [
+          0.8582942708333333,
+          1.0
+        ],
+        [
+          0.8615983072916666,
+          1.0
+        ],
+        [
+          0.8599348958333333,
+          1.0
+        ],
+        [
+          0.859912109375,
+          1.0
+        ],
+        [
+          0.759638671875,
+          1.0
+        ],
+        [
+          0.36023111979166667,
+          1.0
+        ],
+        [
+          0.8600716145833334,
+          1.0
+        ],
+        [
+          0.8588639322916667,
+          1.0
+        ],
+        [
+          0.8585677083333333,
+          1.0
+        ],
+        [
+          0.86107421875,
+          1.0
+        ],
+        [
+          0.8604361979166667,
+          1.0
+        ],
+        [
+          0.8590234374999999,
+          1.0
+        ],
+        [
+          0.8590690104166667,
+          1.0
+        ],
+        [
+          0.8599348958333333,
+          1.0
+        ],
+        [
+          0.8595930989583334,
+          1.0
+        ],
+        [
+          0.8594108072916666,
+          1.0
+        ],
+        [
+          0.8590462239583333,
+          1.0
+        ],
+        [
+          0.8589322916666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8629654947916667,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8621223958333333,
+          1.0
+        ],
+        [
+          0.8624186197916666,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8627148437500001,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.86298828125,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8629654947916667,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8624186197916666,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.86298828125,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8635579427083333,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8629199218749999,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8626464843749999,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.86298828125,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8635579427083333,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8629199218749999,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8626464843749999,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.86298828125,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8635579427083333,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8629199218749999,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8626464843749999,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8637858072916667,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8635579427083333,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8629199218749999,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8626464843749999,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8637858072916667,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8635579427083333,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8629199218749999,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8626464843749999,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8637858072916667,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8627604166666667,
+          1.0
+        ],
+        [
+          0.8635579427083333,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8622591145833333,
+          1.0
+        ],
+        [
+          0.8629199218749999,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8631705729166667,
+          1.0
+        ],
+        [
+          0.8624641927083333,
+          1.0
+        ],
+        [
+          0.8621451822916666,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8626920572916668,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8623046875,
+          1.0
+        ],
+        [
+          0.8631477864583333,
+          1.0
+        ],
+        [
+          0.8631705729166668,
+          1.0
+        ],
+        [
+          0.862783203125,
+          1.0
+        ],
+        [
+          0.8627376302083334,
+          1.0
+        ],
+        [
+          0.8623958333333333,
+          1.0
+        ],
+        [
+          0.8621451822916667,
+          1.0
+        ],
+        [
+          0.8618717447916666,
+          1.0
+        ],
+        [
+          0.8619856770833333,
+          1.0
+        ],
+        [
+          0.8631022135416666,
+          1.0
+        ],
+        [
+          0.8618489583333333,
+          1.0
+        ],
+        [
+          0.8615755208333333,
+          1.0
+        ],
+        [
+          0.862509765625,
+          1.0
+        ],
+        [
+          0.8626009114583333,
+          1.0
+        ],
+        [
+          0.8626464843749999,
+          1.0
+        ],
+        [
+          0.8622591145833334,
+          1.0
+        ],
+        [
+          0.8637858072916667,
+          1.0
+        ],
+        [
+          0.8622135416666666,
+          1.0
+        ]
+      ]
+    },
+    "curiosity": {
+      "prototype_count": 0,
+      "learning_progress": 0.0,
+      "unique_states_visited": 33,
+      "success_rate": 0.0
+    },
+    "global_workspace": {
+      "current_winner": "SEMANTIC",
+      "current_content_type": "dict",
+      "history_len": 100,
+      "danger_vectors": 0,
+      "rehearsal_vetoes": 0
+    },
+    "text_learner": {
+      "total_sessions": 0,
+      "total_concepts": 8408,
+      "total_facts": 71666,
+      "total_episodes": 1,
+      "concept_frequencies": {
+        "The": 1,
+        "Human": 1,
+        "Heart": 1,
+        "Beats": 1,
+        "Approximately": 1,
+        "100": 1,
+        "000": 1,
+        "Times": 1,
+        "Day": 1,
+        "Pumping": 1,
+        "About": 1,
+        "Gallons": 1,
+        "Blood": 1,
+        "Through": 1,
+        "Miles": 1,
+        "Vessels": 1,
+        "Mount Everest": 1,
+        "Earth": 1,
+        "Mount": 1,
+        "Everest": 1
+      },
+      "relation_types": {
+        "Beats": 2,
+        "Pumping": 1,
+        "Gallons": 1,
+        "per": 23,
+        "Miles": 8,
+        "Metres": 1,
+        "is_a": 40356,
+        "Standing": 6,
+        "semantically_related": 2757,
+        "and": 1905,
+        "Stretches": 1,
+        "Centuries": 1,
+        "from": 127,
+        "part_of": 12459,
+        "all": 72,
+        "produces": 5,
+        "Produces": 4,
+        "Covering": 1,
+        "Contains": 3,
+        "our": 4,
+        "Famous": 5,
+        "Equals": 5,
+        "Squared": 2,
+        "Using": 20,
+        "Plants": 4,
+        "for": 285,
+        "their": 98,
+        "Organizes": 1,
+        "with": 288,
+        "Athens": 1,
+        "Originated": 1,
+        "Citizens": 1,
+        "Berners": 2,
+        "you": 126,
+        "Involves": 2,
+        "Asking": 3,
+        "Explaining": 3,
+        "Helps": 3,
+        "Something": 47,
+        "Makes": 13,
+        "Explanations": 2,
+        "Examples": 4,
+        "Asked": 14,
+        "Sentences": 1,
+        "Writing": 6,
+        "Uses": 5,
+        "one": 69,
+        "Puddles": 2,
+        "causes": 16253,
+        "Areas": 1,
+        "Accumulates": 1,
+        "Mammals": 2,
+        "Whales": 2,
+        "not": 84,
+        "two": 42,
+        "Comparing": 1,
+        "Concepts": 3,
+        "similar_to": 6081,
+        "Plus": 5,
+        "Minus": 1,
+        "Matters": 1,
+        "Adding": 4,
+        "Means": 11,
+        "Times": 11,
+        "can": 135,
+        "Divided": 2,
+        "Quarters": 5,
+        "its": 62,
+        "Moves": 2,
+        "how": 52,
+        "Falls": 3,
+        "Forms": 3,
+        "Flows": 2,
+        "Clouds": 2,
+        "Units": 4,
+        "Cells": 1,
+        "Containing": 1,
+        "Types": 7,
+        "Laws": 1,
+        "Unless": 2,
+        "Objects": 2,
+        "Says": 5,
+        "Mass": 4,
+        "Arranged": 2,
+        "Rays": 1,
+        "Includes": 6,
+        "Infrared": 2,
+        "Microwaves": 2,
+        "Waves": 2,
+        "that": 286,
+        "Programming": 2,
+        "Languages": 1,
+        "Allows": 6,
+        "Computers": 2,
+        "Learning": 12,
+        "Being": 31,
+        "Converts": 3,
+        "Coded": 2,
+        "Protects": 1,
+        "Stored": 3,
+        "Structured": 2,
+        "Refers": 2,
+        "Accessed": 1,
+        "Computing": 2,
+        "Owning": 1,
+        "Users": 4,
+        "Applications": 3,
+        "Populous": 2,
+        "Flowing": 1,
+        "Produced": 9,
+        "Transformed": 1,
+        "Introducing": 1,
+        "has": 82,
+        "Fruits": 3,
+        "Proteins": 4,
+        "Vegetables": 1,
+        "Foods": 1,
+        "Muscles": 2,
+        "Improves": 2,
+        "Reduces": 1,
+        "Strengthens": 1,
+        "Minutes": 11,
+        "Hours": 9,
+        "Need": 13,
+        "Adults": 1,
+        "Thinking": 1,
+        "Subjects": 4,
+        "Reading": 6,
+        "Broadens": 1,
+        "Across": 1,
+        "Projects": 4,
+        "Goals": 4,
+        "Deadlines": 1,
+        "Chronicles": 29,
+        "Referred": 3,
+        "Playing": 12,
+        "Developed": 5,
+        "who": 74,
+        "Runs": 2,
+        "Carrying": 1,
+        "Adjustments": 2,
+        "Entries": 1,
+        "Writers": 3,
+        "Opening": 3,
+        "Sales": 7,
+        "Received": 6,
+        "Adapted": 1,
+        "Expanded": 2,
+        "Missions": 3,
+        "Players": 4,
+        "Games": 7,
+        "Voiced": 1,
+        "Speaking": 2,
+        "Progresses": 1,
+        "Unlocked": 1,
+        "Varies": 1,
+        "Characters": 5,
+        "Relating": 2,
+        "sub": 1,
+        "Elements": 5,
+        "but": 97,
+        "Points": 11,
+        "Getting": 6,
+        "Happens": 4,
+        "Knocked": 2,
+        "Potentials": 3,
+        "Skills": 1,
+        "Unaltered": 1,
+        "Masters": 1,
+        "Based": 18,
+        "his": 216,
+        "her": 211,
+        "Classes": 4,
+        "Scouts": 1,
+        "Engineers": 1,
+        "Class": 2,
+        "Gained": 3,
+        "Attributes": 3,
+        "Distributing": 1,
+        "During": 15,
+        "Takes": 9,
+        "Offenders": 1,
+        "Criminals": 1,
+        "Composed": 1,
+        "Meaning": 1,
+        "Always": 17,
+        "Dangerous": 1,
+        "Accused": 1,
+        "Weapons": 5,
+        "made_of": 6919,
+        "Members": 5,
+        "Consisting": 4,
+        "Orders": 1,
+        "this": 73,
+        "Becomes": 1,
+        "Themselves": 1,
+        "Continues": 2,
+        "Commanding": 1,
+        "Losses": 1,
+        "Suffers": 1,
+        "Lived": 8,
+        "Following": 5,
+        "As": 3,
+        "Killed": 1,
+        "Decides": 1,
+        "Confronts": 1,
+        "Owing": 1,
+        "Ways": 8,
+        "Finished": 8,
+        "Beginning": 5,
+        "Wanted": 68,
+        "Wanting": 3,
+        "Parts": 3,
+        "had": 135,
+        "Considered": 8,
+        "Handled": 1,
+        "Previous": 7,
+        "Layouts": 1,
+        "Involved": 7,
+        "Creating": 4,
+        "Incorporated": 2,
+        "Destroyed": 2,
+        "him": 40,
+        "Uniforms": 1,
+        "Graphics": 1,
+        "Worked": 4,
+        "Designed": 5,
+        "Adjusted": 1,
+        "Segments": 3,
+        "Recorded": 3,
+        "Removed": 2,
+        "Incorporating": 1,
+        "Rejected": 3,
+        "Instruments": 4,
+        "Constructed": 3,
+        "Used": 18,
+        "Soldiers": 3,
+        "Tgs": 1,
+        "Leading": 6,
+        "Maps": 2,
+        "Featuring": 1,
+        "Released": 3,
+        "Episodes": 4,
+        "Topped": 4,
+        "Coming": 4,
+        "Gaming": 2,
+        "Entertaining": 1,
+        "Putting": 4,
+        "Feeling": 7,
+        "Limitations": 1,
+        "Aspects": 4,
+        "Annoying": 1,
+        "Spikes": 1,
+        "non": 5,
+        "Serious": 1,
+        "Pacing": 1,
+        "Excited": 7,
+        "Visuals": 1,
+        "Geddes": 1,
+        "3ds": 1,
+        "Returning": 1,
+        "Series": 4,
+        "Extended": 2,
+        "Planned": 1,
+        "Needed": 14,
+        "Editions": 1,
+        "Nameless": 2,
+        "Rivals": 3,
+        "Announced": 1,
+        "Directed": 3,
+        "Focused": 2,
+        "Themes": 3,
+        "Vehicles": 2,
+        "Happened": 1,
+        "Appearances": 1,
+        "Ending": 1,
+        "Flowers": 10,
+        "Songs": 1,
+        "Protagonists": 1,
+        "Serialized": 1,
+        "Illustrated": 3,
+        "Located": 3,
+        "Arkansas": 14,
+        "Building": 11,
+        "Remaining": 3,
+        "Buildings": 7,
+        "Douglas": 4,
+        "Attractions": 1,
+        "Established": 2,
+        "Dangers": 1,
+        "James": 3,
+        "Perceived": 1,
+        "six": 9,
+        "Increased": 4,
+        "Plans": 1,
+        "Arms": 2,
+        "States": 24,
+        "United": 10,
+        "Delegates": 1,
+        "Decided": 28,
+        "Permitted": 2,
+        "Determined": 2,
+        "Officers": 2,
+        "Informed": 1,
+        "Reported": 2,
+        "Unconfirmed": 1,
+        "Transferred": 1,
+        "Stores": 3,
+        "News": 1,
+        "Lines": 7,
+        "Deemed": 1,
+        "any": 19,
+        "Denied": 1,
+        "Believing": 1,
+        "Troops": 4,
+        "This": 2,
+        "Authorities": 2,
+        "Inaugurated": 1,
+        "Agreed": 2,
+        "Allowed": 2,
+        "Besides": 4,
+        "Munitions": 2,
+        "Leaving": 2,
+        "Caps": 1,
+        "Regiments": 2,
+        "Mustered": 2,
+        "Companies": 5,
+        "Mounted": 1,
+        "Comprising": 1,
+        "Operated": 4,
+        "Spirits": 1,
+        "Tools": 3,
+        "Attempted": 1,
+        "nor": 2,
+        "Undertakings": 1,
+        "Illustrating": 1,
+        "may": 24,
+        "Conscripted": 1,
+        "Commenced": 4,
+        "Purchased": 1,
+        "Guns": 1,
+        "Days": 7,
+        "Hopes": 1,
+        "Activities": 2,
+        "Functions": 2,
+        "Continued": 9,
+        "Included": 5,
+        "Works": 9,
+        "Assumed": 1,
+        "Consisted": 1,
+        "Packing": 1,
+        "Laborers": 1,
+        "Clerks": 1,
+        "Cartridges": 3,
+        "Performed": 2,
+        "Repaired": 3,
+        "Duties": 1,
+        "Moulds": 1,
+        "Inspected": 1,
+        "Shows": 2,
+        "Packages": 1,
+        "Issued": 1,
+        "Recaptured": 1,
+        "Marched": 2,
+        "Brooks": 2,
+        "Seized": 1,
+        "Loyalists": 1,
+        "Altered": 1,
+        "Ones": 1,
+        "Closing": 1,
+        "Acres": 3,
+        "Moved": 14,
+        "Societies": 1,
+        "Raised": 1,
+        "Organizations": 1,
+        "Invited": 1,
+        "Remained": 4,
+        "Provided": 2,
+        "Headquartered": 1,
+        "Surrounding": 2,
+        "Purposes": 7,
+        "Served": 1,
+        "Veterans": 1,
+        "Camping": 1,
+        "Progress": 3,
+        "Arts": 3,
+        "Places": 2,
+        "Designated": 2,
+        "Sites": 1,
+        "Renamed": 1,
+        "Named": 83,
+        "Opened": 4,
+        "Visitors": 1,
+        "Illustrations": 1,
+        "Depicting": 3,
+        "Books": 3,
+        "Themed": 6,
+        "Glass": 5,
+        "Claimed": 3,
+        "Died": 4,
+        "she": 159,
+        "Amusing": 1,
+        "Bed": 2,
+        "Courses": 1,
+        "Sons": 1,
+        "Remarked": 1,
+        "Drawings": 1,
+        "Submitted": 1,
+        "Schools": 1,
+        "Friends": 20,
+        "Sending": 1,
+        "Postcards": 1,
+        "Paintings": 4,
+        "Various": 7,
+        "Detached": 1,
+        "Sometimes": 2,
+        "Closed": 1,
+        "Fairies": 2,
+        "Relatives": 1,
+        "Gladys": 1,
+        "Specimens": 1,
+        "Gardens": 1,
+        "1920s": 1,
+        "Focusing": 1,
+        "Sacred": 1,
+        "Evening": 1,
+        "Trips": 1,
+        "Collaborated": 1,
+        "Devolved": 1,
+        "Taking": 1,
+        "Worthing": 1,
+        "Aged": 1,
+        "Interesting": 8,
+        "Indicated": 2,
+        "Tried": 15,
+        "Printing": 4,
+        "Perhaps": 1,
+        "Clothing": 1,
+        "Advances": 3,
+        "Studied": 1,
+        "Influenced": 3,
+        "Things": 6,
+        "Sponsored": 1,
+        "Events": 6,
+        "Exhibited": 1,
+        "Donated": 1,
+        "Sketches": 1,
+        "Publishers": 1,
+        "Covers": 1,
+        "Called": 20,
+        "Less": 4,
+        "Religious": 6,
+        "Published": 3,
+        "Designs": 5,
+        "Hymns": 1,
+        "Dated": 1,
+        "Painting": 5,
+        "Preparing": 1,
+        "Yes": 12,
+        "Loved": 34,
+        "Looked": 34,
+        "Started": 31,
+        "Trees": 5,
+        "Spring": 1,
+        "Liked": 13,
+        "Pulled": 2,
+        "Troubled": 1,
+        "Running": 13,
+        "Walking": 7,
+        "Played": 14,
+        "Speed": 3,
+        "Going": 4,
+        "Stopped": 5,
+        "Cars": 12,
+        "Thing": 6,
+        "Pictures": 2,
+        "Disgusting": 1,
+        "Octopus": 1,
+        "Learned": 6,
+        "Jumped": 9,
+        "Showed": 2,
+        "Others": 7,
+        "Boxes": 3,
+        "Mysterious": 1,
+        "Trying": 3,
+        "His": 1,
+        "Mixed": 1,
+        "Promised": 2,
+        "Ears": 1,
+        "Embarrassed": 1,
+        "Mistakes": 2,
+        "Red": 12,
+        "Looks": 3,
+        "Amazing": 6,
+        "Thanked": 4,
+        "Warned": 1,
+        "Stayed": 1,
+        "Wished": 3,
+        "Tasted": 4,
+        "Screamed": 1,
+        "Bring": 2,
+        "Walked": 10,
+        "Caused": 8,
+        "Flying": 2,
+        "Turns": 6,
+        "Shouted": 6,
+        "Soaring": 1,
+        "Inviting": 1,
+        "Replied": 14,
+        "Noticed": 9,
+        "Lots": 12,
+        "Matched": 1,
+        "Doing": 1,
+        "Explained": 2,
+        "Years": 22,
+        "Stories": 1,
+        "Anything": 3,
+        "Wondered": 2,
+        "Reached": 5,
+        "Arrived": 7,
+        "Realized": 1,
+        "Counted": 1,
+        "Towards": 4,
+        "Minding": 1,
+        "Business": 5,
+        "Injured": 1,
+        "Smiled": 10,
+        "why": 5,
+        "Imagining": 1,
+        "Students": 4,
+        "Crowded": 1,
+        "Does": 16,
+        "Words": 5,
+        "Friendships": 1,
+        "Scared": 3,
+        "Emerged": 1,
+        "Hugged": 4,
+        "Laughed": 1,
+        "Stepped": 3,
+        "Bellowed": 1,
+        "Nothing": 1,
+        "Gets": 9,
+        "Rushed": 1,
+        "Frightened": 1,
+        "Glasses": 2,
+        "Steps": 1,
+        "Tired": 2,
+        "Chores": 2,
+        "Wiped": 1,
+        "Tasks": 1,
+        "Tempted": 1,
+        "Sounds": 2,
+        "Animals": 4,
+        "Roamed": 1,
+        "Exclaimed": 2,
+        "Wants": 5,
+        "Hopping": 3,
+        "Hopped": 6,
+        "Listened": 5,
+        "Answered": 3,
+        "Waved": 3,
+        "Sailed": 4,
+        "Pieces": 19,
+        "Picked": 2,
+        "Spiders": 1,
+        "Remembered": 1,
+        "Seemed": 2,
+        "Careless": 1,
+        "Managed": 1,
+        "Chewed": 1,
+        "Looking": 4,
+        "Heading": 1,
+        "Watched": 1,
+        "Gasped": 2,
+        "Morning": 2,
+        "Peeked": 1,
+        "Raced": 2,
+        "Parents": 8,
+        "Making": 5,
+        "Belonged": 1,
+        "Stumbled": 1,
+        "Worried": 1,
+        "Hooting": 1,
+        "Searching": 2,
+        "Hooted": 1,
+        "Everything": 2,
+        "Dressed": 1,
+        "Offered": 1,
+        "Sharing": 1,
+        "Brings": 3,
+        "Visiting": 1,
+        "Nodded": 1,
+        "Gathered": 2,
+        "Selling": 4,
+        "Approached": 1,
+        "yes": 1,
+        "Discovered": 1,
+        "Stepping": 1,
+        "Added": 10,
+        "Moving": 1,
+        "Balanced": 2,
+        "Kids": 2,
+        "Grabbed": 1,
+        "Doctors": 1,
+        "Packed": 1,
+        "Sounded": 2,
+        "Eyes": 2,
+        "Helpless": 2,
+        "Crawled": 1,
+        "Printed": 1,
+        "Holding": 1,
+        "Barked": 1,
+        "Revealed": 1,
+        "Hoped": 1,
+        "Delicious": 2,
+        "Sing": 1,
+        "Presents": 1,
+        "Sitting": 1,
+        "Refused": 1,
+        "Scolded": 1,
+        "Ribbons": 1,
+        "Knows": 1,
+        "Squirrels": 1,
+        "Birds": 5,
+        "Oranges": 1,
+        "Becoming": 1,
+        "Generous": 1,
+        "Waited": 1,
+        "Bears": 1,
+        "\u0152yes": 2,
+        "Helped": 3,
+        "Buried": 1,
+        "Watching": 2,
+        "Enjoyed": 1,
+        "Displayed": 1,
+        "Lights": 1,
+        "Flags": 1,
+        "Hats": 12,
+        "Wearing": 1,
+        "Diving": 1,
+        "Rocks": 1,
+        "Sticks": 1,
+        "Leaves": 3,
+        "Folded": 1,
+        "Protested": 1,
+        "Picking": 1,
+        "Seashells": 1,
+        "Cleaning": 1,
+        "Bowed": 1,
+        "Bringing": 1,
+        "Thousands": 2,
+        "Coloured": 1,
+        "Grass": 1,
+        "Spied": 1,
+        "Needs": 7,
+        "Airlines": 1,
+        "Services": 10,
+        "Cities": 5,
+        "Periods": 3,
+        "Matches": 1,
+        "Returned": 1,
+        "Chess": 2,
+        "Positions": 3,
+        "Including": 27,
+        "Varied": 1,
+        "Rules": 2,
+        "Genres": 3,
+        "Featured": 1,
+        "Festivals": 2,
+        "Peppers": 2,
+        "Headliners": 2,
+        "Browning": 3,
+        "Moses": 4,
+        "Mechanisms": 1,
+        "Varieties": 3,
+        "Firearms": 3,
+        "Patents": 1,
+        "Repeating": 1,
+        "Invented": 1,
+        "Improvements": 3,
+        "Pistols": 3,
+        "Autoloading": 1,
+        "Telescoping": 1,
+        "Loading": 1,
+        "Gas": 6,
+        "Contributions": 1,
+        "Cooled": 2,
+        "Manufactured": 3,
+        "Changes": 5,
+        "Assembled": 1,
+        "Copied": 1,
+        "Inventing": 2,
+        "Improving": 2,
+        "Reproduced": 4,
+        "Fathers": 2,
+        "Founding": 2,
+        "Rights": 10,
+        "Proved": 2,
+        "Congress": 4,
+        "Represented": 2,
+        "Resolutions": 2,
+        "Adams": 4,
+        "According": 3,
+        "Challenged": 2,
+        "Interests": 2,
+        "Acquired": 2,
+        "Reduced": 2,
+        "Signed": 2,
+        "Prohibiting": 2,
+        "Mathematics": 2,
+        "Disciplines": 2,
+        "Surveying": 2,
+        "Organized": 2,
+        "Shunned": 2,
+        "Denying": 2,
+        "Authored": 2,
+        "Hemings": 6,
+        "Consensus": 2,
+        "Fathered": 2,
+        "Achievements": 2,
+        "ten": 9,
+        "Ranked": 2,
+        "Kings": 1,
+        "Scoring": 1,
+        "Performers": 1,
+        "Scored": 3,
+        "Romanized": 1,
+        "Growing": 1,
+        "Completed": 1,
+        "Districts": 1,
+        "Connecting": 2,
+        "Connected": 2,
+        "Vertices": 2,
+        "Edges": 2,
+        "Fitness": 2,
+        "Techniques": 2,
+        "Processes": 1,
+        "Process": 7,
+        "Mining": 8,
+        "Provides": 2,
+        "Resources": 4,
+        "Referring": 3,
+        "Supporting": 1,
+        "Related": 2,
+        "Beaded": 2,
+        "Wavelengths": 5,
+        "Colors": 1,
+        "Led": 3,
+        "Ping": 2,
+        "Hiking": 4,
+        "Biking": 2,
+        "Swimming": 2,
+        "Skating": 2,
+        "Humans": 4,
+        "Sports": 3,
+        "Founded": 2,
+        "Manufacturing": 4,
+        "Changed": 1,
+        "Crisis": 2,
+        "2000s": 3,
+        "Powered": 3,
+        "Touring": 1,
+        "Marques": 1,
+        "Models": 7,
+        "Georges": 1,
+        "Brothers": 1,
+        "Builds": 1,
+        "Owns": 2,
+        "Breed": 2,
+        "Problems": 2,
+        "Inherited": 1,
+        "Conditions": 3,
+        "Breeding": 1,
+        "Dogs": 1,
+        "Encountered": 1,
+        "King": 3,
+        "Consoles": 4,
+        "Gamers": 2,
+        "Titles": 3,
+        "Chances": 2,
+        "Apis": 4,
+        "Https": 2,
+        "Offers": 2,
+        "Expressed": 3,
+        "Operations": 2,
+        "Methods": 6,
+        "Mapped": 3,
+        "Identified": 2,
+        "Institutions": 2,
+        "Banks": 6,
+        "Houses": 6,
+        "Issues": 3,
+        "Situations": 2,
+        "Lending": 2,
+        "Underwriting": 6,
+        "Securities": 4,
+        "Risks": 2,
+        "Backers": 2,
+        "Roasted": 2,
+        "Grinders": 2,
+        "Characteristics": 2,
+        "Trained": 4,
+        "Baristas": 2,
+        "Brewing": 6,
+        "Shops": 2,
+        "Outlets": 2,
+        "Launched": 1,
+        "Owned": 2,
+        "Jobseekers": 1,
+        "Access": 1,
+        "Registered": 1,
+        "Groups": 3,
+        "Postings": 3,
+        "Articles": 3,
+        "Professionals": 3,
+        "Joining": 2,
+        "Posting": 4,
+        "Organizing": 2,
+        "Cvs": 2,
+        "Publishing": 2,
+        "Resumes": 2,
+        "Lumi\u00e8res": 4,
+        "Originating": 2,
+        "Philosophers": 2,
+        "Jacques": 2,
+        "Denis": 2,
+        "Arising": 2,
+        "Des": 2,
+        "Fighting": 3,
+        "Arbitrariness": 2,
+        "Limited": 3,
+        "Whereas": 2,
+        "Terms": 3,
+        "Convicted": 1,
+        "Demanding": 1,
+        "Americans": 6,
+        "Initiated": 1,
+        "Riots": 1,
+        "Resulted": 2,
+        "Subjected": 3,
+        "Reparations": 6,
+        "Living": 2,
+        "Estimates": 4,
+        "Renewed": 2,
+        "Effects": 2,
+        "Coates": 1,
+        "Willingness": 1,
+        "Pointing": 1,
+        "Working": 1,
+        "Nations": 3,
+        "Experts": 1,
+        "Encouraged": 1,
+        "Ensuring": 1,
+        "Inhibits": 1,
+        "Lives": 1,
+        "Incarcerations": 3,
+        "Inequalities": 2,
+        "Identifying": 2,
+        "Arguments": 3,
+        "Exists": 2,
+        "Instituted": 2,
+        "Estimated": 2,
+        "Seems": 4,
+        "Wheels": 2,
+        "Inventions": 2,
+        "Dreams": 2,
+        "Entering": 2,
+        "Seeing": 2,
+        "Movies": 5,
+        "Indeed": 4,
+        "Depictions": 2,
+        "Dinosaurs": 3,
+        "Damaged": 2,
+        "Tyrannosaurus": 2,
+        "Theropods": 2,
+        "Crocodiles": 2,
+        "Expected": 2,
+        "Cats": 4,
+        "Credited": 1,
+        "Versions": 1,
+        "Searchers": 1,
+        "Thus": 1,
+        "Singles": 3,
+        "Recording": 7,
+        "Charts": 3,
+        "Hitting": 1,
+        "Climbing": 2,
+        "Harnesses": 10,
+        "Climbers": 4,
+        "Padded": 3,
+        "Harness": 11,
+        "Inverting": 1,
+        "Giving": 3,
+        "Advantages": 1,
+        "Loops": 2,
+        "Caving": 2,
+        "Promises": 2,
+        "Enriched": 6,
+        "Extending": 2,
+        "Weighs": 3,
+        "Achieved": 1,
+        "Tires": 2,
+        "Tests": 7,
+        "Conducted": 3,
+        "Hunting": 2,
+        "Tries": 3,
+        "Owners": 2,
+        "Strips": 4,
+        "Speeds": 4,
+        "Racing": 2,
+        "Reaching": 2,
+        "Kgs": 2,
+        "Wing": 2,
+        "Aerodynamics": 2,
+        "Sophisticated": 2,
+        "Goes": 5,
+        "Needing": 2,
+        "Condensed": 5,
+        "Parks": 1,
+        "Keys": 1,
+        "Accounts": 1,
+        "Dates": 1,
+        "Limes": 2,
+        "Filling": 4,
+        "Complementing": 2,
+        "Yolks": 2,
+        "Mixing": 2,
+        "Ingredients": 3,
+        "Cooking": 2,
+        "Thickening": 2,
+        "Premiums": 2,
+        "Features": 2,
+        "Projected": 2,
+        "Appears": 2,
+        "Resembles": 2,
+        "Ruined": 2,
+        "Possess": 2,
+        "Fluctuations": 2,
+        "Opinions": 2,
+        "Remains": 4,
+        "Changing": 3,
+        "Suggests": 2,
+        "Consumers": 4,
+        "Chips": 2,
+        "Islands": 16,
+        "Overseas": 3,
+        "Census": 1,
+        "results_in": 2,
+        "Opposed": 2,
+        "Marrying": 1,
+        "Reproducing": 3,
+        "Relatedness": 2,
+        "Decreases": 1,
+        "Offspring": 1,
+        "Inheriting": 2,
+        "Genes": 2,
+        "Leviss": 2,
+        "Beatles": 2,
+        "Doors": 2,
+        "Stones": 2,
+        "Boys": 2,
+        "Rolling": 2,
+        "Bands": 3,
+        "Peoples": 1,
+        "Representatives": 2,
+        "Formed": 1,
+        "Songwriting": 1,
+        "Acts": 1,
+        "Favourites": 2,
+        "Flavours": 6,
+        "Shared": 2,
+        "Hops": 4,
+        "Levels": 5,
+        "Depending": 2,
+        "Bitterness": 2,
+        "Having": 5,
+        "Adds": 2,
+        "Tends": 3,
+        "Grains": 4,
+        "Differences": 2,
+        "Herbs": 2,
+        "Spices": 4,
+        "Minerals": 4,
+        "Styles": 2,
+        "Bodied": 2,
+        "Thames": 1,
+        "Terminus": 1,
+        "Passengers": 1,
+        "Shortened": 1,
+        "Hearing": 1,
+        "Uncolored": 1,
+        "Recordings": 1,
+        "Laboratories": 3,
+        "Labs": 2,
+        "Resulting": 2,
+        "Performances": 2,
+        "Orchestras": 2,
+        "Results": 4,
+        "Preferred": 4,
+        "Introduced": 2,
+        "Artists": 2,
+        "Innovations": 2,
+        "Bing": 4,
+        "Specified": 2,
+        "Curves": 2,
+        "Lps": 4,
+        "Records": 6,
+        "Adopted": 2,
+        "Needles": 2,
+        "Bass": 2,
+        "Manufacturers": 6,
+        "Intended": 2,
+        "Turntables": 2,
+        "Tuners": 2,
+        "Preamplifiers": 2,
+        "Components": 8,
+        "Enthusiasts": 2,
+        "Integrated": 4,
+        "Displacing": 2,
+        "Replacing": 2,
+        "Transistorized": 2,
+        "Misleading": 2,
+        "Mosfets": 2,
+        "Diffused": 2,
+        "Address": 2,
+        "Electronics": 2,
+        "Ldmos": 2,
+        "Switching": 2,
+        "1980s": 2,
+        "Amplifiers": 2,
+        "Amps": 2,
+        "Sections": 2,
+        "Systems": 4,
+        "Magazines": 4,
+        "Speakers": 2,
+        "Offering": 2,
+        "Reviews": 2,
+        "Listening": 7,
+        "Engineering": 7,
+        "pre": 2,
+        "Brands": 2,
+        "Biases": 2,
+        "Researchers": 4,
+        "Listeners": 2,
+        "Samples": 4,
+        "Identifies": 2,
+        "Cables": 2,
+        "Attempts": 2,
+        "Months": 2,
+        "Stated": 2,
+        "Testing": 2,
+        "Forests": 3,
+        "Eared": 4,
+        "Described": 1,
+        "Coverts": 1,
+        "Elongated": 1,
+        "Tipped": 2,
+        "Drivers": 2,
+        "Tensions": 1,
+        "Culminating": 1,
+        "Incidents": 1,
+        "Defined": 1,
+        "Rowing": 3,
+        "Puts": 1,
+        "Recurring": 1,
+        "Tracks": 1,
+        "Bites": 1,
+        "Knees": 2,
+        "Injuries": 5,
+        "Enabling": 2,
+        "Gloves": 2,
+        "Shooting": 4,
+        "Kicking": 3,
+        "Finneas": 3,
+        "Collaborates": 1,
+        "Titled": 1,
+        "Countries": 1,
+        "Numerous": 1,
+        "Debuted": 1,
+        "Topping": 4,
+        "Temperatures": 3,
+        "Relaxed": 2,
+        "pro": 4,
+        "Retired": 2,
+        "Colored": 6,
+        "Beers": 6,
+        "Meters": 12,
+        "Benning": 1,
+        "Jenness": 1,
+        "Massachusetts": 1,
+        "Married": 1,
+        "Sells": 3,
+        "Phones": 2,
+        "Watches": 3,
+        "Resigned": 2,
+        "Pretending": 2,
+        "Drinking": 2,
+        "Calling": 2,
+        "Unrelated": 1,
+        "Paints": 2,
+        "Purifying": 3,
+        "Prepared": 2,
+        "Lubricants": 2,
+        "Oils": 4,
+        "Cosmetics": 2,
+        "Products": 3,
+        "Heating": 2,
+        "Cleansers": 2,
+        "Anointing": 2,
+        "Holds": 3,
+        "Pertains": 2,
+        "Transactions": 2,
+        "Banking": 2,
+        "Individuals": 2,
+        "Raising": 2,
+        "Trading": 2,
+        "Fixed": 2,
+        "Departments": 2,
+        "Specialized": 2,
+        "Guys": 1,
+        "Logistics": 1,
+        "Consulting": 1,
+        "Pairs": 3,
+        "Blueberries": 1,
+        "Beans": 5,
+        "Musicians": 2,
+        "Hundred": 8,
+        "Understanding": 1,
+        "String": 3,
+        "Furthered": 1,
+        "Succeed": 1,
+        "Failed": 1,
+        "Riding": 1,
+        "Driving": 1,
+        "Vented": 1,
+        "Lyrics": 2,
+        "Anthologies": 1,
+        "Cowpunchers": 1,
+        "Advanced": 2,
+        "Countermeasures": 1,
+        "Ubiquitous": 2,
+        "Candles": 1,
+        "Mushrooms": 1,
+        "Eggs": 1,
+        "Sausages": 1,
+        "Fried": 1,
+        "Hrs": 1,
+        "Pedals": 1,
+        "Turning": 1,
+        "Press": 2,
+        "Gears": 1,
+        "Disengaging": 1,
+        "Pressing": 1,
+        "Bioinformatics": 1,
+        "Macromolecules": 1,
+        "Basis": 1,
+        "Genomics": 1,
+        "Citations": 1,
+        "Structures": 1,
+        "Cutting": 1,
+        "Los": 2,
+        "Thomas": 1,
+        "Costs": 3,
+        "Serving": 2,
+        "Restrictions": 1,
+        "Spells": 1,
+        "Managers": 6,
+        "Shields": 1,
+        "Surpassed": 1,
+        "Svms": 1,
+        "Machines": 2,
+        "Frameworks": 1,
+        "Proposed": 1,
+        "Scaling": 1,
+        "Training": 3,
+        "Marked": 1,
+        "Performing": 1,
+        "Created": 1,
+        "Clustering": 1,
+        "Applies": 1,
+        "Vectors": 1,
+        "Unlabeled": 1,
+        "Statistics": 1,
+        "Approaches": 1,
+        "Sets": 3,
+        "Unsupervised": 1,
+        "Enhanced": 1,
+        "Metropolis": 1,
+        "Kilometers": 1,
+        "Residents": 1,
+        "Serves": 1,
+        "Screwdrivers": 1,
+        "Mounting": 1,
+        "Summers": 1,
+        "Fires": 1,
+        "Dozens": 1,
+        "Experiences": 1,
+        "Homes": 1,
+        "Wildfires": 3,
+        "Winds": 3,
+        "Firefighters": 1,
+        "Efforts": 1,
+        "Managing": 1,
+        "Gives": 5,
+        "Fbs": 2,
+        "Mls": 2,
+        "Rapids": 1,
+        "Defeating": 1,
+        "Rhinoceros": 1,
+        "Seeds": 3,
+        "Sinapis": 1,
+        "Liquids": 1,
+        "Placed": 2,
+        "Canceling": 1,
+        "Simulated": 1,
+        "Comes": 1,
+        "Pigs": 1,
+        "Photos": 1,
+        "Landmarks": 1,
+        "Outdoors": 1,
+        "Views": 1,
+        "Rosmarinus": 2,
+        "\u02ccr\u0252sm\u0259\u02c8ra\u026an\u0259s": 2,
+        "Officinalis": 1,
+        "\u018f\u02ccf\u026as\u026a\u02c8ne\u026al\u026as": 1,
+        "Marinus": 1,
+        "Ros": 2,
+        "Jules": 1,
+        "Annotated": 1,
+        "Boundaries": 1,
+        "Repeats": 1,
+        "Sequences": 1,
+        "Databases": 1,
+        "Informatics": 1,
+        "Materials": 2,
+        "Develops": 1,
+        "Descriptions": 1,
+        "Inferring": 1,
+        "Associations": 1,
+        "Domains": 2,
+        "Combinations": 1,
+        "Princess": 6,
+        "Daenerys": 1,
+        "Rotating": 3,
+        "Shed": 6,
+        "Discussions": 2,
+        "Applied": 1,
+        "Henning": 1,
+        "Contrasting": 1,
+        "Endless": 1,
+        "Argues": 1,
+        "Decisions": 4,
+        "Collected": 8,
+        "Collecting": 1,
+        "Principles": 1,
+        "Centers": 1,
+        "Focus": 3,
+        "Debated": 1,
+        "Invested": 1,
+        "Balks": 1,
+        "Walks": 1,
+        "Forcing": 1,
+        "Sleeping": 2,
+        "Rvs": 2,
+        "Bus": 1,
+        "Chassis": 1,
+        "Enclosed": 1,
+        "Households": 1,
+        "Hands": 1,
+        "yet": 1,
+        "Forces": 1,
+        "Gods": 1,
+        "Hindus": 1,
+        "Representing": 1,
+        "Selfless": 1,
+        "Revered": 1,
+        "Warriors": 1,
+        "Intellectuals": 1,
+        "Traditions": 1,
+        "Shapes": 1,
+        "Acclaimed": 1,
+        "Plugging": 1,
+        "Motors": 1,
+        "Roles": 1,
+        "Adventures": 1,
+        "Striking": 1,
+        "Batting": 2,
+        "Scores": 1,
+        "Wickets": 1,
+        "Bowled": 1,
+        "Sides": 3,
+        "Swing": 3,
+        "Aligned": 1,
+        "Handed": 3,
+        "Opens": 1,
+        "Amateurs": 1,
+        "Hips": 1,
+        "Practices": 1,
+        "Designers": 4,
+        "Functioning": 2,
+        "Cases": 1,
+        "Willing": 1,
+        "Harris": 1,
+        "Meats": 1,
+        "Options": 1,
+        "Saving": 1,
+        "Bonds": 1,
+        "Notes": 1,
+        "Sprouting": 2,
+        "Billions": 2,
+        "Burning": 2,
+        "Balls": 9,
+        "Causes": 1,
+        "Detailed": 1,
+        "Mirrors": 1,
+        "Bodies": 2,
+        "Directing": 2,
+        "Batteries": 1,
+        "Horned": 1,
+        "Causing": 1,
+        "Passed": 2,
+        "Substances": 1,
+        "Breaking": 2,
+        "Roots": 1,
+        "Ensues": 1,
+        "Evaporates": 3,
+        "Cavities": 2,
+        "Producers": 1,
+        "Pass": 1,
+        "Ships": 1,
+        "Grazing": 1,
+        "Charged": 2,
+        "Particles": 2,
+        "Rainbows": 1,
+        "Sensing": 1,
+        "Emits": 1,
+        "Fortified": 2,
+        "Jobs": 2,
+        "Dies": 1,
+        "Amounts": 1,
+        "Falling": 1,
+        "Snows": 1,
+        "Munching": 2,
+        "Clips": 4,
+        "Grandparents": 2,
+        "Pages": 9,
+        "Writes": 3,
+        "Planted": 1,
+        "Buys": 2,
+        "Pizzas": 2,
+        "Eats": 4,
+        "Boarding": 1,
+        "Poured": 1,
+        "Brownies": 2,
+        "Pounds": 4,
+        "Worms": 2,
+        "Goodies": 1,
+        "Clothes": 1,
+        "Alexis": 3,
+        "Mows": 2,
+        "Charges": 1,
+        "Driveways": 3,
+        "Earned": 6,
+        "Mowing": 1,
+        "Lawns": 1,
+        "Shoveled": 1,
+        "Shoveling": 1,
+        "Saved": 2,
+        "Cuts": 1,
+        "Partners": 1,
+        "Spending": 1,
+        "Buying": 1,
+        "Hards": 1,
+        "Bikes": 2,
+        "Stamps": 3,
+        "Beetles": 3,
+        "Snakes": 7,
+        "Jaguars": 1,
+        "Letters": 1,
+        "Shoes": 3,
+        "Shorts": 2,
+        "Shopping": 3,
+        "Tennis": 6,
+        "Manages": 2,
+        "Liters": 1,
+        "Collects": 1,
+        "Deleted": 2,
+        "Downloading": 1,
+        "Files": 8,
+        "Downloaded": 5,
+        "Gnomes": 4,
+        "Equating": 1,
+        "Multiplying": 1,
+        "Dividing": 1,
+        "Travels": 2,
+        "Calculated": 1,
+        "Cups": 9,
+        "Teaspoons": 3,
+        "Ounces": 3,
+        "Tickets": 1,
+        "Piles": 1,
+        "Monkeys": 1,
+        "Bananas": 3,
+        "Collapsing": 1,
+        "Bags": 6,
+        "Snickers": 1,
+        "Skittles": 1,
+        "Practicing": 1,
+        "Weeks": 1,
+        "Downloads": 1,
+        "Megabytes": 3,
+        "Seconds": 1,
+        "Digits": 3,
+        "Carlos": 2,
+        "Memorized": 3,
+        "Shells": 3,
+        "Conversations": 1,
+        "Paying": 1,
+        "Restating": 1,
+        "Daughters": 1,
+        "Teams": 1,
+        "Separated": 1,
+        "Thrones": 1,
+        "Painted": 1,
+        "Enacting": 1,
+        "Discussing": 1,
+        "Lilies": 1,
+        "Divers": 1,
+        "Quoting": 1,
+        "Outbreeding": 1,
+        "Inbreeding": 1,
+        "Kinds": 1,
+        "Guards": 1,
+        "Palaeophis": 1,
+        "Ideas": 1,
+        "Heights": 1,
+        "Consists": 1,
+        "Continents": 1,
+        "Rains": 1,
+        "Occurring": 1,
+        "Solved": 1,
+        "Greeting": 1,
+        "Questions": 1,
+        "Enables": 1
+      },
+      "sessions": []
+    },
+    "multimodal": {
+      "supported_modalities": [
+        "text",
+        "image",
+        "audio",
+        "video",
+        "structured"
+      ],
+      "images_trained": 50,
+      "images_described": 0,
+      "images_generated": 0,
+      "visual_concepts": 28
+    },
+    "image_generator": {
+      "generation_count": 0,
+      "learned_concepts": 28,
+      "concept_list": [
+        "airplane",
+        "flying",
+        "sky",
+        "frog",
+        "near",
+        "water",
+        "bird",
+        "feathers",
+        "wings",
+        "horse",
+        "running",
+        "field",
+        "automobile",
+        "car",
+        "road",
+        "deer",
+        "natural",
+        "habitat",
+        "dog",
+        "fur"
+      ],
+      "config": {
+        "image_size": [
+          32,
+          32
+        ],
+        "is_color": true,
+        "smoothing_factor": 0.5,
+        "contrast_boost": 1.2
+      }
+    }
+  }
+}

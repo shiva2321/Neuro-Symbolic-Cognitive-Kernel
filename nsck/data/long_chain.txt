@@ -1,0 +1,7 @@
+The Chain of Being
+The Alpha is a Beta.
+Every Beta is a Gamma.
+A Gamma is a Delta.
+All Deltas are Epsilon.
+Epsilon is a Zeta.
+Zeta is the Omega.

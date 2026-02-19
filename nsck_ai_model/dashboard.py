@@ -604,9 +604,9 @@ async function refreshStats() {
     {label: 'Concepts', value: data.knowledge.total_concepts, color: 'var(--green)'},
     {label: 'Relations', value: data.knowledge.total_relations, color: 'var(--accent)'},
     {label: 'Episodes', value: data.knowledge.total_episodes, color: 'var(--orange)'},
-    {label: 'Vocabulary', value: data.encoder.vocabulary_size, color: 'var(--green)'},
-    {label: 'Causal Rules', value: data.causal_rules.total_rules, color: 'var(--accent)'},
-    {label: 'Abstractions', value: data.abstractions.total_abstractions, color: 'var(--orange)'},
+    {label: 'Sentence Store', value: data.knowledge.sentence_store, color: 'var(--green)'},
+    {label: 'Causal Links', value: data.causal.total_links, color: 'var(--accent)'},
+    {label: 'Context Turns', value: data.context.turns_tracked, color: 'var(--orange)'},
     {label: 'Queries', value: data.engine.query_count, color: 'var(--green)'},
     {label: 'Bigrams', value: data.generator.bigram_vocab, color: 'var(--accent)'},
     {label: 'Texts Trained', value: data.training.texts_trained, color: 'var(--orange)'},
@@ -622,7 +622,7 @@ async function refreshStats() {
     '<div style="font-size:32px">😊</div>' +
     '<div><strong>Current:</strong> ' + em.emotion +
     '<br>Valence: ' + em.valence + ' | Arousal: ' + em.arousal +
-    '<br>Blend: ' + Object.entries(em.blend || {}).map(([k,v]) => k + ': ' + v).join(', ') + '</div>';
+    '<br>Blend: ' + Object.entries(em.blend || {}).map(([k,v]) => k + ': ' + (typeof v === 'number' ? v.toFixed(2) : v)).join(', ') + '</div>';
   document.getElementById('raw-stats').textContent = JSON.stringify(data, null, 2);
 }
 

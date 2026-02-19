@@ -34,6 +34,10 @@ class ResponseComposer:
     """
     Enhanced response composer that generates fluent text using VSA operations
     and learned linguistic patterns.
+
+    All query starters, relation templates, and response patterns are
+    *learned from data* via ``learn_from_text()`` and ``learn_from_qa()``.
+    No hardcoded response templates.
     """
     
     def __init__(self):
@@ -43,15 +47,16 @@ class ResponseComposer:
         self.transition_patterns: Dict[str, List[str]] = defaultdict(list)
         self.learned_patterns: List[Dict[str, Any]] = []
         
-        # Common sentence starters for different query types
-        self.query_starters = {
-            'what': ["It is", "This refers to", "This is", "We can define it as"],
-            'who': ["This person", "This individual", "They", "This refers to"],
-            'where': ["This is located", "You can find it", "It is situated", "This place"],
-            'when': ["This occurred", "This happened", "The time was", "It took place"],
-            'how': ["The process involves", "This works by", "The method is", "This happens through"],
-            'why': ["The reason is", "This occurs because", "The explanation is", "This happens due to"],
-        }
+        # Learned starters per query type: {qtype → Counter(starter → count)}
+        self._learned_starters: Dict[str, Counter] = defaultdict(Counter)
+        # Learned Q&A answer structures
+        self._qa_structures: Dict[str, List[str]] = defaultdict(list)
+        # Relation → natural-language templates (learned from training text)
+        self.relation_templates: Dict[str, List[str]] = defaultdict(list)
+
+        # Grammatical starters — minimal, filled by learning
+        # (empty by default; populated from Q&A data)
+        self.query_starters: Dict[str, List[str]] = defaultdict(list)
     
     def learn_from_text(self, text: str):
         """
@@ -78,6 +83,104 @@ class ResponseComposer:
             # Learn transition patterns
             if len(sentences) > 1:
                 self._learn_transitions(sentences)
+
+            # Auto-learn relation templates from "X is Y" / "X has Y" patterns
+            self._learn_relation_from_sentence(sent)
+
+    def learn_from_qa(self, question: str, answer: str):
+        """Learn response patterns from a question-answer pair.
+
+        Discovers what answer structures correspond to each query type.
+        """
+        q_type = self._determine_query_type(question)
+
+        # Learn answer starter (first 3 words)
+        answer_words = answer.strip().split()
+        if len(answer_words) >= 2:
+            starter = ' '.join(answer_words[:min(3, len(answer_words))])
+            self._learned_starters[q_type][starter] += 1
+
+            # Rebuild query_starters from learned data
+            top_starters = self._learned_starters[q_type].most_common(6)
+            self.query_starters[q_type] = [s for s, _ in top_starters]
+
+        # Store answer structure for this query type (cap at 50)
+        if len(answer.strip()) > 10:
+            structs = self._qa_structures[q_type]
+            if answer.strip() not in structs:
+                structs.append(answer.strip())
+                if len(structs) > 50:
+                    self._qa_structures[q_type] = structs[-50:]
+
+    def learn_relation_template(self, relation: str, subject: str,
+                                obj: str, sentence: str):
+        """Learn how a relation is expressed in natural language.
+
+        Given a sentence containing *subject* and *obj*, creates a
+        template like ``"{subject} is the capital of {object}."``
+        """
+        tmpl = sentence
+        # Replace subject and object with placeholders
+        for variant in [subject, subject.lower(), subject.capitalize()]:
+            tmpl = tmpl.replace(variant, '{subject}')
+        for variant in [obj, obj.lower(), obj.capitalize()]:
+            tmpl = tmpl.replace(variant, '{object}')
+
+        if '{subject}' in tmpl and '{object}' in tmpl:
+            templates = self.relation_templates[relation.lower()]
+            if tmpl not in templates:
+                templates.append(tmpl)
+                # Keep only top 10 templates per relation
+                if len(templates) > 10:
+                    self.relation_templates[relation.lower()] = templates[-10:]
+
+    def _learn_relation_from_sentence(self, sentence: str):
+        """Auto-learn relation templates from sentences.
+
+        Detects ``"X is the Y of Z"`` or ``"X verb Z"`` structures
+        and stores them as templates.
+        """
+        sent = sentence.strip()
+        if len(sent) < 10:
+            return
+
+        # Pattern: "Subject is/are the Relation of Object"
+        m = re.match(
+            r'^(\w[\w\s]{1,30}?)\s+(is|are|was|were)\s+'
+            r'(?:the\s+)?(.+?)\s+of\s+(.+?)[.!?]?$',
+            sent, re.IGNORECASE)
+        if m:
+            subj, verb, rel_phrase, obj = m.groups()
+            rel_key = re.sub(r'\s+', '_', rel_phrase.lower().strip())
+            tmpl = f"{{subject}} {verb} the {rel_phrase.strip()} of {{object}}."
+            templates = self.relation_templates[rel_key]
+            if tmpl not in templates:
+                templates.append(tmpl)
+
+        # Pattern: "Subject verb Object" (simple SVO)
+        m = re.match(
+            r'^(\w[\w\s]{1,20}?)\s+(causes?|improves?|increases?|decreases?|'
+            r'contains?|produces?|uses?|requires?|enables?|prevents?)\s+'
+            r'(.+?)[.!?]?$',
+            sent, re.IGNORECASE)
+        if m:
+            subj, verb, obj = m.groups()
+            rel_key = verb.lower().rstrip('s')
+            tmpl = f"{{subject}} {verb.lower()} {{object}}."
+            templates = self.relation_templates[rel_key]
+            if tmpl not in templates:
+                templates.append(tmpl)
+
+    def get_learning_stats(self) -> Dict[str, Any]:
+        """Return statistics about learned patterns."""
+        return {
+            'sentence_templates': len(self.sentence_templates),
+            'concept_phrases': sum(len(v) for v in self.concept_phrases.values()),
+            'transition_patterns': sum(len(v) for v in self.transition_patterns.values()),
+            'relation_templates': {k: len(v) for k, v in self.relation_templates.items()},
+            'learned_starters': {k: len(v) for k, v in self._learned_starters.items()},
+            'qa_structures': {k: len(v) for k, v in self._qa_structures.items()},
+        }
     
     def compose_response(
         self,
@@ -260,36 +363,33 @@ class ResponseComposer:
         obj: str,
         query_type: str
     ) -> str:
-        """Construct a natural sentence from a fact triple."""
-        # Common relation patterns
+        """Construct a natural sentence from a fact triple.
+
+        Uses learned relation templates first, then grammatical fallbacks.
+        """
         relation_lower = relation.lower()
         
-        # Direct mappings
-        if relation_lower in ['is', 'are', 'was', 'were']:
+        # Check learned relation templates first
+        templates = self.relation_templates.get(relation_lower, [])
+        if not templates:
+            # Try without underscores
+            templates = self.relation_templates.get(
+                relation_lower.replace('_', ' '), [])
+        if templates:
+            try:
+                return templates[0].format(subject=subject, object=obj)
+            except (KeyError, IndexError):
+                pass
+
+        # Grammatical fallbacks (not domain-specific)
+        if relation_lower in ('is', 'are', 'was', 'were'):
             return f"{subject} {relation} {obj}."
         
-        if relation_lower in ['has', 'have', 'had']:
+        if relation_lower in ('has', 'have', 'had'):
             return f"{subject} {relation} {obj}."
         
-        # Handle common verbs
-        verb_patterns = {
-            'cause': f"{subject} causes {obj}.",
-            'causes': f"{subject} causes {obj}.",
-            'improve': f"{subject} improves {obj}.",
-            'improves': f"{subject} improves {obj}.",
-            'increase': f"{subject} increases {obj}.",
-            'increases': f"{subject} increases {obj}.",
-            'contain': f"{subject} contains {obj}.",
-            'contains': f"{subject} contains {obj}.",
-            'use': f"{subject} uses {obj}.",
-            'uses': f"{subject} uses {obj}.",
-        }
-        
-        if relation_lower in verb_patterns:
-            return verb_patterns[relation_lower]
-        
-        # Default construction
-        return f"{subject} {relation} {obj}."
+        # Default: use relation as verb
+        return f"{subject} {relation.replace('_', ' ')} {obj}."
     
     def _improve_fluency(self, response: str, query_type: str) -> str:
         """

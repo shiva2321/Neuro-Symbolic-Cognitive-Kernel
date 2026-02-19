@@ -289,26 +289,44 @@ class ContextRetentionModule:
         """
         Determine if context should be used for this query.
         
+        Only returns True when there is actual conversation history AND
+        the query contains pronouns or deictic references that need
+        resolution.  A short query alone is NOT sufficient — "What is
+        water?" is a standalone question, not a context reference.
+        
         Args:
             query: User query
             
         Returns:
             True if context should be used
         """
-        # Use context if query has pronouns or references
-        reference_words = ['it', 'this', 'that', 'these', 'those', 'they', 'them',
-                          'its', 'their', 'what about', 'how about', 'tell me more']
-        
+        # No history → nothing to reference
+        if not self.conversation_history:
+            return False
+
+        # Check for explicit reference words (pronouns / deictic phrases)
+        reference_phrases = [
+            'what about', 'how about', 'tell me more',
+            'and what', 'what else',
+        ]
+        # Pronoun patterns — match as whole words to avoid false positives
+        # (e.g. "it" inside "Italy")
+        reference_pronouns = [
+            r'\bit\b', r'\bits\b', r'\bthis\b', r'\bthat\b',
+            r'\bthese\b', r'\bthose\b', r'\bthey\b', r'\bthem\b',
+            r'\btheir\b', r'\bthe same\b',
+        ]
+
         query_lower = query.lower()
-        
-        for word in reference_words:
-            if word in query_lower:
+
+        for phrase in reference_phrases:
+            if phrase in query_lower:
                 return True
-        
-        # Use context if query is short and vague
-        if len(query.split()) <= 3:
-            return True
-        
+
+        for pattern in reference_pronouns:
+            if re.search(pattern, query_lower):
+                return True
+
         return False
     
     def clear_context(self):

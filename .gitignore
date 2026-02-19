@@ -1,43 +1,26 @@
 **/target/
 **/__pycache__/
 **/.pytest_cache/
+.benchmarks/
 .idea/
 .vscode/
 *.pyc
 *.log
-*.txt
-!nsck_gameplay_log.txt
-!requirements.txt
-run_log_*.txt
-nsck-demo/10Minute_experiment_video.mp4
-
-data_mnist/
-nsck-demo/data_mnist/
-*.gguf
-
-# Runtime-generated artifacts – never commit these
 *.db
 *.pth
 *.csv
 *.png
-demo_outputs/
+*.gguf
 
-# NSCK AI Model artifacts
+# Runtime / generated
+hf_cache/
+demo_outputs/
 nsck_ai_model/logs/
 nsck_ai_model/models/
 nsck_ai_model/hf_cache/
+data_mnist/
+nsck-demo/data_mnist/
+nsck-demo/10Minute_experiment_video.mp4
 
-# Benchmark and evaluation results (generated)
-/benchmark_results/
-/complete_evaluation/
-/telemetry_logs/
-/telemetry_demo/
-/quick_benchmark/
-/eval_results/
-/eval_extended/
-/monitor_demo/
-/my_logs/
-/quick_test/
-/standard_eval/
-/extended_eval/
-archive/
+# Virtualenv
+.venv/
