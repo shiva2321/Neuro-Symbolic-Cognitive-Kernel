@@ -34,12 +34,36 @@ class LanguageModule:
     """
     Interfaces with a local LLM to provide natural language capabilities.
     Maintains strict separation between 'Language' (LLM) and 'Thought' (VSA).
+    
+    Supports pluggable backends:
+    - LLM (Llama/Phi) for broad natural language.
+    - VSA (VSALanguageModule) for neuro-symbolic grounding on CPU.
     """
-    def __init__(self, model_path: str = DEFAULT_MODEL_PATH):
+    # [Phase 2] Defaulting to VSA mode (Neuro-Symbolic)
+    def __init__(self, model_path: str = DEFAULT_MODEL_PATH, semantic_memory: Optional[Any] = None, use_vsa: bool = True):
         self.cortex = get_lingua_cortex()
         self.llm = None
         self.mock_mode = False
+        self.use_vsa = use_vsa
+        self.vsa_backend = None
         
+        if self.use_vsa:
+            try:
+                from python.core.language.vsa_language_module import VSALanguageModule
+                self.vsa_backend = VSALanguageModule(semantic_memory)
+                print("[Language] Initialized VSA Backend (Neuro-Symbolic).")
+            except Exception as e:
+                print(f"[Language] Failed to init VSA Backend: {e}. Falling back to LLM/Mock.")
+                self.use_vsa = False
+        
+        if not self.use_vsa: # Only load LLM if VSA is not primary (or if we want hybrid?)
+            # For now, if use_vsa is True, we skip LLM for 'understand' but might need it for 'generate'?
+            # Let's load LLM anyway if available for 'generate'.
+            pass
+        else:
+            print("[Language] VSA Mode Active. LLM will be skipped for Understanding.")
+            return # Skip LLM loading if VSA is active (Save RAM)
+
         if not LLAMA_AVAILABLE:
             print("WARNING: llama-cpp-python not installed. LanguageModule running in MOCK mode.")
             self.mock_mode = True
@@ -85,6 +109,24 @@ class LanguageModule:
         Input: User text (e.g. "Go to the food")
         Output: Structured intent + Grounded Semantic Hypervector
         """
+        if self.use_vsa and self.vsa_backend:
+            # Delegate to VSA Backend
+            vsa_result = self.vsa_backend.understand(text)
+            # Adapt output format to match:
+            # vsa_result keys: 'intent', 'entities', 'grounded_hv', 'debug_tree'
+            
+            structured = {
+                "intent": vsa_result.get("intent", "unknown"),
+                "entities": vsa_result.get("entities", []),
+                "relation": "vsa_parsed",
+                "debug_tree": vsa_result.get("debug_tree")
+            }
+            
+            return {
+                "structured_output": structured,
+                "grounded_hv": vsa_result.get("grounded_hv")
+            }
+
         if self.mock_mode:
             return self._mock_understand(text)
             

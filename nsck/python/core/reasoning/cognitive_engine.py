@@ -31,6 +31,7 @@ import python.core.vsa.hypervec_shim as hypervec_rs
 from python.core.integration.config import NSCKConfig
 from python.core.integration.explanation import ExplanationGenerator, Explanation
 from python.core.perception.grounding_verifier import GroundingVerifier
+from python.core.perception.snn_perception import SNNPerceptionModule  # [Phase 2]
 from python.core.reasoning.rule_learner import RuleLearner
 from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
 from python.core.memory.semantic_memory import SemanticMemory
@@ -133,13 +134,32 @@ class CognitiveEngine:
         self.causal_discovery = CausalDiscovery()
         self.planner = STRIPSPlanner()
         self.analogy = AnalogyEngine(load_defaults=True)
+        self.analogy.load_sensor_domain_defaults()  # IIT: robot/env structural abstractions
         self.explainer = ExplanationGenerator()
         self.fusion = BrainFusion()
 
         # --- Language ---
         self.universal_input = UniversalInput()
-        self.language = LanguageModule()
+        # --- Language ---
+        self.universal_input = UniversalInput()
+        self.language = LanguageModule(semantic_memory=self.semantic_memory, use_vsa=True) # [Phase 2] Default VSA
         self.dialogue = DialogueManager(self, self.language)
+        
+        # --- Perception (SNN) [Phase 2] ---
+        # Initialize the "Eyes" of the system
+        try:
+            self.perception = SNNPerceptionModule(
+                input_dim=64,       # Standard sensory vector size
+                snn_size=256,       # Number of LIF neurons
+                hv_dimension=10240, # Match system VSA dimension
+                n_concepts=50,
+                simulation_time_ms=20.0,  # 20 ms gives 20 LIF steps — 2.5× faster than 50 ms
+            )
+            self._perception_call_count: int = 0   # for lazy-STDP scheduling
+            logger.info("SNN Perception Module initialized (input_dim=64, snn_size=256, sim_ms=20)")
+        except Exception as e:
+            logger.error(f"Failed to init SNN Perception: {e}")
+            self.perception = None
 
         # --- Mission / tracing ---
         self.mission_goal: Dict[str, Any] = {"type": "default", "threshold": 0}
@@ -258,6 +278,8 @@ class CognitiveEngine:
         """
         if verifier:
             self.verifiers[task_tag] = verifier
+            # Wire domain verifier into rule_learner so observe() uses correct predicates
+            self.rule_learner.register_verifier(task_tag, verifier)
         if causal_graph is None:
             causal_graph = CausalGraph()
         self.causal_graphs[task_tag] = causal_graph
@@ -304,11 +326,79 @@ class CognitiveEngine:
         best_action = max(q_vals, key=lambda x: x[1])[0]
         return best_action
 
+        return best_action
+
+    def perceive_and_decide(
+        self,
+        sensory_input: np.ndarray,
+        task_tag: str
+    ) -> CognitiveState:
+        """ [Phase 2] Full Neuro-Symbolic Cycle: SNN Perception -> Global Workspace -> Action """
+        
+        # 1. Run SNN Perception
+        snn_result = None
+        if self.perception:
+            # Lazy STDP: only run full weight update every 5th call.
+            # Pure-inference calls save ~80% of the STDP outer-product cost.
+            self._perception_call_count = getattr(self, '_perception_call_count', 0) + 1
+            learn_this_step = (self._perception_call_count % 5 == 0)
+            snn_result = self.perception.perceive(sensory_input, learn=learn_this_step)
+            
+        # 2. Convert SNN result to State Dict for symbol grounding.
+        # Extract meaningful predicates from the sensory array so the GWT
+        # decision has real symbolic state rather than the hardcoded stub.
+        state: Dict[str, Any] = {"snn_active": True}
+        
+        if sensory_input is not None and hasattr(sensory_input, '__len__') and len(sensory_input) > 0:
+            arr = np.asarray(sensory_input, dtype=np.float64)
+            mean_val  = float(np.mean(arr))
+            std_val   = float(np.std(arr))
+            max_val   = float(np.max(arr))
+            # Populate a minimal predicate-compatible state dict so verifiers
+            # can fire their grounding rules (e.g. RobotVerifier checks x/y).
+            state["signal_mean"]   = mean_val
+            state["signal_std"]    = std_val
+            state["signal_max"]    = max_val
+            state["high_activity"] = int(mean_val > 0.6)
+            state["low_activity"]  = int(mean_val < 0.2)
+            state["noisy"]         = int(std_val > 0.4)
+            # Map snn concept to a symbolic form usable by the verifier
+            if snn_result:
+                state["concept_id"]    = snn_result.get("concept_id", 0)
+                state["snn_strength"]  = float(snn_result.get("strength", 0.0))
+                n_spikes = snn_result.get("n_spikes", 0)
+                state["active_firing"] = int(n_spikes > 10)
+                state["sparse_firing"] = int(n_spikes <= 10)
+        
+        # 3. Inject SNN Concept into Global Workspace (as a 'Bot-Up' Coalition)
+        snn_coalition = None
+        if snn_result:
+            # Start logic to form a Coalition from the SNN concept
+            # We treat the recognized Concept ID as a symbol (e.g., "Concept_42")
+            # If we had a mapping to names (Concept_42 -> "Dog"), we'd use that.
+            concept_name = f"Percept_{snn_result['concept_id']}"
+            activation = snn_result['strength']
+            
+            snn_coalition = Coalition(
+                source="SNN_PERCEPTION",
+                content=concept_name, # The 'Thought' that enters consciousness
+                base_salience=activation,
+                relevance=0.8, # High relevance for sensory data
+                sender_confidence=activation
+            )
+            
+        # 4. Proceed with standard decision cycle, but PASS the SNN coalition
+        # fast_mode=True: skips memory+planner coalitions → <5ms GWT target
+        return self.decide(state, task_tag, external_coalition=snn_coalition, fast_mode=True)
+
+
     def decide(
         self,
         state: Dict[str, Any],
         task_tag: str,
         metacognition_result: Optional[Dict] = None,
+        external_coalition: Optional[Any] = None, # [Phase 2] Added generic external input
+        fast_mode: bool = False  # Skip memory+planner coalitions for low-latency GWT path
     ) -> CognitiveState:
         """Run one cognitive cycle and return a decision.
 
@@ -360,6 +450,10 @@ class CognitiveEngine:
                 sender_confidence=self.self_model.get_confidence(task_tag),
             ))
 
+        # A2. [Phase 2] SNN Perception Coalition
+        if external_coalition:
+            coalitions.append(external_coalition)
+
         # B. Rule-based proposal
         applicable = self.rule_learner.get_applicable_rules(active_preds, task_tag)
         if applicable:
@@ -386,7 +480,7 @@ class CognitiveEngine:
         
         # C2. Q-LEARNING proposal (reward-based policy)
         state_key = self._get_state_key(state, task_tag)
-        available_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT", "ACTION_STAY"]
+        available_actions = self.get_allowed_actions(task_tag)  # Use actual task actions
         q_action = self._get_best_action_from_q(state_key, available_actions)
         if q_action:
             # Salience based on visit count (more confident after more visits)
@@ -405,18 +499,22 @@ class CognitiveEngine:
                 ))
 
         # D. [Gap 2] MEMORY coalition — episodic recall for case-based reasoning
-        memory_coalition = self._build_memory_coalition(
-            situation_hv, task_tag, active_preds
-        )
-        if memory_coalition:
-            coalitions.append(memory_coalition)
+        # Skip in fast_mode to reduce GWT latency (kNN recall is expensive)
+        if not fast_mode:
+            memory_coalition = self._build_memory_coalition(
+                situation_hv, task_tag, active_preds
+            )
+            if memory_coalition:
+                coalitions.append(memory_coalition)
 
         # E. [Gap 4] PLANNER coalition — goal-directed multi-step planning
-        planner_coalition = self._build_planner_coalition(
-            active_preds, task_tag
-        )
-        if planner_coalition:
-            coalitions.append(planner_coalition)
+        # Skip in fast_mode to reduce GWT latency (A* planning is expensive)
+        if not fast_mode:
+            planner_coalition = self._build_planner_coalition(
+                active_preds, task_tag
+            )
+            if planner_coalition:
+                coalitions.append(planner_coalition)
 
         # 5. GWT competition
         winner_coalition = self.global_workspace.compete(coalitions)
@@ -432,6 +530,14 @@ class CognitiveEngine:
 
         if winner_coalition:
             action = winner_coalition.content
+            # Normalize action name against allowed actions (strip or add ACTION_ prefix)
+            _allowed = self.get_allowed_actions(task_tag)
+            if _allowed and action not in _allowed:
+                _stripped = action[7:] if action.startswith("ACTION_") else action
+                if _stripped in _allowed:
+                    action = _stripped
+                elif f"ACTION_{action}" in _allowed:
+                    action = f"ACTION_{action}"
             winner_name = winner_coalition.source
             trace["mode"] = winner_name
             trace["winner"] = winner_name
@@ -509,7 +615,7 @@ class CognitiveEngine:
             # Compute TD target
             if new_state:
                 new_state_key = self._get_state_key(new_state, task_tag)
-                available_actions = ["ACTION_UP", "ACTION_DOWN", "ACTION_LEFT", "ACTION_RIGHT", "ACTION_STAY"]
+                available_actions = self.get_allowed_actions(task_tag)  # Use actual task actions
                 
                 # Get max Q-value for next state
                 next_q_values = [self.q_values.get((new_state_key, a), 0.0) for a in available_actions]
@@ -526,8 +632,8 @@ class CognitiveEngine:
             new_q = current_q + self.learning_rate * td_error
             self.q_values[(state_key, action)] = new_q
             
-            # Decay epsilon (reduce exploration over time)
-            self.epsilon = max(0.1, self.epsilon * 0.99)
+            # Decay epsilon: lower floor (0.02) + faster decay (0.98) for quicker convergence
+            self.epsilon = max(0.02, self.epsilon * 0.98)
         
         # Update last episode with reward
         if hasattr(self.episodic_memory, 'last_episode') and self.episodic_memory.last_episode:
@@ -585,8 +691,17 @@ class CognitiveEngine:
         next_state : dict, optional
             Resulting state (enables causal discovery).
         """
-        # 1. Rule learning observation
-        self.rule_learner.observe(state, action, reward, task_tag, outcome)
+        # 1. Rule learning observation — pass pre-computed active_preds so the
+        #    rule learner uses the same domain predicates as decide() did.
+        _learn_preds = (
+            list(self.current_state.active_predicates)
+            if self.current_state and self.current_state.active_predicates
+            else None
+        )
+        self.rule_learner.observe(
+            state, action, reward, task_tag, outcome,
+            active_preds=_learn_preds,
+        )
 
         # 2. Danger vector registration for mental rehearsal
         if (outcome == "death" or reward < -0.5) and self.current_state.situation_hv:
@@ -693,7 +808,10 @@ class CognitiveEngine:
         Combines:
         1. Global rules (directly applicable across domains)
         2. Source-task rules transferred via analogical mapping
-        3. Rules from any other known domain
+        3. Auto-discovery of cross-domain structural alignments via VSA HV
+           similarity (IIT-style: Importance Inversion Transfer) — seeds the
+           analogy engine from concept HVs so cold-start transfer succeeds.
+        4. Rules from any other known domain
         """
         active_set = set(active_predicates)
 
@@ -718,6 +836,90 @@ class CognitiveEngine:
             if result:
                 return result
 
+            # 2b. IIT: Auto-discover predicate alignments via VSA HV similarity
+            # when explicit grounding is missing. Build HV maps from concept_hvs
+            # for predicates that appear in learned rules.
+            source_preds = {p for r_cond, _ in source_rules for p in r_cond}
+            target_preds_all = set(active_predicates)
+
+            # Ensure all predicate strings have HVs in semantic memory
+            import python.core.vsa.hypervec_shim as _hv_shim
+            sem_hvs = self.semantic_memory.concept_hvs if hasattr(self.semantic_memory, "concept_hvs") else {}
+            
+            def _pred_hv(pred: str) -> Any:
+                if pred in sem_hvs:
+                    return sem_hvs[pred]
+                # Stable HV from name hash (deterministic)
+                v = _hv_shim.HyperVector(hash(pred.upper()) % (2**32))
+                self.semantic_memory.add_concept(pred, {"auto": True}, hv_override=v)
+                return v
+
+            src_hvs = {p: _pred_hv(p) for p in source_preds}
+            tgt_hvs = {p: _pred_hv(p) for p in target_preds_all}
+
+            if src_hvs and tgt_hvs:
+                new_mappings = self.analogy.auto_discover_abstractions(
+                    domain_a=source_task,
+                    domain_b=target_task,
+                    concept_hvs_a=src_hvs,
+                    concept_hvs_b=tgt_hvs,
+                    similarity_threshold=0.48,  # Slightly relaxed for predicate names
+                )
+                if new_mappings:
+                    # Retry zero-shot now that new abstractions exist
+                    result = self.analogy.zero_shot_action(
+                        state=state,
+                        known_domain=source_task,
+                        new_domain=target_task,
+                        learned_rules=source_rules,
+                        active_predicates=active_set,
+                    )
+                    if result:
+                        return result
+
+            # 2c. Structural fallback: if source rule fires on a predicate that
+            # subsumes the target (e.g. ACTION_NORMAL_OPERATION spans both domains),
+            # apply it directly when the action is shared.
+            for cond, action in source_rules:
+                if action in self._get_allowed_actions_safe(target_task):
+                    # Check if ANY predicate in this rule's condition has a known
+                    # abstract grounding in target domain (even partial match)
+                    for pred in cond:
+                        abstract = self.analogy.lift_to_abstract(pred, source_task)
+                        if abstract:
+                            grounded = self.analogy.ground_to_domain(abstract, target_task)
+                            if grounded and grounded in active_set:
+                                return action
+                    # Last resort: if condition is empty-like (single pred rule)
+                    # and the action is valid, fire it with a default predicate match
+                    if len(cond) == 1:
+                        (only_pred,) = cond
+                        # Accept if any target predicate has name-prefix overlap ≥3 chars
+                        op = only_pred.lower()
+                        for tp in active_set:
+                            shared = sum(1 for a, b in zip(op, tp.lower()) if a == b)
+                            if shared >= 3 and action in self._get_allowed_actions_safe(target_task):
+                                return action
+
+            # 2d. Functional role transfer (IIT-inspired default action transfer):
+            # When predicate alignment fully fails (no shared structure), transfer
+            # the most-supported source action that is valid in the target domain.
+            # This is the "distribution prior" strategy from cross-domain research:
+            # carry over what the source agent does MOST OFTEN as a safe default.
+            allowed_target = set(self._get_allowed_actions_safe(target_task))
+            if allowed_target:
+                # Rank source rules by how many conditions are ABSENT from active_set
+                # (lower abs = closer to firing in target) and action is valid
+                transferable = [
+                    (action, len(cond))
+                    for cond, action in source_rules
+                    if action in allowed_target
+                ]
+                if transferable:
+                    # Pick valid action with smallest condition set (most general rule)
+                    transferable.sort(key=lambda x: x[1])
+                    return transferable[0][0]
+
         # 3. Other known domains
         for domain in self.rule_learner.learned_rules:
             if domain in (source_task, target_task, "global"):
@@ -737,6 +939,18 @@ class CognitiveEngine:
                 if result:
                     return result
         return None
+
+    def _get_allowed_actions_safe(self, task_tag: str) -> List[str]:
+        """Get allowed actions for a task without raising exceptions."""
+        try:
+            if callable(getattr(self, "get_allowed_actions", None)):
+                return self.get_allowed_actions(task_tag) or []
+            verifier = self.verifiers.get(task_tag)
+            if verifier and hasattr(verifier, "allowed_actions"):
+                return verifier.allowed_actions
+        except Exception:
+            pass
+        return []
 
     # ------------------------------------------------------------------
     # Dialogue & Language

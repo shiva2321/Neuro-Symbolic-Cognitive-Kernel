@@ -1,0 +1,1110 @@
+Architectural Specification for a Biologically Plausible VSA-SNN Natural Language Understanding System
+1. Introduction
+The quest for Artificial General Intelligence (AGI) has long been defined by a schism between two dominant paradigms: the symbolic approach, which prioritizes structured reasoning, variable binding, and explicit syntax; and the connectionist approach, which emphasizes learning, adaptability, and distributed representations. While Deep Learning has achieved remarkable success in pattern recognition and statistical language modeling, it often struggles with the systematicity and compositional generalization that characterize human cognition. Conversely, traditional symbolic AI excels at logic but lacks the robustness and grounding of neural systems. The resolution of this dichotomy lies in the integration of high-dimensional vector representations with the temporal dynamics of spiking neurons—a synthesis formalized as Vector Symbolic Architectures (VSA) implemented within Spiking Neural Networks (SNNs).
+
+This report presents a comprehensive architectural analysis of a VSA-SNN system designed for Natural Language Understanding (NLU). Unlike conventional artificial neural networks that rely on rate-based abstractions and continuous backpropagation, this architecture is grounded in the Neural Engineering Framework (NEF) and the Semantic Pointer Architecture (SPA). It leverages the computational efficiency of sparse spiking activity and the representational power of Holographic Reduced Representations (HRR) to perform complex syntactic parsing and semantic reasoning.   
+
+The primary focus of this analysis is to address the "missing layers" of neuromorphic engineering: the control logic required to sequence cognitive operations, the memory management systems necessary to maintain state over time, and the input/output interfaces that bridge the gap between continuous real-world data and discrete spike trains. By synthesizing insights from computational neuroscience, control theory, and systems programming, we outline a blueprint for a scalable, biologically plausible cognitive computer implemented in the Rust programming language for optimal performance and memory safety.
+
+The architecture described herein is not merely a theoretical construct but a functional specification for building an NLU system capable of left-corner parsing—a psycho-linguistically plausible algorithm that minimizes working memory load. We detail the mathematical derivation of the synaptic weights, the differential equations governing neuronal dynamics, and the specific data structures required for efficient simulation. This system demonstrates how the brain's "operating system"—the Basal Ganglia and Thalamus—can be replicated in software to route information dynamically between cortical modules, enabling a neural network to execute sequential programs without a central processing unit.   
+
+2. Theoretical Framework and Mathematical Foundations
+To construct an NLU system using spiking neurons, it is necessary to first define the mathematical operations that the neural substrate must approximate. The system operates on two distinct levels of abstraction: the representational level, where information is encoded as high-dimensional vectors (semantic pointers), and the implementation level, where these vectors are represented by the collective spiking activity of heterogeneous neuron populations.
+
+2.1 Vector Symbolic Architectures (VSA)
+The core data structure of the proposed system is the "semantic pointer"—a high-dimensional vector (hypervector) that serves as a compressed representation of semantic content. In this architecture, we utilize Holographic Reduced Representations (HRR) due to their mathematical compatibility with the dot-product tuning curves typical of cortical neurons. In HRR, the information is distributed holographically across all dimensions of the vector, providing inherent robustness to noise and synaptic failure.   
+
+The algebraic structure of the VSA is defined by a vector space R 
+D
+  equipped with three primary operations: superposition, binding, and unbinding. These operations allow the system to construct complex, hierarchical symbol structures (such as parse trees) from atomic components (words and roles).
+
+2.1.1 Superposition (Bundling)
+Superposition is the operation used to represent sets of items or unstructured collections. Given two vectors x,y∈R 
+D
+ , their superposition z is defined as the component-wise addition:
+
+z=x+y
+
+Ideally, the vectors x and y are normalized such that ∣∣x∣∣≈∣∣y∣∣≈1. The resulting vector z shares similarity with both constituent vectors, meaning that the dot product z⋅x and z⋅y will be significantly greater than zero (approximately 1/ 
+2
+
+​
+  if orthogonal). This property allows the system to query whether a specific item is present in the set by checking for similarity. In a neural implementation, this is achieved simply by summing the input currents from two source populations into a single target population.   
+
+2.1.2 Binding (Circular Convolution)
+Binding is the critical operation for representing structure and syntax. It allows the system to associate a "role" (e.g., Subject) with a "filler" (e.g., Dog) in a way that is distinct from simple superposition. For HRRs, binding is implemented via circular convolution (⊛):
+
+z=x⊛y
+
+Mathematically, the k-th component of the bound vector is defined as:
+
+(x⊛y) 
+k
+​
+ = 
+j=0
+∑
+D−1
+​
+ x 
+j
+​
+ y 
+k−j(modD)
+​
+ 
+
+Unlike superposition, the bound vector z is dissimilar (quasi-orthogonal) to both x and y. This property is essential for avoiding "ghosts" or false positives during retrieval. It effectively compresses the tensor product of the two vectors back into the original D-dimensional space, preventing the "curse of dimensionality" that plagues traditional tensor product representations.   
+
+2.1.3 Unbinding (Involution)
+To retrieve information from a bound structure, an unbinding operation is required. In HRR, the approximate inverse of a vector x is its involution x 
+†
+ , which is obtained by reversing the indices of the vector elements (except the first element at index 0):
+
+x 
+†
+ =
+
+Unbinding is then performed by convolving the bound structure with the involution of the cue:
+
+y 
+approx
+​
+ =z⊛x 
+†
+ =(x⊛y)⊛x 
+†
+ ≈y
+
+Because circular convolution is a lossy compression operation, the result y 
+approx
+​
+  is a noisy version of the original vector y. This necessitates the use of a "clean-up memory" (described in Section 3) to restore the vector to its exact state.   
+
+2.2 The Neural Engineering Framework (NEF)
+The translation of these abstract vector operations into biological spikes is governed by the Neural Engineering Framework (NEF). The NEF provides a systematic method for compiling high-level mathematical functions into low-level synaptic weights.   
+
+2.2.1 Encoding
+A population of N neurons represents a time-varying vector x(t) through its spiking activity. The input current J 
+i
+​
+  injected into the soma of neuron i is defined by:
+
+J 
+i
+​
+ (x)=α 
+i
+​
+ ⟨e 
+i
+​
+ ,x⟩+J 
+i
+bias
+​
+ 
+
+Where:
+
+α 
+i
+​
+  is the gain factor (scaling the response).
+
+e 
+i
+​
+  is the encoding vector (the "preferred direction" in the vector space that this neuron is most sensitive to).
+
+J 
+i
+bias
+​
+  is a background bias current that accounts for the neuron's spontaneous firing rate.
+The non-linear neuron model G (typically Leaky Integrate-and-Fire, LIF) converts this current into a spike train δ 
+i
+​
+ (t):
+
+δ 
+i
+​
+ (t)=G[J 
+i
+​
+ (x(t))]
+
+.   
+
+2.2.2 Decoding
+The semantic vector x can be estimated (decoded) from the population activity by computing a linear weighted sum of the post-synaptic currents (PSCs). The PSC a 
+i
+​
+ (t) is generated by convolving the spike train with a synaptic filter h(t) (usually a decaying exponential):
+
+a 
+i
+​
+ (t)= 
+t 
+jk
+​
+ 
+∑
+​
+ h(t−t 
+jk
+​
+ )
+
+The linear estimate  
+x
+^
+ (t) is then:
+
+x
+^
+ (t)= 
+i=1
+∑
+N
+​
+ a 
+i
+​
+ (t)d 
+i
+​
+ 
+
+The decoding vectors d 
+i
+​
+  are determined offline using least-squares optimization to minimize the error E=∫(x− 
+x
+^
+ ) 
+2
+ dt over a sampling of the vector space. This optimization accounts for the specific tuning curves and noise properties of the neurons in the population.   
+
+2.2.3 Transformation
+The true power of the NEF lies in its ability to compute arbitrary functions f(x) directly in the connection weights between populations. To compute a transformation y=f(x), we simply solve for a different set of decoders d 
+f
+  such that:
+
+i=1
+∑
+N
+​
+ a 
+i
+​
+ (t)d 
+i
+f
+​
+ ≈f(x(t))
+
+The synaptic weight matrix W 
+ij
+​
+  connecting population A (representing x) to population B (representing y) is derived as the outer product of the decoders of A and the encoders of B:
+
+W 
+ij
+​
+ =α 
+j
+​
+ e 
+j
+​
+ ⊗d 
+i
+f
+​
+ 
+
+This allows the SNN to implement the complex vector algebra required for VSA (including the element-wise multiplication needed for circular convolution) purely through the static configuration of synaptic weights.   
+
+3. Input/Output Interfaces: The Transduction Problem
+A functional NLU system must interface with the external world, which typically presents data in continuous or symbolic formats (text, audio) rather than spike trains. This section details the "transduction" layers that convert standard word embeddings into VSA hypervectors and subsequently into spikes, and vice-versa.
+
+3.1 Input Interface: From Embeddings to Spikes
+Modern NLP relies on dense word embeddings (e.g., Word2Vec, GloVe, BERT) where semantic meaning is encoded in dense vectors of dimension D 
+emb
+​
+ ≈300−768. However, VSA systems require high-dimensional, quasi-orthogonal hypervectors (D 
+vsa
+​
+ ≈1024−8192) to support the binding capacity required for deep syntax trees.
+
+3.1.1 Random Projection Mapping
+To map from the dense embedding space R 
+D 
+emb
+​
+ 
+  to the VSA space R 
+D 
+vsa
+​
+ 
+ , we employ a Random Projection technique. This method is computationally efficient and preserves the cosine similarity between words (semantic relations) in the higher-dimensional space, a property guaranteed by the Johnson-Lindenstrauss lemma.   
+
+Algorithm:
+
+Projection Matrix Generation: Initialize a fixed, random projection matrix W 
+proj
+​
+ ∈R 
+D 
+vsa
+​
+ ×D 
+emb
+​
+ 
+ . The elements of this matrix are typically drawn from a normal distribution N(0,1) or a sparse ternary distribution {−1,0,1} for hardware efficiency.
+
+Projection: For an input word embedding v 
+glove
+​
+ , compute the raw hypervector:
+
+v 
+raw
+​
+ =W 
+proj
+​
+ v 
+glove
+​
+ 
+Normalization: VSA operations (binding) are sensitive to vector magnitude. The projected vector must be normalized to the unit hypersphere:
+
+v 
+sp
+​
+ = 
+∣∣v 
+raw
+​
+ ∣∣
+v 
+raw
+​
+ 
+​
+ 
+
+This ensures that v 
+sp
+​
+ ⋅v 
+sp
+​
+ =1, which is a requirement for the stability of unitary binding operations.   
+
+3.1.2 Spike Generation (Transduction)
+Once the semantic pointer v 
+sp
+​
+  is computed, it must be converted into a temporal spike train to drive the SNN. This is achieved by injecting the vector as a bias current into the Input Population of the network.
+For each neuron i in the Input Population:
+
+J 
+input,i
+​
+ (t)=α 
+i
+​
+ (e 
+i
+​
+ ⋅v 
+sp
+​
+ (t))
+
+This effectively "clamps" the input population to represent the word vector. The neurons will fire Poisson-like spike trains whose rates correspond to the projection of the semantic pointer onto their encoders.   
+
+3.2 Output Interface: From Spikes to Symbols
+The output of the NLU system is a dynamic pattern of activity in a "Result" population (e.g., representing the answer to a query). To make this intelligible, it must be decoded back into text.
+
+3.2.1 Linear Decoding and Filtering
+The discrete spikes S 
+j
+​
+ (t) from the output population are first low-pass filtered to recover the continuous signal a 
+j
+​
+ (t). The high-dimensional vector  
+y
+^
+​
+ (t) is reconstructed using the optimal decoders d 
+j
+​
+ :
+
+y
+^
+​
+ (t)= 
+j=1
+∑
+N
+​
+ a 
+j
+​
+ (t)d 
+j
+​
+ 
+
+The time constant of the synaptic filter τ 
+psc
+​
+  (typically 5-10ms) determines the smoothness of the decoded signal. A larger τ reduces noise but introduces latency.   
+
+3.2.2 Vocabulary Query (Similarity Search)
+The decoded vector  
+y
+^
+​
+  is likely a noisy approximation of a valid semantic pointer. To identify the specific word it represents, the system performs a similarity check against the entire vocabulary.
+Let V 
+vocab
+​
+  be the matrix containing all valid semantic pointers (words). The system computes the dot product (cosine similarity) between the output  
+y
+^
+​
+  and every vector in V 
+vocab
+​
+ :
+
+s=V 
+vocab
+​
+  
+y
+^
+​
+  
+T
+ 
+
+The index of the maximum value in s corresponds to the output word:
+
+Output Word=argmax 
+k
+​
+ (s 
+k
+​
+ )
+
+In a pure hardware implementation, this "argmax" operation is performed by the Clean-up Memory (a Winner-Take-All circuit), but for the I/O interface, it can be computed efficiently in software.   
+
+4. Architectural Modules: Memory and Processing
+A robust NLU system requires specialized cortical modules to store intermediate states (working memory), process syntax (binding), and correct errors (clean-up). We define the neural implementation of these critical components below.
+
+4.1 The Working Memory (Neural Integrator) Module
+Language processing is inherently temporal; the system must maintain the context of the beginning of a sentence while processing the end. In the brain, this function is attributed to Neural Integrators—recurrent networks that can maintain a stable firing state in the absence of external input.   
+
+4.1.1 Differential Equation and Dynamics
+To store a vector x, the neural population must approximate a mathematical integrator. The state equation is:
+
+dt
+dx
+​
+ =u(t)
+
+Where u(t) is the control input (e.g., "add this word to memory"). To maintain a value (u=0), the derivative must be zero.
+In the discrete time domain (simulation step δt), this is:
+
+x(t+δt)=x(t)+δt⋅u(t)
+
+This implies that the current state depends on the previous state plus the input.
+
+4.1.2 Synaptic Weight Derivation
+In the NEF, this integration is implemented via a recurrent connection. If we want the population to represent x(t), the recurrent connection must feed the decoded value of x(t) back into the population to sustain the activity.
+The function to be computed by the recurrence is f(x)=x.
+However, biological synapses have an intrinsic time constant τ 
+s
+​
+  (e.g., 100ms for NMDA receptors, often used in working memory). The dynamics of the post-synaptic current h(t) effectively integrate the spikes. To implement a perfect mathematical integrator using leaky synapses, the recurrent weight matrix W 
+rec
+​
+  must implement a scaled feedback function:
+
+W 
+rec
+​
+ =τ 
+s
+​
+ DE 
+T
+ +I
+
+Technically, the NEF derivation for a population with synaptic filter τ 
+s
+​
+  approximating  
+x
+˙
+ =Ax+Bu requires the recurrent connection to compute f(x)=τ 
+s
+​
+ Ax+x. For a memory (integrator), A=0 (no drift), so the recurrence computes the identity f(x)=x.   
+
+Drift Compensation: Real neural integrators are "leaky" and noisy. Without correction, the stored vector x will drift towards zero or random noise. To mitigate this, the working memory is often coupled with a Clean-up Memory (Auto-associative Attractor) that constantly "pulls" the state towards the nearest valid semantic pointer.   
+
+4.2 The Associative Memory (Clean-up) Module
+As VSA vectors are bound and manipulated, they accumulate noise. If this noise is not removed, it compounds rapidly, rendering deep parse trees unintelligible. The Clean-up Memory is the error-correction mechanism of the cognitive architecture. It functions as a Winner-Take-All (WTA) circuit.   
+
+4.2.1 Architecture and Connectivity
+The Clean-up Memory consists of a population of neurons where each sub-population is tuned to a specific vector in the vocabulary.
+
+Feedforward Excitation: The noisy input vector v 
+noisy
+​
+  projects to all neurons. The input current to sub-population k is proportional to the similarity v 
+noisy
+​
+ ⋅v 
+k
+​
+ .
+
+Lateral Inhibition: All sub-populations project excitatory connections to a shared pool of Inhibitory Interneurons. These interneurons then project strong inhibitory connections back to all excitatory sub-populations.
+
+Mechanism: The most active sub-population (the "winner") drives the inhibitory pool the hardest. This global inhibition suppresses the less active populations (the "losers"), leaving only the winner active. This is effectively a hardware implementation of the argmax function.   
+
+4.2.2 Spiking Circuit Equations
+Let V 
+i
+​
+  be the membrane potential of the i-th excitatory neuron (tuned to word i), and V 
+inh
+​
+  be the potential of the shared inhibitory population.
+
+τ 
+E
+​
+  
+dt
+dV 
+i
+​
+ 
+​
+ =−(V 
+i
+​
+ −E 
+L
+​
+ )+I 
+ext,i
+​
+ −w 
+inh
+​
+ g 
+inh
+​
+ (t)(V 
+i
+​
+ −E 
+rev,I
+​
+ )
+τ 
+I
+​
+  
+dt
+dV 
+inh
+​
+ 
+​
+ =−(V 
+inh
+​
+ −E 
+L
+​
+ )+w 
+exc
+​
+  
+j
+∑
+​
+ g 
+exc,j
+​
+ (t)(V 
+inh
+​
+ −E 
+rev,E
+​
+ )
+
+Where:
+
+g(t) is the synaptic conductance (filtered spikes).
+
+w 
+inh
+​
+  and w 
+exc
+​
+  are synaptic weights.
+
+E 
+rev
+​
+  are reversal potentials (typically -70mV for inhibition, 0mV for excitation).
+
+4.2.3 Stability Parameters
+For the WTA dynamics to converge to a single stable winner without oscillation or "epileptic" runaway activity, specific parameter ratios are required:
+
+Inhibitory Speed: The inhibitory loop must be faster than the excitatory integration. τ 
+I
+​
+ <τ 
+E
+​
+ . Typical values are τ 
+I
+​
+ ≈2−5 ms (GABA$_A$) and τ 
+E
+​
+ ≈20 ms.
+
+Inhibition/Excitation Ratio: The inhibitory weight w 
+inh
+​
+  must be sufficiently strong to suppress the losers. A ratio of w 
+inh
+​
+ >1.2w 
+exc
+​
+  is often cited as a stability criterion for hard WTA. If inhibition is too weak, multiple winners ("soft" WTA) may emerge, which is undesirable for unambiguous symbol selection.   
+
+4.3 The Binding Module (Circular Convolution Circuit)
+This module performs the syntactic binding of vectors (z=x⊛y). In the Fourier domain, convolution becomes element-wise multiplication.
+
+Architecture:
+
+FFT Projection: The input populations for x and y are connected to an intermediate "binding" population via weights that implement the Discrete Fourier Transform (DFT).
+
+Element-wise Product: The intermediate population computes the element-wise product of the transformed vectors. Since the inputs are complex numbers in the Fourier domain, this involves computing (a+bi)(c+di)=(ac−bd)+(ad+bc)i.
+
+This requires neurons capable of computing nonlinear product functions f(u,v)=u⋅v. The NEF excels at this; a 2D ensemble of neurons with mixed tuning curves can approximate the product function with high precision.
+
+IFFT Projection: The resulting activity is projected to the output population via weights implementing the Inverse DFT, recovering the bound vector z in the time domain.   
+
+Spiking Implementation:
+The binding module typically requires ~3-4x the number of neurons as a simple memory buffer because computing products is more demanding on the representational capacity than simple linear storage. The dimensionality D of the vectors dictates the size of the DFT matrices (e.g., 1024×1024), making this one of the most computationally intensive modules in the SNN.   
+
+5. Control Logic: The Brain's Operating System
+The most critical "missing layer" in typical SNN descriptions is the control logic. A parser is an algorithm: it requires IF-THEN rules, state transitions, and sequential operations. In the mammalian brain, this "Action Selection" is performed by the Basal Ganglia (BG) and Thalamus. We model this system to control the flow of information between cortical modules.   
+
+5.1 Basal Ganglia: The Action Selector
+The Basal Ganglia functions as a competitive network that monitors the state of the cortex and selects the most appropriate "action" (or rule) to execute. It does not process the data itself; it decides what to do with the data.
+
+5.1.1 Input (Striatum): Utility Calculation
+The Striatum receives state vectors from all cortical buffers (Input, Stack, Tree). It is composed of populations representing the "condition" part of production rules.
+For a rule i (e.g., "If Input is Noun, Push to Stack"), the utility U 
+i
+​
+  is calculated as the dot product between the current cortical state S and the rule's prototype vector C 
+i
+​
+ :
+
+U 
+i
+​
+ =S⋅C 
+i
+​
+ 
+
+The Striatum neurons effectively encode these utilities. High activity in a specific striatal population indicates that the conditions for that rule are met.
+
+5.1.2 Selection Pathways (Direct vs. Indirect)
+The selection logic is implemented via the interaction of distinct neurochemical pathways that modulate the output of the BG (the Globus Pallidus internus, GPi).
+
+GPi Default State: The GPi provides tonic (constant) inhibition to the Thalamus. This is the "brake" that prevents any actions from occurring by default.
+
+Direct Pathway (Go): Striatal neurons expressing D1 receptors project inhibitory connections directly to the GPi. When these neurons fire (high utility), they inhibit the GPi. Inhibiting an inhibitor results in disinhibition. This releases the "brake" on the specific thalamic channel associated with that action, allowing it to fire.
+
+Indirect Pathway (No-Go): Striatal neurons expressing D2 receptors project to the Globus Pallidus externus (GPe), which inhibits the Subthalamic Nucleus (STN), which excites the GPi. This loop acts as a "surround suppression" mechanism. It reinforces the inhibition on competing actions, ensuring that only one clear winner is selected.
+
+Hyperdirect Pathway (Global Stop): The Cortex projects directly to the STN (bypassing Striatum). This excites the GPi rapidly, applying a "Global Stop" signal. This is useful for resetting the system or canceling actions mid-flight.   
+
+Simulation: In our SNN, we model these pathways using distinct neuron populations with sign-constrained weights (inhibitory vs. excitatory). The interaction implements a robust "off-center, on-surround" selection mechanism.   
+
+Table 1: Basal Ganglia Pathway Logic Implementation
+
+Pathway	Source → Target	Weight Sign	Functional Outcome
+Direct	Striatum D1 → GPi	Inhibitory (-)	Disinhibition (Go): Reduces GPi activity, allowing Thalamus to fire.
+Indirect	Striatum D2 → GPe → STN → GPi	(-), (-), (+)	Suppression (No-Go): Increases GPi activity, blocking competing actions.
+Hyperdirect	Cortex → STN → GPi	Excitatory (+)	Braking: Rapidly inhibits all thalamic channels.
+5.2 Thalamus: The Routing Gate
+The Thalamus acts as the gated switchboard of the cognitive architecture. It contains the "channels" for information transfer (e.g., Input -> Stack, Tree -> Partial).
+
+Gating Mechanism:
+Thalamic neurons are normally silenced by the tonic inhibition from the GPi. When the BG selects an action (via the Direct Pathway), the inhibition on a specific thalamic population is removed.
+Once disinhibited, the thalamic neurons can respond to their driving input (from the Cortex). They relay the signal to the target cortical area.
+Mathematically, this implements a multiplicative gate:
+
+Flow 
+A→B
+​
+ =Signal 
+A
+​
+ ×Gate 
+BG
+​
+ (i)
+
+If Gate 
+BG
+​
+ (i) is 0 (inhibited), no flow occurs. If 1 (disinhibited), the vector is transferred. This physical routing of high-dimensional vectors constitutes the "execution" of the symbolic rule.   
+
+6. The Syntactic Core: Left-Corner Parsing Implementation
+To demonstrate NLU, we implement a Left-Corner Parser. This algorithm is theoretically ideal for this architecture because it is memory-efficient (unlike pure bottom-up parsing) and predictive (unlike pure top-down parsing), matching human sentence processing constraints.   
+
+6.1 Memory Buffers
+The architecture defines four specific VSA buffers (Neural Integrators):
+
+INPUT: Holds the current word vector (e.g., Dog).
+
+STACK: Holds the stack of predicted syntactic goals (e.g., VP, S).
+
+TREE: Holds the current syntactic tree structure being built.
+
+PARTIAL: Holds partial trees waiting for a right-branch completion.
+
+6.2 Parsing Operations and Dynamics
+The parsing process is a sequence of state transitions driven by BG rules.
+
+Scenario: Parsing the sentence "The dog ran."
+
+Phase 1: Shift (Processing "The")
+
+State: Input=The (Category DT), Stack=Empty.
+
+BG Rule: If Input=DT and Stack=Empty -> Shift
+
+Action (Thalamus Routing):
+
+Bind The with role DT.
+
+Push goal NP (Noun Phrase) onto Stack.
+
+VSA Implementation:
+
+TREE←TREE+(The⊛DT)
+STACK←NP+(STACK⊛PushOp)
+
+Note: Pushing onto the stack is implemented by binding the current stack vector with a special PushOp vector (effectively shifting it "down" in similarity space) and adding the new item.
+
+Phase 2: Predict (Processing "Dog")
+
+State: Input=Dog (Category N), Stack=NP.
+
+BG Rule: If Input=N and Stack=NP -> Predict
+
+Action: Complete the Noun Phrase.
+
+VSA Implementation:
+
+TREE←TREE+(Dog⊛N)
+
+(Here, "The" and "Dog" are now superimposed in the Tree buffer, creating a representation of the NP).
+
+Phase 3: Reduce (Processing "Ran")
+
+State: Input=Ran (Category V), Stack=NP (Completed).
+
+BG Rule: If Input=V and Stack=NP -> Reduce
+
+Action: Combine the completed NP (Subject) and the V (Verb) into a Sentence structure.
+
+VSA Implementation:
+
+FULL_TREE←(TREE 
+NP
+​
+ ⊛Subject)+(Ran⊛Verb⊛Action)
+The differential equations governing these transitions are simply the standard integrator equations ( 
+x
+˙
+ =u), where the input u is the output of the binding modules, gated by the Thalamus. The specific sequence is emergent from the utility maximization in the Striatum.   
+
+7. Learning and Plasticity: The PES Rule
+While the basic grammar rules can be "hard-wired" into the BG weights, a robust system must adapt. The Prescribed Error Sensitivity (PES) learning rule is the standard mechanism for supervised learning in the NEF. It allows the system to learn new semantic bindings or adjust decoding weights to minimize error.   
+
+7.1 Derivation of the PES Rule
+The goal is to modify the connection weights ω 
+ij
+​
+  to minimize an error signal E(t). The error is typically the difference between the desired vector x 
+target
+​
+  and the actual decoded vector  
+x
+^
+ .
+
+E(t)=x 
+target
+​
+ (t)− 
+x
+^
+ (t)
+
+The gradient descent rule for minimizing the squared error leads to the PES update equation for weights between pre-synaptic population A and post-synaptic population B:
+
+Δω 
+ij
+​
+ =κα 
+j
+​
+ e 
+j
+​
+ ⋅E(t)a 
+i
+​
+ (t)
+
+Where:
+
+κ: Learning rate scalar.
+
+α 
+j
+​
+ ,e 
+j
+​
+ : Gain and Encoder of the post-synaptic neuron j.
+
+a 
+i
+​
+ (t): Filtered activity of the pre-synaptic neuron i.
+
+Insight: The PES rule is a biologically plausible approximation of backpropagation. The term e 
+j
+​
+ ⋅E represents the "local error" for neuron j, projecting the global vector error onto the neuron's preferred direction. The term a 
+i
+​
+ (t) represents the Hebbian eligibility trace (pre-synaptic activity).   
+
+7.2 Online Learning Implementation
+In the parser, PES can be used to learn new vocabulary or grammatical associations.
+
+Error Calculation: A specialized "Error Population" computes E(t).
+
+Weight Update: The weights connecting the Cortex to the BG (for rule learning) or Input to Cortex (for vocabulary learning) are updated at every time step (dt) using the PES equation.
+
+Generalization: Over time, the error signal decreases, and the system performs the correct transformation without external guidance.   
+
+8. Software Implementation in Rust
+To simulate a system of this complexity—involving hundreds of thousands of neurons and high-dimensional vector operations—performance is paramount. The Rust programming language is the ideal choice due to its zero-cost abstractions, memory safety guarantees, and support for high-performance numerical computing.   
+
+8.1 Memory Management and Ownership
+A major challenge in SNN simulation is managing the complex graph of synaptic connections. In C++, this often leads to memory leaks or segmentation faults. Rust's ownership model solves this but requires careful architectural design.
+
+The "Engine" Pattern: Instead of having neurons "own" their synapses (which creates self-referential structures that fight the borrow checker), the state should be held in a central Engine struct. Neurons and Synapses are stored in contiguous Vec structures (Structure of Arrays) for cache locality.
+
+Indexing vs. Pointers: Connections should be represented by usize indices into these vectors rather than raw pointers or Rc/Box smart pointers. This avoids the overhead of reference counting and allows the borrow checker to validate data access at compile time.   
+
+8.2 Sparse Matrix Operations
+The connectivity matrix of an SNN is extremely sparse (typically <10% density). Using dense matrices is computationally prohibitive.
+
+CSR Format: We utilize the Compressed Sparse Row (CSR) format (via the sprs crate) to store synaptic weights. This allows for efficient matrix-vector multiplication (the core operation of the update loop) by iterating only over non-zero elements.
+
+Parallelization: The update loop is parallelized using rayon. The neuron state update (V(t+1)) is an "embarrassingly parallel" problem. The synapse update can be parallelized by partitioning the postsynaptic populations.   
+
+Table 2: Rust Crate Ecosystem for VSA-SNN
+
+Crate	Functionality	Architectural Role
+ndarray	Dense vector algebra	Implementing VSA operations (binding, superposition).
+sprs	Sparse linear algebra	Storing and multiplying synaptic weight matrices.
+rayon	Data parallelism	Multi-threading the neuron update loop.
+rand_distr	Probability distributions	Generating Gaussian/Ternary projection matrices.
+8.3 The Simulation Loop
+The simulation should utilize a clock-driven approach (fixed dt=1ms) rather than event-driven. While event-driven is efficient for low firing rates, the dense recurrence of VSA systems often leads to "spike storms" that degrade event-queue performance.
+Optimized Loop Logic:
+
+Rust
+// Pseudo-Rust implementation
+fn step(&mut self) {
+    // 1. Parallel Neuron Update (Compute V and Spikes)
+    let spikes: Vec<bool> = self.neurons.par_iter_mut()
+       .map(|n| n.update(self.dt))
+       .collect();
+
+    // 2. Sparse Synaptic Transmission
+    // Multiply spike vector by weight matrix to get input currents
+    let currents = &self.weights_csr * &spikes_as_vector;
+
+    // 3. Apply currents to next step buffer
+    self.current_buffer.par_iter_mut().zip(currents)
+       .for_each(|(buff, curr)| *buff += curr);
+}
+.   
+
+9. System Scalability: Dimensionality and SNR
+The viability of this architecture hinges on the Signal-to-Noise Ratio (SNR) of the VSA representations. As vectors are bound and superimposed, the resulting vector becomes "noisier" (less similar to the constituents), making accurate retrieval difficult.
+
+9.1 Dimensionality Trade-offs
+The capacity of an HRR memory scales linearly with the dimensionality D. To store K items with a retrieval error probability ϵ, the required dimension is:
+
+K 
+max
+​
+ ≈ 
+2ln(1/ϵ)
+D
+​
+ 
+
+For NLU tasks involving complex sentence trees (depth 5-6) and a vocabulary of 10,000+ words, D must be substantial.
+
+Minimum Viable D: ~512 dimensions for simple toy grammars.
+
+Robust D: 2048 - 8192 dimensions for open-domain text.
+
+Neuron Scaling: The number of neurons N required to represent a D-dimensional vector scales as N≈20D to 30D. This implies that a robust NLU system requires cortical modules of 50,000 to 200,000 neurons each.   
+
+9.2 SNR Calculation and Thresholding
+The SNR of retrieving an item from a superposition of K items is approximately:
+
+SNR≈ 
+K
+D
+​
+ 
+
+Binding operations reduce this further. To mitigate noise, we can employ Thresholding strategies (binarizing the vectors) at the I/O interfaces or within the Clean-up Memory. This effectively turns the continuous HRR into a variation of Binary Spatter Codes (BSC), trading some algebraic precision for massive gains in noise resilience and hardware efficiency (since binary operations are cheaper than floating-point).   
+
+10. Conclusion
+This report has outlined a complete, technically rigorous specification for a VSA-SNN Natural Language Understanding system. By fusing the representational capacity of Holographic Reduced Representations with the dynamic control architecture of the Basal Ganglia-Thalamus loop, we create a system that can parse syntax and semantic meaning using biologically plausible mechanisms.
+
+The critical innovations detailed here—specifically the implementation of WTA Clean-up Memories to counteract VSA noise, the use of Neural Integrators for state persistence, and the Random Projection interface for grounding symbols—solve the integration problems that have historically hindered neuromorphic NLU. Furthermore, the adoption of Rust and sparse matrix optimizations ensures that this architecture is not just a theoretical model, but a scalable software artifact capable of running on modern hardware.
+
+Future development should focus on Hierarchical Clean-up, inserting clean-up modules at intermediate stages of the parse tree to reset SNR, and exploring Neuromorphic Hardware Acceleration (e.g., Intel Loihi, SpiNNaker) to execute these massive sparse networks with milliwatt-level power consumption. The path to AGI lies in this synthesis of symbol and spike.
+
+
+pmc.ncbi.nlm.nih.gov
+Exploiting semantic information in a spiking neural SLAM system - PMC - NIH
+Opens in a new window
+
+journals.plos.org
+Optimizing Semantic Pointer Representations for Symbol-Like Processing in Spiking Neural Networks | PLOS One - Research journals
+Opens in a new window
+
+medium.com
+Building Vision-Language Models (VLMs) from Scratch: A Practitioner's Guide - Medium
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+INTEGRATIVE AND NETWORK-SPECIFIC CONNECTIVITY OF THE BASAL GANGLIA AND THALAMUS DEFINED IN INDIVIDUALS - PMC
+Opens in a new window
+
+digibug.ugr.es
+Action Learning in an Integrated Model of Basal Ganglia and its Application in Control Systems Álvaro González Redondo - DIGIBUG Principal
+Opens in a new window
+
+mashqliu.com
+A computational model of action selection in the basal ganglia. I. A new functional anatomy
+Opens in a new window
+
+scholarworks.brandeis.edu
+Holographic Embeddings for Text and Graphs A Master's Thesis Presented to The Faculty of the Graduate School of Arts and Scien - Brandeis ScholarWorks
+Opens in a new window
+
+emergentmind.com
+Holographic Reduced Representations (HRRs) - Emergent Mind
+Opens in a new window
+
+hd-computing.com
+HD/VSA
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+Associative memory of structured knowledge - PMC
+Opens in a new window
+
+gist.github.com
+Rust Implementation Plan for a 'Super-Turing' Spiking AI Chip Simulation - gists · GitHub
+Opens in a new window
+
+nengo.ai
+Learning a communication channel — Nengo 4.0.1.dev0 docs
+Opens in a new window
+
+researchgate.net
+(PDF) A Solution to the Dynamics of the Prescribed Error Sensitivity Learning Rule - ResearchGate
+Opens in a new window
+
+arxiv.org
+LARS-VSA: A Vector Symbolic Architecture For Learning with Abstract Rules - arXiv
+Opens in a new window
+
+arxiv.org
+Hyperdimensional computing: a fast, robust and interpretable paradigm for biological data
+Opens in a new window
+
+redwood.berkeley.edu
+Word Embeddings with HD Computing/VSA | Redwood Center
+Opens in a new window
+
+snntorch.readthedocs.io
+Tutorial 1 - Spike Encoding — snntorch 0.9.4 documentation
+Opens in a new window
+
+arxiv.org
+Sparse Spike Encoding of Channel Responses for Energy Efficient Human Activity Recognition - arXiv
+Opens in a new window
+
+ieeexplore.ieee.org
+Training Spiking Neural Networks Using Lessons From Deep Learning - IEEE Xplore
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+Modeling Working Memory in a Spiking Neuron Network Accompanied by Astrocytes - PMC
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+Spiking neural network with working memory can integrate and rectify spatiotemporal features - PMC
+Opens in a new window
+
+jneurosci.org
+A Spiking Neural Integrator Model of the Adaptive Control of Action by the Medial Prefrontal Cortex | Journal of Neuroscience
+Opens in a new window
+
+journals.plos.org
+A state space approach for piecewise-linear recurrent neural networks for identifying computational dynamics from neural measurements - Research journals - PLOS
+Opens in a new window
+
+biorxiv.org
+Associative memory of structured knowledge - bioRxiv
+Opens in a new window
+
+papers.nips.cc
+Learning Winner-take-all Competition Between Groups of Neurons in Lateral Inhibitory Networks - NIPS
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+Mechanisms of Winner-Take-All and Group Selection in Neuronal ...
+Opens in a new window
+
+frontiersin.org
+Basal ganglia for beginners: the basic concepts you need to know and their role in movement control - Frontiers
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+Computational models of basal-ganglia pathway functions: focus on functional neuroanatomy - PMC
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+A neural network model of basal ganglia's decision-making circuitry - PubMed Central
+Opens in a new window
+
+ieeexplore.ieee.org
+An Embedded Multi-Core Real-Time Simulation Platform of Basal Ganglia for Deep Brain Stimulation - IEEE Xplore
+Opens in a new window
+
+cambridge.org
+Motor Control (Section 6:) - The Thalamus - Cambridge University Press & Assessment
+Opens in a new window
+
+escholarship.org
+Sentence processing in spiking neurons: A ... - eScholarship
+Opens in a new window
+
+aclanthology.org
+LEFT-CORNER PARSING AND PSYCHOLOGICAL PLAUSIBILITY - ACL Anthology
+Opens in a new window
+
+cs.union.edu
+9.1 Left-Corner Parsing - CS @ Union
+Opens in a new window
+
+frontiersin.org
+Paired competing neurons improving STDP supervised local learning in spiking neural networks - Frontiers
+Opens in a new window
+
+researchgate.net
+Network diagram used to analyze the PES rule. A connection from x to y... - ResearchGate
+Opens in a new window
+
+reddit.com
+SC-NeuroCore: Rust neuromorphic SNN compiler with 512× speedup & FPGA equivalence - Reddit
+Opens in a new window
+
+github.com
+jgosmann/nengo-rs: An experimental Nengo backend ... - GitHub
+Opens in a new window
+
+oneuptime.com
+How to Create Type-State Pattern in Rust - OneUptime
+Opens in a new window
+
+mdpi.com
+Simulation of Spiking Neural P Systems with Sparse Matrix-Vector Operations - MDPI
+Opens in a new window
+
+ninercommons.charlotte.edu
+SPMM-BENCH: PERFORMANCE CHARACTERIZATION OF SPARSE FORMATS FOR SPARSE-DENSE MATRIX MULTIPLICATION by Patrick Flynn A thesis subm - Niner Commons
+Opens in a new window
+
+dlvr.rantai.dev
+Chapter 3 | Deep Learning via Rust - RantAI
+Opens in a new window
+
+direct.mit.edu
+Simulating and Predicting Dynamical Systems With Spatial Semantic Pointers | Neural Computation - MIT Press Direct
+Opens in a new window
+
+pmc.ncbi.nlm.nih.gov
+SNR-enhanced diffusion MRI with structure-preserving low-rank denoising in reproducing kernel Hilbert spaces - PMC
+Opens in a new window
+
+arxiv.org
+Vector Symbolic Open Source Information Discovery - arXiv
+Opens in a new window
+
+frontiersin.org
+Balancing accuracy and efficiency: co-design of hybrid quantization and unified computing architecture for spiking neural networks - Frontiers
+Opens in a new window

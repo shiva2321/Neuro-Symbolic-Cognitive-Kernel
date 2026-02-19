@@ -454,7 +454,10 @@ class TextKnowledgeLearner:
         
         # Extract words that appear important (longer words, domain terms)
         words = self._tokenize(sentence)
-        stop_words = {'the', 'and', 'for', 'that', 'this', 'with', 'from', 'but', 'not', 'are', 'was', 'were', 'has', 'had', 'can', 'may', 'its', 'his', 'her', 'our', 'their', 'she', 'him', 'you', 'who', 'how', 'why', 'any', 'all', 'one', 'two', 'six', 'ten', 'yes', 'no', 'nor', 'yet', 'per', 'via', 'etc', 'viz', 'i.e', 'e.g', 'non', 'sub', 'pre', 'pro', 'con', 'sur', 'co'}
+        stop_words = {
+            'the', 'and', 'for', 'that', 'this', 'with', 'from', 'but', 'not', 'are', 'was', 'were', 'has', 'had', 'can', 'may', 'its', 'his', 'her', 'our', 'their', 'she', 'him', 'you', 'who', 'how', 'why', 'any', 'all', 'one', 'two', 'six', 'ten', 'yes', 'no', 'nor', 'yet', 'per', 'via', 'etc', 'viz', 'i.e', 'e.g', 'non', 'sub', 'pre', 'pro', 'con', 'sur', 'co',
+            'which', 'also', 'other', 'because', 'after', 'before', 'have', 'they', 'there', 'some', 'been', 'would', 'could', 'should', 'than', 'then', 'now', 'only', 'just', 'more', 'most', 'such', 'into', 'over', 'under', 'again', 'further', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both', 'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only', 'own', 'same', 'so', 'than', 'too', 'very', 's', 't', 'can', 'will', 'just', 'don', 'should', 'now'
+        }
         
         for word in words:
             w_lower = word.lower()

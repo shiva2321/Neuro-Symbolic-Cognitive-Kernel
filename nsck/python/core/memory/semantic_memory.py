@@ -7,6 +7,8 @@ Implements abstracted knowledge (Schemas) and spreading activation.
 
 import networkx as nx
 import numpy as np
+import pickle
+import os
 from typing import Dict, List, Any, Optional, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
 
@@ -94,6 +96,10 @@ class SemanticMemory:
                 print(f"[WARNING] Rust backend add_concept failed: {e}")
         
         self.concept_graph.add_node(concept_name, **properties)
+    
+    def get_concept(self, concept_name: str) -> Optional[hypervec_rs.HyperVector]:
+        """Retrieve the hypervector for a given concept."""
+        return self.concept_hvs.get(concept_name)
     
     def add_relation(self, concept1: str, relation: str, concept2: str, timestamp: float = 0.0):
         """
@@ -243,3 +249,43 @@ class SemanticMemory:
             if rel == "causes": schema["caused_by"].append(neighbor)
             
         return schema
+
+    def save(self, filepath: str):
+        """Save semantic memory to disk via pickle."""
+        print(f"[SEMANTIC] Saving memory to {filepath}...")
+        data = {
+            "concept_graph": self.concept_graph,
+            "concept_hvs": self.concept_hvs,
+            "relation_weights": self.relation_weights
+        }
+        with open(filepath, "wb") as f:
+            pickle.dump(data, f)
+        print(f"[SEMANTIC] Saved {len(self.concept_hvs)} concepts.")
+
+    def load(self, filepath: str):
+        """Load semantic memory from disk."""
+        if not os.path.exists(filepath):
+            print(f"[SEMANTIC] No memory file found at {filepath}")
+            return
+            
+        print(f"[SEMANTIC] Loading memory from {filepath}...")
+        try:
+            with open(filepath, "rb") as f:
+                data = pickle.load(f)
+            
+            self.concept_graph = data.get("concept_graph", nx.DiGraph())
+            self.concept_hvs = data.get("concept_hvs", {})
+            self.relation_weights = data.get("relation_weights", self.DEFAULT_RELATION_WEIGHTS)
+            
+            # Sync with Rust backend if active
+            if self._rust_backend:
+                print(f"[SEMANTIC] Syncing {len(self.concept_hvs)} concepts to Rust backend...")
+                for name, hv in self.concept_hvs.items():
+                    try:
+                        self._rust_backend.add_concept(name, hv)
+                    except Exception as e:
+                        print(f"[WARNING] Rust sync failed for {name}: {e}")
+                        
+            print(f"[SEMANTIC] Loaded {len(self.concept_hvs)} concepts.")
+        except Exception as e:
+            print(f"[SEMANTIC] Failed to load memory: {e}")

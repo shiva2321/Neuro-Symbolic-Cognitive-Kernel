@@ -29,9 +29,12 @@ struct StoredEpisode {
 
 impl StoredEpisode {
     fn from_episode(episode: &Episode) -> Self {
-        // Serialize HV to bytes (simplified - actual implementation needs proper serialization)
-        let situation_hv_bits = vec![0u8; 1280]; // 10240 bits / 8 = 1280 bytes
-        
+        // Serialize HV bits as little-endian bytes: 160 u64 × 8 bytes = 1280 bytes exactly.
+        let situation_hv_bits: Vec<u8> = episode.situation_hv.bits
+            .iter()
+            .flat_map(|word| word.to_le_bytes())
+            .collect();
+
         StoredEpisode {
             timestamp: episode.timestamp,
             task_tag: episode.task_tag.clone(),
@@ -40,6 +43,33 @@ impl StoredEpisode {
             outcome: episode.outcome.clone(),
             reward: episode.reward,
             impact_score: episode.impact_score,
+        }
+    }
+
+    /// Deserialize back into a full Episode, reconstructing the HyperVector from stored bytes.
+    fn to_episode(&self) -> Episode {
+        const NUM_U64: usize = 160; // 10240 / 64
+        let mut bits: Vec<u64> = self.situation_hv_bits
+            .chunks_exact(8)
+            .map(|chunk| {
+                let arr: [u8; 8] = chunk.try_into().unwrap_or([0u8; 8]);
+                u64::from_le_bytes(arr)
+            })
+            .collect();
+        // Pad/truncate to exactly 160 u64s to guard against corruption.
+        bits.resize(NUM_U64, 0u64);
+
+        let mut hv = HyperVector::zero();
+        hv.bits = bits;
+
+        Episode {
+            timestamp:    self.timestamp,
+            task_tag:     self.task_tag.clone(),
+            situation_hv: hv,
+            action:       self.action.clone(),
+            outcome:      self.outcome.clone(),
+            reward:       self.reward,
+            impact_score: self.impact_score,
         }
     }
 }
@@ -294,6 +324,73 @@ impl PersistentStorage {
         }
 
         Ok(episodes)
+    }
+
+    /// Load full Episode objects (with reconstructed HyperVectors) from the database.
+    ///
+    /// Pass `task_tag = Some("my_task")` to filter by task, or `None` for all tasks.
+    /// Results are ordered newest-first, capped at `limit`.
+    #[pyo3(signature = (task_tag = None, limit = 1000))]
+    fn load_episodes_full(
+        &self,
+        task_tag: Option<String>,
+        limit: usize,
+    ) -> PyResult<Vec<Episode>> {
+        let conn = self.connection.lock();
+
+        let stored: Vec<StoredEpisode> = if let Some(ref tag) = task_tag {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT timestamp, task_tag, situation_hv, action, outcome, reward, impact_score \
+                     FROM episodes WHERE task_tag = ?1 ORDER BY timestamp DESC LIMIT ?2",
+                )
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Prepare failed: {}", e))
+                })?;
+
+            let rows: Vec<StoredEpisode> = stmt.query_map(params![tag, limit as i64], |row| {
+                Ok(StoredEpisode {
+                    timestamp:          row.get(0)?,
+                    task_tag:           row.get(1)?,
+                    situation_hv_bits:  row.get(2)?,
+                    action:             row.get(3)?,
+                    outcome:            row.get(4)?,
+                    reward:             row.get(5)?,
+                    impact_score:       row.get(6)?,
+                })
+            })
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Query failed: {}", e)))?
+            .filter_map(|r| r.ok())
+            .collect();
+            rows
+        } else {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT timestamp, task_tag, situation_hv, action, outcome, reward, impact_score \
+                     FROM episodes ORDER BY timestamp DESC LIMIT ?1",
+                )
+                .map_err(|e| {
+                    PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Prepare failed: {}", e))
+                })?;
+
+            let rows: Vec<StoredEpisode> = stmt.query_map(params![limit as i64], |row| {
+                Ok(StoredEpisode {
+                    timestamp:          row.get(0)?,
+                    task_tag:           row.get(1)?,
+                    situation_hv_bits:  row.get(2)?,
+                    action:             row.get(3)?,
+                    outcome:            row.get(4)?,
+                    reward:             row.get(5)?,
+                    impact_score:       row.get(6)?,
+                })
+            })
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!("Query failed: {}", e)))?
+            .filter_map(|r| r.ok())
+            .collect();
+            rows
+        };
+
+        Ok(stored.into_iter().map(|se| se.to_episode()).collect())
     }
 
     /// Get database statistics

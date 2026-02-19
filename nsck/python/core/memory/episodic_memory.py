@@ -190,23 +190,70 @@ class EpisodicMemory:
         if task not in self.recent:
             self.recent[task] = deque(maxlen=self.recent_capacity)
             self.lsh_index[task] = [{} for _ in range(self.lsh_num_tables)]
+            self._lsh_inserts_since_rebuild: Dict[str, int] = getattr(self, "_lsh_inserts_since_rebuild", {})
+            self._lsh_inserts_since_rebuild[task] = 0
         
-        # Add to recent buffer
+        # Track whether the deque is full (next append will evict the oldest entry).
+        deque_was_full = len(self.recent[task]) == self.recent_capacity
+        
+        # Add to recent buffer (Python primary store)
         self.recent[task].append(episode)
-        ep_idx = len(self.recent[task]) - 1
+        # Use timestamp as stable LSH key — deque integer indices go stale
+        # once the deque reaches maxlen and begins evicting front elements.
+        ep_ts = episode.timestamp
         
+        if not hasattr(self, "_lsh_inserts_since_rebuild"):
+            self._lsh_inserts_since_rebuild: Dict[str, int] = {}
+        self._lsh_inserts_since_rebuild[task] = self._lsh_inserts_since_rebuild.get(task, 0) + 1
+
+        # Mirror to Rust backend for fast parallel kNN when compiled.
+        # Rust holds a copy for rayon-accelerated search; Python self.recent is authoritative.
+        if self._rust_backend is not None and hypervec_rs.Episode is not None:
+            try:
+                rust_ep = hypervec_rs.Episode(
+                    episode.timestamp,
+                    episode.task_tag,
+                    episode.situation_hv,
+                    episode.action,
+                    episode.outcome,
+                    episode.reward,
+                    episode.impact_score,
+                )
+                self._rust_backend.add_episode(rust_ep)
+            except Exception:
+                pass  # Silently fall back if HV type is incompatible (Python fallback HV).
+
         # Update LSH index (insert into all tables)
         if hasattr(episode.situation_hv, 'lsh_hash'):
             for t, seed in enumerate(self.lsh_seeds):
                 lsh = episode.situation_hv.lsh_hash(seed, self.lsh_bits)
                 if lsh not in self.lsh_index[task][t]:
                     self.lsh_index[task][t][lsh] = []
-                self.lsh_index[task][t][lsh].append(ep_idx)
+                self.lsh_index[task][t][lsh].append(ep_ts)
+        
+        # Stale-index fix: when the deque was at capacity an eviction just occurred.
+        # After every recent_capacity/10 evictions, rebuild the LSH from current
+        # deque contents so stale timestamps don't degrade recall.
+        rebuild_interval = max(1, self.recent_capacity // 10)
+        if deque_was_full and self._lsh_inserts_since_rebuild.get(task, 0) >= rebuild_interval:
+            self._rebuild_lsh(task)
+            self._lsh_inserts_since_rebuild[task] = 0
         
         # Check if consolidation needed
         if len(self.recent[task]) >= self.consolidation_threshold:
             self._consolidate(task)
     
+    def _rebuild_lsh(self, task_tag: str):
+        """Rebuild LSH index from scratch using only episodes currently in the deque."""
+        self.lsh_index[task_tag] = [{} for _ in range(self.lsh_num_tables)]
+        for ep in self.recent.get(task_tag, deque()):
+            if hasattr(ep.situation_hv, 'lsh_hash'):
+                for t, seed in enumerate(self.lsh_seeds):
+                    lsh = ep.situation_hv.lsh_hash(seed, self.lsh_bits)
+                    if lsh not in self.lsh_index[task_tag][t]:
+                        self.lsh_index[task_tag][t][lsh] = []
+                    self.lsh_index[task_tag][t][lsh].append(ep.timestamp)
+
     def _consolidate(self, task_tag: str):
         """Compress old episodes and move to storage."""
         if not self.store:
@@ -232,15 +279,15 @@ class EpisodicMemory:
         self.store.flush_episodes()
         self.store.prune_old_episodes(task_tag, self.total_capacity)
         
-        # Rebuild LSH index for remaining recent episodes
+        # Rebuild LSH index for remaining recent episodes (use timestamp as key)
         self.lsh_index[task_tag] = [{} for _ in range(self.lsh_num_tables)]
-        for i, ep in enumerate(recent):
+        for ep in recent:
             if hasattr(ep.situation_hv, 'lsh_hash'):
                 for t, seed in enumerate(self.lsh_seeds):
                     lsh = ep.situation_hv.lsh_hash(seed, self.lsh_bits)
                     if lsh not in self.lsh_index[task_tag][t]:
                         self.lsh_index[task_tag][t][lsh] = []
-                    self.lsh_index[task_tag][t][lsh].append(i)
+                    self.lsh_index[task_tag][t][lsh].append(ep.timestamp)
         
         print(f"[MEMORY] Consolidated {len(to_store)} episodes for {task_tag}")
     
@@ -282,16 +329,40 @@ class EpisodicMemory:
         Returns:
             List of similar episodes, sorted by similarity
         """
-        # Try Rust backend first
+        # Try Rust backend first (parallel rayon kNN — 10-100x faster than Python LSH).
         if self._rust_backend is not None and hasattr(self._rust_backend, 'parallel_knn_search'):
             try:
-                # Rust backend returns indices and similarities
-                results = self._rust_backend.parallel_knn_search(query_hv, task_tag, k)
-                # Convert to LiveEpisodes (assuming indexed storage)
-                # For now, fall through to Python until we sync storage
-                pass
-            except Exception as e:
-                print(f"[WARNING] Rust backend recall_similar failed: {e}")
+                # Returns [(idx, similarity, Episode), ...] sorted by similarity desc.
+                rust_results = self._rust_backend.parallel_knn_search(
+                    query_hv, k, task_tag
+                )
+                if rust_results:
+                    # Build timestamp → LiveEpisode map so we return the Python object
+                    # (with full state, emotion, ToM, etc.) when still in recent.
+                    recent_list = list(self.recent.get(task_tag, deque()))
+                    ts_map: Dict[float, LiveEpisode] = {
+                        ep.timestamp: ep for ep in recent_list
+                    }
+                    matched: List[LiveEpisode] = []
+                    for (_idx, _sim, rust_ep) in rust_results:
+                        ts = rust_ep.timestamp
+                        if ts in ts_map:
+                            matched.append(ts_map[ts])
+                        else:
+                            # Evicted from Python recent — reconstruct minimal LiveEpisode.
+                            matched.append(LiveEpisode(
+                                timestamp=ts,
+                                task_tag=rust_ep.task_tag,
+                                situation_hv=rust_ep.get_situation_hv(),
+                                state={},
+                                action=rust_ep.action,
+                                outcome=rust_ep.outcome,
+                                reward=rust_ep.reward,
+                                impact_score=rust_ep.impact_score,
+                            ))
+                    return matched
+            except Exception:
+                pass  # Fall through to Python LSH on any error.
         
         # Python fallback with LSH
         recent = self.recent.get(task_tag, deque())
@@ -320,19 +391,24 @@ class EpisodicMemory:
                     if nearby in table:
                         candidates.update(table[nearby])
         
-        # 2. If not enough candidates, add recent episodes
+        # 2. If not enough candidates, fall back to recent tail
+        recent_list = list(recent)
         if len(candidates) < k * 2:
-            candidates.update(range(max(0, len(recent) - k * 3), len(recent)))
-        
-        # 3. Compute exact similarity for candidates
+            tail = recent_list[max(0, len(recent_list) - k * 3):]
+            candidates.update(ep.timestamp for ep in tail)
+
+        # 3. Build timestamp → episode map for O(1) lookup
+        ts_map = {ep.timestamp: ep for ep in recent_list}
+
+        # 4. Compute exact similarity for candidate timestamps
         scored = []
-        for idx in candidates:
-            if 0 <= idx < len(recent):
-                ep = recent[idx]
+        for ts in candidates:
+            ep = ts_map.get(ts)
+            if ep is not None:
                 sim = query_hv.similarity(ep.situation_hv)
                 scored.append((ep, sim))
         
-        # 4. Sort by similarity and return top-k
+        # 5. Sort by similarity and return top-k
         scored.sort(key=lambda x: x[1], reverse=True)
         return [ep for ep, _ in scored[:k]]
     

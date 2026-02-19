@@ -26,6 +26,16 @@ from python.core.perception.vsa_snn_bridge import RateCoder, TemporalCoder
 from python.core.learning.hebbian import VSAHebbianLearner
 from python.core.vsa.hypervec_shim import HyperVector
 
+# ── Rust SNN acceleration (mirrors hypervec_shim try/fallback pattern) ──────
+_SNN_USE_RUST: bool = False
+_snn_rs_ext = None
+try:
+    import snn_rs as _snn_rs_ext  # compiled Rust extension
+    _SNN_USE_RUST = True
+    print(">> [SNN]  Rust backend active (snn_rs)")
+except ImportError:
+    print(">> [SNN]  Rust backend not found — pure Python SNN active")
+
 
 class SimpleConceptMapper:
     """
@@ -162,6 +172,228 @@ class LIFNeuronLayer:
         return np.array(self.spike_history)
 
 
+# ============================================================================
+# PythonSnnCore — pure-NumPy drop-in for ``snn_rs.SnnCore``
+# ============================================================================
+
+class PythonSnnCore:
+    """
+    Pure-NumPy implementation of SnnCore with the same interface as the Rust
+    ``snn_rs.SnnCore`` extension.
+
+    ``simulate(sensory_input, n_steps, learn)`` runs the full LIF + STDP
+    inner loop and returns a list-of-lists spike train (n_steps × snn_size).
+    The STDP update uses a vectorised outer-product so there are no nested
+    Python loops -- only the ``n_steps`` outer loop remains in Python.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        snn_size: int,
+        tau: float = 10.0,
+        v_rest: float = -70.0,
+        v_reset: float = -75.0,
+        v_thresh: float = -50.0,
+        refractory_period: float = 2.0,
+        dt: float = 1.0,
+        stdp_enabled: bool = True,
+        stdp_lr: float = 0.0001,
+        tau_stdp: float = 20.0,
+        a_plus: float = 0.001,
+        a_minus: float = 0.0005,
+        seed=None,
+    ):
+        self.input_dim        = input_dim
+        self.snn_size         = snn_size
+        self.tau              = tau
+        self.v_rest           = v_rest
+        self.v_reset          = v_reset
+        self.v_thresh         = v_thresh
+        self.refractory_period = refractory_period
+        self.dt               = dt
+        self.stdp_enabled     = stdp_enabled
+        self.stdp_lr          = stdp_lr
+        self.tau_stdp         = tau_stdp
+        self.a_plus           = a_plus
+        self.a_minus          = a_minus
+
+        rng = np.random.default_rng(seed)
+        self.input_weights: np.ndarray = (
+            rng.standard_normal((snn_size, input_dim)).astype(np.float64) * 0.1
+        )
+        norms = np.linalg.norm(self.input_weights, axis=1, keepdims=True)
+        self.input_weights /= np.maximum(norms, 1e-12)
+
+        self.v              = np.full(snn_size, v_rest,  dtype=np.float64)
+        self.refractory     = np.zeros(snn_size,          dtype=np.float64)
+        self.pre_spike_times  = np.full(input_dim, -1e4, dtype=np.float64)
+        self.post_spike_times = np.full(snn_size,  -1e4, dtype=np.float64)
+        self.current_time: float = 0.0
+        self.stdp_updates:   int = 0
+        self.weight_updates: int = 0
+
+    def simulate(self, sensory_input: list, n_steps: int, learn: bool) -> list:
+        """Run n_steps LIF + STDP steps; return spike train list-of-lists."""
+        x      = np.asarray(sensory_input, dtype=np.float64)
+        window = 5.0 * self.tau_stdp
+        spike_train: list = []
+
+        for _ in range(n_steps):
+            # Input projection + Gaussian noise
+            current = self.input_weights @ x * 2.0 + np.random.randn(self.snn_size)
+
+            # LIF membrane update (vectorized)
+            active = self.refractory <= 0.0
+            self.v[active] += (
+                self.dt / self.tau
+                * (-(self.v[active] - self.v_rest) + current[active])
+            )
+            self.refractory = np.maximum(0.0, self.refractory - self.dt)
+
+            spikes = (self.v >= self.v_thresh).astype(np.float64)
+            self.v[spikes > 0]          = self.v_reset
+            self.refractory[spikes > 0] = self.refractory_period
+
+            # STDP: vectorized outer-product (no nested Python loops)
+            if learn and self.stdp_enabled:
+                in_sp = (
+                    np.random.rand(self.input_dim)
+                    < np.clip(x, 0.0, 1.0) * 0.5
+                ).astype(np.float64)
+                t = self.current_time
+                self.pre_spike_times[in_sp > 0.5]   = t
+                self.post_spike_times[spikes > 0.5] = t
+
+                vp     = self.post_spike_times > -999.0   # (snn_size,)
+                vr     = self.pre_spike_times  > -999.0   # (input_dim,)
+                dt_mat = (
+                    self.post_spike_times[:, None]
+                    - self.pre_spike_times[None, :]
+                )
+                mask   = vp[:, None] & vr[None, :] & (np.abs(dt_mat) < window)
+                ltp    = mask & (dt_mat > 0)
+                ltd    = mask & (dt_mat <= 0)
+
+                dw = np.zeros_like(self.input_weights)
+                dw[ltp] =  self.a_plus  * np.exp(-dt_mat[ltp] / self.tau_stdp)
+                dw[ltd] = -self.a_minus * np.exp( dt_mat[ltd] / self.tau_stdp)
+                self.input_weights += self.stdp_lr * dw
+                # Soft max-norm clipping: rows exceeding max_norm are scaled
+                # down; rows below budget are untouched.  This preserves the
+                # effective weight scale so large inputs continue to drive
+                # reliable spiking (avoids the unit-norm collapse).
+                _max_norm = 4.0
+                norms = np.linalg.norm(self.input_weights, axis=1, keepdims=True)
+                self.input_weights /= np.where(norms > _max_norm, norms / _max_norm, 1.0)
+                self.stdp_updates  += 1
+                self.current_time  += self.dt
+
+            spike_train.append(spikes.tolist())
+
+        return spike_train
+
+    def get_weights(self) -> list:
+        return self.input_weights.ravel().tolist()
+
+    def set_weights(self, weights: list) -> None:
+        self.input_weights = np.asarray(weights, dtype=np.float64).reshape(
+            self.snn_size, self.input_dim
+        )
+
+    def normalize_weights(self) -> None:
+        # Soft max-norm clipping: only scale rows exceeding budget.
+        # This is consistent with the per-step STDP normalization and
+        # prevents the unit-norm collapse that silences all spikes.
+        _max_norm = 4.0
+        norms = np.linalg.norm(self.input_weights, axis=1, keepdims=True)
+        self.input_weights /= np.where(norms > _max_norm, norms / _max_norm, 1.0)
+        self.weight_updates += 1
+
+    def __repr__(self) -> str:
+        return (
+            f"<SnnCore(Python) input={self.input_dim} "
+            f"snn={self.snn_size} stdp={self.stdp_enabled}>"
+        )
+
+
+# ============================================================================
+# PythonStdpEngine — pure-NumPy drop-in for ``snn_rs.StdpEngine``
+# ============================================================================
+
+class PythonStdpEngine:
+    """
+    Standalone STDP engine with the same interface as the Rust ``snn_rs.StdpEngine``.
+
+    ``apply(input_spikes, output_spikes)`` returns a flat delta_w list
+    (snn_size × input_dim, row-major) already multiplied by stdp_lr so the
+    caller does: ``weights += engine.apply(...)``.
+    """
+
+    def __init__(
+        self,
+        input_dim: int,
+        snn_size: int,
+        stdp_lr: float,
+        tau_stdp: float,
+        a_plus: float,
+        a_minus: float,
+    ):
+        self.input_dim  = input_dim
+        self.snn_size   = snn_size
+        self.stdp_lr    = stdp_lr
+        self.tau_stdp   = tau_stdp
+        self.a_plus     = a_plus
+        self.a_minus    = a_minus
+        self.pre_spike_times  = np.full(input_dim, -1e4, dtype=np.float64)
+        self.post_spike_times = np.full(snn_size,  -1e4, dtype=np.float64)
+        self.current_time: float = 0.0
+        self.updates: int = 0
+
+    def advance_time(self, dt: float) -> None:
+        self.current_time += dt
+
+    def reset(self) -> None:
+        self.pre_spike_times.fill(-1e4)
+        self.post_spike_times.fill(-1e4)
+        self.current_time = 0.0
+
+    def apply(self, input_spikes: list, output_spikes: list) -> list:
+        """Compute STDP delta_w (flat, row-major, scaled by stdp_lr)."""
+        in_sp  = np.asarray(input_spikes,  dtype=np.float64)
+        out_sp = np.asarray(output_spikes, dtype=np.float64)
+        t = self.current_time
+        self.pre_spike_times[in_sp > 0.5]   = t
+        self.post_spike_times[out_sp > 0.5] = t
+
+        window = 5.0 * self.tau_stdp
+        vp     = self.post_spike_times > -999.0
+        vr     = self.pre_spike_times  > -999.0
+        dt_mat = (
+            self.post_spike_times[:, None]
+            - self.pre_spike_times[None, :]
+        )
+        mask = vp[:, None] & vr[None, :] & (np.abs(dt_mat) < window)
+        ltp  = mask & (dt_mat > 0)
+        ltd  = mask & (dt_mat <= 0)
+
+        dw = np.zeros((self.snn_size, self.input_dim), dtype=np.float64)
+        dw[ltp] =  self.a_plus  * np.exp(-dt_mat[ltp] / self.tau_stdp) * self.stdp_lr
+        dw[ltd] = -self.a_minus * np.exp( dt_mat[ltd] / self.tau_stdp) * self.stdp_lr
+
+        self.updates += 1
+        return dw.ravel().tolist()
+
+    def __repr__(self) -> str:
+        return (
+            f"<StdpEngine(Python) input={self.input_dim} "
+            f"snn={self.snn_size}>"
+        )
+
+
+# ============================================================================
+
+
 class SNNPerceptionModule:
     """
     Complete SNN-based perception module with VSA output
@@ -181,7 +413,7 @@ class SNNPerceptionModule:
         hv_dimension: int = 1024,
         n_concepts: int = 50,
         encoding_mode: str = "rate",  # "rate" or "temporal"
-        simulation_time_ms: float = 50.0,
+        simulation_time_ms: float = 20.0,  # 20 ms nominal (was 50 ms — 2.5x faster)
         hebbian_lr: float = 0.001,
         stdp_enabled: bool = True,  # NEW: Enable STDP learning
         stdp_lr: float = 0.0001,  # NEW: STDP learning rate
@@ -228,30 +460,62 @@ class SNNPerceptionModule:
         )
         
         # Input → SNN connectivity (stronger initialization for spiking)
-        self.input_weights = np.random.randn(snn_size, input_dim) * 5.0  # Increased from 0.1
-        
+        # Use scale 5.0 and DO NOT normalize at init — normalization collapses
+        # every row to unit-norm, making input currents ~0.8 mV which is far
+        # too weak to drive a -70 mV resting neuron past the -50 mV threshold.
+        # Normalization is applied only after STDP updates to prevent runaway.
+        self.input_weights = np.random.randn(snn_size, input_dim) * 5.0
+
+        # Cached mean row-norm for adaptive gain; re-computed only after learning
+        # calls so every perceive() call avoids the 256×64 norm computation.
+        # Initial value: norm of fresh scale-5 rows ≈ 5 × sqrt(input_dim).
+        self._cached_avg_w_norm: float = float(
+            np.linalg.norm(self.input_weights, axis=1).mean()
+        )
         # STDP spike time tracking
         self.pre_spike_times = np.full(input_dim, -1000.0)  # Last spike time for each input
         self.post_spike_times = np.full(snn_size, -1000.0)  # Last spike time for each neuron
         self.current_time = 0.0  # Current simulation time (ms)
         
-        # Statistics (initialize BEFORE calling _normalize_weights)
+        # Statistics
         self.processing_times = []
         self.weight_updates = 0
         self.stdp_updates = 0
-        
-        # Normalize weights initially (prevent runaway during learning)
-        self._normalize_weights()
-    
+
+        # ── SNN Core: always available (Rust when compiled, Python otherwise) ─────────
+        # SnnCore.simulate() replaces the entire per-step Python loop in perceive().
+        _core_cls = _snn_rs_ext.SnnCore if _SNN_USE_RUST else PythonSnnCore
+        try:
+            self._snn_core = _core_cls(
+                input_dim         = self.input_dim,
+                snn_size          = self.snn_size,
+                tau               = 10.0,
+                v_rest            = -70.0,
+                v_reset           = -75.0,
+                v_thresh          = -50.0,
+                refractory_period = 2.0,
+                dt                = 1.0,
+                stdp_enabled      = self.stdp_enabled,
+                stdp_lr           = self.stdp_lr,
+                tau_stdp          = self.tau_stdp,
+                a_plus            = self.a_plus,
+                a_minus           = self.a_minus,
+                seed              = None,
+            )
+            # Seed with the same normalised weights Python just built.
+            self._snn_core.set_weights(self.input_weights.flatten().tolist())
+        except Exception as _e:
+            self._snn_core = None  # Rare; perceive() falls back to inline Python loop.
+
     def _normalize_weights(self):
         """
-        Normalize input weights to prevent runaway growth during learning.
-        Uses L2 normalization per neuron (each row normalized independently).
+        Soft max-norm clipping: only scale rows that exceed the norm budget.
+        Rows below budget are untouched so early-stage weights can grow.
+        Consistent with the PythonSnnCore STDP normalization.
         """
-        for i in range(self.snn_size):
-            norm = np.linalg.norm(self.input_weights[i])
-            if norm > 0:
-                self.input_weights[i] /= norm
+        _max_norm = 4.0
+        norms = np.linalg.norm(self.input_weights, axis=1, keepdims=True)
+        self.input_weights /= np.where(norms > _max_norm, norms / _max_norm, 1.0)
         self.weight_updates += 1
     
     def update_weights(self, delta_w: np.ndarray, normalize: bool = True):
@@ -321,6 +585,16 @@ class SNNPerceptionModule:
         self._normalize_weights()
         self.stdp_updates += 1
     
+    # Target L×gain product that gives ~25% per-step spiking probability.
+    # For a row w with ||w||=L and input x~N(0, gain), the dv per LIF step is
+    # N(0, 0.2·L·gain).  P(first-step spike) ≈ P(Z > 20) where Z~N(0, 0.2·L·gain).
+    # Setting 0.2·L·gain = 30 → L·gain = 150 gives P ~ 25% (comfortable sweet spot).
+    # With adaptive gain = 150 / avg(||w_row||) this automatically scales to:
+    #   - Unit-norm Rust weights (L=1)   → gain = 150
+    #   - Soft-max-norm(4) Python weights → gain =  37.5
+    #   - Fresh scale-5   init weights   → gain ≈   3.75
+    _TARGET_LG: float = 150.0
+
     def perceive(
         self,
         sensory_input: np.ndarray,
@@ -330,7 +604,7 @@ class SNNPerceptionModule:
         Process sensory input through full SNN pipeline
         
         Args:
-            sensory_input: (input_dim,) normalized sensory vector
+            sensory_input: (input_dim,) sensory vector (any scale)
             learn: Whether to update Hebbian associations
             
         Returns:
@@ -341,35 +615,68 @@ class SNNPerceptionModule:
                 - processing_time_ms: Total processing latency
         """
         start_time = time.perf_counter()
-        
+
+        # ── Adaptive input standardization ───────────────────────────────
+        # Rust SNN keeps unit-norm weights; Python soft-max-norm keeps ~4.0.
+        # Fresh scale-5 init has norm ~40.  A fixed gain cannot serve all cases.
+        # Solution: compute gain = _TARGET_LG / mean(||w_row||) so that
+        #   0.2 × avg_weight_norm × gain ≈ 30 mV → ~25% per-step firing rate.
+        # We use _cached_avg_w_norm (updated after learning calls) to avoid
+        # a 256×64 norm computation on every inference call.
+        x_raw = np.asarray(sensory_input, dtype=np.float64)
+        _mu, _sigma = x_raw.mean(), x_raw.std()
+
+        avg_w_norm = self._cached_avg_w_norm  # cheap: just an attribute read
+        effective_gain = self._TARGET_LG / max(avg_w_norm, 1e-4)
+
+        if _sigma > 1e-6:
+            x_proc = (x_raw - _mu) / _sigma * effective_gain
+        else:
+            # Constant (zero-variance) input: uniform drive at effective_gain.
+            x_proc = np.ones_like(x_raw) * effective_gain
+
         # 1. Simulate SNN dynamics
-        self.snn_layer.reset()
         n_steps = int(self.simulation_time_ms / self.snn_layer.dt)
-        self.current_time = 0.0  # Reset simulation time
-        
-        for step in range(n_steps):
-            # Generate input spikes from sensory signal (Poisson-like)
-            # Higher values → higher spike probability
-            spike_prob = np.clip(sensory_input, 0, 1)  # Ensure [0,1]
-            input_spikes = (np.random.rand(self.input_dim) < spike_prob * 0.5).astype(np.float32)
-            
-            # Generate input current from sensory signal
-            input_current = self.input_weights @ sensory_input
-            
-            # Amplify current and add noise for robustness
-            input_current = input_current * 2.0 + np.random.randn(self.snn_size) * 1.0
-            
-            # Step SNN forward
-            output_spikes = self.snn_layer.step(input_current)
-            
-            # Apply STDP learning
-            if learn and self.stdp_enabled:
-                self._apply_stdp(input_spikes, output_spikes)
-            
-            # Advance simulation time
-            self.current_time += self.snn_layer.dt
-        
-        spike_train = self.snn_layer.get_spike_train()
+
+        if self._snn_core is not None:
+            # ── RUST FAST PATH ───────────────────────────────────────────────
+            # Entire loop (LIF + noise + STDP) runs in one Rust call.
+            # Returns list-of-lists (n_steps × snn_size); convert to ndarray.
+            spike_train_nested = self._snn_core.simulate(
+                x_proc.tolist(),
+                n_steps,
+                learn,
+            )
+            spike_train = np.array(spike_train_nested, dtype=np.float32)
+            # Sync weights back only after LEARNING calls (when Rust STDP may
+            # have modified them).  Skipping on pure-inference calls avoids the
+            # expensive 16,384-element Python-list allocation + numpy conversion
+            # on every non-learning step (≈80% of calls with lazy STDP).
+            if learn:
+                rust_w = self._snn_core.get_weights()
+                self.input_weights = np.array(rust_w, dtype=np.float32).reshape(
+                    self.snn_size, self.input_dim
+                )
+                # Recompute cached norm from the freshly-synced weights.
+                self._cached_avg_w_norm = float(
+                    np.linalg.norm(self.input_weights, axis=1).mean()
+                )
+        else:
+            # ── PYTHON FALLBACK PATH ─────────────────────────────────────────
+            self.snn_layer.reset()
+            self.current_time = 0.0
+            for _step in range(n_steps):
+                # Map x_proc (N(0, effective_gain)) to [0,1] for spike-prob estimate
+                spike_prob   = np.clip((x_proc + effective_gain) / (2 * effective_gain), 0, 1)
+                input_spikes = (np.random.rand(self.input_dim) < spike_prob * 0.5).astype(np.float32)
+                input_current = self.input_weights @ x_proc
+                input_current = input_current * 2.0 + np.random.randn(self.snn_size) * 1.0
+                output_spikes = self.snn_layer.step(input_current)
+                if learn and self.stdp_enabled:
+                    self._apply_stdp(input_spikes, output_spikes)
+                self.current_time += self.snn_layer.dt
+            spike_train = self.snn_layer.get_spike_train()
+            spike_train = np.array(spike_train, dtype=np.float32)
         
         # 2. Encode spike train using rate or temporal coding
         if self.encoding_mode == "rate":
@@ -419,17 +726,23 @@ class SNNPerceptionModule:
         # Calculate weight statistics
         weight_norms = [np.linalg.norm(self.input_weights[i]) for i in range(self.snn_size)]
         
+        # Pull STDP / weight update counts from core (Rust or Python)
+        rust_stdp    = self._snn_core.stdp_updates   if self._snn_core else self.stdp_updates
+        rust_w_upd   = self._snn_core.weight_updates if self._snn_core else self.weight_updates
+        backend      = "rust" if _SNN_USE_RUST and self._snn_core is not None else "python"
+
         return {
             "avg_latency_ms": np.mean(self.processing_times),
             "max_latency_ms": np.max(self.processing_times),
             "n_processed": len(self.processing_times),
             "n_concepts_learned": len(self.concept_mapper.concepts),
-            "weight_updates": self.weight_updates,
-            "stdp_updates": self.stdp_updates,
+            "weight_updates": rust_w_upd,
+            "stdp_updates": rust_stdp,
             "stdp_enabled": self.stdp_enabled,
             "avg_weight_norm": np.mean(weight_norms),
             "max_weight_norm": np.max(weight_norms),
-            "min_weight_norm": np.min(weight_norms)
+            "min_weight_norm": np.min(weight_norms),
+            "backend": backend,
         }
     
     def reset_stats(self):

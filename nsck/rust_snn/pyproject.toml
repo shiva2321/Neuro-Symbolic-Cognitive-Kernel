@@ -1,0 +1,14 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "snn-rs"
+version = "0.1.0"
+description = "Rust-accelerated SNN backend for NSCK (LIF, STDP, Hebbian, ConceptMapper)"
+requires-python = ">=3.9"
+
+[tool.maturin]
+# Output .pyd into the same directory as hypervec_rs so the shim finds it automatically
+module-name = "snn_rs"
+features    = []

@@ -117,6 +117,87 @@ class AnalogyEngine:
         }
         for name, spec in _GAME_DEFAULTS.items():
             self.register_abstract(name, spec["description"], spec["groundings"])
+
+    def load_sensor_domain_defaults(self):
+        """Register cross-domain structural abstractions for robot navigation
+        and environmental / industrial monitoring (IIT-inspired mappings).
+
+        These abstract concepts capture the invariant structure shared by
+        any "agent monitoring a hazardous environment and taking corrective
+        action" task, regardless of the surface predicates used.
+
+        Call this when working with robot_nav ↔ env_monitoring transfer.
+        """
+        _SENSOR_DEFAULTS = {
+            # ── Proximity to a boundary / critical threshold ────────────────
+            "BOUNDARY_CONDITION": {
+                "description": "Agent is near a physical or logical boundary",
+                "groundings": {
+                    "source_nav": "WALL_ADJACENT",
+                    "target_env": "HIGH_CO2",
+                    "robot": "WALL_ADJACENT",
+                    "env": "HIGH_CO2",
+                    "navigation": "WALL_ADJACENT",
+                },
+            },
+            # ── Severe / imminent danger ────────────────────────────────────
+            "CRITICAL_HAZARD": {
+                "description": "Severe hazard requiring urgent response",
+                "groundings": {
+                    "source_nav": "ON_HAZARD",
+                    "target_env": "DANGEROUS_CO2",
+                    "robot": "ON_HAZARD",
+                    "env": "HAZARDOUS_AIR",
+                    "navigation": "ON_HAZARD",
+                },
+            },
+            # ── Making progress toward goal / safe zone ─────────────────────
+            "PROGRESS_TOWARD_GOAL": {
+                "description": "Moving toward a goal or safe operating region",
+                "groundings": {
+                    "source_nav": "MID_GOAL",
+                    "target_env": "POOR_AIR",
+                    "robot": "MID_GOAL",
+                    "env": "POOR_AIR",
+                    "navigation": "MID_GOAL",
+                },
+            },
+            # ── At or near goal / safe state ────────────────────────────────
+            "AT_GOAL": {
+                "description": "Agent has reached goal or safe operating state",
+                "groundings": {
+                    "source_nav": "NEAR_GOAL",
+                    "target_env": "HIGH_HUMIDITY",
+                    "robot": "NEAR_GOAL",
+                    "env": "HIGH_HUMIDITY",
+                    "navigation": "NEAR_GOAL",
+                },
+            },
+            # ── Resource depletion ──────────────────────────────────────────
+            "RESOURCE_LOW": {
+                "description": "Critical resource is running low",
+                "groundings": {
+                    "source_nav": "LOW_BATTERY",
+                    "target_env": "DRY_AIR",
+                    "robot": "LOW_BATTERY",
+                    "env": "DRY_AIR",
+                    "navigation": "LOW_BATTERY",
+                },
+            },
+            # ── Normal / safe operation ──────────────────────────────────────
+            "SAFE_OPERATION": {
+                "description": "System is operating within safe parameters",
+                "groundings": {
+                    "source_nav": "ACTION_NORMAL_OPERATION",
+                    "target_env": "NORMAL_OPERATION",
+                    "robot": "ACTION_STAY",
+                    "env": "NORMAL_OPERATION",
+                    "navigation": "ACTION_STAY",
+                },
+            },
+        }
+        for name, spec in _SENSOR_DEFAULTS.items():
+            self.register_abstract(name, spec["description"], spec["groundings"])
     
     def register_domain(
         self,

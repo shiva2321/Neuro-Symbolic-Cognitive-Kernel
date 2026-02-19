@@ -246,32 +246,21 @@ if _USE_RUST and _ext is not None:
     _install_compat_methods(_ext.HyperVector)
     HyperVector = _ext.HyperVector
     
-    # PATCH: Align permute direction with Python convention
-    # Python: permute(1) -> np.roll(-1) (roll left, positions move left)
-    # Rust:   permute(1) -> rotate right (positions move right)
-    # Fix: Negate shift parameter to match Python's np.roll direction
-    
-    _rust_permute = HyperVector.permute
-    def _aligned_permute(self, shift: int):
-        return _rust_permute(self, -shift)
-    HyperVector.permute = _aligned_permute
-    
-    _rust_permute_inverse = HyperVector.permute_inverse
-    def _aligned_permute_inverse(self, shift: int):
-        return _rust_permute_inverse(self, -shift)
-    HyperVector.permute_inverse = _aligned_permute_inverse
-    
+    # permute() direction is correct in the Rust build: positive shift = left rotation,
+    # matching np.roll(bits, -shift) and hypervec_py.py convention.  No patch needed.
+
     # --- Expose all Rust-accelerated classes with proper documentation ---
     
     # Direct exports from Rust module
-    SemanticMemoryConcurrent = _ext.SemanticMemoryConcurrent
-    EpisodicMemoryConcurrent = _ext.EpisodicMemoryConcurrent
-    Episode = _ext.Episode
-    HyperVectorRegistry = _ext.HyperVectorRegistry
-    ActivationAccumulator = _ext.ActivationAccumulator
-    CognitiveWorkerPool = _ext.CognitiveWorkerPool
-    PersistentStorage = _ext.PersistentStorage
-    AsyncCognitiveRuntime = _ext.AsyncCognitiveRuntime
+    # Direct exports from Rust module (with safe fallback)
+    SemanticMemoryConcurrent = getattr(_ext, "SemanticMemoryConcurrent", None)
+    EpisodicMemoryConcurrent = getattr(_ext, "EpisodicMemoryConcurrent", None)
+    Episode = getattr(_ext, "Episode", None)
+    HyperVectorRegistry = getattr(_ext, "HyperVectorRegistry", None)
+    ActivationAccumulator = getattr(_ext, "ActivationAccumulator", None)
+    CognitiveWorkerPool = getattr(_ext, "CognitiveWorkerPool", None)
+    PersistentStorage = getattr(_ext, "PersistentStorage", None)
+    AsyncCognitiveRuntime = getattr(_ext, "AsyncCognitiveRuntime", None)
     
     # Add enhanced docstrings to existing classes (PyO3 classes can't be subclassed)
     # Note: These will appear in help() but not in __doc__ due to Rust readonly attributes
@@ -328,10 +317,11 @@ if _USE_RUST and _ext is not None:
     }
 
     # Rust parallel free-functions
-    parallel_similarity_search = _ext.parallel_similarity_search
-    batch_parallel_similarity_search = _ext.batch_parallel_similarity_search
-    parallel_bundle = _ext.parallel_bundle
-    run_semantic_search_async = _ext.run_semantic_search_async
+    # Rust parallel free-functions (with safe fallback)
+    parallel_similarity_search = getattr(_ext, "parallel_similarity_search", None)
+    batch_parallel_similarity_search = getattr(_ext, "batch_parallel_similarity_search", None)
+    parallel_bundle = getattr(_ext, "parallel_bundle", None)
+    run_semantic_search_async = getattr(_ext, "run_semantic_search_async", None)
 
     __backend__ = "Rust"
     if multiprocessing.current_process().name == "MainProcess":

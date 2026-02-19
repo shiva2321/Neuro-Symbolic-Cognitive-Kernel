@@ -97,6 +97,10 @@ class RuleLearner(WorkspaceModule):
             "TARGET_NEAR", "TARGET_FAR", "SAFE_PATH"
         }
         
+        # Task-specific verifiers (registered via register_verifier()).
+        # These override self.verifier for predicate extraction within observe().
+        self.task_verifiers: Dict[str, GroundingVerifier] = {}
+
         # WorkspaceModule telemetry
         self._proposals_count = 0
         self._wins_count = 0
@@ -128,27 +132,43 @@ class RuleLearner(WorkspaceModule):
         # New learned rules: Standard threshold
         return self.min_success_rate
     
+    def register_verifier(self, task_tag: str, verifier: 'GroundingVerifier') -> None:
+        """Register a domain-specific verifier for a task.
+
+        Called automatically by CognitiveEngine.register_task() so that observe()
+        can extract the correct predicates for each domain.
+        """
+        self.task_verifiers[task_tag] = verifier
+
     def observe(
         self,
         state: Dict[str, Any],
         action: str,
         reward: float,
         task_tag: str,
-        outcome: str = "neutral"
+        outcome: str = "neutral",
+        *,
+        active_preds: Optional[List[str]] = None,
     ):
         """
         Record an observation for pattern learning.
-        
+
         Args:
             state: Game state dict
             action: Action taken (e.g., "ACTION_UP")
             reward: Reward received
             task_tag: Which task/game
             outcome: Outcome label ("success", "failure", "neutral")
+            active_preds: Pre-computed predicate list (overrides internal extraction).
+                          Pass this from CognitiveEngine.learn() to avoid using the
+                          default verifier which returns [] for unknown tasks.
         """
         # 1. Extract active predicates from state
-        active_preds = self.verifier.get_active_predicates(state, context=task_tag)
-        
+        if active_preds is None:
+            # Use task-specific verifier if registered, else fall back to default.
+            verifier = self.task_verifiers.get(task_tag, self.verifier)
+            active_preds = verifier.get_active_predicates(state, context=task_tag)
+
         if not active_preds:
             return  # Can't learn from ungrounded state
         

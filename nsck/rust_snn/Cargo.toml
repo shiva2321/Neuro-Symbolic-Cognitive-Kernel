@@ -1,0 +1,22 @@
+[package]
+name = "rust_snn"
+version = "0.1.0"
+edition = "2021"
+
+# Compiled as a Python extension module — identical pattern to rust_vsa/hypervec_rs
+[lib]
+name = "snn_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3       = { version = "0.20", features = ["extension-module"] }
+rand       = "0.8"
+rand_chacha = "0.3"
+rayon      = "1.10"   # data-parallel neuron updates (mirrors rust_vsa)
+parking_lot = "0.12"  # faster Mutex than std (mirrors rust_vsa)
+
+[dev-dependencies]
+criterion = "0.5"
+
+[features]
+default = []
