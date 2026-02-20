@@ -80,10 +80,10 @@ from dataclasses import dataclass, field
 import numpy as np
 
 # ---------------------------------------------------------------------------
-# Ensure nsck-demo is importable
+# Ensure nsck is importable
 # ---------------------------------------------------------------------------
 _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_NSCK_DEMO = os.path.join(_REPO_ROOT, "nsck-demo")
+_NSCK_DEMO = os.path.join(_REPO_ROOT, "nsck")
 if _NSCK_DEMO not in sys.path:
     sys.path.insert(0, _NSCK_DEMO)
 

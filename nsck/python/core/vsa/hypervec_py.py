@@ -121,8 +121,58 @@ class HyperVectorPy:
     def permute_inverse(self, shift):
         """Inverse permutation: equivalent to permute(-shift)."""
         return self.permute(-shift)
-    
-        
+
+    def weighted_bundle(self, other, weight: float, seed=None):
+        """
+        Produce a vector biased toward *self* (weight→1) or *other* (weight→0).
+
+        Uses majority-vote over ``k`` copies: a high *weight* includes more
+        copies of *self*, a low *weight* more copies of *other*.
+
+        Args:
+            other: The other HyperVector to blend with.
+            weight: Blend weight in [0, 1].  1.0 = all self, 0.0 = all other.
+            seed:   Unused; kept for API parity with the Rust shim.
+
+        Returns:
+            A new HyperVectorPy blended according to *weight*.
+        """
+        w = max(0.0, min(1.0, float(weight)))
+        k = 7
+        self_n = max(1, int(round(w * k)))
+        other_n = k - self_n
+
+        out = self
+        for _ in range(self_n - 1):
+            out = out.bundle(self)
+        for _ in range(other_n):
+            out = out.bundle(other)
+        return out
+
+    def lsh_hash(self, seed: int, n_bits: int) -> int:
+        """
+        Locality-Sensitive Hash of this hypervector.
+
+        Selects ``n_bits`` random bit positions (seeded deterministically) and
+        packs the values at those positions into an integer.  Similar vectors
+        share many selected bits, so they tend to land in the same bucket.
+
+        Args:
+            seed:   Integer seed that selects the projection (one per LSH table).
+            n_bits: Number of bits to project onto (bucket resolution).
+
+        Returns:
+            A non-negative integer bucket index.
+        """
+        rng = np.random.default_rng(seed)
+        indices = rng.choice(DIMENSION, size=int(n_bits), replace=False)
+        selected = self.bits[indices]
+        result = 0
+        for i, b in enumerate(selected):
+            if b:
+                result |= (1 << i)
+        return result
+
     def __repr__(self):
         return f"<HyperVector dim={DIMENSION} (Python)>"
 
