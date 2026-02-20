@@ -69,7 +69,7 @@ class TestLinearSolver:
 
     def test_rhs_constant(self):
         result = self.solver.solve("3 = x + 1")
-        assert result.get("x", result.get("x")) == pytest.approx(2.0)
+        assert result["x"] == pytest.approx(2.0)
 
     def test_coefficient(self):
         result = self.solver.solve("2x = 10")
