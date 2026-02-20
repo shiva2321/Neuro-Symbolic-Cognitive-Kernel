@@ -49,7 +49,7 @@ cd nsck/rust_vsa && cargo test --release
 
 | Layer | Location | Files | Test methods | Description |
 |---|---|---|---|---|
-| Unit | `nsck/tests/unit/` | 21 files | ~104 | Module-level isolation tests |
+| Unit | `nsck/tests/unit/` | 25 files | ~199 | Module-level isolation tests |
 | Integration | `nsck/tests/integration/` | 9 files | ~145 | Cross-module and system tests |
 | Architecture | `nsck/tests/core_architecture/` | 4 files | ~63 | Architecture capability verification |
 | Experiments | `nsck/tests/experiments/` | 4 files | ~10 | Behavioural validation scenarios |
@@ -58,7 +58,7 @@ cd nsck/rust_vsa && cargo test --release
 | Rust | `nsck/rust_vsa/tests/` | 1 file | 11 | Property-based VSA correctness |
 | Python core | `nsck/python/core/tests/` | 3 files | ~40 | Module-internal tests |
 
-**Total: ~500 test methods** across the codebase.
+**Total: ~597 test methods** across the codebase.
 
 ---
 
@@ -260,6 +260,47 @@ Unit tests target individual classes in isolation, using minimal or mocked depen
 
 ---
 
+### `unit/learning/test_cross_domain.py` — 15 tests
+
+**What:** Tests the cross-domain knowledge transfer engine (`TransferEngine`, `SchemaExtractor`, `StructureMapper`, `RuleLifter`).
+
+**How:**
+- Registers concepts and rules in a source domain.
+- Declares explicit correspondences or lets `discover_correspondences` find them.
+- Calls `transfer()` and checks returned `TransferredInference` objects: correct relation labels, confidence ordering, non-empty target fillers.
+- Tests edge cases: no correspondences → empty result; single auto-discovered correspondence → valid mapping.
+
+**Why:** Cross-domain transfer is the primary mechanism for generalising knowledge across domains. These tests verify that the structural mapping and rule lifting steps produce correct inferences without corrupting source domain knowledge.
+
+---
+
+### `unit/language/test_semantic_roles.py` — 24 tests
+
+**What:** Tests the `SemanticRoleLabeler` and related VSA helper functions.
+
+**How:**
+- Labels sentences with known role structures; checks `frame.pred`, `frame.agent`, `frame.patient`, `frame.location`, `frame.temporal`, `frame.manner`, `frame.negation`.
+- Tests predicate finding: irregular verb takes priority over morphological pattern.
+- Tests resonator verification: codebook update doesn't corrupt frame.
+- Tests VSA helpers: determinism of word/role HVs; different words produce different HVs.
+
+**Why:** SRL is the entry point for structured language understanding. Incorrect role extraction would corrupt all downstream causal and semantic reasoning that depends on thematic structure.
+
+---
+
+### `unit/language/test_nlg_discourse.py` — 19 tests
+
+**What:** Tests `DiscoursePlanner` and `NLGEngine` (including backward compatibility with `StructuralRealizer`).
+
+**How:**
+- Passes single and multi-frame lists to `DiscoursePlanner.plan()` and checks: connective insertion, pronoun anaphora, procedural numbering, negation surface form, and multi-frame paragraph generation.
+- Tests `NLGEngine.generate_discourse()` and `generate_causal_chain()` for correct multi-sentence output.
+- Tests backward compatibility: `NLGEngine.generate("factual", ...)` still produces a single sentence.
+
+**Why:** NLG quality is the primary user-facing output of the system. These tests ensure that discourse planning produces coherent, well-connected paragraphs without breaking the existing single-sentence generation API.
+
+---
+
 ### `unit/perception/test_semantic_folding.py` — 2 tests
 
 **What:** Tests that semantic folding preserves important properties.
@@ -277,6 +318,21 @@ Unit tests target individual classes in isolation, using minimal or mocked depen
 **How:** Binds a role HV with a filler HV via XOR; verifies unbinding recovers the filler; tests that the bound vector is quasi-orthogonal to both.
 
 **Why:** Role-filler binding is used to represent structured knowledge (e.g., "capital(France)=Paris"). Incorrect unbinding would corrupt all structured queries.
+
+---
+
+### `unit/reasoning/test_math_reasoning.py` — 37 tests
+
+**What:** Tests all math reasoning components: `FPECodebook`, `ExpressionEvaluator`, `LinearSolver`, `WordProblemParser`, `MathReasoner`.
+
+**How:**
+- `FPECodebook`: monotone similarity (adjacent numbers more similar than distant), determinism, boundary integers.
+- `ExpressionEvaluator`: arithmetic with precedence, parentheses, unary minus, division by zero guard.
+- `LinearSolver`: standard `x + b = c`, coefficient `ax`, RHS constant, negative solution.
+- `WordProblemParser`: cue-word classification for all four operations.
+- `MathReasoner`: end-to-end solve/compare/verbalize, `is_math_query` detection.
+
+**Why:** Math reasoning must be exact and reproducible. These tests verify that no rounding error, parser edge case, or encoding collision slips through.
 
 ---
 

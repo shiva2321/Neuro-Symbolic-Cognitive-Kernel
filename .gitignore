@@ -11,6 +11,8 @@
 *.csv
 *.png
 *.gguf
+*.json
+*.npz
 
 # Runtime / generated
 hf_cache/
@@ -18,6 +20,7 @@ demo_outputs/
 nsck_ai_model/logs/
 nsck_ai_model/models/
 nsck_ai_model/hf_cache/
+checkpoints/
 data_mnist/
 nsck-demo/data_mnist/
 nsck-demo/10Minute_experiment_video.mp4

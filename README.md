@@ -19,10 +19,10 @@ NSCK (Neural-Symbolic Cognitive Kernel) is a **reasoning engine**, not a chatbot
 
 - **Representation** — Every concept, relation, and context is a 10,240-bit binary hypervector. XOR binds roles to fillers; majority-vote bundling creates superpositions; circular shift encodes word order.
 - **Memory** — Two-tier episodic memory (in-memory hot tier + SQLite warm tier with LSH indexing) and a directed-graph semantic memory with spreading activation.
-- **Reasoning** — Global Workspace Theory competition, Δ*P* causal discovery, STRIPS A\* planning, rule induction, and analogical transfer.
+- **Reasoning** — Global Workspace Theory competition, Δ*P* causal discovery, STRIPS A\* planning, rule induction, analogical transfer, cross-domain knowledge transfer, and math/numeric reasoning.
 - **Perception** — Leaky Integrate-and-Fire spiking neurons with STDP learning, connected to VSA via a Rate/Temporal coder bridge.
-- **Learning** — Curiosity-driven exploration (VSA novelty), Hebbian association, and autonomous causal model construction.
-- **Language** — Text → HV encoding via semantic folding; TextKnowledgeLearner extracts subject–relation–object triples; NLG assembles responses from retrieved evidence.
+- **Learning** — Curiosity-driven exploration (VSA novelty), Hebbian association, continual learning (EWC), meta-learning (MAML-style), and cross-domain rule lifting.
+- **Language** — Text → HV encoding via semantic folding; Semantic Role Labeling (SRL) extracts thematic roles (AGENT/PATIENT/LOCATION/…); TextKnowledgeLearner extracts triples; NLG with discourse planning and anaphora assembles multi-sentence responses.
 - **Transparency** — Every action is accompanied by a human-readable explanation tracing the winning coalition, rule activations, causal chain, and confidence score.
 
 ## What Is the AI Model?
@@ -47,14 +47,14 @@ Node_network/
 │
 ├── nsck/                           ← NSCK cognitive architecture
 │   ├── python/
-│   │   └── core/                   ← ~45 Python source files, ~23,000 LOC
+│   │   └── core/                   ← ~47 Python source files, ~23,800 LOC
 │   │       ├── vsa/                ← HyperVector engine + Rust shim
-│   │       ├── reasoning/          ← CognitiveEngine, GWT, Planner, Causal, Rules, Analogy
+│   │       ├── reasoning/          ← CognitiveEngine, GWT, Planner, Causal, Rules, Analogy, MathReasoner
 │   │       ├── memory/             ← EpisodicMemory (LSH+SQLite), SemanticMemory (Graph+VSA)
 │   │       ├── cognitive/          ← Emotions, Metacognition, Self-Model, Theory of Mind
 │   │       ├── perception/         ← SNN (LIF+STDP), VSA-SNN Bridge, Symbol Grounding
-│   │       ├── learning/           ← Hebbian learning, Curiosity module
-│   │       ├── language/           ← NLU, Dialogue, Text Knowledge Learner, Universal Input
+│   │       ├── learning/           ← Hebbian learning, Curiosity module, CrossDomainTransfer
+│   │       ├── language/           ← NLU, SRL, Discourse NLG, Dialogue, Text Knowledge Learner, Universal Input
 │   │       ├── integration/        ← Config, BrainStore (SQLite), BrainFusion, Explanation
 │   │       ├── multimodal/         ← Image processor, Image generator
 │   │       └── training/           ← SNN training pipelines
@@ -77,7 +77,8 @@ Node_network/
 │   │   ├── FORMULAS.md             ← Theory, formulas, proofs, and design goals
 │   │   ├── MODULE_REFERENCE.md     ← Every file, class, and method
 │   │   ├── TESTING.md              ← All tests: what they test, how, and why
-│   │   └── WORKFLOWS.md            ← Decision loop and data-flow walkthroughs
+│   │   ├── WORKFLOWS.md            ← Decision loop and data-flow walkthroughs
+│   │   └── NSCK_ROADMAP_AND_PLAN.md ← Implementation roadmap: gaps, phases, research
 │   │
 │   ├── examples/                   ← Runnable usage examples
 │   ├── data/                       ← Test corpora (belief revision, causal chains)
@@ -99,7 +100,6 @@ Node_network/
 │   ├── train_autonomous.py         ← Autonomous training entry point
 │   └── tests/                      ← 123 tests (77 unit + 46 production)
 │
-├── checkpoints/                    ← Training checkpoints (JSON + NPZ)
 └── research/                       ← Research notes (VSA/SNN literature)
 ```
 

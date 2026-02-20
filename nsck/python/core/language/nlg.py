@@ -1,18 +1,26 @@
 """
 NSCK Natural Language Generation (NLG) Module
 ==============================================
-Pure VSA Structural Realizer.
-Converts internal semi-structured facts into fluent English using 
-grammatical rules (Morphology + Syntax), NOT templates.
+Pure VSA Structural Realizer + Discourse Planner.
 
-Design:
--------
-* StructuralRealizer: Conjugates verbs, pluralizes nouns, handles determiners.
-* Logic-Driven: Input is a semantic frame (Subject, Relation, Object).
-* Output: Grammatically correct sentence.
+Converts internal semi-structured facts into fluent English using
+grammatical rules (Morphology + Syntax), NOT templates, NOT LLMs.
+
+Design
+------
+* StructuralRealizer  – single S-V-O sentence construction (morphology +
+  syntax trees).
+* DiscoursePlanner    – multi-sentence generation: orders facts by coherence,
+  inserts connectives (therefore, because, however …), applies pronoun
+  anaphora, and formats responses by query type (factual / explanatory /
+  procedural / comparative).
+* NLGEngine           – thin orchestrator used by the rest of NSCK.
+
+No neural networks involved.  Every decision is deterministic rule-based.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+import re
 
 class StructuralRealizer:
     """
@@ -230,5 +238,250 @@ class NLGEngine:
                     return self.realizer.realize_sentence(subj, "have", val) # "The dog has red"
             
             return self.realizer.realize_sentence(subj, rel, obj)
-            
-        return f"I am unable to articulate that thought yet."
+
+        return "I am unable to articulate that thought yet."
+
+
+# ---------------------------------------------------------------------------
+# Discourse Planner
+# ---------------------------------------------------------------------------
+
+class DiscoursePlanner:
+    """
+    Multi-sentence discourse planner.
+
+    Converts a list of semantic frames (dicts) into a coherent paragraph:
+    1. Orders frames by topic centrality and causal ordering.
+    2. Selects discourse connectives appropriate to the relation type.
+    3. Applies pronoun anaphora to avoid repetition.
+    4. Formats output based on query type (factual/explanatory/procedural).
+
+    Input frame schema (each element of *frames* list)
+    ---------------------------------------------------
+    {
+      "subject":  str,
+      "relation": str,          # e.g. "is_a", "causes", "has_property"
+      "object":   str,
+      "tense":    str,          # optional: "present" | "past" | "future"
+      "negate":   bool,         # optional
+      "importance": float,      # optional 0-1, default 0.5
+    }
+
+    Query types
+    -----------
+    * "factual"      - brief factual answer
+    * "explanatory"  - topic sentence + supporting evidence
+    * "procedural"   - numbered/sequenced steps
+    * "comparative"  - contrast two entities
+    * "causal"       - causal chain narrative
+    """
+
+    # Connectives keyed by (relation_type, position_in_discourse)
+    _CONNECTIVES: Dict[str, Dict[str, str]] = {
+        "causes": {
+            "first": "",
+            "middle": "As a result,",
+            "last": "Therefore,",
+        },
+        "enables": {
+            "first": "",
+            "middle": "This makes it possible to",
+            "last": "Consequently,",
+        },
+        "contradicts": {
+            "first": "",
+            "middle": "However,",
+            "last": "Nevertheless,",
+        },
+        "similar_to": {
+            "first": "",
+            "middle": "Similarly,",
+            "last": "In the same way,",
+        },
+        "precedes": {
+            "first": "First,",
+            "middle": "Then,",
+            "last": "Finally,",
+        },
+        "has_property": {
+            "first": "",
+            "middle": "Additionally,",
+            "last": "Furthermore,",
+        },
+        "default": {
+            "first": "",
+            "middle": "Also,",
+            "last": "In addition,",
+        },
+    }
+
+    def __init__(self):
+        self._realizer = StructuralRealizer()
+
+    def plan(
+        self,
+        frames: List[Dict[str, Any]],
+        query_type: str = "factual",
+        topic: str = "",
+    ) -> str:
+        """
+        Generate a coherent multi-sentence response from a list of frames.
+
+        Parameters
+        ----------
+        frames : list of semantic frame dicts
+        query_type : "factual" | "explanatory" | "procedural" | "causal" | "comparative"
+        topic : the central topic word (for anaphora)
+
+        Returns
+        -------
+        str : a fluent multi-sentence paragraph
+        """
+        if not frames:
+            return "I don't have enough information to answer that."
+
+        frames = self._sort_frames(frames, query_type)
+
+        sentences: List[str] = []
+        seen_subjects: List[str] = []
+
+        for i, frame in enumerate(frames):
+            pos = "first" if i == 0 else ("last" if i == len(frames) - 1 else "middle")
+            sentence = self._realize_frame(frame, i, seen_subjects, topic, pos)
+            if sentence:
+                sentences.append(sentence)
+                subj = frame.get("subject", "")
+                if subj and subj not in seen_subjects:
+                    seen_subjects.append(subj)
+
+        if query_type == "procedural":
+            return self._format_steps(sentences)
+
+        return " ".join(sentences)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _sort_frames(
+        self, frames: List[Dict[str, Any]], query_type: str
+    ) -> List[Dict[str, Any]]:
+        """Order frames: high-importance first; causal chains in order."""
+        if query_type in ("causal", "procedural"):
+            return frames  # preserve supplied order
+
+        def key(f: Dict[str, Any]) -> float:
+            rel = f.get("relation", "")
+            if rel in ("is_a", "isa", "is"):
+                return 0.0
+            if rel in ("causes", "enables", "creates"):
+                return 0.1
+            return 1.0 - f.get("importance", 0.5)
+
+        return sorted(frames, key=key)
+
+    def _realize_frame(
+        self,
+        frame: Dict[str, Any],
+        index: int,
+        seen_subjects: List[str],
+        topic: str,
+        position: str,
+    ) -> str:
+        """Realize one frame as a sentence with connective + anaphora."""
+        subj = frame.get("subject", "")
+        rel = frame.get("relation", "is related to")
+        obj = frame.get("object") or frame.get("value", "")
+        tense = frame.get("tense", "present")
+        negate = frame.get("negate", False)
+
+        if not subj or not obj:
+            return ""
+
+        # --- Anaphora: replace repeated subject with pronoun ---
+        display_subj = self._apply_anaphora(subj, seen_subjects, topic)
+
+        # --- Negation ---
+        if negate:
+            sentence = self._realizer.realize_sentence(display_subj, rel, obj, tense)
+            # Insert "not" after first finite verb
+            sentence = re.sub(
+                r"\b(is|are|was|were|has|have|do|does)\b",
+                lambda m: m.group(0) + " not",
+                sentence,
+                count=1,
+            )
+        else:
+            sentence = self._realizer.realize_sentence(display_subj, rel, obj, tense)
+
+        # --- Connective ---
+        conn_map = self._CONNECTIVES.get(rel, self._CONNECTIVES["default"])
+        connective = conn_map.get(position, "")
+        if connective and index > 0:
+            sentence = connective + " " + sentence[0].lower() + sentence[1:]
+
+        return sentence
+
+    def _apply_anaphora(
+        self, subject: str, seen: List[str], topic: str
+    ) -> str:
+        """Replace subject with pronoun if it was recently mentioned."""
+        if subject not in seen:
+            return subject
+        return "it"
+
+    def _format_steps(self, sentences: List[str]) -> str:
+        """Format as numbered steps for procedural queries."""
+        if not sentences:
+            return ""
+        return "\n".join(f"{i+1}. {s}" for i, s in enumerate(sentences))
+
+
+# ---------------------------------------------------------------------------
+# Extended NLGEngine
+# ---------------------------------------------------------------------------
+
+class NLGEngine:
+    def __init__(self):
+        self.realizer = StructuralRealizer()
+        self.discourse = DiscoursePlanner()
+
+    def generate(self, category: str, data: Dict[str, Any]) -> str:
+        """Generate response using Grammar Engine (single-frame)."""
+        if category == "fact":
+            subj = data.get("subject", "it")
+            rel = data.get("relation", "is related to")
+            obj = data.get("object") or data.get("value", "something")
+
+            if "property" in data:
+                prop = data["property"]
+                val = data["value"]
+                if prop == "characteristic":
+                    return self.realizer.realize_sentence(subj, "is_a", val)
+                else:
+                    return self.realizer.realize_sentence(subj, "have", val)
+
+            return self.realizer.realize_sentence(subj, rel, obj)
+
+        return "I am unable to articulate that thought yet."
+
+    def generate_discourse(
+        self,
+        frames: List[Dict[str, Any]],
+        query_type: str = "factual",
+        topic: str = "",
+    ) -> str:
+        """
+        Generate a multi-sentence response from multiple semantic frames.
+
+        Parameters
+        ----------
+        frames : list of {"subject", "relation", "object", ...} dicts
+        query_type : response style ("factual"|"explanatory"|"procedural"|"causal")
+        topic : central topic word (aids anaphora)
+        """
+        return self.discourse.plan(frames, query_type=query_type, topic=topic)
+
+    def generate_causal_chain(self, chain: List[Any]) -> str:
+        """Generate a causal-chain narrative."""
+        return self.realizer.realize_chain(chain)

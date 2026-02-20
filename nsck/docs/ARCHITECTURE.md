@@ -46,6 +46,7 @@ graph TB
         Plan["STRIPSPlanner\nplanner.py · 296 LOC"]
         Ana["AnalogyEngine\nanalogy.py · 609 LOC"]
         Ctx["ContextEngine\ncontext_engine.py · 440 LOC"]
+        Math["MathReasoner\nmath_reasoning.py\nFPE + algebra + word problems"]
     end
 
     subgraph S4["4 · Perception"]
@@ -58,6 +59,7 @@ graph TB
     subgraph S5["5 · Learning"]
         Hebb["HebbianMatrix + VSAHebbianLearner\nhebbian.py · 506 LOC\nOja's rule"]
         Cur["CuriosityModule\ncuriosity.py · 336 LOC"]
+        XD["TransferEngine\ncross_domain.py\nSchema + Structure + Rule lifting"]
     end
 
     subgraph S6["6 · Cognitive"]
@@ -72,6 +74,8 @@ graph TB
         LM["LanguageModule + LinguaCortex\nlanguage_module.py · 526 LOC\nlingua_cortex.py · ~260 LOC"]
         DM["DialogueManager\ndialogue_manager.py · 506 LOC"]
         UI["UniversalInput\nuniversal_input.py · 947 LOC"]
+        SRL["SemanticRoleLabeler\nsemantic_roles.py\n12 thematic roles · resonator"]
+        NLG["NLGEngine + DiscoursePlanner\nnlg.py\nconnectives · anaphora · steps"]
     end
 
     subgraph S8["8 · Integration"]
@@ -417,7 +421,84 @@ Converts any input type to a HV:
 | `str` | LinguaCortex semantic folding |
 | `dict` | XOR-bind each key–value pair, bundle results |
 | `np.ndarray` (image) | MultimodalProcessor → fused image HV |
-| numeric | scalar quantisation → HV |
+| numeric | FPE encoding (MathReasoner) or scalar quantisation → HV |
+
+### 8.4 Semantic Role Labeling (`semantic_roles.py`)
+
+VSA-native SRL: identifies *who did what to whom, where, when, why, and how* without any neural network.
+
+**12 thematic roles:** PRED, AGENT, PATIENT, THEME, RECIPIENT, INSTRUMENT, LOCATION, TEMPORAL, MANNER, CAUSE, PURPOSE, NEGATION.
+
+**Pipeline:**
+1. Tokenise and lower-case.
+2. Find predicate: irregular verbs first (bit, ran, gave…) → morphological pattern (-s/-ed/-ing) → copular fallback.
+3. Extract AGENT (NP before verb), PATIENT (NP after verb), PPs for LOCATION/TEMPORAL/etc.
+4. Build VSA composite: `S = ⊕ bind(role_hv, filler_hv)` for each filled role.
+5. Resonator verification: for each role, `estimate = S ⊕ role_hv`, find nearest filler in codebook.
+
+**Role vectors** are deterministic seeds (60001–60012); **word vectors** are MD5-seeded — both are reproducible across sessions.
+
+### 8.5 NLG with Discourse Planning (`nlg.py`)
+
+`StructuralRealizer` (existing) handles single S-V-O sentences.
+
+`DiscoursePlanner` (new) generates coherent multi-sentence paragraphs from a list of semantic frames:
+- Orders frames by relation type (definitions first, causal chains next)
+- Inserts discourse connectives appropriate to the relation (causes → "As a result,"; contradicts → "However,")
+- Applies pronoun anaphora for repeated subjects ("fire … it …")
+- Formats procedural responses as numbered steps
+
+`NLGEngine` exposes both via `generate()` (single frame) and `generate_discourse()` (list of frames).
+
+---
+
+## 8b. Math Reasoning (`math_reasoning.py`)
+
+Pure-Python symbolic math — no neural networks, no `eval()`.
+
+**FPE Codebook** — Fractional Power Encoding via incremental noise accumulation:
+
+```
+v_0 = base_bits                          # seed 9876543
+v_n = v_{n-1} with FLIP_BITS (64) flipped deterministically
+sim(v_n, v_m) decreases monotonically as |n-m| increases
+sim(v_1, v_2) ≈ 0.994   sim(v_1, v_50) ≈ 0.775
+```
+
+**ExpressionEvaluator** — recursive-descent parser for `+ − × ÷ ** ()`.
+
+**LinearSolver** — solves `ax + b = c` forms in natural notation ("x + 3 = 7" → x=4).
+
+**WordProblemParser** — cue-word classification (add/sub/mul/div) for natural-language arithmetic problems.
+
+---
+
+## 8c. Cross-Domain Knowledge Transfer (`cross_domain.py`)
+
+Formal VSA-based mechanism for lifting knowledge from a source domain and applying it in a target domain.
+
+**Components:**
+
+| Class | Role |
+|---|---|
+| `SchemaExtractor` | Groups domain rules by relation type → bundled schema HV |
+| `StructureMapper` | Finds concept correspondences via HV cosine similarity |
+| `RuleLifter` | Substitutes fillers using correspondences → `TransferredInference` |
+| `TransferEngine` | Orchestrates all three; exposes `register_*` and `transfer()` API |
+
+**Transfer confidence:**
+```
+conf(inf) = source_rule.confidence × min(src_mapping.sim, tgt_mapping.sim)
+```
+
+**Example:**
+```python
+engine.register_rule("physics", "force", "causes", "acceleration", 0.9)
+engine.register_correspondence("physics", "force", "finance", "return", 1.0)
+engine.register_correspondence("physics", "acceleration", "finance", "volatility", 1.0)
+results = engine.transfer("physics", "finance")
+# → "return causes volatility (conf=0.90)"
+```
 
 ---
 

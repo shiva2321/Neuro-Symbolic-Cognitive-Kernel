@@ -377,7 +377,68 @@ STRIPSPlanner(operators: List[Rule] = None)
 
 ---
 
-## Perception Layer
+### `reasoning/math_reasoning.py`
+
+**Math/numeric reasoning module.** No neural networks. No `eval()`. Pure symbolic computation.
+
+#### `FPECodebook`
+
+Fractional Power Encoding via incremental noise accumulation.
+
+```python
+FPECodebook(max_int: int = 1023)
+```
+
+| Method | Signature | Returns |
+|---|---|---|
+| `encode` | `(n: int | float) → HyperVector` | HV for numeric value |
+| `similarity` | `(a, b) → float` | cosine similarity between encodings |
+| `find_nearest` | `(hv, candidates?) → int` | nearest integer in codebook |
+
+**Property:** `sim(v_n, v_m)` decreases monotonically as `|n-m|` increases.
+
+#### `ExpressionEvaluator`
+
+Safe recursive-descent arithmetic parser supporting `+ − × ÷ ** ()` and unary minus.
+
+```python
+ExpressionEvaluator().evaluate("(3 + 5) * 2")   # → 16.0
+```
+
+#### `LinearSolver`
+
+Solves one-variable linear equations in natural notation.
+
+```python
+LinearSolver().solve("x + 3 = 7")   # → {'x': 4.0}
+LinearSolver().solve("2x - 1 = 5")  # → {'x': 3.0}
+```
+
+#### `WordProblemParser`
+
+Extracts arithmetic operations from natural-language word problems via cue-word classification (add/sub/mul/div).
+
+#### `MathReasoner`
+
+Top-level API combining all math sub-components.
+
+```python
+MathReasoner(fpe_max_int: int = 1023)
+```
+
+| Method | Signature | Returns |
+|---|---|---|
+| `solve_expression` | `(expr: str) → float` | exact arithmetic result |
+| `solve_algebra` | `(equation: str) → Dict[str, float]` | variable → value |
+| `solve_word_problem` | `(text: str) → dict` | `{answer, expression, explanation}` |
+| `compare` | `(a, b) → dict` | `{less, equal, greater, difference, fpe_similarity}` |
+| `magnitude_similarity` | `(a, b) → float` | FPE cosine similarity |
+| `encode_number` | `(n) → HyperVector` | FPE HV for n |
+| `is_math_query` | `(text) → bool` | heuristic detection |
+| `extract_numbers` | `(text) → List[float]` | all numeric values in text |
+| `verbalize_answer` | `(result) → str` | natural-language sentence |
+
+---
 
 ### `perception/snn_perception.py` — 874 LOC
 
@@ -504,7 +565,78 @@ CuriosityModule(novelty_threshold: float = 0.7, progress_window: int = 100, stag
 
 ---
 
-## Cognitive Layer
+### `learning/cross_domain.py`
+
+**Cross-domain knowledge transfer engine.** Lifts rules from a source domain and applies them in a target domain using VSA structural similarity — no neural network required.
+
+#### `DomainConcept` (dataclass)
+
+`domain: str`, `name: str`, `hv: HyperVector`
+
+#### `DomainRelation` (dataclass)
+
+`domain`, `source`, `relation`, `target`, `confidence: float`, `triple_hv: HyperVector`
+
+The `triple_hv` is `src_hv XOR rel_hv XOR tgt_hv`.
+
+#### `ConceptCorrespondence` (dataclass)
+
+`source_domain`, `source_concept`, `target_domain`, `target_concept`, `structural_similarity: float`
+
+#### `TransferredInference` (dataclass)
+
+`source_domain`, `source_rule`, `target_domain`, `target_source`, `target_relation`, `target_target`, `confidence`, `provenance: str`
+
+Method: `summary() → str`
+
+#### `SchemaExtractor`
+
+Groups domain relations by relation type and bundles their `triple_hv`s into a schema HV for each type.
+
+| Method | Signature | Returns |
+|---|---|---|
+| `extract` | `(relations, concepts) → Dict[str, HV]` | schema HVs keyed by relation type |
+
+#### `StructureMapper`
+
+Finds concept correspondences between source and target domains.
+
+| Method | Signature | Returns |
+|---|---|---|
+| `map` | `(src_concepts, tgt_concepts, explicit?, threshold) → List[ConceptCorrespondence]` | correspondences |
+
+When `explicit` is provided, it is returned directly (bypasses auto-discovery).
+
+#### `RuleLifter`
+
+Substitutes fillers in source-domain rules using a concept mapping.
+
+| Method | Signature | Returns |
+|---|---|---|
+| `lift` | `(relations, correspondences, target_domain, confidence_threshold) → List[TransferredInference]` | transferred inferences |
+
+Confidence formula: `source_rule.confidence × min(src_corr.similarity, tgt_corr.similarity)`.
+
+#### `TransferEngine`
+
+Top-level orchestrator.
+
+```python
+engine = TransferEngine(confidence_threshold=0.55)
+```
+
+| Method | Signature | Returns |
+|---|---|---|
+| `register_concept` | `(domain, name, seed?) → DomainConcept` | registered concept |
+| `register_rule` | `(domain, src, relation, tgt, confidence) → DomainRelation` | registered relation |
+| `register_correspondence` | `(src_domain, src_concept, tgt_domain, tgt_concept, sim) → ConceptCorrespondence` | declared mapping |
+| `transfer` | `(source_domain, target_domain) → List[TransferredInference]` | sorted by confidence ↓ |
+| `discover_correspondences` | `(source_domain, target_domain, threshold) → List[ConceptCorrespondence]` | auto-discovered |
+| `apply` | `(inferences, rule_learner) → int` | count of injected rules |
+| `domain_summary` | `(domain) → dict` | `{domain, num_concepts, num_relations, …}` |
+| `list_domains` | `() → List[str]` | sorted domain names |
+
+---
 
 ### `cognitive/emotion_system.py` — 420 LOC
 
@@ -668,7 +800,97 @@ Converts any input type to a HV for unified processing.
 
 ---
 
-## Integration Layer
+### `language/semantic_roles.py`
+
+**VSA Semantic Role Labeling.** Extracts thematic roles from natural-language sentences using lexico-syntactic heuristics and a VSA resonator — no neural network.
+
+#### `SRLFrame` (dataclass)
+
+| Field | Type | Default |
+|---|---|---|
+| `pred` | `str` | `""` |
+| `agent` | `str` | `""` |
+| `patient` | `str` | `""` |
+| `theme` | `str` | `""` |
+| `recipient` | `str` | `""` |
+| `instrument` | `str` | `""` |
+| `location` | `str` | `""` |
+| `temporal` | `str` | `""` |
+| `manner` | `str` | `""` |
+| `cause` | `str` | `""` |
+| `purpose` | `str` | `""` |
+| `negation` | `bool` | `False` |
+| `confidence` | `float` | `0.0` |
+
+Method: `to_dict() → dict` (omits empty optional fields).
+
+#### `SemanticRoleLabeler`
+
+```python
+SemanticRoleLabeler()
+```
+
+| Method | Signature | Returns |
+|---|---|---|
+| `label` | `(sentence: str) → SRLFrame` | role frame for one sentence |
+| `label_batch` | `(sentences: List[str]) → List[SRLFrame]` | frames for multiple sentences |
+| `update_codebook` | `(words: List[str]) → None` | add words to resonator codebook |
+
+**Role vector seeds:** deterministic seeds 60001–60012 (one per role); word vectors use MD5-hash seeds — reproducible across sessions.
+
+**Processing pipeline:**
+1. Tokenise + lowercase.
+2. Find predicate: irregular past tenses → morphological pattern → copular fallback.
+3. Extract AGENT (pre-verb NP), PATIENT (post-verb NP, skipping PPs).
+4. Parse prepositional phrases → LOCATION / TEMPORAL / RECIPIENT / INSTRUMENT / etc.
+5. Build VSA composite: `S = ⊕ bind(role_hv, filler_hv)`.
+6. Resonator verification: `estimate = S ⊕ role_hv`, match against codebook.
+
+---
+
+### `language/nlg.py` — enhanced
+
+#### `StructuralRealizer` (existing)
+
+Single-sentence grammar engine.
+
+| Method | Signature | Returns |
+|---|---|---|
+| `pluralize` | `(noun: str) → str` | morphological plural |
+| `conjugate` | `(verb, person, number, tense) → str` | conjugated form |
+| `add_article` | `(noun) → str` | "a/an/the" + noun |
+| `realize_sentence` | `(subj, relation, obj, tense?) → str` | complete sentence |
+| `realize_chain` | `(chain: List) → str` | causal chain narrative |
+
+#### `DiscoursePlanner` (new)
+
+Multi-sentence paragraph generator from a list of semantic frames.
+
+```python
+DiscoursePlanner().plan(frames, query_type="factual", topic="")
+```
+
+**Query types:** `"factual"` | `"explanatory"` | `"procedural"` | `"causal"` | `"comparative"`
+
+**Frame schema:** `{"subject": str, "relation": str, "object": str, "tense"?: str, "negate"?: bool, "importance"?: float}`
+
+Features:
+- Discourse connectives by relation type (`causes` → "As a result,"; `contradicts` → "However,")
+- Pronoun anaphora for repeated subjects
+- Numbered step formatting for procedural queries
+- Importance-weighted frame ordering
+
+#### `NLGEngine` (new)
+
+Thin orchestrator exposing both old and new APIs.
+
+| Method | Signature | Returns |
+|---|---|---|
+| `generate` | `(category, data) → str` | single-frame sentence (backward-compatible) |
+| `generate_discourse` | `(frames, query_type?, topic?) → str` | multi-sentence paragraph |
+| `generate_causal_chain` | `(chain) → str` | causal chain narrative |
+
+---
 
 ### `integration/persistence.py` — 852 LOC
 
@@ -1015,13 +1237,17 @@ Flask app with 15 endpoints. See [nsck_ai_model/README.md](../../nsck_ai_model/R
 | `reasoning/test_rule_learner_interface.py` | `TestRuleLearnerInterface` | WorkspaceModule interface compliance |
 | `reasoning/test_logic_bridge.py` | `TestLogicBridge` | VSA ↔ symbolic logic bridging |
 | `reasoning/test_theory_formation.py` | `TestTheoryFormation` | Rule induction from observations |
+| `reasoning/test_math_reasoning.py` | `TestMathReasoner`, `TestFPECodebook`, `TestExpressionEvaluator`, `TestLinearSolver`, `TestWordProblemParser` | FPE encoding, expression evaluation, algebra, word problems |
 | `cognitive/test_context_engine.py` | `TestContextEngine` | Context window management |
 | `cognitive/test_metacognition.py` | `TestMetacognition` | MetacognitiveEngine performance tracking |
 | `cognitive/test_metacognitive_veto.py` | `TestMetacognitiveVeto` | SafetyGate veto logic |
 | `cognitive/test_self_model.py` | `TestSelfModel` | Confidence calibration |
 | `cognitive/test_integrated_metacognition.py` | `TestIntegratedMetacognition` | Full metacognition integration |
 | `language/test_lingua.py` | `TestLingua` | LinguaCortex encoding properties |
+| `language/test_semantic_roles.py` | `TestSemanticRoleLabeler`, `TestSRLFrame`, `TestVSAHVFunctions` | SRL pipeline: predicate finding, role extraction, resonator, negation, anaphora |
+| `language/test_nlg_discourse.py` | `TestStructuralRealizerBackCompat`, `TestDiscoursePlanner`, `TestNLGEngine` | Discourse planning: connectives, anaphora, procedural, negation |
 | `learning/test_text_knowledge_learner.py` | `TestTextKnowledgeLearner` | SVO extraction, causal detection |
+| `learning/test_cross_domain.py` | `TestTransferEngine`, `TestSchemaExtractor`, `TestStructureMapper`, `TestRuleLifter` | Cross-domain transfer: registration, mapping, lifting, confidence ordering |
 | `perception/test_semantic_folding.py` | `TestSemanticFolding` | Semantic folding properties |
 | `perception/test_semantic_roles.py` | `TestSemanticRoles` | Role-filler binding and unbinding |
 | `integration_core/test_brain_fusion.py` | `TestBrainFusion` | Multi-task knowledge transfer |

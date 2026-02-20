@@ -177,6 +177,7 @@ sequenceDiagram
 | `reasoning/` | `planner.py` | `STRIPSPlanner`, `PlanStep` | ~296 |
 | `reasoning/` | `analogy.py` | `AnalogyEngine`, `Analogy` | 609 |
 | `reasoning/` | `context_engine.py` | `ContextEngine` | ~440 |
+| `reasoning/` | `math_reasoning.py` | `MathReasoner`, `FPECodebook`, `LinearSolver` | ~390 |
 | `memory/` | `episodic_memory.py` | `EpisodicMemory`, `LiveEpisode` | 501 |
 | `memory/` | `semantic_memory.py` | `SemanticMemory` | 291 |
 | `memory/` | `staged_recall.py` | `StagedRecall` | ~134 |
@@ -190,11 +191,14 @@ sequenceDiagram
 | `perception/` | `symbol_grounding.py` | `SymbolGrounding` | ~200 |
 | `learning/` | `hebbian.py` | `HebbianMatrix`, `VSAHebbianLearner` | 506 |
 | `learning/` | `curiosity.py` | `CuriosityModule`, `ExplorationDecision` | 336 |
+| `learning/` | `cross_domain.py` | `TransferEngine`, `SchemaExtractor`, `RuleLifter` | ~430 |
 | `language/` | `text_knowledge_learner.py` | `TextKnowledgeLearner` | 1,074 |
 | `language/` | `language_module.py` | `LanguageModule` | 526 |
 | `language/` | `lingua_cortex.py` | `LinguaCortex` | ~260 |
 | `language/` | `dialogue_manager.py` | `DialogueManager` | 506 |
 | `language/` | `universal_input.py` | `UniversalInput` | 947 |
+| `language/` | `semantic_roles.py` | `SemanticRoleLabeler`, `SRLFrame` | ~380 |
+| `language/` | `nlg.py` | `StructuralRealizer`, `DiscoursePlanner`, `NLGEngine` | ~430 |
 | `integration/` | `persistence.py` | `BrainStore`, `Episode`, `Rule` | 852 |
 | `integration/` | `brain_fusion.py` | `BrainFusion`, `TaskBrain`, `FusedBrain` | ~481 |
 | `integration/` | `config.py` | `NSCKConfig` | ~73 |
@@ -311,3 +315,4 @@ See [`examples/custom_module.py`](examples/custom_module.py) for a complete exam
 | [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Every file, class, method, and parameter |
 | [docs/TESTING.md](docs/TESTING.md) | All test files: what they test, how, and why |
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Decision loop and data-flow walkthroughs |
+| [docs/NSCK_ROADMAP_AND_PLAN.md](docs/NSCK_ROADMAP_AND_PLAN.md) | Full implementation roadmap: gaps, phases, research refs, success criteria |
