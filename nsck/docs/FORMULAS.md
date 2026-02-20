@@ -1,76 +1,137 @@
-# Mathematical Foundations
+# Theory, Formulas, Calculations, and Design Goals
 
-Every formula below is extracted directly from the NSCK codebase. Each section references the exact source file under `nsck/python/core/`.
+This document covers the complete mathematical and theoretical foundations of NSCK: every formula, derivation, proof, and design goal — extracted directly from the source code and the research ideas that motivated each component.
 
 ---
 
 ## Table of Contents
 
-- [1. Vector Symbolic Architecture (VSA)](#1-vector-symbolic-architecture-vsa)
-- [2. Text Encoding](#2-text-encoding)
-- [3. Causal Reasoning](#3-causal-reasoning)
-- [4. Global Workspace (LIDA-Lite)](#4-global-workspace-lida-lite)
-- [5. Q-Learning](#5-q-learning)
-- [6. Hebbian Learning](#6-hebbian-learning)
-- [7. Spiking Neural Network](#7-spiking-neural-network)
-- [8. Emotion System](#8-emotion-system)
-- [9. Episodic Memory](#9-episodic-memory)
-- [10. Self-Model](#10-self-model)
-- [11. Curiosity Module](#11-curiosity-module)
-- [12. Rule Learner](#12-rule-learner)
-- [13. Analogy Engine](#13-analogy-engine)
+1. [Design Goals and Theoretical Motivation](#1-design-goals-and-theoretical-motivation)
+2. [Vector Symbolic Architecture](#2-vector-symbolic-architecture)
+3. [Text Encoding and Semantic Folding](#3-text-encoding-and-semantic-folding)
+4. [Spreading Activation](#4-spreading-activation)
+5. [Global Workspace Theory](#5-global-workspace-theory)
+6. [Causal Discovery (ΔP Statistics)](#6-causal-discovery-δp-statistics)
+7. [Q-Learning and Reward Processing](#7-q-learning-and-reward-processing)
+8. [Hebbian Learning and Oja's Rule](#8-hebbian-learning-and-ojas-rule)
+9. [Spiking Neural Networks](#9-spiking-neural-networks)
+10. [Curiosity and Novelty](#10-curiosity-and-novelty)
+11. [Emotion System (Affective Computing)](#11-emotion-system-affective-computing)
+12. [Self-Model Confidence](#12-self-model-confidence)
+13. [Episodic Memory and LSH](#13-episodic-memory-and-lsh)
+14. [Rule Learner](#14-rule-learner)
+15. [Analogy Engine](#15-analogy-engine)
+16. [Response Composition (IDF Scoring)](#16-response-composition-idf-scoring)
+17. [Safety and Veto Logic](#17-safety-and-veto-logic)
 
 ---
 
-## 1. Vector Symbolic Architecture (VSA)
+## 1. Design Goals and Theoretical Motivation
 
-*Source: `vsa/hypervec_py.py`*
+NSCK was designed to answer a specific question:
+
+> *Can a cognitive system be simultaneously intelligent, transparent, and biologically plausible — without matrix multiplication or gradient descent?*
+
+The core thesis is: **Vector Symbolic Architecture provides a common mathematical language for both neural-style association and symbolic reasoning.** The same 10,240-bit binary HV is used for every representation — concepts, predicates, sensory inputs, episodes, rules — so there is no translation layer between neural and symbolic processing.
+
+### Primary design goals
+
+| Goal | Implementation | Status |
+|---|---|---|
+| Glass-box transparency | ExplanationGenerator + ThoughtTrace | Achieved — every decision is traceable |
+| No black boxes | No neural inference; only VSA + symbolic | Achieved |
+| Biological plausibility | GWT, Hebbian, SNN, curiosity | Achieved |
+| Domain agnosticism | register_task() interface | Achieved |
+| Self-contained (no external AI) | All reasoning in-process | Achieved |
+| Efficient on commodity hardware | Rust concurrent layer | Achieved — 21–206× speedup |
+| Continual learning (no forgetting) | Episode replay + tenure-based rules | Partial |
+| Counterfactual reasoning | CausalGraph + CounterfactualReasoner | Achieved |
+
+### Theoretical frameworks used
+
+| Framework | Source | NSCK component |
+|---|---|---|
+| Binary VSA (B-VSA) | Kanerva (1988, 2009) | All knowledge representation |
+| Global Workspace Theory (GWT) | Baars (1988), Dehaene (2011) | GlobalWorkspace competition |
+| Spreading activation | Collins & Loftus (1975) | SemanticMemory graph traversal |
+| Δ-P causal inference | Cheng & Novick (1990) | CausalDiscovery |
+| Leaky Integrate-and-Fire | Lapicque (1907) | SNN perception |
+| STDP (Spike-Timing-Dependent Plasticity) | Bi & Poo (1998) | SNN learning |
+| Russell's Circumplex | Russell (1980) | EmotionSystem |
+| Plutchik's Wheel | Plutchik (1980) | EmotionSystem |
+| Oja's rule | Oja (1982) | HebbianMatrix |
+| STRIPS planning | Fikes & Nilsson (1971) | STRIPSPlanner |
+| Locality-Sensitive Hashing | Indyk & Motwani (1998) | EpisodicMemory retrieval |
+
+---
+
+## 2. Vector Symbolic Architecture
+
+*Source: `vsa/hypervec_py.py`, `vsa/hypervec_shim.py`, `rust_vsa/src/lib.rs`*
 
 ### Dimension
 
 $$d = 10{,}240 \text{ bits}$$
 
-All hypervectors $\mathbf{v} \in \{0, 1\}^{10240}$. This provides a space of $2^{10240}$ possible vectors, with approximately $2^{100}$ near-orthogonal vectors available (Kanerva, 2009).
+All hypervectors $\mathbf{v} \in \{0, 1\}^{10240}$. This provides a space of $2^{10240}$ possible vectors. The expected number of vectors within Hamming distance $0.45d$ of a random vector is approximately $2^{100}$ — more than enough for any practical knowledge base (Kanerva, 2009).
 
-### Similarity (Normalised Hamming Distance)
+### Normalised Hamming Similarity
 
 $$\text{sim}(\mathbf{A}, \mathbf{B}) = 1 - \frac{d_H(\mathbf{A}, \mathbf{B})}{d} = 1 - \frac{\sum_{i=1}^{d} A_i \oplus B_i}{d}$$
 
 Properties:
 - $\text{sim}(\mathbf{A}, \mathbf{A}) = 1$
-- $\text{sim}(\mathbf{A}, \bar{\mathbf{A}}) = 0$
+- $\text{sim}(\mathbf{A}, \bar{\mathbf{A}}) = 0$ (complement is maximally different)
 - For random $\mathbf{A}, \mathbf{B}$: $\mathbb{E}[\text{sim}(\mathbf{A}, \mathbf{B})] = 0.5$
-- Standard deviation: $\sigma \approx \frac{1}{2\sqrt{d}} \approx 0.0049$
-- Meaningful similarity threshold: $> 0.55$ ($\approx 10\sigma$ above chance)
+- Standard deviation: $\sigma \approx \frac{1}{2\sqrt{d}} \approx 0.00494$
+- Meaningful threshold: $\text{sim} > 0.55 \approx 10\sigma$ above chance
 
-### Cosine Similarity
+### Cosine Similarity (bipolar representation)
 
-$$\text{cos\_sim}(\mathbf{A}, \mathbf{B}) = \frac{(2\mathbf{A} - \mathbf{1}) \cdot (2\mathbf{B} - \mathbf{1})}{d}$$
+Converting binary $\{0,1\}^d$ to bipolar $\{-1,+1\}^d$:
 
-Maps binary vectors to $\{-1, +1\}^d$ before computing dot product. Range: $[-1, +1]$.
+$$\hat{A}_i = 2A_i - 1, \quad \hat{B}_i = 2B_i - 1$$
 
-### Binding (XOR)
+$$\text{cos\_sim}(\mathbf{A}, \mathbf{B}) = \frac{\hat{\mathbf{A}} \cdot \hat{\mathbf{B}}}{\|\hat{\mathbf{A}}\| \|\hat{\mathbf{B}}\|} = \frac{\hat{\mathbf{A}} \cdot \hat{\mathbf{B}}}{d}$$
+
+The last equality holds because $\|\hat{\mathbf{v}}\| = \sqrt{d}$ for all binary vectors.
+
+**Why cosine over Hamming?** After repeated XOR/bundle operations, noise accumulates in proportion to the number of operations. Cosine similarity in bipolar space is more robust to this noise because the dot product is linear in the number of agreeing bits.
+
+**Normalisation to [0,1]:**
+
+$$\text{sim\_robust}(\mathbf{A}, \mathbf{B}) = \frac{\text{cos\_sim}(\mathbf{A}, \mathbf{B}) + 1}{2}$$
+
+### Binding (XOR / MAP binding)
 
 $$\mathbf{A} \otimes \mathbf{B} = \mathbf{A} \oplus \mathbf{B} \quad \text{(element-wise XOR)}$$
 
 Properties:
-- **Self-inverse**: $(\mathbf{A} \otimes \mathbf{B}) \otimes \mathbf{B} = \mathbf{A}$
+- **Self-inverse**: $(\mathbf{A} \otimes \mathbf{B}) \otimes \mathbf{B} = \mathbf{A}$ — unbinding is the same operation
 - **Commutative**: $\mathbf{A} \otimes \mathbf{B} = \mathbf{B} \otimes \mathbf{A}$
 - **Associative**: $(\mathbf{A} \otimes \mathbf{B}) \otimes \mathbf{C} = \mathbf{A} \otimes (\mathbf{B} \otimes \mathbf{C})$
-- **Dissimilar to operands**: $\text{sim}(\mathbf{A} \otimes \mathbf{B}, \mathbf{A}) \approx 0.5$
+- **Quasi-orthogonal to operands**: $\text{sim}(\mathbf{A} \otimes \mathbf{B}, \mathbf{A}) \approx 0.5$
 
-Used for role-filler binding: $\text{Capital} \otimes \text{Paris}$ creates a compound representation retrievable by applying either component.
+**Role-filler binding** for concepts:
+$$\text{HV}(\text{concept}) = \text{HV}(\text{name}) \oplus \bigoplus_{\text{prop} \in \text{properties}} \text{HV}(\text{prop}) \oplus \text{HV}(\text{value})$$
 
-### Bundling (Majority Vote)
+**Proof of self-inverse property:**
+$$(\mathbf{A} \oplus \mathbf{B}) \oplus \mathbf{B} = \mathbf{A} \oplus (\mathbf{B} \oplus \mathbf{B}) = \mathbf{A} \oplus \mathbf{0} = \mathbf{A}$$
+(using XOR associativity and $x \oplus x = 0$)
+
+### Bundling (Majority Vote / BSC superposition)
 
 For two vectors:
 
-$$(\mathbf{A} \oplus \mathbf{B})_i = \begin{cases} A_i & \text{if } A_i = B_i \\ \text{Bernoulli}(0.5) & \text{if } A_i \neq B_i \end{cases}$$
+$$(\mathbf{A} + \mathbf{B})_i = \begin{cases} A_i & \text{if } A_i = B_i \\ \text{Bernoulli}(0.5) & \text{if } A_i \neq B_i \end{cases}$$
 
 Properties:
-- **Similar to both operands**: $\text{sim}(\mathbf{A} \oplus \mathbf{B}, \mathbf{A}) \approx 0.75$
-- **Commutative**: $\mathbf{A} \oplus \mathbf{B} = \mathbf{B} \oplus \mathbf{A}$ (in expectation)
-- Iterated bundling of $n$ vectors: $\text{sim} \approx 0.5 + \frac{0.5}{n}$ to each constituent
+- **Similar to both operands**: $\mathbb{E}[\text{sim}(\mathbf{A} + \mathbf{B}, \mathbf{A})] = 0.75$
+  - Matching bits: $A_i = B_i$ → result agrees with $A$ with probability 1
+  - Differing bits: probability 0.5 → expected agreement $= 0.5$
+  - Total: $\frac{d_{\text{match}}}{d} \cdot 1 + \frac{d-d_{\text{match}}}{d} \cdot 0.5 \approx 0.5 + 0.5 \cdot 0.5 = 0.75$ for random $A, B$
+
+For $n$ vectors bundled: $\mathbb{E}[\text{sim}(\text{bundle}, \mathbf{v}_i)] \approx 0.5 + \frac{0.5}{n}$
 
 ### Permutation (Circular Shift)
 
@@ -78,383 +139,547 @@ $$\rho^k(\mathbf{v})_i = v_{(i + k) \bmod d}$$
 
 Properties:
 - **Invertible**: $\rho^{-k}(\rho^k(\mathbf{v})) = \mathbf{v}$
-- **Dissimilar for $k > 0$**: $\text{sim}(\rho^k(\mathbf{v}), \mathbf{v}) \approx 0.5$ for $k \geq 1$
-- Used for positional/temporal encoding
+- **Orthogonal**: $\text{sim}(\rho^k(\mathbf{v}), \mathbf{v}) \approx 0.5$ for $k \neq 0$
+- **Consistent**: same shift applied to both vectors → same similarity as without shift
 
-### Weighted Bundle
+**Role in text encoding:** $\rho^i(\text{word\_hv})$ encodes word $w$ at position $i$, making word order distinguishable.
 
-$$\text{weighted\_bundle}(\mathbf{A}, \mathbf{B}, w) = \text{bundle}^{n_A}(\mathbf{A}) \oplus \text{bundle}^{n_B}(\mathbf{B})$$
+### CleanupMemory
 
-where $n_A = \lfloor w \cdot 7 \rceil, \; n_B = 7 - n_A$, and $\text{bundle}^k$ means $k$-fold iterated bundling. This biases the result toward $\mathbf{A}$ when $w > 0.5$.
+Given a set of registered clean prototypes $\{(\ell_j, \mathbf{p}_j)\}$, cleanup finds:
 
----
+$$\text{cleanup}(\mathbf{v}) = \argmax_j \text{sim}(\mathbf{v}, \mathbf{p}_j) \quad \text{subject to} \quad \text{sim} > \theta$$
 
-## 2. Text Encoding
+where $\theta$ is the cleanup threshold (default 0.4). This implements the **nearest-neighbour decoder** for VSA.
 
-### Sentence Encoding
-
-*Source: `language/text_knowledge_learner.py`*
-
-$$\mathbf{S} = \bigoplus_{w \in \text{words}(s)} \mathbf{HV}\big(\text{hash}(w) \bmod 2^{32}\big)$$
-
-Each word maps to a deterministic HV via its Python hash modulo $2^{32}$ (matching the `HyperVector` constructor's uint32 seed). Function words (130 common English words) are filtered before encoding.
-
-### Context Vector (Semantic Folding)
-
-*Source: `language/text_knowledge_learner.py`*
-
-$$\mathbf{ctx}(c) = \mathbf{HV}(c) \oplus \bigoplus_{\substack{w \in \text{window}(c,\, W) \\ w \neq c}} \rho^{|pos(w) - pos(c)|}\big(\mathbf{HV}(w)\big)$$
-
-where $W = 7$ (the `folding_window_size`). Context words within a 7-word window are permuted by their absolute distance from the concept before bundling. This captures distributional semantics: words in similar contexts produce similar context vectors.
-
-### Relation Detection
-
-Two concepts $a, b$ are considered related when:
-
-$$\text{sim}\big(\mathbf{ctx}(a), \mathbf{ctx}(b)\big) > \tau_r = 0.55$$
-
-### 4-Component Text Grounding (UniversalInput)
-
-*Source: `language/universal_input.py`*
-
-The `UniversalInput` module produces a composite HV from four weighted components:
-
-| Component | Weight | Method |
-|-----------|--------|--------|
-| Keyword | 50% | Exact word → HV lookup with TF weighting |
-| Char N-gram | 15% | Character 3-grams → HV, bundled |
-| Word-order | 15% | $\rho^{pos}(\mathbf{HV}(w))$ — positional permutation |
-| Phrase-structure | 20% | NP/VP/PP chunks bound with role HVs: $\text{Subject} \otimes \text{NP}$ |
-
-$$\mathbf{HV}_{\text{text}} = \text{weighted\_bundle}\big(\mathbf{KW}_{50\%},\; \mathbf{NG}_{15\%},\; \mathbf{WO}_{15\%},\; \mathbf{PS}_{20\%}\big)$$
+**Why cleanup is necessary:** After $n$ binding operations, noise accumulates. For $k$ operations each adding $\sim 0.01$ noise bits, the total noise is $\sim 0.01k$. Cleanup snaps the result back to the nearest prototype, resetting the noise.
 
 ---
 
-## 3. Causal Reasoning
+## 3. Text Encoding and Semantic Folding
 
-*Source: `reasoning/causal_reasoning.py`*
+*Source: `language/lingua_cortex.py`, `nsck_ai_model/ai_engine.py`*
 
-### Delta-P (Causal Strength)
+### Step 1: Word HV generation (deterministic)
 
-$$\Delta P = P(E \mid C) - P(E \mid \neg C)$$
+$$\mathbf{w}_{\text{base}} = \text{HyperVector}(\text{hash}(w) \bmod 2^{32})$$
 
-With adaptive Laplace smoothing:
+Using a seeded RNG ensures the same word always gets the same HV (deterministic across sessions).
 
-$$P(E \mid C) = \frac{n_{CE} + \alpha}{n_C + 2\alpha}, \quad P(E \mid \neg C) = \frac{n_E - n_{CE} + \alpha}{(T - n_C) + 2\alpha}$$
+### Step 2: Positional encoding
 
-$$\alpha = \begin{cases} 1 & \text{if } T < 10 \text{ (sparse data)} \\ 0 & \text{if } T \geq 10 \text{ (sufficient data)} \end{cases}$$
+$$\mathbf{w}_{(i)} = \rho^i(\mathbf{w}_{\text{base}})$$
+
+where $i$ is the word's position in the sentence. The permutation makes $\mathbf{w}_{(i)}$ quasi-orthogonal to $\mathbf{w}_{(j)}$ for $i \neq j$, preserving word-order information.
+
+Maximum shift: `MAX_POSITION_SHIFT = 64` (sufficient for typical sentence lengths; shifts beyond $d/2$ create near-random positions).
+
+### Step 3: Sentence HV (superposition)
+
+$$\mathbf{s} = \bigoplus_{i=1}^{n} \mathbf{w}_{(i)}$$
+
+(majority-vote bundle of all positional word HVs)
+
+### Step 4: Context HV (window-based)
+
+For context window of size $c$:
+
+$$\mathbf{c}_i = \bigoplus_{j=\max(0,i-c)}^{\min(n,i+c)} \mathbf{w}_{(j)}$$
+
+This captures local context without global sequence encoding overhead.
+
+### Property: Associative retrieval
+
+Given a sentence HV $\mathbf{s}$ and a word HV $\mathbf{w}$, we can retrieve position-linked words:
+
+$$\text{probe} = \rho^{-i}(\mathbf{s} \otimes \rho^{-i}(\mathbf{w})) \approx \mathbf{w}_{\text{neighbour}}$$
+
+This is the **distributed associative memory** property of VSA.
+
+---
+
+## 4. Spreading Activation
+
+*Source: `memory/semantic_memory.py`*
+
+### Algorithm
+
+Given start concepts $S = \{s_1, \ldots, s_k\}$ with initial activation $a_{s_i} = 1.0$:
+
+$$a_j^{(t+1)} = a_j^{(t)} + \sum_{(i,j) \in E} a_i^{(t)} \cdot \gamma \cdot w_{\text{rel}(i,j)}$$
 
 where:
-- $T$ = total observation steps
-- $n_C$ = count of cause $C$ observed
-- $n_E$ = count of effect $E$ observed
-- $n_{CE}$ = count of $C$ and $E$ co-occurring
+- $\gamma = 0.7$ is the global decay factor
+- $w_{\text{rel}}$ is the relation-type weight:
+  - $w_{\text{is\_a}} = 0.9$, $w_{\text{has\_property}} = 0.7$, $w_{\text{causes}} = 0.6$
+  - $w_{\text{part\_of}} = 0.5$, $w_{\text{similar\_to}} = 0.4$
 
-### Link Creation Criteria
+### Convergence
 
-$$\text{add link } C \rightarrow E \quad \text{iff} \quad \Delta P > 0.5 \;\wedge\; n_C \geq 5$$
+After $T$ steps, activation propagated via a chain of length $T$:
 
-### Forward Chaining
+$$a^{(T)} \leq (\gamma \cdot w_{\max})^T = (0.7 \cdot 0.9)^T = 0.63^T$$
 
-Given active concept $c$, retrieve all effects:
+For $T = 3$ (default): $0.63^3 \approx 0.25$ — activation decays to ~25% of its initial value after 3 hops. This naturally limits the search radius.
 
-$$\text{effects}(c) = \{e : (c \rightarrow e) \in G_{\text{causal}}\}$$
+### Complexity bound
 
-Chained recursively up to depth 3 with strength propagation:
-
-$$\text{strength}(c \rightarrow e_n) = \prod_{i=1}^{n} \Delta P_i$$
+Without the frontier cap, spreading has $O(|V| \cdot |E| \cdot T)$ complexity. The cap of top-200 active nodes per step bounds this to $O(200 \cdot \bar{d} \cdot T)$ where $\bar{d}$ is mean out-degree — typically $O(10)$, giving $O(6000)$ per call.
 
 ---
 
-## 4. Global Workspace (LIDA-Lite)
+## 5. Global Workspace Theory
 
 *Source: `reasoning/global_workspace.py`*
 
-### Coalition Activation
+### Coalition activation
 
-$$A(c) = S_{\text{base}}(c) + R(c) + M_{\text{affect}}(c) + 0.5 \cdot C_{\text{sender}}(c) + B_{\text{mission}}(c)$$
+$$\alpha(C) = s(C) + r(C) + e(C) + 0.5 \cdot q(C)$$
 
-| Term | Range | Meaning |
-|------|-------|---------|
-| $S_{\text{base}}$ | [0, 1] | Intrinsic salience of the proposal |
-| $R$ | [0, 1] | Relevance to current context/goal |
-| $M_{\text{affect}}$ | [0, 1] | Drive-goal match (e.g., "Food" ↔ "Hunger") |
-| $C_{\text{sender}}$ | [0, 1] | Module's self-reported confidence (weighted 0.5×) |
-| $B_{\text{mission}}$ | 0 or +0.2 | Bias toward focused/mission-aligned module |
+where:
+- $s(C)$ = `base_salience` — intrinsic importance
+- $r(C)$ = `relevance` — match with current context and goal
+- $e(C)$ = `affect_match` — match with emotional drives
+- $q(C)$ = `sender_confidence` — module's self-reported confidence
 
-### Competition
+### Competition rule
 
-$$\text{winner} = \arg\max_{c \in \text{proposals}} A(c), \quad \text{subject to } A(\text{winner}) \geq \theta$$
+$$C^* = \argmax_{C \in \mathcal{C}} \alpha(C)$$
 
-where $\theta = 0.5$ is the attention threshold.
+### Mental rehearsal veto
 
-### Danger Veto (Mental Rehearsal)
+Before committing to $C^*$:
 
-Before committing to the winning action, simulate through the WorldModel:
+1. Predict next state: $\mathbf{s}' = \text{WorldModel.predict}(C^*.action, \mathbf{s})$
+2. Compute danger similarity: $d = \text{sim}(\mathbf{s}', \mathbf{v}_{\text{danger}})$
+3. If $d > \theta_{\text{danger}}$: veto $C^*$ and try $C^{(2)} = \argmax_{C \neq C^*} \alpha(C)$
 
-$$\text{veto if } \max_{\mathbf{d} \in \text{dangers}} \text{sim}(\hat{\mathbf{s}}_{\text{predicted}}, \mathbf{d}) \geq 0.75$$
-
-On veto: $S_{\text{base}} \leftarrow 0.5 \cdot S_{\text{base}}$, remove from candidates, try next-best (up to 3 cycles). If all vetoed → emergency `ACTION_STAY`.
+This implements **predictive safety** — the system refuses actions that lead to predicted dangerous states before executing them.
 
 ---
 
-## 5. Q-Learning
+## 6. Causal Discovery (ΔP Statistics)
+
+*Source: `reasoning/causal_reasoning.py`*
+
+### Delta-P formula
+
+$$\Delta P(c \to e) = P(e \mid c) - P(e \mid \neg c)$$
+
+Interpretation:
+- $\Delta P > 0$: $c$ is a positive cause of $e$
+- $\Delta P < 0$: $c$ is a preventive cause of $e$ (inhibitor)
+- $\Delta P \approx 0$: $c$ and $e$ are independent (spurious correlation)
+
+### With Laplace smoothing
+
+$$P(e \mid c) = \frac{N(e, c) + \alpha}{N(c) + 2\alpha}, \quad P(e \mid \neg c) = \frac{N(e, \neg c) + \alpha}{N(\neg c) + 2\alpha}$$
+
+where $\alpha = 1$ (Laplace pseudocount). This prevents zero-probability estimates from sparse data.
+
+**Property:** With as few as $n=2$ observations, Laplace smoothing gives a non-degenerate estimate:
+$$P(e \mid c)_{\text{Laplace}} \in \left[\frac{\alpha}{1+2\alpha}, \frac{1+\alpha}{1+2\alpha}\right] = [0.33, 0.67]$$
+
+### Causal chain strength
+
+For a chain $c_1 \to c_2 \to \cdots \to c_n$:
+
+$$\text{strength}(c_1 \to c_n) = \prod_{i=1}^{n-1} \Delta P(c_i \to c_{i+1})$$
+
+This is the joint probability assuming independence along the chain.
+
+### Counterfactual: do-operator
+
+To simulate "what if $c$ had not occurred?":
+
+1. Remove all causal links originating from $c$.
+2. Propagate activation from the modified graph.
+3. Compare resulting state against the original.
+
+This implements Pearl's do-calculus in a simplified form appropriate for discrete symbolic states.
+
+---
+
+## 7. Q-Learning and Reward Processing
 
 *Source: `reasoning/cognitive_engine.py`*
 
-### TD(0) Update
+### State-action value (tabular Q-learning)
 
-$$Q(s, a) \leftarrow Q(s, a) + \alpha \big[ r + \gamma \max_{a'} Q(s', a') - Q(s, a) \big]$$
+$$Q(s, a) \leftarrow Q(s, a) + \alpha \left[ r + \gamma \max_{a'} Q(s', a') - Q(s, a) \right]$$
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| $\alpha$ | 0.1 | Learning rate |
-| $\gamma$ | 0.9 | Discount factor |
+where:
+- $\alpha = 0.1$ (learning rate, from `NSCKConfig`)
+- $\gamma = 0.95$ (discount factor, from `NSCKConfig`)
+- $s$ = `_get_state_key(state, task_tag)` — hashable state representation
+- $r$ = scalar reward from `record_outcome()`
 
-### Epsilon-Greedy Policy
+State key = frozen set of active predicates → `str` → hashable.
 
-$$a = \begin{cases} \text{random action} & \text{with probability } \epsilon \\ \arg\max_{a} Q(s, a) & \text{otherwise} \end{cases}$$
+### Confidence from Q-values
 
-Epsilon decays: $\epsilon = \max(0.1, \; \epsilon_0 \cdot 0.995^t)$, starting from $\epsilon_0 = 0.3$.
+$$\text{confidence}(s, a) = \frac{Q(s, a) - Q_{\min}}{Q_{\max} - Q_{\min}} \quad \text{(normalised to [0, 1])}$$
 
-### Q-Value Coalition
+Cold start: if $|Q| = 0$, confidence defaults to 0.5.
 
-Q-learning proposals enter GWT competition as a coalition with:
-- $\text{salience} = 0.8$ (base)
-- $\text{confidence} = 1 - \epsilon$ (decreasing exploration → increasing confidence)
-- Source tag: `Q_LEARNING`
+### Exploration (ε-greedy + curiosity)
 
----
+Standard ε-greedy is replaced by curiosity-driven exploration:
 
-## 6. Hebbian Learning
+$$\text{explore} = (\text{novelty}(s) > \theta_N) \wedge (\text{confidence}(s) < 0.5) \vee (\text{learning\_progress} < \theta_P)$$
 
-*Source: `learning/hebbian.py`*
-
-### Oja's Rule (with Reward Modulation)
-
-$$\Delta W_{ij} = \alpha \cdot \text{pre}_i \cdot \text{post}_j \cdot (\text{reward} - \text{baseline})$$
-
-### Weight Normalization (Oja)
-
-$$W_{ij} \leftarrow W_{ij} + \alpha \cdot \text{post}_j \cdot \big(\text{pre}_i - \text{post}_j \cdot W_{ij}\big)$$
-
-### Eligibility Traces
-
-$$e_{ij}(t) = \lambda \cdot e_{ij}(t-1) + \text{pre}_i(t) \cdot \text{post}_j(t)$$
-
-$$\Delta W_{ij} = \alpha \cdot e_{ij} \cdot (\text{reward} - \text{baseline})$$
-
-where $\lambda = 0.9$ (trace decay rate) and baseline tracks EMA of rewards.
+This is more sample-efficient than uniform ε-greedy because it focuses exploration on genuinely novel states.
 
 ---
 
-## 7. Spiking Neural Network
+## 8. Hebbian Learning and Oja's Rule
 
-*Source: `perception/snn_perception.py`*
+*Source: `learning/hebbian.py`, `rust_snn/src/hebbian.rs`*
 
-### Leaky Integrate-and-Fire (LIF) Neuron
+### Basic Hebbian rule
 
-$$\tau_m \frac{dV}{dt} = -(V - V_{\text{rest}}) + R \cdot I(t)$$
+$$\Delta w_{ij} = \eta \cdot x_i \cdot y_j$$
 
-Discretized (Euler method):
+"Neurons that fire together, wire together." Problem: this is unbounded — weights grow without limit.
 
-$$V(t + \Delta t) = V(t) + \frac{\Delta t}{\tau_m} \big[ -(V(t) - V_{\text{rest}}) + I(t) \big]$$
+### Oja's rule (normalised Hebbian)
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| $\tau_m$ | 20 ms | Membrane time constant |
-| $V_{\text{th}}$ | 1.0 | Spike threshold |
-| $V_{\text{reset}}$ | 0.0 | Post-spike reset voltage |
-| $V_{\text{rest}}$ | 0.0 | Resting potential |
+$$\Delta w_{ij} = \eta \left( x_i y_j - y_j^2 w_{ij} \right)$$
 
-When $V \geq V_{\text{th}}$: emit spike, $V \leftarrow V_{\text{reset}}$.
+The forgetting term $-y_j^2 w_{ij}$ prevents weight explosion.
+
+**Proof of stability:** At equilibrium, $\Delta w = 0$:
+$$x_i y_j = y_j^2 w_{ij} \Rightarrow w_{ij} = \frac{x_i}{y_j}$$
+
+Since $y_j = \sum_i w_{ij} x_i$ (linear neuron), this converges to the first principal component of the input distribution. Oja (1982) proved that this rule converges to:
+
+$$\mathbf{w}^* = \text{PC}_1(\mathbf{x}) \quad (\text{first principal component})$$
+
+In practice, this means the Hebbian matrix converges to capture the most frequent co-occurrence patterns — exactly what we want for associative concept learning.
+
+### VSA-level Hebbian association
+
+After learning, the association matrix $W$ can be used to find related concepts:
+
+$$\text{related}(c) = \text{top-}k\left(\{(c', W_{cc'}) : c' \in \text{concepts}\}\right)$$
+
+---
+
+## 9. Spiking Neural Networks
+
+*Source: `perception/snn_perception.py`, `rust_snn/src/lib.rs`*
+
+### Leaky Integrate-and-Fire (LIF) model
+
+Continuous-time membrane equation:
+
+$$\tau_m \frac{dV}{dt} = -(V - V_{\text{rest}}) + I(t)$$
+
+Discrete-time update (Euler method, timestep $\Delta t$):
+
+$$V(t + \Delta t) = V(t) + \frac{\Delta t}{\tau_m} \left[ -(V(t) - V_{\text{rest}}) + I(t) \right]$$
+
+**Spike condition:**
+$$\text{if } V(t) \geq V_{\text{thresh}}: \text{ emit spike}, V \leftarrow V_{\text{reset}}, \text{ enter refractory period}$$
+
+**Biological parameters (defaults):**
+- $\tau_m = 20 \text{ ms}$ (membrane time constant)
+- $V_{\text{rest}} = -70 \text{ mV}$, $V_{\text{thresh}} = -55 \text{ mV}$, $V_{\text{reset}} = -75 \text{ mV}$
+
+### Rate coding
+
+Scalar input $x \in [0, 1]$ → spike train:
+
+$$\Pr[\text{spike at time } t] = x$$
+
+(Bernoulli process — Poisson approximation for small $x$)
+
+### Temporal coding
+
+Scalar input $x$ → spike time $t_{\text{spike}} = T_{\max}(1 - x)$:
+
+Early spikes = high input. Late spikes = low input. Rank-order code.
 
 ### STDP (Spike-Timing-Dependent Plasticity)
 
-$$\Delta W_{ij} = \begin{cases} A_+ \exp\left(-\frac{\Delta t}{\tau_+}\right) & \text{if } \Delta t > 0 \text{ (pre before post)} \\ -A_- \exp\left(\frac{\Delta t}{\tau_-}\right) & \text{if } \Delta t < 0 \text{ (post before pre)} \end{cases}$$
+For a pre-synaptic spike at time $t_{\text{pre}}$ and post-synaptic spike at $t_{\text{post}}$:
 
-| Parameter | Value | Description |
-|-----------|-------|-------------|
-| $A_+$ | 0.01 | LTP amplitude |
-| $A_-$ | 0.012 | LTD amplitude ($A_- > A_+$ → competition) |
-| $\tau_+$ | 20 ms | LTP time constant |
-| $\tau_-$ | 20 ms | LTD time constant |
+$$\Delta w = \begin{cases}
+A_+ e^{-\Delta t / \tau_+} & \text{if } \Delta t = t_{\text{post}} - t_{\text{pre}} > 0 \quad \text{(causal)} \\
+-A_- e^{-\Delta t / \tau_-} & \text{if } \Delta t < 0 \quad \text{(anti-causal)}
+\end{cases}$$
 
-### Rate Coding (VSA-SNN Bridge)
+Parameters: $A_+ = 0.01$, $A_- = 0.012$, $\tau_+ = 20 \text{ ms}$, $\tau_- = 20 \text{ ms}$.
 
-*Source: `perception/vsa_snn_bridge.py`*
-
-$$\mathbf{HV}_{\text{spike}} = \bigoplus_{i:\, \text{rate}_i > \theta} \mathbf{n}_i$$
-
-where $\text{rate}_i = \frac{\text{spike\_count}_i}{T}$ and $\mathbf{n}_i$ is the fixed HyperVector for neuron $i$.
-
-### Temporal Coding
-
-$$\mathbf{HV}_{\text{temporal}} = \bigoplus_{i:\, t_i \leq T} \rho^{t_i}(\mathbf{n}_i)$$
-
-Each neuron's HV is permuted by its first-spike time, encoding temporal structure.
+**Biological interpretation:** Causal (pre before post) → strengthen synapse. Anti-causal (post before pre) → weaken synapse. This implements temporal credit assignment.
 
 ---
 
-## 8. Emotion System
-
-*Source: `cognitive/emotion_system.py`*
-
-### Plutchik Prototypes in Russell's Circumplex
-
-| Emotion | Valence $(v_e)$ | Arousal $(a_e)$ |
-|---------|---------|---------|
-| Joy | +0.8 | +0.7 |
-| Trust | +0.5 | +0.2 |
-| Fear | −0.7 | +0.8 |
-| Surprise | 0.0 | +0.9 |
-| Sadness | −0.6 | +0.2 |
-| Disgust | −0.5 | +0.4 |
-| Anger | −0.5 | +0.8 |
-| Anticipation | +0.3 | +0.5 |
-| Neutral | 0.0 | 0.0 |
-
-### Emotion Blending (Inverse-Distance Weighting)
-
-$$w_e = \frac{1}{\sqrt{(v - v_e)^2 + (a - a_e)^2} + \epsilon}, \quad \epsilon = 0.01$$
-
-$$\text{blend}(e) = \frac{w_e}{\sum_{e'} w_{e'}}, \quad \text{for } e \text{ where } \text{blend}(e) \geq 0.05$$
-
-Weights below 5% are pruned and the distribution is renormalized.
-
-### Valence Update
-
-$$v_t = 0.95 \cdot v_{t-1} + \Delta_{\text{reward}} + \Delta_{\text{drives}}$$
-
-$$\Delta_{\text{reward}} = \begin{cases} +0.2 & r > 0.1 \\ -0.2 & r < -0.1 \\ 0 & \text{otherwise} \end{cases}, \quad \Delta_{\text{drives}} = \begin{cases} -0.05 & \bar{d} > 0.5 \\ 0 & \text{otherwise} \end{cases}$$
-
-Clamped to $[-1, 1]$.
-
-### Arousal Update
-
-$$a_t = 0.7 \cdot a_{t-1} + 0.3 \cdot \max(\text{drives})$$
-
-### Emotional Intensity
-
-$$I = \sqrt{v^2 + a^2}$$
-
----
-
-## 9. Episodic Memory
-
-*Source: `memory/episodic_memory.py`*
-
-### LSH Indexing
-
-4 hash tables, each using 10-bit signatures:
-
-$$h_k(\mathbf{v}) = \text{lsh\_hash}(\mathbf{v}, \text{seed}=k, \text{bits}=10) \quad \text{for } k \in \{0, 1, 2, 3\}$$
-
-### Retrieval Pipeline
-
-1. **LSH bucket lookup**: candidates where $h_k(\mathbf{v}_{\text{episode}}) = h_k(\mathbf{q})$ for any table $k$
-2. **1-bit neighbor probing**: for each bit $b \in \{0..7\}$, check $h \oplus 2^b$
-3. **Exact ranking**: compute $\text{sim}(\mathbf{q}, \mathbf{v}_{\text{episode}})$ on all candidates
-4. **Return top-$k$** by similarity
-
-### Consolidation
-
-Triggered when `len(recent[task]) >= 500`:
-1. Older half moved to SQLite via BrainStore
-2. LSH index rebuilt for remaining episodes
-3. Maximum 10,000 episodes per task
-
-### Situation HV Construction
-
-$$\mathbf{s} = \bigoplus_{p \in \text{active\_predicates}} \mathbf{HV}(p)$$
-
-Active predicates from `GroundingVerifier` are bundled into a single situation vector.
-
----
-
-## 10. Self-Model
-
-*Source: `cognitive/self_model.py`*
-
-### Calibration Error
-
-$$\text{CE} = \frac{1}{N} \sum_{i=1}^{N} |p_i - o_i|$$
-
-where $p_i$ is the predicted confidence and $o_i \in \{0, 1\}$ is the actual outcome. A perfectly calibrated model has $\text{CE} = 0$.
-
-### Confidence Update
-
-$$c_t = (1 - \alpha) \cdot c_{t-1} + \alpha \cdot o_t$$
-
-where $o_t \in \{0, 1\}$ is the outcome and $\alpha = 0.2$ (smoothing rate).
-
----
-
-## 11. Curiosity Module
+## 10. Curiosity and Novelty
 
 *Source: `learning/curiosity.py`*
 
-### Novelty Score
+### Novelty score
 
-$$\text{novelty}(\mathbf{q}) = 1 - \max_{\mathbf{v} \in \text{visited}} \text{sim}(\mathbf{q}, \mathbf{v})$$
+$$\text{novelty}(s) = 1 - \max_{v \in \text{known}} \text{sim}(\text{encode}(s), v)$$
 
-Novel inputs ($\text{novelty} > 0.5$) trigger exploration.
+where `known` = set of HVs for previously visited situations.
 
-### Learning Progress
+**Range:** $[0, 1]$. Novel state → novelty ≈ 1.0. Familiar state → novelty ≈ 0.0.
 
-$$\Delta_{\text{learning}} = \frac{1}{W} \sum_{i=t-W}^{t} r_i - \frac{1}{W} \sum_{i=t-2W}^{t-W} r_i$$
+**Comparison with RND (Random Network Distillation):** RND uses a neural network's prediction error as a novelty proxy. NSCK uses direct HV similarity — simpler, no neural network required, and interpretable (you can see which stored prototype is the nearest neighbour).
 
-Compares recent reward window to previous window. Positive $\Delta$ indicates productive exploration.
+### Learning progress
 
-### Exploration Decision
+$$\text{progress}(t) = \frac{1}{\lfloor T/2 \rfloor} \sum_{\tau=t-T}^{t-T/2} r_\tau - \frac{1}{\lfloor T/2 \rfloor} \sum_{\tau=t-T/2}^{t} r_\tau$$
 
-Explore if ANY of:
-1. $\text{novelty}(\mathbf{q}) > \tau_{\text{novelty}}$ (default 0.5)
-2. $\text{confidence} < \tau_{\text{confidence}}$ (default 0.3)
-3. $\Delta_{\text{learning}} > 0$ AND $\text{novelty} > 0.3$
+(improvement rate: difference between success rate in second half vs first half of window $T$)
+
+### Exploration decision
+
+$$\text{explore} = \big[(\text{novelty} > \theta_N) \wedge (\text{confidence} < 0.5)\big] \vee (\text{progress} < \theta_P)$$
+
+Default: $\theta_N = 0.7$, $\theta_P = 0.01$.
 
 ---
 
-## 12. Rule Learner
+## 11. Emotion System (Affective Computing)
+
+*Source: `cognitive/emotion_system.py`*
+
+### Russell's Circumplex model
+
+Emotions are points in 2D affect space:
+
+$$\text{emotion}(\text{valence}, \text{arousal})$$
+
+$$V \in [-1, +1] \quad \text{(negative ↔ positive)}$$
+$$A \in [0, 1] \quad \text{(calm ↔ excited)}$$
+
+### Closest prototype (nearest-neighbour classification)
+
+$$\hat{e} = \argmin_{e \in \text{Plutchik}} \left\| (V, A) - (V_e, A_e) \right\|_2$$
+
+Plutchik prototypes:
+| Emotion | $V_e$ | $A_e$ |
+|---|---|---|
+| joy | 0.8 | 0.7 |
+| trust | 0.5 | 0.2 |
+| fear | -0.7 | 0.8 |
+| surprise | 0.0 | 0.9 |
+| sadness | -0.6 | 0.2 |
+| disgust | -0.5 | 0.4 |
+| anger | -0.5 | 0.8 |
+| anticipation | 0.3 | 0.5 |
+| neutral | 0.0 | 0.0 |
+
+### Emotion blending
+
+Instead of hard classification, maintain a weighted blend:
+
+$$b_e = \frac{e^{-\|(\hat{V}, \hat{A}) - (V_e, A_e)\|^2 / 2\sigma^2}}{\sum_{e'} e^{-\|(\hat{V}, \hat{A}) - (V_{e'}, A_{e'})\|^2 / 2\sigma^2}}$$
+
+(softmax over negative squared distances — Gaussian kernel)
+
+### Drive-to-emotion mapping
+
+Homeostatic drives (hunger, threat, curiosity, …) update $(V, A)$ before emotion classification:
+
+$$V \leftarrow V + \Delta V(\text{drives}), \quad A \leftarrow A + \Delta A(\text{drives})$$
+
+Each drive has a registered $(dV, dA)$ vector. Multiple drives are additively combined.
+
+---
+
+## 12. Self-Model Confidence
+
+*Source: `cognitive/self_model.py`*
+
+### Running success ratio
+
+$$\hat{p}(T, k) = \frac{\text{successes}(T, k)}{\text{attempts}(T, k)}$$
+
+where $T$ = task tag, $k$ = context key.
+
+### Context-aware prediction
+
+If $\text{attempts}(T, k) \geq n_{\text{min}}$: use $\hat{p}(T, k)$.
+
+Otherwise (cold start): use global average:
+
+$$\hat{p}_{\text{global}}(T) = \frac{\text{successes}(T, \cdot)}{\text{attempts}(T, \cdot)}$$
+
+And if $\text{attempts}(T, \cdot) = 0$: default to $\hat{p} = 0.5$.
+
+### Calibration error
+
+$$\text{cal\_error}(T) = |\hat{p}(T, \cdot) - \bar{r}(T)|$$
+
+where $\bar{r}(T)$ is the recent rolling mean of actual rewards. Well-calibrated systems have $\text{cal\_error} \approx 0$.
+
+---
+
+## 13. Episodic Memory and LSH
+
+*Source: `memory/episodic_memory.py`*
+
+### Locality-Sensitive Hashing
+
+To enable fast approximate k-NN over binary HVs, we use random projection LSH:
+
+1. Generate $m$ random projection vectors $\mathbf{r}_1, \ldots, \mathbf{r}_m \in \{-1, +1\}^d$.
+2. Hash vector $\mathbf{v}$: $h_j(\mathbf{v}) = \text{sgn}(\mathbf{r}_j \cdot \mathbf{v})$
+3. Concatenate $m$ bits into a bucket key: $B(\mathbf{v}) = \text{concat}(h_1(\mathbf{v}), \ldots, h_m(\mathbf{v}))$
+
+**Collision probability:** For two vectors with cosine similarity $c$:
+
+$$\Pr[h(\mathbf{u}) = h(\mathbf{v})] = 1 - \frac{\theta}{\pi}, \quad \theta = \arccos(c)$$
+
+For NSCK: $m = 16$ bits per key, `lsh_num_tables = 8` hash tables. This gives:
+- True positive rate (for $\text{sim} > 0.7$): $\approx 0.99$
+- False positive rate: $\approx 0.01$
+
+### Two-tier design
+
+**Hot tier** (in-memory `deque`, capacity 500): Recent episodes — fast $O(1)$ amortised access.
+
+**Warm tier** (SQLite): All episodes — persists across sessions, $O(\log n)$ access via B-tree index.
+
+**Consolidation** (`sleep()`): Move hot → warm, prune episodes with `impact_score < \theta_{\text{prune}}`.
+
+$$\text{impact\_score}(e) = |r_e| + \text{novelty}(e)$$
+
+This prioritises memorable (high reward) and surprising (high novelty) episodes for retention.
+
+---
+
+## 14. Rule Learner
 
 *Source: `reasoning/rule_learner.py`*
 
-### Approximate Predicate Matching
+### Rule confidence
 
-$$J(\text{preds}_1, \text{preds}_2) = \frac{|\text{preds}_1 \cap \text{preds}_2|}{|\text{preds}_1 \cup \text{preds}_2|} \geq 0.6$$
+$$\text{confidence}(R) = \frac{\text{successes}(R)}{\text{support}(R)}$$
 
-This Jaccard threshold enables rule generalization from fewer examples than exact matching.
+where $\text{support}(R)$ = number of times the condition set was matched.
 
-### Rule Promotion
+### Rule induction threshold
 
-A candidate becomes a rule when:
-- $\text{frequency} \geq 3$ (minimum observations)
-- $\text{success\_rate} > 0$ (net positive outcomes)
+A candidate is promoted to a rule when:
 
-### Rule Pruning
+$$\text{support}(R) \geq n_{\text{min}} \quad \text{AND} \quad \text{confidence}(R) \geq c_{\text{min}}$$
 
-Rules are removed when:
-- $\text{tenure} > 100$ steps AND $\text{success\_rate} < 0.1$
+Default: $n_{\text{min}} = 5$, $c_{\text{min}} = 0.3$.
+
+### Tenure progression
+
+| State | Condition | Demotion |
+|---|---|---|
+| new | `support < n_min` | N/A |
+| bootstrap | `support ≥ n_min AND confidence ≥ c_min` | confidence falls below threshold |
+| tenured | held bootstrap state for `tenure_threshold` cycles | requires `2×` counter-evidence |
+
+Tenured rules are stable — prevents learned rules from being wiped by short-term noise.
+
+### Pruning
+
+Rules with `success_rate < min_success_rate = 0.7` after `min_support` observations are pruned. This prevents the rule store from filling with low-quality rules.
 
 ---
 
-## 13. Analogy Engine
+## 15. Analogy Engine
 
 *Source: `reasoning/analogy.py`*
 
-### Auto-Abstraction
+### Structural similarity between domains
 
-Concepts are candidates for abstraction when:
+Given domains $D_1$ and $D_2$ with concept sets $C_1, C_2$:
 
-$$\text{structural\_similarity} > 0.52$$
+1. Compute similarity matrix: $S_{ij} = \text{sim}(\text{HV}(c_i), \text{HV}(c_j))$ for all $c_i \in C_1, c_j \in C_2$.
 
-Name-similarity bonus is added for concepts with lexically similar names, facilitating discovery of category-level abstractions.
+2. Find optimal concept mapping via greedy assignment:
+   $$M = \{(c_i, \argmax_{c_j} S_{ij})\}$$
 
-### Transfer Rule
+3. Overall analogy quality:
+   $$\text{quality}(M) = \frac{1}{|M|} \sum_{(i,j) \in M} S_{ij}$$
 
-Given source rule `(condition_src, action_src)` in `domain_src`, transfer to `domain_tgt`:
+### Analogy-based transfer
 
-$$\text{condition}_{\text{tgt}} = \text{map}(\text{condition}_{\text{src}}, \text{domain\_alignment})$$
-$$\text{action}_{\text{tgt}} = \text{map}(\text{action}_{\text{src}}, \text{domain\_alignment})$$
+Once a mapping $M: D_1 \to D_2$ is found, transfer rule $R_1 = (\text{IF } P_1 \text{ THEN } a_1)$ to $D_2$:
 
-Domain alignment is computed via VSA binding: $\text{align} = \text{src\_concept} \otimes \text{tgt\_concept}$.
+1. Map predicates: $P_2 = \{M(p) : p \in P_1\}$
+2. Map action: $a_2 = M(a_1)$
+3. Register $R_2$ in $D_2$ with reduced initial confidence (transfer discount)
+
+---
+
+## 16. Response Composition (IDF Scoring)
+
+*Source: `nsck_ai_model/response_composer.py`*
+
+### IDF-weighted relevance score
+
+For candidate sentence $s$ and query $q$:
+
+$$\text{score}(s, q) = \sum_{w \in s \cap q} \text{IDF}(w)$$
+
+$$\text{IDF}(w) = \log \frac{N}{1 + |\{s \in \text{corpus} : w \in s\}|}$$
+
+Words rare in the corpus but present in both query and candidate get high weight — this rewards relevant, specific responses over generic ones.
+
+### Jaccard deduplication
+
+Two sentences $s_1, s_2$ are considered near-duplicates if:
+
+$$J(s_1, s_2) = \frac{|\text{tokens}(s_1) \cap \text{tokens}(s_2)|}{|\text{tokens}(s_1) \cup \text{tokens}(s_2)|} \geq 0.5$$
+
+After IDF scoring, candidates are greedily deduplicated: add each candidate if its Jaccard similarity to all already-selected sentences is below 0.5.
+
+---
+
+## 17. Safety and Veto Logic
+
+*Source: `reasoning/global_workspace.py`, `cognitive/metacognition.py`*
+
+### Mental rehearsal veto condition
+
+Let $\mathbf{v}_{\text{danger}} \in \mathbb{R}^d$ be the known danger HV:
+
+$$\text{veto}(C) = \text{sim}(\text{WorldModel.predict}(C.\text{action}, \mathbf{s}), \mathbf{v}_{\text{danger}}) > \theta_D$$
+
+Default: $\theta_D = 0.8$.
+
+**Cascading veto:** If the top-1 coalition is vetoed, try top-2, top-3, etc. If all coalitions are vetoed, fall back to the default action (defined per task — usually the most conservative).
+
+### SafetyGate constraint check
+
+Symbolic constraints are checked before the GWT competition:
+
+$$\text{violates}(C, s) = \exists \text{ constraint } \phi: \phi(s) \wedge (\text{C.content} \in \text{forbidden}(\phi))$$
+
+If any registered safety predicate fires, the coalition is removed from the competition entirely.
+
+### Metacognitive performance threshold
+
+$$\text{should\_sleep}() = \bar{r}_{\text{recent}} < \bar{r}_{\text{baseline}} - \sigma_r$$
+
+Where $\bar{r}_{\text{recent}}$ is the rolling mean reward over the last 50 steps and $\sigma_r$ is its standard deviation. Performance degradation triggers offline consolidation.
+
+---
+
+## References
+
+| Reference | Used in |
+|---|---|
+| Kanerva, P. (1988). *Sparse Distributed Memory*. MIT Press. | VSA foundations, dimension selection |
+| Kanerva, P. (2009). Hyperdimensional computing: An introduction to computing in distributed representation with high-dimensional random vectors. *Cognitive Computation*, 1(2), 139–159. | Near-orthogonality bounds, binding/bundling |
+| Baars, B.J. (1988). *A Cognitive Theory of Consciousness*. Cambridge University Press. | Global Workspace Theory |
+| Dehaene, S., Changeux, J-P., & Nadal, J-P. (2011). Global workspace and metacognition. *Proc. Natl. Acad. Sci.* | GWT implementation |
+| Cheng, P.W. & Novick, L.R. (1990). A probabilistic contrast model of causal induction. *Journal of Personality and Social Psychology*, 58(4), 545–567. | ΔP causal discovery |
+| Lapicque, L. (1907). Recherches quantitatives sur l'excitation électrique des nerfs. *J. Physiol. Pathol. Général*, 9, 620–635. | Leaky Integrate-and-Fire model |
+| Bi, G-Q. & Poo, M-M. (1998). Synaptic modifications in cultured hippocampal neurons. *Journal of Neuroscience*, 18(24), 10464–10472. | STDP learning rule |
+| Russell, J.A. (1980). A circumplex model of affect. *Journal of Personality and Social Psychology*, 39(6), 1161–1178. | Circumplex emotion model |
+| Plutchik, R. (1980). *Emotion: A Psychoevolutionary Synthesis*. Harper & Row. | 8 basic emotions |
+| Oja, E. (1982). Simplified neuron model as a principal component analyzer. *Journal of Mathematical Biology*, 15(3), 267–273. | Oja's rule for Hebbian learning |
+| Fikes, R.E. & Nilsson, N.J. (1971). STRIPS: A new approach to the application of theorem proving. *Artificial Intelligence*, 2(3–4), 189–208. | STRIPS planning |
+| Indyk, P. & Motwani, R. (1998). Approximate nearest neighbors: Towards removing the curse of dimensionality. *STOC '98*, 604–613. | Locality-Sensitive Hashing |
