@@ -892,7 +892,7 @@ class TestEfficiencyProofs:
 
     def test_intrinsic_motivation_param_count(self):
         """ICM module should have <25K parameters (lightweight design)."""
-        import torch
+        torch = pytest.importorskip("torch", reason="torch not installed")
         icm_mod = pytest.importorskip(
             "python.utilities.intrinsic_motivation",
             reason="IntrinsicCuriosityModule archived",
@@ -910,7 +910,7 @@ class TestEfficiencyProofs:
 
         The projection matrix should have ~90% zeros (10% non-zero by design).
         """
-        import torch
+        torch = pytest.importorskip("torch", reason="torch not installed")
         wm_mod = pytest.importorskip(
             "python.core.neural.world_model",
             reason="WorldModel archived",
@@ -932,7 +932,7 @@ class TestEfficiencyProofs:
 
     def test_world_model_param_count(self):
         """WorldModel MLP should be small — well under 100K parameters."""
-        import torch
+        torch = pytest.importorskip("torch", reason="torch not installed")
         wm_mod = pytest.importorskip(
             "python.core.neural.world_model",
             reason="WorldModel archived",

@@ -104,6 +104,8 @@ from python.core.reasoning.causal_reasoning import (
 )
 from python.core.learning.curiosity import CuriosityModule
 from python.core.language.text_knowledge_learner import TextKnowledgeLearner
+from python.core.reasoning.analogy import AnalogyEngine
+from python.core.language.nlg import NLGEngine
 from python.core.multimodal.multimodal_processor import (
     MultimodalProcessor, MultimodalInput, ProcessedInput, ModalityResult,
 )
@@ -745,10 +747,12 @@ class NSCKAIEngine:
         self.causal_reasoner = CausalReasoner(self.causal_graph)
         self.causal_discovery = CausalDiscovery()
 
-        # Text learning — uses SemanticMemory and EpisodicMemory internally
+        # Text learning — uses SemanticMemory, EpisodicMemory and the shared
+        # CausalGraph so causal facts flow directly into causal_reasoner.
         self.text_learner = TextKnowledgeLearner(
             semantic_memory=self.semantic_memory,
             episodic_memory=self.episodic_memory,
+            causal_graph=self.causal_graph,
         )
 
         # N-gram model for response generation
@@ -777,6 +781,21 @@ class NSCKAIEngine:
         self.image_generator = ImageGenerator(
             semantic_memory=self.semantic_memory,
         )
+
+        # AnalogyEngine for cross-domain knowledge transfer.
+        # auto_discover_abstractions() is called whenever a new domain is
+        # trained to build HV-similarity bridges between domains; discovered
+        # pairs are written as 'similar_to' edges in semantic_memory so that
+        # spreading activation propagates across domain boundaries.
+        self.analogy_engine = AnalogyEngine()
+        # domain_tag -> {concept_name: HyperVector} — populated during training
+        self._domain_concept_hvs: Dict[str, Dict[str, Any]] = defaultdict(dict)
+
+        # NLGEngine for structured multi-sentence discourse generation.
+        # Used in _build_response() when multiple facts are available to
+        # assemble a coherent multi-sentence answer with connectives and
+        # anaphora rather than raw sentence concatenation.
+        self.nlg_engine = NLGEngine()
 
         # Register modules with GlobalWorkspace
         self.global_workspace.register_module("SEMANTIC", _SemanticModule())
@@ -836,7 +855,8 @@ class NSCKAIEngine:
     # Training — uses actual NSCK TextKnowledgeLearner
     # ------------------------------------------------------------------
 
-    def train_on_text(self, text: str, source_quality: float = 1.0) -> Dict[str, Any]:
+    def train_on_text(self, text: str, source_quality: float = 1.0,
+                      domain: str = 'general') -> Dict[str, Any]:
         """Learn from a text passage using the NSCK learning pipeline.
 
         Process:
@@ -844,15 +864,20 @@ class NSCKAIEngine:
            relations, and facts using semantic folding (LinguaCortex).
         2. Concepts → ``SemanticMemory`` (NetworkX graph + HV index).
         3. Episodes → ``EpisodicMemory`` (VSA + LSH).
-        4. Causal links → ``CausalGraph``.
+        4. Causal links → ``CausalGraph`` (shared with TextKnowledgeLearner).
         5. N-gram patterns → ``ResponseGenerator``.
         6. Sentence index → ``_sentence_store`` for response assembly.
+        7. Cross-domain bridges discovered via ``AnalogyEngine`` whenever a
+           new domain is introduced.
 
         Args:
             text: Text passage to learn from.
             source_quality: Quality weight for sentences from this source.
                 Higher values (e.g. 2.0) for curated data, lower (0.5)
                 for noisy web text.  Default 1.0.
+            domain: Optional domain tag (e.g. 'biology', 'technology').
+                Used by AnalogyEngine to discover cross-domain concept
+                bridges.  Defaults to 'general'.
         """
         start = time.time()
 
@@ -1005,6 +1030,10 @@ class NSCKAIEngine:
         n_relations = learn_result.get('relations', 0) if isinstance(learn_result, dict) else 0
         n_facts = learn_result.get('facts', 0) if isinstance(learn_result, dict) else 0
 
+        # Step 6: Collect new concept HVs for this domain and discover
+        # cross-domain bridges via AnalogyEngine.
+        cross_domain_bridges = self._update_domain_concepts_and_bridge(domain)
+
         self._training_stats['texts_trained'] += 1
         self._training_stats['sentences_processed'] += len(sentences)
         self._training_stats['concepts_learned'] += n_concepts
@@ -1019,10 +1048,83 @@ class NSCKAIEngine:
             'relations_added': n_relations,
             'facts_stored': n_facts,
             'causal_links_added': causal_added,
+            'cross_domain_bridges': cross_domain_bridges,
             'elapsed_s': round(elapsed, 4),
         }
         logger.info("Trained: %s", result)
         return result
+
+    def _update_domain_concepts_and_bridge(self, domain: str) -> int:
+        """Snapshot new concept HVs for *domain* and discover cross-domain bridges.
+
+        For every domain already seen, ``AnalogyEngine.auto_discover_abstractions``
+        compares HV representations of concepts from the two domains.  Pairs
+        whose names share a common stem (≥3 chars) or whose HV similarity
+        exceeds the threshold are linked with a ``similar_to`` edge in
+        ``semantic_memory`` so spreading activation propagates across domain
+        boundaries.
+
+        Returns the number of new bridge edges added to semantic memory.
+        """
+        # Collect current concept HVs for this domain from semantic_memory
+        current_hvs = dict(self.semantic_memory.concept_hvs)
+        existing_in_domain = self._domain_concept_hvs.get(domain, {})
+        # Only process concepts not yet registered for this domain
+        new_hvs = {
+            name: hv for name, hv in current_hvs.items()
+            if name not in existing_in_domain
+        }
+        if new_hvs:
+            self._domain_concept_hvs[domain].update(new_hvs)
+
+        bridges_added = 0
+        # Compare against every other domain already stored
+        for other_domain, other_hvs in self._domain_concept_hvs.items():
+            if other_domain == domain or not other_hvs:
+                continue
+            # Discover mappings between this domain's new concepts and the
+            # other domain's concepts.  auto_discover_abstractions uses both
+            # HV similarity and name-stem matching.
+            try:
+                mappings = self.analogy_engine.auto_discover_abstractions(
+                    domain_a=domain,
+                    domain_b=other_domain,
+                    concept_hvs_a=new_hvs,
+                    concept_hvs_b=other_hvs,
+                    similarity_threshold=0.52,
+                )
+                for mapping in mappings:
+                    # Write a bidirectional 'similar_to' edge into the
+                    # semantic graph so spreading activation crosses domains.
+                    a_name = mapping.source_concept
+                    b_name = mapping.target_concept
+                    if (a_name in self.semantic_memory.concept_graph
+                            and b_name in self.semantic_memory.concept_graph):
+                        if not self.semantic_memory.concept_graph.has_edge(a_name, b_name):
+                            self.semantic_memory.concept_graph.add_edge(
+                                a_name, b_name,
+                                relation='similar_to',
+                                weight=float(mapping.similarity),
+                                cross_domain=True,
+                                domains=(domain, other_domain),
+                            )
+                            bridges_added += 1
+                        if not self.semantic_memory.concept_graph.has_edge(b_name, a_name):
+                            self.semantic_memory.concept_graph.add_edge(
+                                b_name, a_name,
+                                relation='similar_to',
+                                weight=float(mapping.similarity),
+                                cross_domain=True,
+                                domains=(other_domain, domain),
+                            )
+                            bridges_added += 1
+            except Exception as _e:
+                import logging as _logging
+                _logging.getLogger(__name__).debug(
+                    "AnalogyEngine bridge discovery failed: %s", _e)
+                pass  # AnalogyEngine failures must not abort training
+
+        return bridges_added
 
     def finalize_training(self):
         """Build learned prototypes after all training data is processed.
@@ -1631,10 +1733,10 @@ class NSCKAIEngine:
             "reasoning_steps": reasoning_trace,
         })
 
-        # --- Stage 7: Causal inference (NSCK CausalReasoner) ---
+        # --- Stage 7: Causal inference + Cross-domain bridges ---
         trace.begin("causal_inference", {
             "active_concepts": query_concepts,
-            "module": "CausalReasoner + CounterfactualReasoner",
+            "module": "CausalReasoner + AnalogyEngine + CounterfactualReasoner",
         })
         causal_effects = []
         causal_chains = []
@@ -1647,7 +1749,32 @@ class NSCKAIEngine:
             for cause in causes:
                 causal_chains.append((cause, c))
 
-        # Check for counterfactual "what if" queries
+        # Cross-domain bridge discovery: find concepts from other domains
+        # that are analogically similar to the query concepts via the
+        # AnalogyEngine's registered auto-abstractions.
+        cross_domain_analogies: List[str] = []
+        known_domains = list(self._domain_concept_hvs.keys())
+        if len(known_domains) >= 2:
+            query_cap = [c.capitalize() for c in query_concepts]
+            for i, d_a in enumerate(known_domains):
+                for d_b in known_domains[i + 1:]:
+                    try:
+                        analogy = self.analogy_engine.find_analogy(d_a, d_b)
+                        for mapping in analogy.mappings:
+                            if mapping.source_concept in query_cap:
+                                cross_domain_analogies.append(
+                                    f"{mapping.source_concept} ({d_a}) ≈ "
+                                    f"{mapping.target_concept} ({d_b})"
+                                )
+                            elif mapping.target_concept in query_cap:
+                                cross_domain_analogies.append(
+                                    f"{mapping.target_concept} ({d_b}) ≈ "
+                                    f"{mapping.source_concept} ({d_a})"
+                                )
+                    except Exception as _e:
+                        import logging as _logging
+                        _logging.getLogger(__name__).debug(
+                            "Cross-domain analogy query failed: %s", _e)
         is_counterfactual = self.counterfactual.is_counterfactual_query(
             user_input)
         if is_counterfactual:
@@ -1660,9 +1787,10 @@ class NSCKAIEngine:
             except Exception:
                 pass
 
-        trace.end("NSCK CausalReasoner inference", {
+        trace.end("NSCK CausalReasoner + AnalogyEngine inference", {
             "effects_found": causal_effects[:5],
             "causes_found": causal_chains[:5],
+            "cross_domain_analogies": cross_domain_analogies[:5],
             "is_counterfactual": is_counterfactual,
             "counterfactual_confidence": (
                 round(counterfactual_result.confidence, 3)
@@ -1786,6 +1914,7 @@ class NSCKAIEngine:
                     [(k, round(v, 3)) for k, v in activation.items()],
                     key=lambda x: x[1], reverse=True)[:5],
                 'causal_effects': causal_effects[:5],
+                'cross_domain_analogies': cross_domain_analogies[:5],
                 'novelty': round(novelty, 3),
                 'gw_winner': winner.source if winner else "none",
                 'self_confidence': round(

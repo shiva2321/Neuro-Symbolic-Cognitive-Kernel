@@ -24,11 +24,15 @@ class SemanticMemory:
     # Default relation weights for spreading activation.
     # Higher weight = stronger propagation through that edge type.
     DEFAULT_RELATION_WEIGHTS: Dict[str, float] = {
-        "is_a": 0.9,         # Taxonomic links carry most meaning
-        "has_property": 0.7,  # Properties propagate strongly
-        "causes": 0.6,       # Causal links weaker than taxonomic
-        "part_of": 0.5,      # Mereological
-        "similar_to": 0.4,   # Weakest — associative
+        "is_a": 0.9,            # Taxonomic links carry most meaning
+        "has_property": 0.7,    # Properties propagate strongly
+        "causes": 0.6,          # Causal links
+        "leads_to": 0.6,        # Consequential (alias for causes)
+        "results_in": 0.6,      # Result of action
+        "implies": 0.55,        # Logical implication
+        "part_of": 0.5,         # Mereological
+        "similar_to": 0.4,      # Associative
+        "semantically_related": 0.35,  # Weakest — co-occurrence based
     }
     
     def __init__(self, relation_weights: Optional[Dict[str, float]] = None, use_rust: bool = True):

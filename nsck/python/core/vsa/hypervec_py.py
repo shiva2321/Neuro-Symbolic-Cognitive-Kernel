@@ -34,24 +34,20 @@ class HyperVectorPy:
         return HyperVectorPy.from_bits(new_bits)
 
     def bundle(self, other):
-        # Majority rule for 2 vectors with random tie break
-        # (A & B) | (A & Rand) | (B & !Rand)
-        # Using numpy vectorized operations
-        rand_mask = np.random.randint(0, 2, size=DIMENSION, dtype=np.int8)
-        
-        # Logic: If bits are same, keep. If differ, use mask.
-        # diff = A ^ B
-        # res = (A & B) | (diff & rand_mask)
-        # Check:
-        # A=1, B=1 -> 1&1 | 0 = 1 (Correct)
-        # A=0, B=0 -> 0&0 | 0 = 0 (Correct)
-        # A=1, B=0 -> 0 | (1 & mask) = mask (Correct 50/50)
-        
+        # Majority rule: same bits are kept; differing bits use a
+        # deterministic tie-breaking mask derived from both inputs so
+        # the same pair always produces the same output vector.
         a = self.bits
         b = other.bits
         diff = np.bitwise_xor(a, b)
         same = np.bitwise_and(a, b)
-        
+
+        # Seed from XOR-weight of each vector's first 64 bits — fast,
+        # collision-resistant enough for VSA usage, and reproducible.
+        seed = int(a[:64].sum()) ^ (int(b[:64].sum()) << 14)
+        rand_mask = np.random.default_rng(seed & 0x7FFFFFFF).integers(
+            0, 2, size=DIMENSION, dtype=np.int8)
+
         bundle_bits = np.bitwise_or(same, np.bitwise_and(diff, rand_mask))
         return HyperVectorPy.from_bits(bundle_bits)
 

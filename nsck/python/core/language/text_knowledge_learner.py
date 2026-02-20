@@ -89,7 +89,8 @@ class TextKnowledgeLearner:
         semantic_memory: Optional[SemanticMemory] = None,
         episodic_memory: Optional[EpisodicMemory] = None,
         context_engine: Optional[ContextEngine] = None,
-        language_module: Optional[Any] = None # [AGI] Phase 4: NLU Parser
+        language_module: Optional[Any] = None, # [AGI] Phase 4: NLU Parser
+        causal_graph: Optional[CausalGraph] = None,
     ):
         # Core cognitive modules
         self.semantic = semantic_memory or SemanticMemory()
@@ -100,8 +101,9 @@ class TextKnowledgeLearner:
         # Language cortex for text encoding (NOT an LLM!)
         self.lingua = get_lingua_cortex()
         
-        # Causal reasoning
-        self.causal_graph = CausalGraph()
+        # Causal reasoning — use the shared graph when provided so that
+        # causal facts learned here flow directly into the engine's reasoner.
+        self.causal_graph = causal_graph if causal_graph is not None else CausalGraph()
         self.causal_reasoner = CausalReasoner(self.causal_graph)
         
         # Learning state
@@ -350,9 +352,8 @@ class TextKnowledgeLearner:
                     self.causal_graph.add_causes(
                         cause=subj,
                         effect=obj,
-                        mechanism=f"learned from text: {sentence[:50]}",
-                        confidence=0.7,
-                        timestamp=ts
+                        strength=0.7,
+                        context='text_learning',
                     )
                 except Exception:
                     pass
