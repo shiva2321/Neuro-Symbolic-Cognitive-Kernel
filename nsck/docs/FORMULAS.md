@@ -125,6 +125,8 @@ For two vectors:
 
 $$(\mathbf{A} + \mathbf{B})_i = \begin{cases} A_i & \text{if } A_i = B_i \\ \text{Bernoulli}(0.5) & \text{if } A_i \neq B_i \end{cases}$$
 
+> **Implementation note:** In `HyperVectorPy`, the tie-breaking mask is seeded deterministically from the input vectors (XOR-weight of the first 64 bits of each), so `bundle(A, B)` always returns the same result for the same pair. The mathematical properties above are unaffected — the tie-bits are still independent of the differing positions.
+
 Properties:
 - **Similar to both operands**: $\mathbb{E}[\text{sim}(\mathbf{A} + \mathbf{B}, \mathbf{A})] = 0.75$
   - Matching bits: $A_i = B_i$ → result agrees with $A$ with probability 1
