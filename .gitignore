@@ -1,6 +1,8 @@
 **/target/
 **/__pycache__/
 **/.pytest_cache/
+# Compiled Rust extension binaries (built locally, not committed)
+*.so
 .benchmarks/
 .idea/
 .vscode/

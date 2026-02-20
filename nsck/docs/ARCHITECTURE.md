@@ -138,7 +138,7 @@ classDiagram
 | Operation | Code | Role |
 |---|---|---|
 | `xor(A, B)` | element-wise XOR | Binding — encodes role–filler pairs |
-| `bundle(A, B)` | majority vote + random tie-break | Superposition — "both A and B" |
+| `bundle(A, B)` | majority vote; tie-breaking mask seeded from input bits | Superposition — "both A and B"; deterministic for the same pair |
 | `permute(k)` | `np.roll(bits, -k)` | Encodes position / temporal order |
 | `similarity(A, B)` | `1 - Hamming/d` | Associative lookup distance |
 | `cosine_similarity(A, B)` | bipolar dot product / d | Noise-robust similarity |
@@ -179,7 +179,7 @@ graph LR
     subgraph SemanticMemory
         Graph["NetworkX DiGraph\nconcept_graph"]
         HVIdx["HV Index\nconcept_hvs: Dict str HV"]
-        RelW["Relation Weights\nis_a=0.9  has_property=0.7\ncauses=0.6  part_of=0.5\nsimilar_to=0.4"]
+        RelW["Relation Weights\nis_a=0.9  has_property=0.7\ncauses/leads_to/results_in=0.6\nimplies=0.55  part_of=0.5\nsimilar_to=0.4  semantically_related=0.35"]
         SA["spread_activation(starts, steps, decay)"]
         Q["query(query_hv, k)"]
         RustBE["Rust Backend\nSemanticMemoryConcurrent\n(parallel spreading)"]

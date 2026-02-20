@@ -90,7 +90,7 @@ graph TB
             RAsync["async_runtime.rs (291)<br/>AsyncCognitiveRuntime"]
         end
 
-        subgraph Tests["tests/ — 39 files, ~7,400 LOC"]
+        subgraph Tests["tests/ — 40 files, ~9,100 LOC"]
             TUnit["unit/"]
             TInteg["integration/"]
             TCore["core_architecture/"]
@@ -353,7 +353,7 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph TestSuite["Test Suite — 39 files, ~7,400 LOC"]
+    subgraph TestSuite["Test Suite — 40 files, ~9,100 LOC"]
         subgraph Unit["unit/"]
             TU1["test_analogy.py"]
             TU2["test_causal.py"]
@@ -382,6 +382,7 @@ graph TD
             TI2["test_full_pipeline.py"]
             TI3["test_persistence.py"]
             TI4["test_snn_integration.py"]
+            TI5["test_realworld_capabilities.py"]
         end
 
         subgraph CoreArch["core_architecture/"]

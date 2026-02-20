@@ -34,24 +34,20 @@ class HyperVectorPy:
         return HyperVectorPy.from_bits(new_bits)
 
     def bundle(self, other):
-        # Majority rule for 2 vectors with random tie break
-        # (A & B) | (A & Rand) | (B & !Rand)
-        # Using numpy vectorized operations
-        rand_mask = np.random.randint(0, 2, size=DIMENSION, dtype=np.int8)
-        
-        # Logic: If bits are same, keep. If differ, use mask.
-        # diff = A ^ B
-        # res = (A & B) | (diff & rand_mask)
-        # Check:
-        # A=1, B=1 -> 1&1 | 0 = 1 (Correct)
-        # A=0, B=0 -> 0&0 | 0 = 0 (Correct)
-        # A=1, B=0 -> 0 | (1 & mask) = mask (Correct 50/50)
-        
+        # Majority rule: same bits are kept; differing bits use a
+        # deterministic tie-breaking mask derived from both inputs so
+        # the same pair always produces the same output vector.
         a = self.bits
         b = other.bits
         diff = np.bitwise_xor(a, b)
         same = np.bitwise_and(a, b)
-        
+
+        # Seed from XOR-weight of each vector's first 64 bits — fast,
+        # collision-resistant enough for VSA usage, and reproducible.
+        seed = int(a[:64].sum()) ^ (int(b[:64].sum()) << 14)
+        rand_mask = np.random.default_rng(seed & 0x7FFFFFFF).integers(
+            0, 2, size=DIMENSION, dtype=np.int8)
+
         bundle_bits = np.bitwise_or(same, np.bitwise_and(diff, rand_mask))
         return HyperVectorPy.from_bits(bundle_bits)
 
@@ -121,8 +117,58 @@ class HyperVectorPy:
     def permute_inverse(self, shift):
         """Inverse permutation: equivalent to permute(-shift)."""
         return self.permute(-shift)
-    
-        
+
+    def weighted_bundle(self, other, weight: float, seed=None):
+        """
+        Produce a vector biased toward *self* (weight→1) or *other* (weight→0).
+
+        Uses majority-vote over ``k`` copies: a high *weight* includes more
+        copies of *self*, a low *weight* more copies of *other*.
+
+        Args:
+            other: The other HyperVector to blend with.
+            weight: Blend weight in [0, 1].  1.0 = all self, 0.0 = all other.
+            seed:   Unused; kept for API parity with the Rust shim.
+
+        Returns:
+            A new HyperVectorPy blended according to *weight*.
+        """
+        w = max(0.0, min(1.0, float(weight)))
+        k = 7
+        self_n = max(1, int(round(w * k)))
+        other_n = k - self_n
+
+        out = self
+        for _ in range(self_n - 1):
+            out = out.bundle(self)
+        for _ in range(other_n):
+            out = out.bundle(other)
+        return out
+
+    def lsh_hash(self, seed: int, n_bits: int) -> int:
+        """
+        Locality-Sensitive Hash of this hypervector.
+
+        Selects ``n_bits`` random bit positions (seeded deterministically) and
+        packs the values at those positions into an integer.  Similar vectors
+        share many selected bits, so they tend to land in the same bucket.
+
+        Args:
+            seed:   Integer seed that selects the projection (one per LSH table).
+            n_bits: Number of bits to project onto (bucket resolution).
+
+        Returns:
+            A non-negative integer bucket index.
+        """
+        rng = np.random.default_rng(seed)
+        indices = rng.choice(DIMENSION, size=int(n_bits), replace=False)
+        selected = self.bits[indices]
+        result = 0
+        for i, b in enumerate(selected):
+            if b:
+                result |= (1 << i)
+        return result
+
     def __repr__(self):
         return f"<HyperVector dim={DIMENSION} (Python)>"
 

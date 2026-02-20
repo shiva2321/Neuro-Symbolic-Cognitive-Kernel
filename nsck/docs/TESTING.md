@@ -50,7 +50,7 @@ cd nsck/rust_vsa && cargo test --release
 | Layer | Location | Files | Test methods | Description |
 |---|---|---|---|---|
 | Unit | `nsck/tests/unit/` | 25 files | ~199 | Module-level isolation tests |
-| Integration | `nsck/tests/integration/` | 9 files | ~145 | Cross-module and system tests |
+| Integration | `nsck/tests/integration/` | 10 files | ~290 | Cross-module and system tests |
 | Architecture | `nsck/tests/core_architecture/` | 4 files | ~63 | Architecture capability verification |
 | Experiments | `nsck/tests/experiments/` | 4 files | ~10 | Behavioural validation scenarios |
 | Regression | `nsck/tests/regression/` | 1 file | 6 | Known-fixed bug coverage |
@@ -462,6 +462,39 @@ Integration tests exercise multiple modules together, verifying that the modules
 **How:** Creates a `SNNPerceptionModule`; feeds synthetic sensory inputs; verifies output HVs are valid.
 
 **Why:** Phase 2 introduced the SNN perception layer. These tests are kept as regression coverage to ensure subsequent changes don't break SNN integration.
+
+---
+
+### `integration/test_realworld_capabilities.py` — 145 tests
+
+**What:** Full-stack real-world capability test suite covering every layer of the NSCK core architecture (Python + Rust), including cross-domain knowledge transfer.
+
+**How:** Organised as 20 test classes, each targeting a concrete subsystem or integration boundary:
+
+| Class | Subsystem | Coverage |
+|---|---|---|
+| `TestVSACore` | `HyperVectorPy` | XOR invertibility, deterministic bundle, weighted bundle, LSH hash, similarity range |
+| `TestRustHyperVectorRegistry` | `HyperVectorRegistry` (Rust) | Register, lookup, concurrent reads, shim compat |
+| `TestRustSemanticMemoryConcurrent` | `SemanticMemoryConcurrent` (Rust) | add/query, parallel spreading activation |
+| `TestRustEpisodicMemoryConcurrent` | `EpisodicMemoryConcurrent` (Rust) | store, k-NN recall, hot-tier eviction |
+| `TestRustActivationAccumulator` | `ActivationAccumulator` (Rust) | accumulate, top-k, merge |
+| `TestRustPersistentStorage` | `PersistentStorage` (Rust, SQLite) | HV round-trip, concurrent writes |
+| `TestRustCognitiveWorkerPool` | `CognitiveWorkerPool` (Rust, Tokio) | parallel task dispatch |
+| `TestRustSNN` | `snn_rs` (Rust) | LIFLayer, StdpEngine, SnnCore, HebbianMatrix, RateCoder |
+| `TestPythonSemanticMemory` | `SemanticMemory` (Python) | concept storage, spreading activation, inheritance |
+| `TestPythonEpisodicMemory` | `EpisodicMemory` (Python) | record, recall, similarity-based retrieval |
+| `TestCausalGraphAndReasoner` | `CausalGraph` + `CausalReasoner` | multi-hop chains, counterfactuals, interventions |
+| `TestGlobalWorkspace` | `GlobalWorkspace` | coalition competition, broadcast, working memory |
+| `TestAnalogyEngine` | `AnalogyEngine` | source–target mapping, stem-bridges |
+| `TestSTRIPSPlanner` | `STRIPSPlanner` | goal regression, plan validity |
+| `TestCognitiveModules` | `EmotionSystem`, `SelfModel`, `CuriosityModule` | valence update, calibration, novelty decay |
+| `TestTextKnowledgeLearner` | `TextKnowledgeLearner` | SVO extraction, shared causal graph wiring |
+| `TestNLGEngine` | `NLGEngine` + `DiscoursePlanner` | fluent generation, connective sequencing |
+| `TestSemanticRoleLabeler` | `SemanticRoleLabeler` | 12 thematic roles, resonator decoding |
+| `TestCrossDomainKnowledgeTransfer` | `TransferEngine` + `AnalogyEngine` | multi-domain learn → analogy bridge → spreading activation crosses domain boundary |
+| `TestIntegrationInvariants` | All | Shared-object identity, relation-weight coverage, Rust–Python interop |
+
+**Why:** Validates the full architecture under realistic inputs (multi-sentence corpora, multi-step causal chains, multi-domain analogies) rather than isolated unit conditions. Each test class maps to a concrete architecture layer and can be run independently. The cross-domain transfer tests are the primary regression guard for the TKL ↔ AnalogyEngine ↔ SemanticMemory integration path.
 
 ---
 

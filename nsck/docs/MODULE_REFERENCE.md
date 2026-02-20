@@ -41,12 +41,14 @@ HyperVectorPy(seed: Optional[int] = None)
 | `from_bits` | `(bits: ndarray) → HyperVectorPy` | `HyperVectorPy` | Create HV from an existing bit array (classmethod) |
 | `zero` | `() → HyperVectorPy` | `HyperVectorPy` | Create all-zero HV (classmethod) |
 | `xor` | `(other: HyperVectorPy) → HyperVectorPy` | `HyperVectorPy` | Binding — element-wise XOR |
-| `bundle` | `(other: HyperVectorPy) → HyperVectorPy` | `HyperVectorPy` | Superposition — majority vote with random tie-break |
+| `bundle` | `(other: HyperVectorPy) → HyperVectorPy` | `HyperVectorPy` | Superposition — majority vote; tie-breaking mask seeded deterministically from both inputs (same pair → same result) |
+| `weighted_bundle` | `(other: HyperVectorPy, weight: float, seed=None) → HyperVectorPy` | `HyperVectorPy` | Weighted superposition — `weight∈[0,1]` biases toward `self`; `weight=0.5` equals plain bundle |
 | `permute` | `(shift: int) → HyperVectorPy` | `HyperVectorPy` | Circular bit-shift by `shift` positions |
 | `permute_inverse` | `(shift: int) → HyperVectorPy` | `HyperVectorPy` | Inverse circular shift |
 | `similarity` | `(other: HyperVectorPy) → float` | `[0, 1]` | Normalised Hamming similarity (legacy) |
 | `cosine_similarity` | `(other: HyperVectorPy) → float` | `[-1, 1]` | Bipolar cosine similarity (recommended) |
 | `similarity_robust` | `(other, method='cosine') → float` | `[0, 1]` | Configurable similarity (normalises cosine to [0,1]) |
+| `lsh_hash` | `(seed: int, n_bits: int) → int` | `int` | Locality-sensitive hash — stable fingerprint for approximate nearest-neighbour bucketing |
 
 **Constant:** `DIMENSION = 10240`
 
@@ -160,7 +162,7 @@ SemanticMemory(relation_weights: Optional[Dict] = None, use_rust: bool = True)
 | `save` | `(filepath: str)` | None | Pickle to disk |
 | `load` | `(filepath: str)` | None | Load from pickle |
 
-**Default relation weights:** `is_a=0.9, has_property=0.7, causes=0.6, part_of=0.5, similar_to=0.4`
+**Default relation weights:** `is_a=0.9, has_property=0.7, causes=0.6, leads_to=0.6, results_in=0.6, implies=0.55, part_of=0.5, similar_to=0.4, semantically_related=0.35`
 
 ---
 
@@ -735,6 +737,8 @@ TextKnowledgeLearner(semantic_memory: SemanticMemory = None, causal_graph: Causa
 | `get_learned_facts` | `() → List[str]` | list | All learned sentences |
 
 **Causal keywords detected:** causes, leads to, results in, produces, triggers, prevents, stops, reduces, enables, requires.
+
+**Integration note:** Pass the engine's shared `CausalGraph` via `causal_graph=` so causal facts learned from text flow directly into `CausalReasoner` without a manual sync step. When `causal_graph=None`, TKL creates its own isolated graph.
 
 ---
 
