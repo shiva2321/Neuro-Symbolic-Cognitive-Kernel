@@ -23,42 +23,59 @@ All tests in the NSCK codebase: what each file tests, how it tests it, and why. 
 ## How to Run Tests
 
 ```bash
-# All NSCK tests
-cd nsck
-pytest tests/ python/core/tests/ -q
+# All NSCK tests (from repo root)
+python -m pytest nsck/tests/ -q
 
-# Unit tests only (fast)
-pytest tests/unit/ -q
+# Unit tests only (fast, ~20s)
+python -m pytest nsck/tests/unit/ -q
 
 # Integration tests
-pytest tests/integration/ -q
+python -m pytest nsck/tests/integration/ -q
+
+# V3-specific tests only
+python -m pytest nsck/tests/unit/language/ nsck/tests/unit/memory/ \
+  nsck/tests/unit/reasoning/ nsck/tests/integration/test_full_pipeline_v3.py -q
+
+# Rust backend tests (requires hypervec_rs.so + snn_rs.so built)
+python -m pytest nsck/tests/unit/rust/ -q
 
 # Architecture tests
-pytest tests/core_architecture/ -q
+python -m pytest nsck/tests/core_architecture/ -q
 
-# AI model tests
-python -m pytest nsck_ai_model/tests/ -v
-
-# Rust property tests
+# Rust property tests (Cargo)
 cd nsck/rust_vsa && cargo test --release
 ```
+
+> **Note:** Run from the repository root, not from inside `nsck/`. The `pytest.ini` sets `pythonpath = nsck`, so imports like `from python.core...` resolve correctly.
 
 ---
 
 ## Test Overview
 
-| Layer | Location | Files | Test methods | Description |
+| Layer | Location | Files | Tests | Description |
 |---|---|---|---|---|
-| Unit | `nsck/tests/unit/` | 25 files | ~199 | Module-level isolation tests |
-| Integration | `nsck/tests/integration/` | 10 files | ~290 | Cross-module and system tests |
+| Unit — core | `nsck/tests/unit/vsa/` `cognitive/` `learning/` | 9 files | ~115 | Core module isolation |
+| Unit — V3 language | `nsck/tests/unit/language/` | 4 files | ~26 | CG, frame semantics, coreference, distributional |
+| Unit — V3 memory | `nsck/tests/unit/memory/` | 4 files | ~24 | Homeostasis, stigmergy, HNSW, cleanup |
+| Unit — V3 reasoning | `nsck/tests/unit/reasoning/` | 9 files | ~65 | Belief revision, dual process, blending, analogy |
+| Unit — Rust backends | `nsck/tests/unit/rust/` | 1 file | **81** | HV math, cross-backend parity, SNN, pipeline |
+| Integration | `nsck/tests/integration/` | 12 files | ~315 | Cross-module + V3 pipeline + real-world |
 | Architecture | `nsck/tests/core_architecture/` | 4 files | ~63 | Architecture capability verification |
-| Experiments | `nsck/tests/experiments/` | 4 files | ~10 | Behavioural validation scenarios |
+| Experiments | `nsck/tests/experiments/` | 4 files | ~10 | Behavioural scenarios |
 | Regression | `nsck/tests/regression/` | 1 file | 6 | Known-fixed bug coverage |
-| AI model | `nsck_ai_model/tests/` | 3 files | 123 | Chat engine: unit + production |
-| Rust | `nsck/rust_vsa/tests/` | 1 file | 11 | Property-based VSA correctness |
-| Python core | `nsck/python/core/tests/` | 3 files | ~40 | Module-internal tests |
+| Rust (Cargo) | `nsck/rust_vsa/tests/` | 1 file | 11 | Property-based VSA correctness |
+| Python core | `nsck/python/core/tests/` | 3 files | ~40 | Internal module tests |
 
-**Total: ~597 test methods** across the codebase.
+**Total: ~756 tests** across the codebase.
+
+**Actual pytest run results:**
+
+| Build condition | `python -m pytest nsck/tests/ -q` result |
+|---|---|
+| Python-only (no Rust .so) | **531 passed**, 145 skipped, 3 xfailed |
+| With Rust .so (hypervec_rs + snn_rs) | **671 passed**, 4 skipped, 4 xfailed |
+
+The 145 skipped tests (Python-only) are all in `nsck/tests/unit/rust/test_rust_backends.py` and `nsck/tests/unit/vsa/test_hypervec_parity.py` — they skip gracefully when the Rust extension is not installed.
 
 ---
 
@@ -356,6 +373,109 @@ Unit tests target individual classes in isolation, using minimal or mocked depen
 
 ---
 
+## V3 Unit Tests
+
+These tests were added in V3 and cover all new modules. They are skipped gracefully when optional dependencies (Rust, hnswlib) are not installed.
+
+---
+
+### `unit/language/test_construction_grammar.py` — 8 tests
+
+**What:** Tests `ConstructionMatcher` against diverse English constructions.
+
+**How:** Feeds tokenised sentences and verifies that the correct construction name and role fillers are returned. Covers SVO, copular `is`, `is a`, possessive `has`, causative `causes`, containment `contains`.
+
+**Why:** Construction grammar is the backbone of V3 NLU. These tests ensure each construction template matches correctly.
+
+---
+
+### `unit/language/test_frame_semantics.py` — 6 tests
+
+**What:** Tests `FrameLibrary` verb lookup and `Frame.fill()` / `Frame.extract_filler()` roundtrips.
+
+**How:** Calls `get_frame_for_verb()` for verbs like "bought", "said", "caused"; fills a frame with HV role fillers; extracts fillers and checks similarity ≥ 0.4.
+
+---
+
+### `unit/language/test_coreference.py` — 7 tests
+
+**What:** Tests `EntityRegister` pronoun resolution.
+
+**How:** Registers named entities with gender/animacy/number features. Resolves pronouns (`he`, `she`, `it`, `they`, `this`). Checks register overflow (max 10 entities).
+
+---
+
+### `unit/language/test_distributional_semantics.py` — 5 tests
+
+**What:** Tests `DistributionalCodebook` co-occurrence building and retrieval.
+
+**How:** Builds a codebook from a small corpus; checks co-occurring words produce higher similarity; tests `save()`/`load()` roundtrip.
+
+---
+
+### `unit/memory/test_homeostasis.py` — 6 tests
+
+**What:** Tests `MemoryHomeostasis.regulate()` — edge pruning and stale eviction.
+
+---
+
+### `unit/memory/test_stigmergy.py` — 7 tests
+
+**What:** Tests `mark_path()`, `evaporate_stigmergy()`, and stigmergy-weighted `spread_activation()`.
+
+**How:** Marks a preferred path 10× with reward=1.0 and an alternative once. Checks preferred-path pheromone >> alternative. Verifies `evaporate_stigmergy()` decay.
+
+---
+
+### `unit/memory/test_hnsw_memory.py` — 4 tests
+
+**What:** Tests HNSW index graceful fallback when `hnswlib` is not installed.
+
+---
+
+### `unit/reasoning/test_belief_revision.py` — 7 tests
+
+**What:** Tests `BeliefScorer.free_energy()` and `should_revise()` decision logic.
+
+**How:** Verifies FE is higher for contested beliefs (high contradictions); verifies revision decision is correct.
+
+---
+
+### `unit/reasoning/test_dual_process.py` — 8 tests
+
+**What:** Tests System 1 / System 2 routing in `CognitiveEngine.decide()`.
+
+**How:** `threshold=0.0` → expects `system_used="system_1"`. `threshold=0.99` → expects `system_used="system_2"`.
+
+---
+
+### `unit/reasoning/test_conceptual_blending.py` — 9 tests
+
+**What:** Tests `AnalogyEngine.blend()` and `functor_quality()`.
+
+**How:** Creates two small concept domains; verifies blend HV is non-zero; verifies `functor_quality()` = 1.0 on a perfect mapping.
+
+---
+
+### `unit/rust/test_rust_backends.py` — 81 tests
+
+**What:** Comprehensive Rust backend validation across 8 sections.
+
+| Section | Tests | Coverage |
+|---|---|---|
+| A: HV math | 11 | self-sim, XOR reversibility/commutativity, bundle symmetry, permute, LSH, weighted bundle |
+| B: Cross-backend parity | 6 | XOR/permute/similarity Rust==Python; cross-type similarity |
+| C: SemanticMemory Rust | 8 | add/query, spreading, stigmergy, belief revision, incremental refinement, latency |
+| D: EpisodicMemory Rust | 4 | record/recall, LSH, 200-episode stress |
+| E: SNN Rust classes | 25 | LIFLayer, HebbianMatrix, SnnCore, ConceptMapper, RateCoder, StdpEngine |
+| F: V3 pipeline Rust | 7 | CG, coreference, distributional, frame, dual-process, homeostasis, research config |
+| G: Real-world Rust | 9 | science, geography, biography+coreference, causality, contradiction, edge inputs |
+| H: Scalability Rust | 7 | 10K HV creation, 1K similarity, 5K memory, 500-ring spreading, Rust vs Python |
+
+All 81 tests are skipped gracefully when Rust `.so` files are not present in `nsck/`.
+
+---
+
 ## NSCK Integration Tests
 
 Integration tests exercise multiple modules together, verifying that the modules interact correctly and that emergent system behaviour is correct.
@@ -495,6 +615,35 @@ Integration tests exercise multiple modules together, verifying that the modules
 | `TestIntegrationInvariants` | All | Shared-object identity, relation-weight coverage, Rust–Python interop |
 
 **Why:** Validates the full architecture under realistic inputs (multi-sentence corpora, multi-step causal chains, multi-domain analogies) rather than isolated unit conditions. Each test class maps to a concrete architecture layer and can be run independently. The cross-domain transfer tests are the primary regression guard for the TKL ↔ AnalogyEngine ↔ SemanticMemory integration path.
+
+---
+
+### `integration/test_full_pipeline_v3.py` — 9 tests
+
+**What:** End-to-end tests for all V3 features wired through `TextKnowledgeLearner` and `SemanticMemory`.
+
+**How:**
+- `test_belief_revision_in_semantic_memory` — adds a relation then adds a contradicting relation 10×; verifies contradiction_count > 0.
+- `test_coreference_resolution` — feeds a sentence with "he" after registering "John"; verifies coreference chain is populated.
+- `test_frame_semantics_verb_lookup` — passes a sentence with "bought" to TKL; verifies a COMMERCIAL_TRANSACTION frame or relation was stored.
+- Six further tests cover construction grammar coverage, dual-process routing, stigmergy preference, homeostasis sleep integration, and research config end-to-end.
+
+**Why:** These are the primary regression guard for V3. If any integration wire breaks, these tests catch it before the unit tests do.
+
+---
+
+### `integration/test_real_world_v3.py` — 5 tests
+
+**What:** Real-world capability tests using production-like text inputs.
+
+**How:**
+- Wikipedia paragraph about photosynthesis → query "What does photosynthesis produce?"
+- Science chain: "Water is H2O", "H2O contains hydrogen", "Hydrogen is an element" → multi-hop query
+- 3-sentence news snippet → entity and relation extraction accuracy
+- Multi-turn coreference: "Tell me about dogs. Are they loyal? What do they eat?" → "they" → "dogs"
+- Contradiction test: "The Earth is flat." (1×) vs "The Earth is round." (5×) → round belief wins
+
+**Why:** Validates the system on naturalistic inputs, not just curated fixtures.
 
 ---
 

@@ -170,16 +170,18 @@ sequenceDiagram
 | `vsa/` | `hypervec_py.py` | `HyperVectorPy`, `CleanupMemory` | 361 |
 | `vsa/` | `hypervec_shim.py` | Backend selector (Rust → Python) | 320 |
 | `vsa/` | `resonator.py` | `ResonatorNetwork` | ~120 |
-| `reasoning/` | `cognitive_engine.py` | `CognitiveEngine`, `CognitiveState`, `Proposal` | 1,402 |
+| `reasoning/` | `cognitive_engine.py` | `CognitiveEngine`, `CognitiveState`, `Proposal` | 1,490 |
 | `reasoning/` | `global_workspace.py` | `GlobalWorkspace`, `Coalition` | ~312 |
 | `reasoning/` | `causal_reasoning.py` | `CausalDiscovery`, `CausalGraph`, `CausalReasoner` | 1,233 |
 | `reasoning/` | `rule_learner.py` | `RuleLearner`, `RuleCandidate` | 644 |
 | `reasoning/` | `planner.py` | `STRIPSPlanner`, `PlanStep` | ~296 |
-| `reasoning/` | `analogy.py` | `AnalogyEngine`, `Analogy` | 609 |
+| `reasoning/` | `analogy.py` | `AnalogyEngine`, `Analogy`, `blend()`, `functor_quality()` | 620 |
+| `reasoning/` | `belief_revision.py` ⚑ | `BeliefMetadata`, `BeliefScorer` | 42 |
 | `reasoning/` | `context_engine.py` | `ContextEngine` | ~440 |
 | `reasoning/` | `math_reasoning.py` | `MathReasoner`, `FPECodebook`, `LinearSolver` | ~390 |
 | `memory/` | `episodic_memory.py` | `EpisodicMemory`, `LiveEpisode` | 501 |
-| `memory/` | `semantic_memory.py` | `SemanticMemory` | 291 |
+| `memory/` | `semantic_memory.py` | `SemanticMemory` (+ HNSW + stigmergy + belief revision) ⚑ | 512 |
+| `memory/` | `homeostasis.py` ⚑ | `MemoryHomeostasis` | 134 |
 | `memory/` | `staged_recall.py` | `StagedRecall` | ~134 |
 | `cognitive/` | `emotion_system.py` | `EmotionSystem` | 420 |
 | `cognitive/` | `metacognition.py` | `SafetyGate`, `MetacognitiveEngine` | 504 |
@@ -192,19 +194,25 @@ sequenceDiagram
 | `learning/` | `hebbian.py` | `HebbianMatrix`, `VSAHebbianLearner` | 506 |
 | `learning/` | `curiosity.py` | `CuriosityModule`, `ExplorationDecision` | 336 |
 | `learning/` | `cross_domain.py` | `TransferEngine`, `SchemaExtractor`, `RuleLifter` | ~430 |
-| `language/` | `text_knowledge_learner.py` | `TextKnowledgeLearner` | 1,074 |
+| `language/` | `text_knowledge_learner.py` | `TextKnowledgeLearner` (+ CG + frame + coref wiring) ⚑ | 1,230 |
+| `language/` | `construction_grammar.py` ⚑ | `ConstructionMatcher`, `Construction`, 30 patterns | 135 |
+| `language/` | `frame_semantics.py` ⚑ | `FrameLibrary`, `Frame`, 20 FrameNet frames | 81 |
+| `language/` | `coreference.py` ⚑ | `EntityRegister`, `EntityMention` | 76 |
+| `language/` | `distributional_semantics.py` ⚑ | `DistributionalCodebook` | 127 |
 | `language/` | `language_module.py` | `LanguageModule` | 526 |
 | `language/` | `lingua_cortex.py` | `LinguaCortex` | ~260 |
 | `language/` | `dialogue_manager.py` | `DialogueManager` | 506 |
-| `language/` | `universal_input.py` | `UniversalInput` | 947 |
+| `language/` | `universal_input.py` | `UniversalInput` (+ robust guards) ⚑ | 947 |
 | `language/` | `semantic_roles.py` | `SemanticRoleLabeler`, `SRLFrame` | ~380 |
 | `language/` | `nlg.py` | `StructuralRealizer`, `DiscoursePlanner`, `NLGEngine` | ~430 |
+| `integration/` | `config.py` | `NSCKConfig` (14 V3 flags + 3 presets) ⚑ | 115 |
 | `integration/` | `persistence.py` | `BrainStore`, `Episode`, `Rule` | 852 |
 | `integration/` | `brain_fusion.py` | `BrainFusion`, `TaskBrain`, `FusedBrain` | ~481 |
-| `integration/` | `config.py` | `NSCKConfig` | ~73 |
 | `integration/` | `explanation.py` | `ExplanationGenerator`, `Explanation` | ~433 |
 | `multimodal/` | `multimodal_processor.py` | `MultimodalProcessor`, `MultimodalInput` | 788 |
 | `multimodal/` | `image_generator.py` | `ImageGenerator`, `VisualFeatures` | 575 |
+
+> **⚑** = New or substantially extended in V3.
 
 ### Rust Accelerator (`rust_vsa/`)
 

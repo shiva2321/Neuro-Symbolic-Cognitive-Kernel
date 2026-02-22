@@ -38,11 +38,16 @@ This repository contains two things:
 | **Causal inference** | ΔP discovery + multi-hop forward/backward causal chains |
 | **Planning** | STRIPS A\* planner with operator preconditions and effects |
 | **Cross-domain analogy** | Structural alignment lifts rules from a source domain to a target |
+| **Conceptual blending** | `AnalogyEngine.blend()` merges two domains via shared generic space (V3) |
 | **Episodic memory** | Two-tier store: in-memory hot tier + SQLite warm tier, LSH k-NN retrieval |
 | **Semantic memory** | NetworkX directed graph + HV index + spreading activation |
 | **Perception** | Leaky Integrate-and-Fire spiking neurons (LIF) with STDP; Rate/Temporal VSA bridge |
-| **Language understanding** | SRL (Semantic Role Labeling) extracts AGENT/PATIENT/LOCATION/… thematic roles |
-| **Knowledge extraction** | TextKnowledgeLearner parses text → SVO triples → SemanticMemory edges |
+| **Language understanding** | SRL + Construction Grammar (V3) + Frame Semantics (V3) + Coreference (V3) |
+| **Knowledge extraction** | TextKnowledgeLearner parses text → SVO triples + frame-filled relations → SemanticMemory |
+| **Belief revision** | Free-energy belief scoring detects and resolves contradictions (V3) |
+| **Distributional semantics** | Co-occurrence codebook for synonym-quality HVs (V3) |
+| **Dual-process decisions** | System 1 (fast, threshold) vs System 2 (full GWT) routing (V3) |
+| **Self-regulation** | Homeostatic memory pruning + stigmergic path preference during `sleep()` (V3) |
 | **Natural language generation** | Discourse planner + anaphora resolution assembles multi-sentence responses |
 | **Continuous learning** | Hebbian association, EWC (Elastic Weight Consolidation), curiosity-driven novelty |
 | **Meta-learning** | MAML-style fast adaptation to new tasks |
@@ -106,12 +111,15 @@ Input (text / state dict / image)
 | Metric | Value |
 |---|---|
 | HyperVector dimension | 10,240 bits |
-| Python source files (nsck core) | ~47 files, ~23,800 LOC |
+| Python source files (nsck core) | ~53 files, ~26,000 LOC |
 | Rust source files | 9 (rust_vsa + rust_snn) |
 | Rust speedup over Python VSA | 21× (element-wise) – 206× (parallel k-NN over 1,000 vectors) |
-| Test files / tests | ~40 files · 680+ passing |
-| AI model tests | 123 (77 unit + 46 production) |
+| Test files / tests | ~50 files · 531 passing (Python-only) / **671 passing** (with Rust .so) |
+| V3 feature flags | 14 (all off by default — zero regressions) |
+| New V3 modules | 6 (construction_grammar, frame_semantics, coreference, distributional_semantics, belief_revision, homeostasis) |
 | SNN layers | LIF + STDP + Hebbian + Rate/Temporal VSA bridge |
+| Decision latency (Python) | ~0.001 ms (cached rules) |
+| Memory query @ 1K concepts | ~19 ms Python / ~0.1 ms Rust |
 
 ---
 
