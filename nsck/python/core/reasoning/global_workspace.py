@@ -157,10 +157,19 @@ class GlobalWorkspace:
         for dv in self._danger_vectors:
             try:
                 sim = predicted_hv.similarity(dv)
-                if sim > max_sim:
-                    max_sim = sim
+            except (TypeError, AttributeError):
+                # Cross-backend comparison (e.g. Rust HV vs Python HV):
+                # the Rust extension only accepts its own type, so try the
+                # reverse direction — similarity is symmetric so the value
+                # is identical.
+                try:
+                    sim = dv.similarity(predicted_hv)
+                except Exception:
+                    continue
             except Exception:
                 continue
+            if sim > max_sim:
+                max_sim = sim
 
         return max_sim >= self.veto_threshold, max_sim
 
