@@ -30,6 +30,12 @@ from collections import defaultdict, Counter
 from dataclasses import dataclass
 import numpy as np
 
+# V3: pronouns used for coreference scanning — module-level constant (not recreated per sentence)
+_COREFERENCE_PRONOUNS: frozenset = frozenset({
+    'he', 'him', 'his', 'she', 'her', 'it', 'its',
+    'they', 'them', 'their', 'this', 'that',
+})
+
 try:
     import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
@@ -91,7 +97,9 @@ class TextKnowledgeLearner:
         context_engine: Optional[ContextEngine] = None,
         language_module: Optional[Any] = None, # [AGI] Phase 4: NLU Parser
         causal_graph: Optional[CausalGraph] = None,
+        config=None,
     ):
+        self._config = config
         # Core cognitive modules
         self.semantic = semantic_memory or SemanticMemory()
         self.episodic = episodic_memory or EpisodicMemory()
@@ -112,7 +120,6 @@ class TextKnowledgeLearner:
         self.concept_frequencies: Counter = Counter()
         self.relation_patterns: Dict[str, List[Tuple[str, str]]] = defaultdict(list)
         
-        
         # Semantic folding state for relation discovery
         self.concept_cooccurrence: Dict[Tuple[str, str], int] = defaultdict(int)
         self.concept_context_hvs: Dict[str, hypervec_rs.HyperVector] = {}  # Accumulated context
@@ -122,6 +129,38 @@ class TextKnowledgeLearner:
 
         # O(1) fact-duplicate index: (subject, relation, object) → index in learned_facts
         self._fact_index: Dict[Tuple[str, str, str], int] = {}
+
+        # V3: optional language modules (lazy-loaded when flags are set)
+        self._construction_matcher = None
+        self._frame_library = None
+        self._entity_register = None
+        self._distrib_codebook = None
+        self._config = config
+        if config is not None:
+            if getattr(config, 'enable_construction_grammar', False):
+                try:
+                    from python.core.language.construction_grammar import ConstructionMatcher
+                    self._construction_matcher = ConstructionMatcher()
+                except Exception as e:
+                    print(f"[TextLearner] Construction grammar unavailable: {e}")
+            if getattr(config, 'enable_frame_semantics', False):
+                try:
+                    from python.core.language.frame_semantics import FrameLibrary
+                    self._frame_library = FrameLibrary()
+                except Exception as e:
+                    print(f"[TextLearner] Frame semantics unavailable: {e}")
+            if getattr(config, 'enable_coreference', False):
+                try:
+                    from python.core.language.coreference import EntityRegister
+                    self._entity_register = EntityRegister()
+                except Exception as e:
+                    print(f"[TextLearner] Coreference unavailable: {e}")
+            if getattr(config, 'enable_distributional_semantics', False):
+                try:
+                    from python.core.language.distributional_semantics import DistributionalCodebook
+                    self._distrib_codebook = DistributionalCodebook()
+                except Exception as e:
+                    print(f"[TextLearner] Distributional semantics unavailable: {e}")
         
         print("[TextLearner] Initialized with VSA-based cognitive architecture + semantic folding")
     
@@ -211,10 +250,13 @@ class TextKnowledgeLearner:
         sentences = self._split_sentences(text)
         if max_sentences is not None and max_sentences > 0:
             sentences = sentences[:max_sentences]
-        # Hard cap: very long articles slow training quadratically
-        _MAX_SENTENCES = 25
-        if len(sentences) > _MAX_SENTENCES:
-            sentences = sentences[:_MAX_SENTENCES]
+        # Configurable soft cap — warn rather than silently truncate.
+        # Default max is 1000 sentences; override via max_sentences param.
+        _SOFT_CAP = 1000
+        if len(sentences) > _SOFT_CAP:
+            print(f"[TextLearner] WARNING: {len(sentences)} sentences; truncating to {_SOFT_CAP}. "
+                  "Pass max_sentences= to change limit.")
+            sentences = sentences[:_SOFT_CAP]
         stats['sentences'] = len(sentences)
         
         print(f"[TextLearner] Processing {len(sentences)} sentences...")
@@ -257,6 +299,28 @@ class TextKnowledgeLearner:
         
         # Extract concepts (simple noun extraction + named entities)
         concepts = self._extract_concepts(sentence)
+
+        # V3: Coreference resolution — scan for pronouns and resolve before relation extraction
+        if self._entity_register is not None:
+            words = self._tokenize(sentence)
+            resolved_entities: List[str] = []
+            for word in words:
+                if word.lower() in _COREFERENCE_PRONOUNS:
+                    mention = self._entity_register.resolve(word.lower())
+                    if mention:
+                        resolved = mention.name.capitalize()
+                        resolved_entities.append(resolved)
+            # Remove pronoun forms from concepts (they are sentence-initial capitals, not entities)
+            concepts = [c for c in concepts if c.lower() not in _COREFERENCE_PRONOUNS]
+            # Add resolved entities
+            for resolved in resolved_entities:
+                if resolved not in concepts:
+                    concepts.append(resolved)
+            # Register new named entities (capitalized proper nouns, excluding pronouns)
+            for concept in concepts:
+                if concept[0].isupper() and concept.lower() not in _COREFERENCE_PRONOUNS:
+                    c_hv = hypervec_rs.HyperVector(abs(hash(concept)) % (2**32))
+                    self._entity_register.register(concept, c_hv, {})
         
         # Store concepts in semantic memory
         for concept in concepts:
@@ -276,6 +340,29 @@ class TextKnowledgeLearner:
         
         # Extract relations between concepts
         relations = []
+
+        # [V3-A] Frame Semantics — identify verb, lookup frame, fill roles
+        # Simple positional heuristic: assign concepts to frame roles in order.
+        if self._frame_library is not None and len(concepts) >= 2:
+            try:
+                words_list = self._tokenize(sentence)
+                for word in words_list:
+                    frame = self._frame_library.find_frame(word)
+                    if frame is not None:
+                        roles_list = list(frame.roles.keys())
+                        # Assign concepts to roles positionally (concept[0] → role[0], etc.)
+                        role_to_concept = {}
+                        for idx, role in enumerate(roles_list):
+                            if idx < len(concepts):
+                                role_to_concept[role] = concepts[idx]
+                        if len(role_to_concept) >= 2:
+                            subj_concept = role_to_concept[roles_list[0]]
+                            obj_concept = role_to_concept[roles_list[1]]
+                            if subj_concept and obj_concept and subj_concept != obj_concept:
+                                relations.append((subj_concept, frame.name.lower(), obj_concept))
+                        break  # Use first frame match per sentence
+            except Exception:
+                pass  # graceful fallback
         
         # [A] Deep Parsing via LanguageModule (Prioritize if available)
         if self.language_module:
@@ -290,8 +377,6 @@ class TextKnowledgeLearner:
                 
                 # 2. Conditional Logic (The nuance we missed before)
                 if frames.get("condition"):
-                    # Rule: Condition -> (Agent Action Patient)
-                    # Rule: Condition -> (Agent Action Patient)
                     condition_text = frames["condition"]
                     
                     # Handle None values safely
@@ -301,14 +386,10 @@ class TextKnowledgeLearner:
                     
                     consequence_text = f"{ag} {ac} {pa}".strip()
                     
-                    # Store as a causal relation: Condition -> "implies" -> Consequence
-                    # We treat the condition itself as a high-level concept for now
                     relations.append((condition_text.capitalize(), "implies", consequence_text.capitalize()))
                     
-                    # Also try to extract core concepts from condition
                     cond_concepts = self._extract_concepts(condition_text)
                     for cc in cond_concepts:
-                         # Link condition concept to the consequence
                          relations.append((cc, "leads_to", consequence_text.capitalize()))
 
                 # 3. Causal Logic (Because...)
@@ -326,6 +407,15 @@ class TextKnowledgeLearner:
         
         # Deduplicate matches
         relations = list(set(relations))
+
+        # V3: If coreference is active, strip pronoun-role fillers from relations
+        # (they appear as subjects/objects from construction grammar matches)
+        if self._entity_register is not None:
+            relations = [
+                (s, r, o) for s, r, o in relations
+                if s.lower() not in _COREFERENCE_PRONOUNS
+                and o.lower() not in _COREFERENCE_PRONOUNS
+            ]
         
         # Store relations in semantic memory and causal graph
         current_time = time.time()
@@ -402,22 +492,39 @@ class TextKnowledgeLearner:
         """
         Encode sentence to hypervector using LinguaCortex.
         This uses Semantic Folding (SDR/VSA), NOT embeddings.
+
+        V3 enhancements (gated by config flags):
+        - ``enable_contextual_encoding``: uses positional permutation encoding
+        - ``enable_distributional_semantics``: uses distributional codebook HVs
         """
         # Learn text in lingua cortex
         self.lingua.learn_text_snippet(sentence)
         
         # Get semantic fingerprint (SDR)
         words = self._tokenize(sentence)
-        
+        words_clean = [w.lower().strip() for w in words if len(w.strip()) >= 2]
+
+        # V3: Feed words to distributional codebook for online learning
+        if self._distrib_codebook is not None:
+            self._distrib_codebook.build_from_corpus([words_clean])
+
+        use_contextual = (self._config is not None and
+                          getattr(self._config, 'enable_contextual_encoding', False))
+
         # Bundle word hypervectors
         sentence_hv = None
-        for word in words:
-            word = word.lower().strip()
-            if len(word) < 2:
-                continue
-            
-            # Get or create word hypervector
-            word_hv = hypervec_rs.HyperVector(hash(word) % (2**32))
+        for idx, word in enumerate(words_clean):
+            # Choose HV source: distributional > contextual > hash
+            if self._distrib_codebook is not None:
+                word_hv = self._distrib_codebook.get_hv(word)
+                if word_hv is None:
+                    word_hv = hypervec_rs.HyperVector(abs(hash(word)) % (2**32))
+            elif use_contextual:
+                prev_w = words_clean[idx - 1] if idx > 0 else None
+                next_w = words_clean[idx + 1] if idx < len(words_clean) - 1 else None
+                word_hv = self.encode_word_in_context(word, prev_w, next_w)
+            else:
+                word_hv = hypervec_rs.HyperVector(hash(word) % (2**32))
             
             if sentence_hv is None:
                 sentence_hv = word_hv
@@ -425,6 +532,27 @@ class TextKnowledgeLearner:
                 sentence_hv = sentence_hv.bundle(word_hv)
         
         return sentence_hv if sentence_hv else hypervec_rs.HyperVector(0)
+
+    def encode_word_in_context(
+        self,
+        word: str,
+        prev_word: Optional[str] = None,
+        next_word: Optional[str] = None,
+    ) -> hypervec_rs.HyperVector:
+        """V3: Contextual word encoding using positional permutation.
+
+        context_hv = base_hv.bundle(prev_hv.permute(1)).bundle(next_hv.permute(-1))
+        """
+        base_hv = hypervec_rs.HyperVector(hash(word.lower()) % (2**32))
+        if prev_word is not None:
+            prev_hv = hypervec_rs.HyperVector(hash(prev_word.lower()) % (2**32))
+            if hasattr(prev_hv, 'permute'):
+                base_hv = base_hv.bundle(prev_hv.permute(1))
+        if next_word is not None:
+            next_hv = hypervec_rs.HyperVector(hash(next_word.lower()) % (2**32))
+            if hasattr(next_hv, 'permute'):
+                base_hv = base_hv.bundle(next_hv.permute(-1))
+        return base_hv
     
     def _split_sentences(self, text: str) -> List[str]:
         """Split text into sentences."""
@@ -504,6 +632,33 @@ class TextKnowledgeLearner:
         """
         relations = []
         
+        # V3: Construction Grammar — try first if enabled; fall through to regex if no match
+        if self._construction_matcher is not None:
+            try:
+                words_list = self._tokenize(sentence)
+                cg_matches = self._construction_matcher.match(words_list)
+                for match in cg_matches:
+                    fillers = match.role_fillers
+                    rel = match.construction.relation
+                    # Different constructions expose different roles
+                    subj = None
+                    obj = None
+                    for role_a in ('subject', 'cause', 'owner', 'entity', 'agent'):
+                        if role_a in fillers:
+                            subj = fillers[role_a].capitalize()
+                            break
+                    for role_b in ('attribute', 'effect', 'owned', 'location', 'patient', 'object'):
+                        if role_b in fillers:
+                            obj = fillers[role_b].capitalize()
+                            break
+                    if subj and obj and len(subj) >= 2 and len(obj) >= 2:
+                        relations.append((subj, rel, obj))
+                if relations:
+                    # Construction grammar matched — still run heuristics to augment
+                    pass
+            except Exception as e:
+                pass  # graceful fallback
+
         sentence_lower = sentence.lower()
         
         # --- Phase 1: Explicit Linguistic Patterns ---

@@ -57,7 +57,23 @@ class NSCKConfig:
     min_rule_support: int = 5
     min_rule_confidence: float = 0.7
     min_success_rate: float = 0.6  # [AGI] Added for consistency
-    
+
+    # === V3 Feature Flags (all False by default — preserves existing behaviour) ===
+    enable_construction_grammar: bool = False
+    enable_frame_semantics: bool = False
+    enable_coreference: bool = False
+    enable_contextual_encoding: bool = False
+    enable_free_energy_beliefs: bool = False
+    enable_distributional_semantics: bool = False
+    enable_incremental_concept_refinement: bool = False
+    enable_dual_process: bool = False
+    system1_confidence_threshold: float = 0.75
+    enable_conceptual_blending: bool = False
+    enable_hnsw_index: bool = False
+    enable_homeostasis: bool = False
+    enable_stigmergy: bool = False
+    enable_auto_categories: bool = False
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -66,6 +82,41 @@ class NSCKConfig:
             learning_rate=float(os.getenv("NSCK_LR", "1e-3")),
             model_path=os.getenv("NSCK_MODEL_PATH", "snn_task_aware.pth"),
             persistence_db=os.getenv("NSCK_DB_PATH", "nsck_brain.db"),
+        )
+
+    @classmethod
+    def minimal(cls) -> "NSCKConfig":
+        """Minimal config: all V3 flags off (original behaviour preserved)."""
+        return cls()
+
+    @classmethod
+    def research(cls) -> "NSCKConfig":
+        """Research config: all V3 flags on for maximum capability exploration."""
+        return cls(
+            enable_construction_grammar=True,
+            enable_frame_semantics=True,
+            enable_coreference=True,
+            enable_contextual_encoding=True,
+            enable_free_energy_beliefs=True,
+            enable_distributional_semantics=True,
+            enable_incremental_concept_refinement=True,
+            enable_dual_process=True,
+            enable_conceptual_blending=True,
+            enable_hnsw_index=True,
+            enable_homeostasis=True,
+            enable_stigmergy=True,
+            enable_auto_categories=True,
+        )
+
+    @classmethod
+    def production(cls) -> "NSCKConfig":
+        """Production config: performance flags on, experimental flags off."""
+        return cls(
+            enable_dual_process=True,
+            enable_hnsw_index=True,
+            enable_homeostasis=True,
+            enable_stigmergy=True,
+            enable_incremental_concept_refinement=True,
         )
 
 

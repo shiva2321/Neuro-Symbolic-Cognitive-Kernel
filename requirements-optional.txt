@@ -1,0 +1,6 @@
+# Optional dependencies for enhanced NSCK features
+# Install with: pip install -r requirements-optional.txt
+
+# HNSW index for fast approximate nearest-neighbor search in SemanticMemory
+# Provides 10-100x speedup for large knowledge bases (>10K concepts)
+hnswlib>=0.7.0
