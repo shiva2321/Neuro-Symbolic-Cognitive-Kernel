@@ -366,9 +366,9 @@ class CognitiveEngine:
             causal_graph = CausalGraph()
         self.causal_graphs[task_tag] = causal_graph
         self.causal_reasoners[task_tag] = CausalReasoner(causal_graph)
-        # V4: update abductive reasoner with the most recently registered causal graph
-        if self.abductive_reasoner is not None:
-            self.abductive_reasoner.causal_graph = causal_graph
+        # V4: keep abductive reasoner's causal graph per task — no action needed;
+        # the abductive reasoner uses the task-specific graph passed at call time.
+        # We store a reference so the default task can be inferred if needed.
         try:
             self.task_brains[task_tag] = TaskBrain(task_tag)
         except Exception:
@@ -720,6 +720,10 @@ class CognitiveEngine:
         v4_abductive = None
         if self.abductive_reasoner is not None and winner_name in ("DEFAULT", "EXPLORATION"):
             try:
+                # Use task-specific causal graph so explanations stay domain-relevant
+                task_cg = self.causal_graphs.get(task_tag)
+                if task_cg is not None:
+                    self.abductive_reasoner.causal_graph = task_cg
                 abd_obs = active_preds[0] if active_preds else action
                 abd_result = self.abductive_reasoner.explain(abd_obs)
                 if abd_result.best:
@@ -934,8 +938,9 @@ class CognitiveEngine:
                     confidence=max(0.0, reward),
                 )
                 self.schema_inducer.add_episode(ep)
-                # Periodically run induction
-                if self.stats["episodes_recorded"] % 20 == 0:
+                # Periodically run induction only when new episodes have been added
+                # (schema_inducer._episode_count increments on add_episode)
+                if self.stats["episodes_recorded"] % 20 == 0 and self.schema_inducer._episode_count > 0:
                     self.schema_inducer.induce()
             except Exception:
                 pass

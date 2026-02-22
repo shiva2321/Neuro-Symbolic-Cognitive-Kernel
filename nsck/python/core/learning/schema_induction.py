@@ -55,6 +55,13 @@ import python.core.vsa.hypervec_shim as hypervec_rs
 
 logger = logging.getLogger("nsck.schema_induction")
 
+# Baseline similarity for text-only episodes that share the same relation.
+# Since episodes in a cluster are pre-grouped by relation, any two episodes
+# from the same relation bucket have at least this much in common.
+# Must exceed the default similarity_threshold (0.45) to allow same-relation
+# clustering even when filler words are completely different.
+_SAME_RELATION_BASELINE: float = 0.5
+
 
 # ---------------------------------------------------------------------------
 # Data-classes
@@ -340,8 +347,8 @@ class SchemaInducer:
                 pass
 
         # Fallback: token Jaccard over subject+object words, with a base
-        # "same-relation" bonus of 0.5 so that episodes already grouped by
-        # the same relation can cluster even when filler words differ.
+        # "same-relation" bonus so that episodes already grouped by the same
+        # relation can cluster even when filler words differ.
         words_a = set(a.subject.lower().split() + a.object.lower().split())
         words_b = set(b.subject.lower().split() + b.object.lower().split())
         if not words_a and not words_b:
@@ -349,8 +356,9 @@ class SchemaInducer:
         intersection = len(words_a & words_b)
         union = len(words_a | words_b)
         jaccard = intersection / union if union > 0 else 0.0
-        # Base 0.5 reflects same-relation membership; word overlap adds up to 1.0
-        return 0.5 + 0.5 * jaccard
+        # _SAME_RELATION_BASELINE reflects same-relation membership;
+        # word overlap adds up to 1.0.
+        return _SAME_RELATION_BASELINE + (1.0 - _SAME_RELATION_BASELINE) * jaccard
 
     def _schema_episode_similarity(
         self, schema: Schema, episode: Episode
@@ -365,8 +373,8 @@ class SchemaInducer:
                 pass
 
         # Fallback: slot match
-        # Base similarity = 0.5 (same relation is guaranteed by the caller;
-        # this represents "possibly the same schema with different fillers").
+        # Base similarity = _SAME_RELATION_BASELINE (same relation is guaranteed
+        # by the caller; this represents "possibly the same schema with different fillers").
         subj_match = (
             schema.subject_slot == episode.subject
             or schema.subject_slot.startswith("?")
@@ -379,7 +387,7 @@ class SchemaInducer:
             return 0.9
         if subj_match or obj_match:
             return 0.7
-        return 0.5  # same relation, different fillers — still a schema match
+        return _SAME_RELATION_BASELINE  # same relation, different fillers — still a schema match
 
     def _promote_cluster(self, relation: str, cluster: List[Episode]) -> Schema:
         """

@@ -278,7 +278,10 @@ class AbductiveReasoner:
 
         Stops when:
         - No causes found for ``current`` (root cause reached) → add chain
-          only if it has at least 2 nodes (root + at least one intermediate/effect).
+          only if it has at least 2 nodes (a root cause + the observation).
+          Single-node chains (the observation alone) are excluded because
+          they do not constitute an explanation — an explanation requires at
+          least one causal predecessor.
         - Max depth exceeded.
         - Cycle detected.
         """

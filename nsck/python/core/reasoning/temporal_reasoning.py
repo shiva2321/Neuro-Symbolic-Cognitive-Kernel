@@ -82,6 +82,10 @@ _CONVERSE: Dict[str, str] = {
 }
 
 # Linguistic markers → Allen relation
+# Note: 'when' is ambiguous (can mean simultaneously, in sequence, or
+# conditionally). We map it to 'overlaps' as the most common temporal sense,
+# but callers should use more specific markers ('before'/'after'/'during')
+# for unambiguous temporal facts.
 _MARKER_TO_RELATION: Dict[str, str] = {
     "before":   "before",
     "prior to": "before",

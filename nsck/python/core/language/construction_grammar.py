@@ -277,6 +277,9 @@ def _classify_word(word: str) -> str:
     # Morphological verb detection: -ed / -ing suffixes, but guard against
     # nouns ending in -ed/-ing (e.g. "speed", "king", "building" as noun).
     # Heuristic: length >= 5 to avoid false positives on short words.
+    # Known limitations: "iced", "oped" may be misclassified; "building" (noun)
+    # may be misclassified when used as subject. For higher accuracy, use an
+    # external POS tagger (e.g. NLTK averaged_perceptron_tagger) when available.
     if len(w) >= 5 and (w.endswith("ing") or w.endswith("ize") or w.endswith("ise") or w.endswith("ify")):
         return "VERB"
     if len(w) >= 5 and w.endswith("ed") and not w.endswith("speed"):

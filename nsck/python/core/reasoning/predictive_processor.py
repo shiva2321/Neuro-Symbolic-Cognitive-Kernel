@@ -180,6 +180,10 @@ class PredictiveProcessor:
         predicted_concept, prior_hv = self._generate_prior(context)
 
         # 2. Encode observation as HV
+        # NOTE: hash-seeded HVs produce random similarity ≈ 0.5 for unrelated
+        # concepts — this is a known limitation of the hash-based VSA codebook.
+        # Use enable_distributional_semantics=True with a corpus to obtain
+        # genuine semantic similarity (see DEEP_RESEARCH_REPORT.md §III).
         obs_hv = hypervec_rs.HyperVector(hash(observation) & 0x7FFFFFFF)
 
         # 3. Compute prediction error (PE) = 1 − sim(prior, obs)
