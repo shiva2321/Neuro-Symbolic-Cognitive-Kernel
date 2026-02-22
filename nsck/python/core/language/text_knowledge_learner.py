@@ -134,6 +134,8 @@ class TextKnowledgeLearner:
         self._construction_matcher = None
         self._frame_library = None
         self._entity_register = None
+        self._distrib_codebook = None
+        self._config = config
         if config is not None:
             if getattr(config, 'enable_construction_grammar', False):
                 try:
@@ -153,6 +155,12 @@ class TextKnowledgeLearner:
                     self._entity_register = EntityRegister()
                 except Exception as e:
                     print(f"[TextLearner] Coreference unavailable: {e}")
+            if getattr(config, 'enable_distributional_semantics', False):
+                try:
+                    from python.core.language.distributional_semantics import DistributionalCodebook
+                    self._distrib_codebook = DistributionalCodebook()
+                except Exception as e:
+                    print(f"[TextLearner] Distributional semantics unavailable: {e}")
         
         print("[TextLearner] Initialized with VSA-based cognitive architecture + semantic folding")
     
@@ -295,16 +303,22 @@ class TextKnowledgeLearner:
         # V3: Coreference resolution — scan for pronouns and resolve before relation extraction
         if self._entity_register is not None:
             words = self._tokenize(sentence)
+            resolved_entities: List[str] = []
             for word in words:
                 if word.lower() in _COREFERENCE_PRONOUNS:
                     mention = self._entity_register.resolve(word.lower())
                     if mention:
                         resolved = mention.name.capitalize()
-                        if resolved not in concepts:
-                            concepts.append(resolved)
-            # Register new named entities (capitalized words) in the register
+                        resolved_entities.append(resolved)
+            # Remove pronoun forms from concepts (they are sentence-initial capitals, not entities)
+            concepts = [c for c in concepts if c.lower() not in _COREFERENCE_PRONOUNS]
+            # Add resolved entities
+            for resolved in resolved_entities:
+                if resolved not in concepts:
+                    concepts.append(resolved)
+            # Register new named entities (capitalized proper nouns, excluding pronouns)
             for concept in concepts:
-                if concept[0].isupper():
+                if concept[0].isupper() and concept.lower() not in _COREFERENCE_PRONOUNS:
                     c_hv = hypervec_rs.HyperVector(abs(hash(concept)) % (2**32))
                     self._entity_register.register(concept, c_hv, {})
         
@@ -393,6 +407,15 @@ class TextKnowledgeLearner:
         
         # Deduplicate matches
         relations = list(set(relations))
+
+        # V3: If coreference is active, strip pronoun-role fillers from relations
+        # (they appear as subjects/objects from construction grammar matches)
+        if self._entity_register is not None:
+            relations = [
+                (s, r, o) for s, r, o in relations
+                if s.lower() not in _COREFERENCE_PRONOUNS
+                and o.lower() not in _COREFERENCE_PRONOUNS
+            ]
         
         # Store relations in semantic memory and causal graph
         current_time = time.time()
@@ -469,22 +492,39 @@ class TextKnowledgeLearner:
         """
         Encode sentence to hypervector using LinguaCortex.
         This uses Semantic Folding (SDR/VSA), NOT embeddings.
+
+        V3 enhancements (gated by config flags):
+        - ``enable_contextual_encoding``: uses positional permutation encoding
+        - ``enable_distributional_semantics``: uses distributional codebook HVs
         """
         # Learn text in lingua cortex
         self.lingua.learn_text_snippet(sentence)
         
         # Get semantic fingerprint (SDR)
         words = self._tokenize(sentence)
-        
+        words_clean = [w.lower().strip() for w in words if len(w.strip()) >= 2]
+
+        # V3: Feed words to distributional codebook for online learning
+        if self._distrib_codebook is not None:
+            self._distrib_codebook.build_from_corpus([words_clean])
+
+        use_contextual = (self._config is not None and
+                          getattr(self._config, 'enable_contextual_encoding', False))
+
         # Bundle word hypervectors
         sentence_hv = None
-        for word in words:
-            word = word.lower().strip()
-            if len(word) < 2:
-                continue
-            
-            # Get or create word hypervector
-            word_hv = hypervec_rs.HyperVector(hash(word) % (2**32))
+        for idx, word in enumerate(words_clean):
+            # Choose HV source: distributional > contextual > hash
+            if self._distrib_codebook is not None:
+                word_hv = self._distrib_codebook.get_hv(word)
+                if word_hv is None:
+                    word_hv = hypervec_rs.HyperVector(abs(hash(word)) % (2**32))
+            elif use_contextual:
+                prev_w = words_clean[idx - 1] if idx > 0 else None
+                next_w = words_clean[idx + 1] if idx < len(words_clean) - 1 else None
+                word_hv = self.encode_word_in_context(word, prev_w, next_w)
+            else:
+                word_hv = hypervec_rs.HyperVector(hash(word) % (2**32))
             
             if sentence_hv is None:
                 sentence_hv = word_hv

@@ -21,12 +21,25 @@ COMMON_VERBS = {
     "let", "lets", "begin", "begins", "show", "shows",
     "hear", "hears", "play", "plays", "move", "moves",
     "pay", "pays", "set", "sets", "change", "changes",
+    # Commerce / transaction verbs
+    "sell", "sells", "sold", "buy", "buys", "bought",
+    "trade", "trades", "trade", "hire", "hires",
+    "build", "builds", "built", "create", "creates", "created",
+    "send", "sends", "sent", "receive", "receives",
     # Domain-specific relation verbs
     "causes", "cause", "caused",
     "contains", "contain",
-    "produce", "produces",
-    "require", "requires",
-    "enable", "enables",
+    "produce", "produces", "produced",
+    "require", "requires", "required",
+    "enable", "enables", "enabled",
+    "prevent", "prevents", "prevented",
+    "support", "supports", "include", "includes",
+    "follow", "follows", "represent", "represents",
+    "perform", "performs", "describe", "describes",
+    "discover", "discovers", "discovered",
+    "develop", "develops", "developed",
+    "define", "defines", "defined",
+    "involve", "involves", "allow", "allows",
 }
 
 @dataclass
@@ -74,6 +87,7 @@ class ConstructionMatcher:
         return [
             Construction("SVO_active", ["NOUN","VERB","NOUN"], {"subject":0,"verb":1,"object":2}, "relates_to", 0.8),
             Construction("copular_is", ["NOUN","is","NOUN"], {"subject":0,"attribute":2}, "is_a", 0.95),
+            Construction("copular_is_a", ["NOUN","is","ART","NOUN"], {"subject":0,"attribute":3}, "is_a", 0.95),
             Construction("copular_is_adj", ["NOUN","is","ADJ"], {"subject":0,"quality":2}, "has_property", 0.9),
             Construction("possessive_has", ["NOUN","has","NOUN"], {"owner":0,"owned":2}, "has_property", 0.95),
             Construction("causative", ["NOUN","causes","NOUN"], {"cause":0,"effect":2}, "causes", 0.95),

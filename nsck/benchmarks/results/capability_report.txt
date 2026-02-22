@@ -4,16 +4,22 @@ NSCK V3 Benchmark Report
 [NLU]
   benchmark: nlu
   sentences: 20
-  total_relations_learned: 38
-  avg_relations_per_sentence: 1.9
-  total_elapsed_s: 0.1885
-  avg_elapsed_s: 0.009424
+  total_relations_learned: 43
+  avg_relations_per_sentence: 2.15
+  total_elapsed_s: 0.194
+  avg_elapsed_s: 0.009701
 
 [MEMORY]
   benchmark: memory
 
 [SNN]
-  ERROR: SNNPerceptionModule.__init__() missing 1 required positional argument: 'input_dim'
+  benchmark: snn
+  n_trials: 100
+  avg_latency_ms: 45.918
+  p50_latency_ms: 45.955
+  p95_latency_ms: 52.613
+  avg_spike_count: None
+  spike_count_std: None
 
 [DECISION]
   benchmark: decision
@@ -21,6 +27,6 @@ NSCK V3 Benchmark Report
   avg_latency_ms: 0.001
   p50_latency_ms: 0.001
   p95_latency_ms: 0.001
-  p99_latency_ms: 0.003
+  p99_latency_ms: 0.013
   min_latency_ms: 0.0
-  max_latency_ms: 0.003
+  max_latency_ms: 0.013

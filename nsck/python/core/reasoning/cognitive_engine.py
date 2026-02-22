@@ -524,12 +524,19 @@ class CognitiveEngine:
         # --- V3: Dual Process ---
         # When enabled, try System 1 (fast) coalitions first.
         # Only proceed to System 2 (slow) if System 1 confidence is low.
+        #
+        # NOTE: Coalition.activation sums several components and can exceed 1.0
+        # (base_salience + relevance + affect_match + sender_confidence*0.5).
+        # We normalize to [0,1] before comparing against the threshold so that
+        # threshold=0.75 means "top 25% of possible activation" consistently.
+        _ACTIVATION_NORM = 2.0  # theoretical max: 1.0+1.0+0.0+0.5*1.0 = 2.5, use 2.0 for practical range
         system_used: Optional[str] = None
         system_1_confidence: Optional[float] = None
         if self.config.enable_dual_process and not fast_mode:
             # System 1: already-built coalitions (Q_LEARNING, RULES, EXPLORATION)
             s1_winner = self.global_workspace.compete(coalitions)
-            s1_confidence = s1_winner.activation if s1_winner else 0.0
+            raw_activation = s1_winner.activation if s1_winner else 0.0
+            s1_confidence = min(1.0, raw_activation / _ACTIVATION_NORM)
             system_1_confidence = s1_confidence
             if s1_confidence >= self.config.system1_confidence_threshold:
                 # Use System 1 directly — skip expensive memory+planner
