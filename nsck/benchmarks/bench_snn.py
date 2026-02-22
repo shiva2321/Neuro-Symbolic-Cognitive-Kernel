@@ -43,7 +43,7 @@ def run(n_trials: int = 100) -> Dict[str, Any]:
         "p50_latency_ms": round(latencies[n // 2] * 1000, 3),
         "p95_latency_ms": round(latencies[int(n * 0.95)] * 1000, 3),
         "avg_spike_count": round(sum(spike_counts) / len(spike_counts), 2) if spike_counts else None,
-        "spike_count_std": round(float(np.std(spike_counts)), 3) if len(spike_counts) > 0 else None,
+        "spike_count_std": round(float(np.std(spike_counts)), 3) if spike_counts else None,
     }
 
     os.makedirs(os.path.join(_HERE, "results"), exist_ok=True)

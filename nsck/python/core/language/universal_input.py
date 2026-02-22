@@ -38,6 +38,7 @@ import python.core.vsa.hypervec_shim as hv
 DIMENSION = 10240
 DEFAULT_THERMOMETER_BINS = 100
 MAX_CODEBOOK_SIZE = 10_000
+MAX_INPUT_CHARS = 50_000  # V3: default max characters for text inputs
 
 
 # ---------------------------------------------------------------------------
@@ -784,16 +785,15 @@ class UniversalInput:
         text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
 
         # V3: Truncate very long inputs
-        _MAX_INPUT_CHARS = 50000
-        if len(text) > _MAX_INPUT_CHARS:
+        if len(text) > MAX_INPUT_CHARS:
             import warnings
             warnings.warn(
                 f"[UniversalInput] Input truncated from {len(text)} to "
-                f"{_MAX_INPUT_CHARS} characters.",
+                f"{MAX_INPUT_CHARS} characters.",
                 RuntimeWarning,
                 stacklevel=2,
             )
-            text = text[:_MAX_INPUT_CHARS]
+            text = text[:MAX_INPUT_CHARS]
 
         # V3: Empty input guard
         if not text.strip():
@@ -960,7 +960,7 @@ class UniversalInput:
         self,
         data: Any,
         domain: str = "default",
-        max_chars: int = 50000,
+        max_chars: int = MAX_INPUT_CHARS,
     ) -> Dict:
         """Process arbitrary input with full V3 robustness guards.
 

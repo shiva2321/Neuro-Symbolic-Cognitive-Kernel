@@ -138,11 +138,13 @@ class SemanticMemory:
                 hv = hv.bundle(bound)
 
         # V3: Incremental concept refinement — if concept exists, blend HVs
+        # In VSA, weighted bundling is achieved by including a concept
+        # multiple times in a bundle (90% old = 9 copies, 10% new = 1 copy).
         if (concept_name in self.concept_hvs and
                 self._config is not None and
                 getattr(self._config, 'enable_incremental_concept_refinement', False)):
             existing_hv = self.concept_hvs[concept_name]
-            # 90% old, 10% new: bundle 9 copies of old + 1 copy of new
+            # 90% old, 10% new via majority-vote bundling (9 old : 1 new)
             blended = existing_hv
             for _ in range(9):
                 blended = blended.bundle(existing_hv)
