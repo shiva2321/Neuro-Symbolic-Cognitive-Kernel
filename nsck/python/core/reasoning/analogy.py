@@ -607,3 +607,112 @@ class AnalogyEngine:
             name: dict(ac.grounding_predicates)
             for name, ac in self.abstract_concepts.items()
         }
+
+    # ----------------------------------------------------------------
+    # V3: Conceptual Blending
+    # ----------------------------------------------------------------
+
+    def blend(
+        self,
+        domain_a_concepts: Dict[str, Any],
+        domain_b_concepts: Dict[str, Any],
+        mapping: Optional[Dict[str, str]] = None,
+    ) -> Dict:
+        """Create a conceptual blend from two domains.
+
+        Algorithm:
+        1. Find shared structure (generic space) from mapping.
+        2. Project unique elements from both domains.
+        3. Bundle shared + unique into blended HV.
+        4. Return blend dict with emergent property metadata.
+
+        Parameters
+        ----------
+        domain_a_concepts : {name: HyperVector} for domain A
+        domain_b_concepts : {name: HyperVector} for domain B
+        mapping : optional explicit {a_concept: b_concept} correspondences
+
+        Returns
+        -------
+        dict with keys: shared, unique_a, unique_b, blend_hv, emergent
+        """
+        mapping = mapping or {}
+
+        # Generic space: concepts mapped between domains
+        shared: List[str] = []
+        for ca, cb in mapping.items():
+            if ca in domain_a_concepts and cb in domain_b_concepts:
+                shared.append(f"{ca}↔{cb}")
+
+        # Unique projections
+        mapped_a = set(mapping.keys())
+        mapped_b = set(mapping.values())
+        unique_a = [c for c in domain_a_concepts if c not in mapped_a]
+        unique_b = [c for c in domain_b_concepts if c not in mapped_b]
+
+        # Build blended HV by bundling all HVs together
+        blend_hv = None
+        all_hvs = (
+            list(domain_a_concepts.values()) + list(domain_b_concepts.values())
+        )
+        for hv in all_hvs:
+            if hasattr(hv, 'bundle'):
+                blend_hv = hv if blend_hv is None else blend_hv.bundle(hv)
+
+        # Emergent properties: concepts that appear in neither source alone
+        emergent: List[str] = []
+        if shared and unique_a and unique_b:
+            emergent.append(f"blend({unique_a[0]}, {unique_b[0]})")
+
+        return {
+            "shared": shared,
+            "unique_a": unique_a,
+            "unique_b": unique_b,
+            "blend_hv": blend_hv,
+            "emergent": emergent,
+            "n_shared": len(shared),
+            "n_unique_a": len(unique_a),
+            "n_unique_b": len(unique_b),
+        }
+
+    # ----------------------------------------------------------------
+    # V3: Functor Quality Scoring
+    # ----------------------------------------------------------------
+
+    def functor_quality(
+        self,
+        mapping: Dict[str, str],
+        source_graph: Dict[str, List[str]],
+        target_graph: Dict[str, List[str]],
+    ) -> float:
+        """Measure how well an analogy preserves relational structure.
+
+        For each pair of relations (a→b, b→c) in source, check if the
+        mapped target relations compose (f(a)→f(b), f(b)→f(c)).
+
+        Score = fraction of compositions preserved (0.0–1.0).
+        Higher = better structural analogy.
+
+        Parameters
+        ----------
+        mapping : {source_concept: target_concept}
+        source_graph : {concept: [related_concepts]} adjacency
+        target_graph : {concept: [related_concepts]} adjacency
+        """
+        total = 0
+        preserved = 0
+
+        for a, b in [(k, v) for k, vs in source_graph.items() for v in vs]:
+            # For each b that has outgoing edges in source
+            for c in source_graph.get(b, []):
+                total += 1
+                # Check if mapping preserves composition
+                fa = mapping.get(a)
+                fb = mapping.get(b)
+                fc = mapping.get(c)
+                if fa and fb and fc:
+                    # Check fa→fb and fb→fc in target
+                    if fb in target_graph.get(fa, []) and fc in target_graph.get(fb, []):
+                        preserved += 1
+
+        return preserved / total if total > 0 else 1.0

@@ -767,8 +767,37 @@ class UniversalInput:
         5. **Phrase-structure HV** — compositional parse tree encoded with
            VSA role-filler binding (Subject ⊗ NP, Predicate ⊗ VP, etc.).
         6. Combine all four via segment concatenation (50/15/15/20).
+
+        V3 Robust Input Handling
+        -------------------------
+        - Empty input → returns zero-confidence HV (seed=0), does not crash.
+        - Very long input → truncated at _MAX_INPUT_CHARS (50000) with warning.
+        - Control characters → stripped before processing.
         """
         import re
+
+        # V3: Guard against None
+        if text is None:
+            return hv.HyperVector(0)
+
+        # V3: Strip control characters
+        text = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", text)
+
+        # V3: Truncate very long inputs
+        _MAX_INPUT_CHARS = 50000
+        if len(text) > _MAX_INPUT_CHARS:
+            import warnings
+            warnings.warn(
+                f"[UniversalInput] Input truncated from {len(text)} to "
+                f"{_MAX_INPUT_CHARS} characters.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            text = text[:_MAX_INPUT_CHARS]
+
+        # V3: Empty input guard
+        if not text.strip():
+            return hv.HyperVector(0)
 
         # --- normalise ----
         clean = re.sub(r"[^a-z0-9 ]", "", text.lower()).strip()
@@ -925,6 +954,45 @@ class UniversalInput:
         """Return grounding statistics for dashboard display."""
         self._stats["codebook_size"] = len(self._codebook)
         return dict(self._stats)
+
+    # V3: Convenience method with robust input handling
+    def process(
+        self,
+        data: Any,
+        domain: str = "default",
+        max_chars: int = 50000,
+    ) -> Dict:
+        """Process arbitrary input with full V3 robustness guards.
+
+        Returns a dict with keys: hv (HyperVector), confidence (float),
+        trace (dict with explanation fields).
+        """
+        import re
+        trace: Dict = {"domain": domain}
+        confidence = 1.0
+
+        # Empty input guard
+        if data is None or (isinstance(data, str) and not data.strip()):
+            trace["warning"] = "empty_input"
+            return {"hv": hv.HyperVector(0), "confidence": 0.0, "trace": trace}
+
+        # String-specific processing
+        if isinstance(data, str):
+            # Strip control characters
+            cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", data)
+            if cleaned != data:
+                trace["control_chars_stripped"] = True
+            # Truncate
+            if len(cleaned) > max_chars:
+                cleaned = cleaned[:max_chars]
+                trace["truncated"] = True
+                trace["original_length"] = len(data)
+                confidence *= 0.9
+            data = cleaned
+
+        result_hv = self.ground(data, domain=domain)
+        trace["type"] = type(data).__name__
+        return {"hv": result_hv, "confidence": confidence, "trace": trace}
 
     # ------------------------------------------------------------------
     # Private helpers

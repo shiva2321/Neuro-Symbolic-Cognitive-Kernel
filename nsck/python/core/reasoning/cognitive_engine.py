@@ -49,6 +49,13 @@ from python.core.language.universal_input import UniversalInput
 from python.core.language.language_module import LanguageModule
 from python.core.language.dialogue_manager import DialogueManager
 
+# V3 optional modules — imported lazily below but declared here for typing
+try:
+    from python.core.memory.homeostasis import MemoryHomeostasis
+    _HOMEOSTASIS_AVAILABLE = True
+except Exception:
+    _HOMEOSTASIS_AVAILABLE = False
+
 logger = logging.getLogger("nsck.cognitive_engine")
 
 
@@ -77,6 +84,14 @@ class CognitiveState:
     exploration_mode: bool = False
     explanation: Optional[Explanation] = None
     trace: Dict[str, Any] = field(default_factory=dict)
+    # V3 glass-box trace fields
+    construction_match: Optional[Dict] = None
+    frame_fill: Optional[Dict] = None
+    coreference_chain: Optional[List[Dict]] = None
+    belief_revision: Optional[Dict] = None
+    system_used: Optional[str] = None
+    system_1_confidence: Optional[float] = None
+    homeostasis_actions: Optional[List[str]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -190,6 +205,14 @@ class CognitiveEngine:
         }
         self.current_state = CognitiveState(task_tag="unknown")
         self.msg_broadcaster = None
+
+        # --- V3: Homeostasis ---
+        self.homeostasis = None
+        if _HOMEOSTASIS_AVAILABLE and self.config.enable_homeostasis:
+            self.homeostasis = MemoryHomeostasis()
+
+        # --- V3: Stigmergy path tracking ---
+        self._last_reasoning_path: List[str] = []
 
         # --- Gap 1: Wire GWT broadcast subscribers ---
         self._register_gwt_subscribers()
@@ -498,9 +521,39 @@ class CognitiveEngine:
                     sender_confidence=min(0.9, 0.3 + visit_count * 0.1),
                 ))
 
+        # --- V3: Dual Process ---
+        # When enabled, try System 1 (fast) coalitions first.
+        # Only proceed to System 2 (slow) if System 1 confidence is low.
+        system_used: Optional[str] = None
+        system_1_confidence: Optional[float] = None
+        if self.config.enable_dual_process and not fast_mode:
+            # System 1: already-built coalitions (Q_LEARNING, RULES, EXPLORATION)
+            s1_winner = self.global_workspace.compete(coalitions)
+            s1_confidence = s1_winner.activation if s1_winner else 0.0
+            system_1_confidence = s1_confidence
+            if s1_confidence >= self.config.system1_confidence_threshold:
+                # Use System 1 directly — skip expensive memory+planner
+                system_used = "system_1"
+                winner_coalition = s1_winner
+                if winner_coalition:
+                    winner_coalition = self._safety_check(
+                        winner_coalition, coalitions, state, task_tag
+                    )
+                # Skip to action determination
+                goto_action_determination = True
+            else:
+                # System 2: add slow coalitions
+                system_used = "system_2"
+                goto_action_determination = False
+        else:
+            goto_action_determination = False
+
+        if not goto_action_determination:
+            winner_coalition = None  # will be set below
+
         # D. [Gap 2] MEMORY coalition — episodic recall for case-based reasoning
-        # Skip in fast_mode to reduce GWT latency (kNN recall is expensive)
-        if not fast_mode:
+        # Skip in fast_mode or when System 1 succeeded
+        if not fast_mode and not goto_action_determination:
             memory_coalition = self._build_memory_coalition(
                 situation_hv, task_tag, active_preds
             )
@@ -508,25 +561,30 @@ class CognitiveEngine:
                 coalitions.append(memory_coalition)
 
         # E. [Gap 4] PLANNER coalition — goal-directed multi-step planning
-        # Skip in fast_mode to reduce GWT latency (A* planning is expensive)
-        if not fast_mode:
+        # Skip in fast_mode or when System 1 succeeded
+        if not fast_mode and not goto_action_determination:
             planner_coalition = self._build_planner_coalition(
                 active_preds, task_tag
             )
             if planner_coalition:
                 coalitions.append(planner_coalition)
 
-        # 5. GWT competition
-        winner_coalition = self.global_workspace.compete(coalitions)
+        # 5. GWT competition (only if System 1 didn't already win)
+        if not goto_action_determination:
+            winner_coalition = self.global_workspace.compete(coalitions)
 
-        # 5b. [Gap 5] Safety gate veto — check winning action before committing
-        if winner_coalition:
-            winner_coalition = self._safety_check(
-                winner_coalition, coalitions, state, task_tag
-            )
+            # 5b. [Gap 5] Safety gate veto — check winning action before committing
+            if winner_coalition:
+                winner_coalition = self._safety_check(
+                    winner_coalition, coalitions, state, task_tag
+                )
 
         # 6. Determine final action
         trace: Dict[str, Any] = {"proposals": len(coalitions)}
+        if system_used:
+            trace["system_used"] = system_used
+        if system_1_confidence is not None:
+            trace["system_1_confidence"] = system_1_confidence
 
         if winner_coalition:
             action = winner_coalition.content
@@ -582,6 +640,8 @@ class CognitiveEngine:
             exploration_mode=explore_decision.should_explore,
             explanation=explanation,
             trace=trace,
+            system_used=system_used,
+            system_1_confidence=system_1_confidence,
         )
         
         # Track state-action for Q-learning updates
@@ -660,6 +720,11 @@ class CognitiveEngine:
             self.stats['reward_count'] = 0
         self.stats['total_reward'] += reward
         self.stats['reward_count'] += 1
+
+        # V3: Stigmergy — mark reasoning path on positive reward
+        if reward > 0 and self.config.enable_stigmergy:
+            if self._last_reasoning_path and hasattr(self.semantic_memory, 'mark_path'):
+                self.semantic_memory.mark_path(self._last_reasoning_path, reward)
 
     # ------------------------------------------------------------------
     # Learning
@@ -1269,6 +1334,22 @@ class CognitiveEngine:
 
         self.stats["sleep_cycles"] += 1
         logger.info("[SLEEP] Consolidation complete (%d tasks)", len(tasks))
+
+        # V3: Homeostasis regulation after consolidation
+        if self.config.enable_homeostasis and self.homeostasis is not None:
+            actions = self.homeostasis.regulate(self.semantic_memory)
+            if actions:
+                logger.info("[SLEEP] Homeostasis: %s", actions)
+            # Auto-categorization
+            if self.config.enable_auto_categories:
+                cat_actions = self.homeostasis._auto_categorize(self.semantic_memory)
+                if cat_actions:
+                    logger.info("[SLEEP] Auto-categories: %s", cat_actions)
+
+        # V3: Stigmergy evaporation during sleep
+        if self.config.enable_stigmergy:
+            if hasattr(self.semantic_memory, 'evaporate_stigmergy'):
+                self.semantic_memory.evaporate_stigmergy()
 
     def _consolidate_semantic(self, task_tag: str):
         """Extract repeating patterns from episodes into semantic memory.

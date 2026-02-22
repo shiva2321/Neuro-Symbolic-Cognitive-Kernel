@@ -5,12 +5,23 @@ Structured knowledge base of concepts and relations.
 Implements abstracted knowledge (Schemas) and spreading activation.
 """
 
+import logging
 import networkx as nx
 import numpy as np
 import pickle
 import os
 from typing import Dict, List, Any, Optional, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
+
+# V3: optional HNSW index
+try:
+    import hnswlib as _hnswlib
+    _HNSWLIB_AVAILABLE = True
+except ImportError:
+    _hnswlib = None
+    _HNSWLIB_AVAILABLE = False
+
+logger = logging.getLogger("nsck.semantic_memory")
 
 class SemanticMemory:
     """
@@ -35,7 +46,9 @@ class SemanticMemory:
         "semantically_related": 0.35,  # Weakest — co-occurrence based
     }
     
-    def __init__(self, relation_weights: Optional[Dict[str, float]] = None, use_rust: bool = True):
+    def __init__(self, relation_weights: Optional[Dict[str, float]] = None, use_rust: bool = True,
+                 config=None):
+        self._config = config
         # Try to use Rust backend if available and requested
         self._rust_backend = None
         if use_rust and hypervec_rs.SemanticMemoryConcurrent is not None:
@@ -61,11 +74,44 @@ class SemanticMemory:
         self.relation_weights: Dict[str, float] = dict(self.DEFAULT_RELATION_WEIGHTS)
         if relation_weights:
             self.relation_weights.update(relation_weights)
-    
+
+        # V3: Stigmergy — edge-level pheromone strengths
+        self._stigmergy: Dict[Tuple[str, str], float] = {}
+
+        # V3: HNSW approximate nearest-neighbour index
+        self._hnsw_index = None
+        self._hnsw_id_to_concept: List[str] = []
+        self._hnsw_dim: int = 0
+        self._hnsw_enabled: bool = False
+        if _HNSWLIB_AVAILABLE and config is not None and getattr(config, 'enable_hnsw_index', False):
+            self._hnsw_enabled = True
+            logger.info("[SEMANTIC] HNSW index enabled (hnswlib available)")
+        elif getattr(config, 'enable_hnsw_index', False) and not _HNSWLIB_AVAILABLE:
+            logger.warning("[SEMANTIC] enable_hnsw_index=True but hnswlib not installed; "
+                           "falling back to linear scan. Install with: pip install hnswlib")
+
+    def _init_hnsw(self, dim: int):
+        """Lazily initialise the HNSW index once the HV dimension is known."""
+        if not self._hnsw_enabled or _hnswlib is None:
+            return
+        try:
+            idx = _hnswlib.Index(space='cosine', dim=dim)
+            idx.init_index(max_elements=100_000, ef_construction=200, M=16)
+            idx.set_ef(50)
+            self._hnsw_index = idx
+            self._hnsw_dim = dim
+            self._hnsw_id_to_concept = []
+        except Exception as e:
+            logger.warning("[SEMANTIC] HNSW init failed: %s; falling back to linear scan", e)
+            self._hnsw_enabled = False
+
     def reset(self):
         """Clear all semantic knowledge and re-initialize."""
         self.concept_graph = nx.DiGraph()
         self.concept_hvs = {}
+        self._stigmergy = {}
+        self._hnsw_index = None
+        self._hnsw_id_to_concept = []
         print("[SEMANTIC] Memory reset complete.")
     
     def add_concept(self, concept_name: str, properties: Dict[str, Any], hv_override: Optional[hypervec_rs.HyperVector] = None):
@@ -90,6 +136,18 @@ class SemanticMemory:
                 # Role-filler binding: XOR the property role with value, then bundle into concept
                 bound = prop_hv.xor(value_hv)
                 hv = hv.bundle(bound)
+
+        # V3: Incremental concept refinement — if concept exists, blend HVs
+        if (concept_name in self.concept_hvs and
+                self._config is not None and
+                getattr(self._config, 'enable_incremental_concept_refinement', False)):
+            existing_hv = self.concept_hvs[concept_name]
+            # 90% old, 10% new: bundle 9 copies of old + 1 copy of new
+            blended = existing_hv
+            for _ in range(9):
+                blended = blended.bundle(existing_hv)
+            blended = blended.bundle(hv)
+            hv = blended
         
         # Store in both backends
         self.concept_hvs[concept_name] = hv
@@ -100,6 +158,20 @@ class SemanticMemory:
                 print(f"[WARNING] Rust backend add_concept failed: {e}")
         
         self.concept_graph.add_node(concept_name, **properties)
+
+        # V3: Insert into HNSW index if enabled
+        if self._hnsw_enabled:
+            try:
+                bits = np.asarray(hv.bits, dtype=np.float32)
+                dim = len(bits)
+                if self._hnsw_index is None:
+                    self._init_hnsw(dim)
+                if self._hnsw_index is not None:
+                    idx = len(self._hnsw_id_to_concept)
+                    self._hnsw_id_to_concept.append(concept_name)
+                    self._hnsw_index.add_items(bits.reshape(1, -1), [idx])
+            except Exception as e:
+                logger.debug("[SEMANTIC] HNSW add failed: %s", e)
     
     def get_concept(self, concept_name: str) -> Optional[hypervec_rs.HyperVector]:
         """Retrieve the hypervector for a given concept."""
@@ -129,9 +201,24 @@ class SemanticMemory:
     def query(self, query_hv: hypervec_rs.HyperVector, k: int = 5) -> List[Tuple[str, float]]:
         """
         Find concepts most similar to query HV.
-        Uses Rust parallel search when available (10-100x faster), falls back to Python.
+        Uses HNSW when available, then Rust parallel search, then Python fallback.
         """
-        # Try Rust backend first
+        # V3: HNSW approximate nearest-neighbour
+        if self._hnsw_enabled and self._hnsw_index is not None and self._hnsw_id_to_concept:
+            try:
+                bits = np.asarray(query_hv.bits, dtype=np.float32).reshape(1, -1)
+                n_results = min(k, len(self._hnsw_id_to_concept))
+                labels, distances = self._hnsw_index.knn_query(bits, k=n_results)
+                results = []
+                for label, dist in zip(labels[0], distances[0]):
+                    concept = self._hnsw_id_to_concept[label]
+                    sim = 1.0 - float(dist)  # cosine distance → similarity
+                    results.append((concept, sim))
+                return results
+            except Exception as e:
+                logger.debug("[SEMANTIC] HNSW query failed: %s; falling back", e)
+
+        # Try Rust backend
         if self._rust_backend is not None and hasattr(self._rust_backend, 'parallel_semantic_search'):
             try:
                 return self._rust_backend.parallel_semantic_search(query_hv, k)
@@ -141,11 +228,9 @@ class SemanticMemory:
         # Python fallback
         similarities = []
         for concept_name, concept_hv in self.concept_hvs.items():
-            # Use robust cosine similarity instead of legacy Hamming
             sim = query_hv.cosine_similarity(concept_hv) if hasattr(query_hv, 'cosine_similarity') else query_hv.similarity(concept_hv)
             similarities.append((concept_name, sim))
         
-        # Return top-k most similar
         similarities.sort(key=lambda x: x[1], reverse=True)
         return similarities[:k]
     
@@ -156,34 +241,60 @@ class SemanticMemory:
         Propagation strength is modulated by relation type weights,
         so ``is_a`` edges (0.9) carry activation more strongly than
         ``similar_to`` edges (0.4).
+
+        When stigmergy is present, edge weights are additionally boosted
+        by their pheromone strength (V3 feature).
         
         Returns activation levels for nodes.
         """
         activation = {c: 1.0 for c in start_concepts if c in self.concept_graph}
         
-        # Safety cap: only propagate from the top-N most activated nodes
-        # each step to prevent exponential blow-up on large graphs.
         _MAX_FRONTIER = 200
+        _stigmergy_boost = bool(self._stigmergy)
         
         for _ in range(steps):
             new_activation = activation.copy()
 
-            # Only spread from the highest-activated nodes to bound work
             frontier = sorted(
                 ((c, a) for c, a in activation.items() if a >= 0.01),
                 key=lambda x: x[1], reverse=True)[:_MAX_FRONTIER]
 
             for concept, act in frontier:
-                # Spread to neighbors with relation-weighted strength
                 for _, neighbor, data in self.concept_graph.out_edges(concept, data=True):
                     rel = data.get("relation", "similar_to")
                     edge_weight = self.relation_weights.get(rel, 0.3)
+                    # V3: boost by stigmergy pheromone if present
+                    if _stigmergy_boost:
+                        stig = self._stigmergy.get((concept, neighbor), 0.0)
+                        edge_weight = edge_weight * (1.0 + stig)
                     spread_val = act * decay * edge_weight
                     new_activation[neighbor] = new_activation.get(neighbor, 0.0) + spread_val
             
             activation = new_activation
             
         return activation
+
+    # V3: Stigmergy methods
+
+    def mark_path(self, path: List[str], reward: float = 1.0):
+        """Increment stigmergy pheromone on consecutive edges in path."""
+        for i in range(len(path) - 1):
+            key = (path[i], path[i + 1])
+            self._stigmergy[key] = self._stigmergy.get(key, 0.0) + reward
+
+    def evaporate_stigmergy(self, decay_rate: float = 0.99):
+        """Decay all stigmergy values (call during sleep)."""
+        keys_to_remove = []
+        for key in list(self._stigmergy):
+            self._stigmergy[key] *= decay_rate
+            if self._stigmergy[key] < 1e-6:
+                keys_to_remove.append(key)
+        for key in keys_to_remove:
+            del self._stigmergy[key]
+
+    def get_stigmergy(self, concept1: str, concept2: str) -> float:
+        """Get stigmergy strength for an edge."""
+        return self._stigmergy.get((concept1, concept2), 0.0)
     
     def get_inherited_properties(self, concept: str) -> Dict[str, Any]:
         """
