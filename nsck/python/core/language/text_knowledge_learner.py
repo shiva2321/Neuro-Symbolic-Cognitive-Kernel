@@ -705,8 +705,9 @@ class TextKnowledgeLearner:
                 if relations:
                     # Construction grammar matched — still run heuristics to augment
                     pass
-            except Exception:
-                pass  # graceful fallback
+            except Exception as e:
+                import logging as _log
+                _log.getLogger("nsck.tkl").debug("[TKL] Construction grammar matching failed: %s", e)
 
         sentence_lower = sentence.lower()
         

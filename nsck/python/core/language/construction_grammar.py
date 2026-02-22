@@ -22,6 +22,11 @@ PREPOSITIONS = {
     "despite", "except", "including", "per", "via",
 }
 
+# V4: minimum word length for the -ish adjective suffix heuristic.
+# Short words ending in -ish are often nouns (fish, dish, wish) not adjectives.
+# Words 6+ chars (reddish, childish) are reliably adjectives.
+_MIN_ISH_SUFFIX_LEN = 6
+
 # V4: negation function words (used by _classify_word and new constructions)
 NEGATION_WORDS = {"not", "never", "no", "neither", "nor", "cannot", "cant", "won't", "doesn't", "don't", "didn't", "isn't", "aren't", "wasn't", "weren't", "hasn't", "haven't", "hadn't"}
 
@@ -440,7 +445,7 @@ def _classify_word(word: str) -> str:
         return "ADJ"
     # -ish is an adjective suffix (reddish, childish) but not for short words
     # "fish" (4 chars), "dish" (4 chars), "wish" (4 chars) are NOT adjectives
-    if w.endswith("ish") and len(w) >= 6:
+    if w.endswith("ish") and len(w) >= _MIN_ISH_SUFFIX_LEN:
         return "ADJ"
 
     return "NOUN"

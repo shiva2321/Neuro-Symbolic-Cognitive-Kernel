@@ -600,6 +600,7 @@ class SemanticMemory:
         return prototypes
 
     def save(self, filepath: str):
+        """Save semantic memory to disk via pickle."""
         print(f"[SEMANTIC] Saving memory to {filepath}...")
         data = {
             "concept_graph": self.concept_graph,
