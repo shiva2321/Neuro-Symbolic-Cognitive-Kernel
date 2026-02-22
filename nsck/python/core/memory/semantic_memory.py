@@ -247,13 +247,14 @@ class SemanticMemory:
             )
             should_revise, reason = scorer.should_revise(meta, new_evidence_supports=False)
             if should_revise:
-                # Revise: replace old belief with new one
+                # Revise: replace old belief with new one.
+                # The new belief starts fresh (contradiction_count=0).
                 self.concept_graph.remove_edge(concept1, contradicted_target)
                 self.concept_graph.add_edge(
                     concept1, concept2, relation=relation, timestamp=timestamp,
                     belief_meta={
                         'evidence_count': 1,
-                        'contradiction_count': meta.contradiction_count,
+                        'contradiction_count': 0,
                         'complexity': meta.complexity,
                         'first_seen': timestamp or 0.0,
                         'last_confirmed': timestamp or 0.0,

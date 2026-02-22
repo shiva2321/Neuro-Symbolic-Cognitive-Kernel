@@ -4,7 +4,7 @@ from python.core.reasoning.analogy import AnalogyEngine
 
 
 def _hv(word: str):
-    return hypervec_rs.HyperVector(hash(word) % (2**32))
+    return hypervec_rs.HyperVector(abs(hash(word)) % (2**32))
 
 
 class TestConceptualBlending(unittest.TestCase):
