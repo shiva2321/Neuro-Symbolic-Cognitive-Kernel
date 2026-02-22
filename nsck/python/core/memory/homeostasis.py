@@ -103,11 +103,13 @@ class MemoryHomeostasis:
                     new_categories.append(cat_name)
         return new_categories
 
-    def _simple_cluster(self, memory, concepts: list, threshold: float) -> List[List[str]]:
-        """Greedy clustering by HV similarity."""
+    def _simple_cluster(self, memory, concepts: list, threshold: float, max_concepts: int = 500) -> List[List[str]]:
+        """Greedy O(n²) clustering by HV similarity, capped at max_concepts for efficiency."""
         used = set()
         clusters = []
-        for i, c1 in enumerate(concepts):
+        # Limit to avoid O(n²) slowdown on very large concept sets
+        limited = concepts[:max_concepts]
+        for i, c1 in enumerate(limited):
             if c1 in used:
                 continue
             cluster = [c1]
@@ -115,7 +117,7 @@ class MemoryHomeostasis:
             hv1 = memory.concept_hvs.get(c1)
             if hv1 is None:
                 continue
-            for c2 in concepts[i+1:]:
+            for c2 in limited[i+1:]:
                 if c2 in used:
                     continue
                 hv2 = memory.concept_hvs.get(c2)

@@ -1,8 +1,11 @@
 """Distributional Semantics via VSA context windows for NSCK V3."""
 from __future__ import annotations
+import logging
 import pickle
 from typing import List, Dict, Optional
 import python.core.vsa.hypervec_shim as hypervec_rs
+
+logger = logging.getLogger(__name__)
 
 HyperVector = hypervec_rs.HyperVector
 
@@ -82,8 +85,8 @@ class DistributionalCodebook:
                         # Permute by offset to encode position (silently skip if unsupported)
                         try:
                             ctx_hv = ctx_hv.permute(offset)
-                        except Exception:
-                            pass  # permute is optional; fall back to unpermuted HV
+                        except (AttributeError, TypeError) as e:
+                            logger.debug("permute unavailable, using unpermuted HV: %s", e)
                         word_contexts[w].append(ctx_hv)
         for word, context_hvs in word_contexts.items():
             if not context_hvs:

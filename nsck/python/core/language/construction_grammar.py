@@ -5,7 +5,29 @@ from typing import List, Dict, Optional
 
 ARTICLES = {"a", "an", "the"}
 PREPOSITIONS = {"in", "on", "at", "by", "for", "with", "to", "from", "of", "into", "onto", "about", "above", "below", "under", "over"}
-COMMON_VERBS = {"is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "run", "runs", "go", "goes", "see", "sees", "know", "knows", "think", "thinks", "get", "gets", "make", "makes", "come", "comes", "take", "takes", "use", "uses", "find", "finds", "give", "gives", "tell", "tells", "work", "works", "call", "calls", "try", "tries", "ask", "asks", "need", "needs", "feel", "feels", "become", "becomes", "leave", "leaves", "put", "puts", "mean", "means", "keep", "keeps", "let", "lets", "begin", "begins", "show", "shows", "hear", "hears", "play", "plays", "move", "moves", "pay", "pays", "set", "sets", "change", "changes", "causes", "cause", "caused", "contains", "contain", "produce", "produces", "require", "requires", "enable", "enables"}
+COMMON_VERBS = {
+    # Auxiliaries and copulas
+    "is", "are", "was", "were", "be", "been", "being",
+    "have", "has", "had", "do", "does", "did",
+    # Common motion/action verbs
+    "run", "runs", "go", "goes", "see", "sees",
+    "know", "knows", "think", "thinks", "get", "gets",
+    "make", "makes", "come", "comes", "take", "takes",
+    "use", "uses", "find", "finds", "give", "gives",
+    "tell", "tells", "work", "works", "call", "calls",
+    "try", "tries", "ask", "asks", "need", "needs",
+    "feel", "feels", "become", "becomes", "leave", "leaves",
+    "put", "puts", "mean", "means", "keep", "keeps",
+    "let", "lets", "begin", "begins", "show", "shows",
+    "hear", "hears", "play", "plays", "move", "moves",
+    "pay", "pays", "set", "sets", "change", "changes",
+    # Domain-specific relation verbs
+    "causes", "cause", "caused",
+    "contains", "contain",
+    "produce", "produces",
+    "require", "requires",
+    "enable", "enables",
+}
 
 @dataclass
 class Construction:
