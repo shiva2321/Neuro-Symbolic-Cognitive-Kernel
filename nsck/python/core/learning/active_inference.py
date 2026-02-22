@@ -54,6 +54,14 @@ import numpy as np
 
 logger = logging.getLogger("nsck.active_inference")
 
+# Boltzmann temperature bounds and error-to-temperature scaling factor.
+# Grounded in statistical mechanics: low T → exploit known-good paths;
+# high T → explore uniformly.  Bounds prevent degenerate behaviour.
+MIN_TEMPERATURE: float = 0.1
+MAX_TEMPERATURE: float = 5.0
+# Scaling: mean_error=0 → T stays at base; mean_error=1.0 → T = base * (1 + ERROR_SCALING)
+ERROR_SCALING: float = 4.0
+
 
 class ActiveInferencePlanner:
     """
@@ -236,13 +244,15 @@ class ActiveInferencePlanner:
         High error → high T (explore more).
         Low error   → low T (exploit more).
 
-        Bounded to [0.1, 5.0] to prevent degenerate behaviour.
+        Bounded to [MIN_TEMPERATURE, MAX_TEMPERATURE] to prevent degenerate behaviour.
         """
         if self.pc is not None:
             try:
                 mean_err = self.pc.mean_recent_error()
-                # T ∈ [0.1, 5.0]
-                return max(0.1, min(5.0, self.temperature * (1.0 + 4.0 * mean_err)))
+                return max(
+                    MIN_TEMPERATURE,
+                    min(MAX_TEMPERATURE, self.temperature * (1.0 + ERROR_SCALING * mean_err)),
+                )
             except Exception:
                 pass
         return self.temperature

@@ -42,10 +42,10 @@ class TestWordClassification:
             assert self._cls(word) == "ADJ", f"{word!r} should be ADJ"
 
     def test_negators_classified_as_neg(self):
-        """Negation particles should be NEG."""
-        from python.core.language.construction_grammar import _classify_word
+        """Negation particles should be NEG — checked before COMMON_VERBS."""
+        # These must be NEG (not VERB), confirming NEG is higher priority
         for word in ("not", "no", "never"):
-            assert _classify_word(word) == "NEG", f"{word!r} should be NEG"
+            assert self._cls(word) == "NEG", f"{word!r} should be NEG"
 
     def test_ambiguous_nouns_not_adj(self):
         """Nouns ending in -al/-ary/-ic should not be classified as ADJ."""

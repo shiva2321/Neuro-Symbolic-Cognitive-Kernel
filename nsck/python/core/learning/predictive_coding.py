@@ -48,6 +48,10 @@ import numpy as np
 
 logger = logging.getLogger("nsck.predictive_coding")
 
+# Prior uncertainty returned when no prediction has been made yet.
+# 0.5 means "maximally uncertain" — the system has no prior on this concept.
+PRIOR_UNCERTAINTY: float = 0.5
+
 
 class PredictiveCodingLayer:
     """
@@ -113,22 +117,22 @@ class PredictiveCodingLayer:
         if pred is None:
             # No prior prediction — maximum uncertainty (surprise = 0.5,
             # not 1.0, because we genuinely had no prior).
-            return 0.5
+            return PRIOR_UNCERTAINTY
 
         try:
             obs = np.asarray(getattr(observed_hv, "bits", observed_hv), dtype=np.float32)
         except Exception:
-            return 0.5
+            return PRIOR_UNCERTAINTY
 
         if obs.shape != pred.shape:
-            return 0.5
+            return PRIOR_UNCERTAINTY
 
         # Use cosine distance for robustness (works for both binary and
         # distributional HVs after converting to float).
         norm_pred = np.linalg.norm(pred)
         norm_obs  = np.linalg.norm(obs)
         if norm_pred < 1e-9 or norm_obs < 1e-9:
-            return 0.5
+            return PRIOR_UNCERTAINTY
 
         cosine_sim = float(np.dot(pred, obs) / (norm_pred * norm_obs))
         # Convert cosine similarity [−1, 1] → error [0, 1]
@@ -237,7 +241,7 @@ class PredictiveCodingLayer:
     def mean_recent_error(self, window: int = 100) -> float:
         """Return the mean prediction error over the last *window* observations."""
         if not self._error_history:
-            return 0.5
+            return PRIOR_UNCERTAINTY
         recent = self._error_history[-window:]
         return float(sum(recent) / len(recent))
 

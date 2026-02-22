@@ -224,6 +224,11 @@ BUILTIN_CORPUS: List[List[str]] = [
     ["transportation", "moves", "people", "and", "goods", "between", "places"],
 ]
 
+# Maximum seed value for HyperVector initialisation from hash.
+# Constrains the hash to a 32-bit unsigned integer range, matching
+# the Rust ChaCha8 RNG seed parameter width.
+_HV_SEED_MODULO: int = 2 ** 32
+
 
 class DistributionalCodebook:
     def __init__(self, window_size: int = 5):
@@ -243,7 +248,7 @@ class DistributionalCodebook:
                     j = i + offset
                     if 0 <= j < len(sentence):
                         context_word = sentence[j].lower()
-                        ctx_hv = HyperVector(hash(context_word) % (2**32))
+                        ctx_hv = HyperVector(hash(context_word) % _HV_SEED_MODULO)
                         # Permute by offset to encode position (silently skip if unsupported)
                         try:
                             ctx_hv = ctx_hv.permute(offset)
@@ -252,7 +257,7 @@ class DistributionalCodebook:
                         word_contexts[w].append(ctx_hv)
         for word, context_hvs in word_contexts.items():
             if not context_hvs:
-                self._codebook[word] = HyperVector(hash(word) % (2**32))
+                self._codebook[word] = HyperVector(hash(word) % _HV_SEED_MODULO)
                 continue
             accumulated = context_hvs[0]
             for hv in context_hvs[1:]:
@@ -307,7 +312,7 @@ class DistributionalCodebook:
                 j = i + offset
                 if 0 <= j < len(sentence):
                     context_word = sentence[j].lower()
-                    ctx_hv = HyperVector(hash(context_word) % (2**32))
+                    ctx_hv = HyperVector(hash(context_word) % _HV_SEED_MODULO)
                     try:
                         ctx_hv = ctx_hv.permute(offset)
                     except (AttributeError, TypeError):
