@@ -471,6 +471,134 @@ class SemanticMemory:
             
         return schema
 
+    # ── Multi-hop transitive inference ──────────────────────────────────────
+
+    # Relations that are transitively closed in knowledge graphs
+    # (biology, taxonomy, causality, mereology, etc.)
+    _TRANSITIVE_RELATIONS: frozenset = frozenset({
+        "is_a", "part_of", "causes", "leads_to", "results_in",
+        "implies", "consists_of", "located_in", "derived_from",
+    })
+
+    def infer_transitive(
+        self,
+        concept: str,
+        relation: str,
+        max_hops: int = 4,
+    ) -> List[Tuple[str, int]]:
+        """
+        Follow a transitive relation through the knowledge graph up to
+        *max_hops* steps and return all reachable concepts with their hop
+        distance.
+
+        Grounded in description-logic / knowledge-graph theory: if
+        ``A →[r]→ B →[r]→ C`` and *r* is transitive, then ``A →[r]→ C``
+        holds.  This implements the core of TBox inheritance (is_a),
+        causal chaining (causes/leads_to), and part-whole reasoning.
+
+        Args:
+            concept:   Starting concept name.
+            relation:  Relation type to follow (must be in _TRANSITIVE_RELATIONS
+                       for the call to make logical sense, but any relation is
+                       accepted).
+            max_hops:  Maximum chain length.
+
+        Returns:
+            Sorted list of ``(concept_name, hop_distance)`` pairs, closest
+            first.  The starting concept itself is excluded.
+        """
+        if concept not in self.concept_graph:
+            return []
+
+        visited: Dict[str, int] = {}   # concept → distance
+        queue: List[Tuple[str, int]] = [(concept, 0)]
+
+        while queue:
+            current, depth = queue.pop(0)
+            if depth >= max_hops:
+                continue
+            for _, neighbor, data in self.concept_graph.out_edges(current, data=True):
+                if data.get("relation") == relation and neighbor not in visited:
+                    visited[neighbor] = depth + 1
+                    queue.append((neighbor, depth + 1))
+
+        # Remove the start concept itself (distance 0 won't be in visited but guard anyway)
+        visited.pop(concept, None)
+        return sorted(visited.items(), key=lambda x: x[1])
+
+    def infer_inherited_properties(
+        self,
+        concept: str,
+        max_hops: int = 5,
+    ) -> Dict[str, List[str]]:
+        """
+        Return all properties inherited via the ``is_a`` hierarchy.
+
+        Implements *open-world inheritance*: a concept inherits all
+        ``has_property`` relations of its ancestors (as in Description Logic
+        ALC).  More specific definitions shadow general ones.
+
+        Returns:
+            Dict mapping property name → list of source concepts (most
+            specific first).
+        """
+        ancestors = self.infer_transitive(concept, "is_a", max_hops=max_hops)
+        chain = [concept] + [a for a, _ in ancestors]
+
+        inherited: Dict[str, List[str]] = {}
+        for node in reversed(chain):  # general → specific, so specific wins
+            for _, neighbor, data in self.concept_graph.out_edges(node, data=True):
+                if data.get("relation") == "has_property":
+                    inherited.setdefault(neighbor, []).insert(0, node)
+
+        return inherited
+
+    def find_causal_chain(
+        self,
+        cause: str,
+        effect: str,
+        max_hops: int = 6,
+    ) -> Optional[List[str]]:
+        """
+        Find the shortest causal chain from *cause* to *effect* following
+        ``causes`` / ``leads_to`` / ``results_in`` edges.
+
+        Uses BFS with backtracking to reconstruct the path.  Implements the
+        *Pearl do-calculus* idea that causal paths can be traced through
+        a directed acyclic graph.
+
+        Returns:
+            List of concept names from *cause* to *effect* (inclusive), or
+            None if no path exists within *max_hops*.
+        """
+        _CAUSAL = {"causes", "leads_to", "results_in", "implies"}
+
+        if cause not in self.concept_graph or effect not in self.concept_graph:
+            return None
+
+        # BFS with parent tracking
+        parent: Dict[str, Optional[str]] = {cause: None}
+        queue: List[Tuple[str, int]] = [(cause, 0)]
+
+        while queue:
+            current, depth = queue.pop(0)
+            if current == effect:
+                # Reconstruct path
+                path: List[str] = []
+                node: Optional[str] = effect
+                while node is not None:
+                    path.append(node)
+                    node = parent.get(node)
+                return list(reversed(path))
+            if depth >= max_hops:
+                continue
+            for _, neighbor, data in self.concept_graph.out_edges(current, data=True):
+                if data.get("relation") in _CAUSAL and neighbor not in parent:
+                    parent[neighbor] = current
+                    queue.append((neighbor, depth + 1))
+
+        return None
+
     def save(self, filepath: str):
         """Save semantic memory to disk via pickle."""
         print(f"[SEMANTIC] Saving memory to {filepath}...")
