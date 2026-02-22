@@ -464,6 +464,18 @@ class TextKnowledgeLearner:
             
             stats['relations'] += 1
             stats['facts'] += 1
+
+        # V4: transitive inference — derive new facts after each sentence
+        # (run lazily every 10 sentences to amortise cost)
+        if (self._config is not None and
+                getattr(self._config, 'enable_transitive_inference', False) and
+                getattr(self, '_tkl_sentence_count', 0) % 10 == 0):
+            try:
+                for rel_type in ("is_a", "part_of", "causes", "located_in"):
+                    self.semantic.infer_transitive(rel_type, max_hops=2)
+            except Exception:
+                pass
+        self._tkl_sentence_count = getattr(self, '_tkl_sentence_count', 0) + 1
         
         # Store experience in episodic memory
         episode = LiveEpisode(
@@ -640,14 +652,51 @@ class TextKnowledgeLearner:
                 for match in cg_matches:
                     fillers = match.role_fillers
                     rel = match.construction.relation
-                    # Different constructions expose different roles
+                    cname = match.construction.name
+
+                    # V4: skip negation constructions unless the flag is on
+                    is_negation = rel.startswith("not_") or rel in ("lacks", "cannot_do", "never_does", "acts_without", "lacks_relation")
+                    if is_negation:
+                        if not (self._config is not None and getattr(self._config, 'enable_negation_handling', False)):
+                            continue
+
+                    # V4: skip temporal constructions unless the flag is on
+                    is_temporal = rel in ("precedes", "follows", "since_event", "until_event", "triggered_by", "occurs_during")
+                    if is_temporal:
+                        if not (self._config is not None and getattr(self._config, 'enable_temporal_reasoning', False)):
+                            continue
+
+                    # V4: skip conditional constructions unless the flag is on
+                    is_conditional = rel in ("implies", "conditional_on", "unless_condition", "when_then", "only_if", "leads_to", "results_in")
+                    if is_conditional:
+                        if not (self._config is not None and getattr(self._config, 'enable_conditional_logic', False)):
+                            continue
+
+                    # Extract subject/object from role fillers — V4 extended role name list
                     subj = None
                     obj = None
-                    for role_a in ('subject', 'cause', 'owner', 'entity', 'agent'):
+                    for role_a in (
+                        'subject', 'cause', 'owner', 'entity', 'agent',
+                        # V4:
+                        'antecedent', 'event1', 'early_subject', 'entity1',
+                        'condition_subject', 'negated_subject', 'dependent',
+                        'tool', 'part', 'person', 'artifact', 'left',
+                        'enabler', 'preventer', 'whole', 'term', 'quantity',
+                        'producer', 'container',
+                    ):
                         if role_a in fillers:
                             subj = fillers[role_a].capitalize()
                             break
-                    for role_b in ('attribute', 'effect', 'owned', 'location', 'patient', 'object'):
+                    for role_b in (
+                        'attribute', 'effect', 'owned', 'location', 'patient', 'object',
+                        # V4:
+                        'consequent', 'event2', 'late_subject', 'entity2',
+                        'condition_object', 'negated_attribute', 'negated_quality',
+                        'missing', 'alias', 'definition', 'purpose', 'material',
+                        'required', 'enabled', 'prevented', 'product', 'contained',
+                        'right', 'birthplace', 'dependency', 'responsibility',
+                        'capability', 'absent', 'excluded_location',
+                    ):
                         if role_b in fillers:
                             obj = fillers[role_b].capitalize()
                             break
@@ -656,7 +705,7 @@ class TextKnowledgeLearner:
                 if relations:
                     # Construction grammar matched — still run heuristics to augment
                     pass
-            except Exception as e:
+            except Exception:
                 pass  # graceful fallback
 
         sentence_lower = sentence.lower()

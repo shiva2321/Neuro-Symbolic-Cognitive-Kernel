@@ -10,7 +10,7 @@ import networkx as nx
 import numpy as np
 import pickle
 import os
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Set, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
 
 # V3: optional HNSW index
@@ -41,9 +41,30 @@ class SemanticMemory:
         "leads_to": 0.6,        # Consequential (alias for causes)
         "results_in": 0.6,      # Result of action
         "implies": 0.55,        # Logical implication
+        "conditional_on": 0.5,  # V4: conditional dependency
         "part_of": 0.5,         # Mereological
         "similar_to": 0.4,      # Associative
         "semantically_related": 0.35,  # Weakest — co-occurrence based
+        # V4: negation (low activation weight — negation dampens spreading)
+        "not_is_a": 0.1,
+        "not_has_property": 0.1,
+        "not_relates_to": 0.1,
+        "cannot_do": 0.1,
+        "never_does": 0.1,
+        "lacks": 0.1,
+        # V4: temporal ordering
+        "precedes": 0.45,
+        "follows": 0.45,
+        "since_event": 0.35,
+        "until_event": 0.35,
+        "triggered_by": 0.5,
+        "occurs_during": 0.4,
+        # V4: similarity/difference
+        "different_from": 0.2,
+        "opposite_of": 0.2,
+        "associated_with": 0.45,
+        "depends_on": 0.5,
+        "capable_of": 0.6,
     }
     
     def __init__(self, relation_weights: Optional[Dict[str, float]] = None, use_rust: bool = True,
@@ -471,8 +492,114 @@ class SemanticMemory:
             
         return schema
 
+    # ── V4: Transitive / taxonomic inference ────────────────────────────────
+
+    def infer_transitive(self, relation_type: str = "is_a", max_hops: int = 3) -> int:
+        """V4: Derive new facts by transitive closure over *relation_type* edges.
+
+        Example: If ``A is_a B`` and ``B is_a C`` exist, adds ``A is_a C``.
+
+        Works for any transitive relation: ``is_a``, ``part_of``, ``causes``,
+        ``located_in``, ``leads_to``, ``implies``, etc.
+
+        Args:
+            relation_type: Edge type to close transitively.
+            max_hops:       Maximum chain length (prevents infinite loops on cycles).
+
+        Returns:
+            Number of new edges inferred and added.
+        """
+        new_edges: List[Tuple[str, str]] = []
+        nodes = list(self.concept_graph.nodes())
+
+        for source in nodes:
+            # BFS from source following only relation_type edges
+            visited: Set[str] = {source}
+            frontier = [source]
+            hops = 0
+            while frontier and hops < max_hops:
+                next_frontier: List[str] = []
+                for node in frontier:
+                    for _, target, data in self.concept_graph.out_edges(node, data=True):
+                        if data.get("relation") == relation_type and target not in visited:
+                            visited.add(target)
+                            next_frontier.append(target)
+                            if not self.concept_graph.has_edge(source, target):
+                                new_edges.append((source, target))
+                frontier = next_frontier
+                hops += 1
+
+        added = 0
+        for src, tgt in new_edges:
+            if src != tgt:  # no self-loops
+                self.concept_graph.add_edge(
+                    src, tgt,
+                    relation=relation_type,
+                    inferred=True,
+                    timestamp=0.0,
+                )
+                added += 1
+
+        if added:
+            logger.debug("[SEMANTIC] infer_transitive(%s): added %d derived edges", relation_type, added)
+        return added
+
+    # ── V4: Prototype-based category generalization ──────────────────────────
+
+    def build_prototypes(
+        self,
+        category_relation: str = "is_a",
+        min_members: int = 2,
+    ) -> Dict[str, hypervec_rs.HyperVector]:
+        """V4: Build a *prototype* hypervector for each category by bundling all
+        member HVs.
+
+        Inspired by prototype theory (Rosch 1973): a category is best represented
+        by the central tendency of its members, not a single exemplar.  In VSA,
+        the *bundle* of all member HVs is exactly that central tendency — the
+        resulting vector is maximally similar to all members.
+
+        Usage::
+
+            prototypes = memory.build_prototypes(min_members=3)
+            sim = prototypes["Animal"].similarity(dog_hv)  # high if dog is animal-like
+
+        Args:
+            category_relation: Edge type used to identify category membership
+                                (default: ``"is_a"``).
+            min_members:        Minimum number of members needed to form a prototype.
+
+        Returns:
+            Dict mapping category name → prototype HyperVector.
+        """
+        # Gather members for each category
+        category_members: Dict[str, List[str]] = {}
+        for src, tgt, data in self.concept_graph.edges(data=True):
+            if data.get("relation") == category_relation:
+                category_members.setdefault(tgt, []).append(src)
+
+        prototypes: Dict[str, hypervec_rs.HyperVector] = {}
+        for category, members in category_members.items():
+            if len(members) < min_members:
+                continue
+            prototype_hv: Optional[hypervec_rs.HyperVector] = None
+            for member in members:
+                member_hv = self.concept_hvs.get(member)
+                if member_hv is None:
+                    continue
+                if prototype_hv is None:
+                    prototype_hv = member_hv
+                else:
+                    prototype_hv = prototype_hv.bundle(member_hv)
+            if prototype_hv is not None:
+                prototypes[category] = prototype_hv
+                logger.debug(
+                    "[SEMANTIC] Prototype for '%s' built from %d members", category, len(members)
+                )
+
+        return prototypes
+
     def save(self, filepath: str):
-        """Save semantic memory to disk via pickle."""
         print(f"[SEMANTIC] Saving memory to {filepath}...")
         data = {
             "concept_graph": self.concept_graph,
