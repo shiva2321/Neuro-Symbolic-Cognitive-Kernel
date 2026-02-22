@@ -74,6 +74,23 @@ class NSCKConfig:
     enable_stigmergy: bool = False
     enable_auto_categories: bool = False
 
+    # === V4 Feature Flags — new cognitive capabilities ===
+    # Schema induction: generalise episodic experiences into abstract schemas
+    enable_schema_induction: bool = False
+    schema_similarity_threshold: float = 0.55
+    schema_min_support: int = 2
+
+    # Predictive processing: active-inference-style prediction-error learning
+    enable_predictive_processing: bool = False
+    predictive_learning_rate: float = 0.15
+
+    # Abductive reasoning: Inference-to-Best-Explanation over causal graph
+    enable_abductive_reasoning: bool = False
+    abductive_max_depth: int = 4
+
+    # Temporal reasoning: Allen interval algebra for event ordering
+    enable_temporal_reasoning: bool = False
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -91,7 +108,7 @@ class NSCKConfig:
 
     @classmethod
     def research(cls) -> "NSCKConfig":
-        """Research config: all V3 flags on for maximum capability exploration."""
+        """Research config: all V3 + V4 flags on for maximum capability exploration."""
         return cls(
             enable_construction_grammar=True,
             enable_frame_semantics=True,
@@ -106,17 +123,26 @@ class NSCKConfig:
             enable_homeostasis=True,
             enable_stigmergy=True,
             enable_auto_categories=True,
+            # V4
+            enable_schema_induction=True,
+            enable_predictive_processing=True,
+            enable_abductive_reasoning=True,
+            enable_temporal_reasoning=True,
         )
 
     @classmethod
     def production(cls) -> "NSCKConfig":
-        """Production config: performance flags on, experimental flags off."""
+        """Production config: performance + stability flags on, experimental flags off."""
         return cls(
             enable_dual_process=True,
             enable_hnsw_index=True,
             enable_homeostasis=True,
             enable_stigmergy=True,
             enable_incremental_concept_refinement=True,
+            # V4 production-safe
+            enable_schema_induction=True,
+            enable_abductive_reasoning=True,
+            enable_temporal_reasoning=True,
         )
 
 

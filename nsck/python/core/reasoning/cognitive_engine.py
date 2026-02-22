@@ -56,6 +56,31 @@ try:
 except Exception:
     _HOMEOSTASIS_AVAILABLE = False
 
+# V4 optional modules
+try:
+    from python.core.learning.schema_induction import SchemaInducer, Episode as SchemaEpisode
+    _SCHEMA_INDUCTION_AVAILABLE = True
+except Exception:
+    _SCHEMA_INDUCTION_AVAILABLE = False
+
+try:
+    from python.core.reasoning.predictive_processor import PredictiveProcessor
+    _PREDICTIVE_AVAILABLE = True
+except Exception:
+    _PREDICTIVE_AVAILABLE = False
+
+try:
+    from python.core.reasoning.abductive_reasoning import AbductiveReasoner
+    _ABDUCTIVE_AVAILABLE = True
+except Exception:
+    _ABDUCTIVE_AVAILABLE = False
+
+try:
+    from python.core.reasoning.temporal_reasoning import TemporalKnowledgeGraph
+    _TEMPORAL_AVAILABLE = True
+except Exception:
+    _TEMPORAL_AVAILABLE = False
+
 logger = logging.getLogger("nsck.cognitive_engine")
 
 
@@ -92,6 +117,11 @@ class CognitiveState:
     system_used: Optional[str] = None
     system_1_confidence: Optional[float] = None
     homeostasis_actions: Optional[List[str]] = None
+    # V4 glass-box trace fields
+    schema_match: Optional[Dict] = None          # matched/induced schema
+    predictive_state: Optional[Dict] = None      # prediction error + free energy
+    abductive_explanation: Optional[Dict] = None # IBE result
+    temporal_context: Optional[List[Dict]] = None # temporal ordering facts
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +244,35 @@ class CognitiveEngine:
         # --- V3: Stigmergy path tracking ---
         self._last_reasoning_path: List[str] = []
 
+        # --- V4: Schema Induction ---
+        self.schema_inducer = None
+        if _SCHEMA_INDUCTION_AVAILABLE and self.config.enable_schema_induction:
+            self.schema_inducer = SchemaInducer(
+                similarity_threshold=self.config.schema_similarity_threshold,
+                min_support=self.config.schema_min_support,
+            )
+
+        # --- V4: Predictive Processing ---
+        self.predictive_processor = None
+        if _PREDICTIVE_AVAILABLE and self.config.enable_predictive_processing:
+            self.predictive_processor = PredictiveProcessor(
+                semantic_memory=self.semantic_memory,
+                learning_rate=self.config.predictive_learning_rate,
+            )
+
+        # --- V4: Abductive Reasoning ---
+        self.abductive_reasoner = None
+        if _ABDUCTIVE_AVAILABLE and self.config.enable_abductive_reasoning:
+            self.abductive_reasoner = AbductiveReasoner(
+                semantic_memory=self.semantic_memory,
+                max_depth=self.config.abductive_max_depth,
+            )
+
+        # --- V4: Temporal Knowledge Graph ---
+        self.temporal_kg = None
+        if _TEMPORAL_AVAILABLE and self.config.enable_temporal_reasoning:
+            self.temporal_kg = TemporalKnowledgeGraph()
+
         # --- Gap 1: Wire GWT broadcast subscribers ---
         self._register_gwt_subscribers()
 
@@ -307,6 +366,9 @@ class CognitiveEngine:
             causal_graph = CausalGraph()
         self.causal_graphs[task_tag] = causal_graph
         self.causal_reasoners[task_tag] = CausalReasoner(causal_graph)
+        # V4: update abductive reasoner with the most recently registered causal graph
+        if self.abductive_reasoner is not None:
+            self.abductive_reasoner.causal_graph = causal_graph
         try:
             self.task_brains[task_tag] = TaskBrain(task_tag)
         except Exception:
@@ -637,6 +699,46 @@ class CognitiveEngine:
             self.trace_history.pop(0)
 
         # 10. Build cognitive state
+        # V4: Run predictive processing on situation
+        v4_predictive = None
+        if self.predictive_processor is not None and active_preds:
+            try:
+                ctx = active_preds[0] if active_preds else task_tag
+                obs = active_preds[-1] if len(active_preds) > 1 else ctx
+                ps = self.predictive_processor.process(ctx, obs)
+                v4_predictive = {
+                    "prediction_error": ps.prediction_error,
+                    "free_energy": ps.free_energy,
+                    "surprise_level": ps.surprise_level,
+                    "predicted": ps.predicted,
+                    "observed": ps.observed,
+                }
+            except Exception:
+                pass
+
+        # V4: Abductive explanation if action is unexpected (high PE) or no winner
+        v4_abductive = None
+        if self.abductive_reasoner is not None and winner_name in ("DEFAULT", "EXPLORATION"):
+            try:
+                abd_obs = active_preds[0] if active_preds else action
+                abd_result = self.abductive_reasoner.explain(abd_obs)
+                if abd_result.best:
+                    v4_abductive = abd_result.best.to_dict()
+            except Exception:
+                pass
+
+        # V4: Temporal context for active predicates
+        v4_temporal = None
+        if self.temporal_kg is not None and active_preds:
+            try:
+                v4_temporal = []
+                for pred in active_preds[:3]:
+                    facts = self.temporal_kg.timeline(pred)
+                    if facts:
+                        v4_temporal.append({"event": pred, "temporal_facts": facts[:3]})
+            except Exception:
+                pass
+
         self.current_state = CognitiveState(
             task_tag=task_tag,
             situation_hv=situation_hv,
@@ -649,6 +751,10 @@ class CognitiveEngine:
             trace=trace,
             system_used=system_used,
             system_1_confidence=system_1_confidence,
+            # V4 trace fields
+            predictive_state=v4_predictive,
+            abductive_explanation=v4_abductive,
+            temporal_context=v4_temporal,
         )
         
         # Track state-action for Q-learning updates
@@ -812,6 +918,27 @@ class CognitiveEngine:
         # 6. Causal discovery (requires next_state)
         if next_state:
             self._update_causal_model(state, action, reward, task_tag, next_state)
+
+        # V4.7: Schema induction — feed episode to schema inducer
+        if self.schema_inducer is not None and self.current_state.active_predicates:
+            try:
+                preds = self.current_state.active_predicates
+                subj = preds[0] if preds else task_tag
+                obj  = preds[-1] if len(preds) > 1 else action
+                ep = SchemaEpisode(
+                    subject=subj,
+                    relation=action,
+                    object=obj,
+                    situation_hv=self.current_state.situation_hv,
+                    task_tag=task_tag,
+                    confidence=max(0.0, reward),
+                )
+                self.schema_inducer.add_episode(ep)
+                # Periodically run induction
+                if self.stats["episodes_recorded"] % 20 == 0:
+                    self.schema_inducer.induce()
+            except Exception:
+                pass
 
     def _update_causal_model(
         self,
