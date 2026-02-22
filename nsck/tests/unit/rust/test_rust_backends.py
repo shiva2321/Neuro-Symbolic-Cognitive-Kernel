@@ -214,7 +214,7 @@ class TestCrossBackendParity:
 class TestSemanticMemoryRust:
 
     def _make_mem(self, **cfg_kwargs):
-        return SemanticMemory(use_rust=False, config=NSCKConfig(**cfg_kwargs))
+        return SemanticMemory(use_rust=True, config=NSCKConfig(**cfg_kwargs))
 
     def test_add_and_query_concepts(self):
         mem = self._make_mem()
@@ -253,7 +253,6 @@ class TestSemanticMemoryRust:
         for _ in range(15):
             mem.mark_path(["S", "A", "B", "C"], 1.0)
         mem.mark_path(["S", "C"], 0.5)
-        mem._config = NSCKConfig(enable_stigmergy=True)
         act = mem.spread_activation(["S"], steps=2, decay=0.8)
         assert act.get("A", 0) > act.get("C", 0) * 0.5
 
@@ -398,7 +397,9 @@ class TestSNNRustLIFLayer:
         assert total <= 5, f"Expected ≤5 spikes with zero input, got {total}"
 
     def test_high_input_causes_spikes(self):
-        # Equilibrium potential with I=20: v_eq = v_rest + I = -70 + 20 = -50 > -55 threshold.
+        # Equilibrium potential with I=20: v_eq = v_rest + I = -70 + 20 = -50.
+        # This exceeds the threshold -55 (i.e. -50 > -55 in numerical value,
+        # meaning -50 is less negative and closer to 0 than -55).
         # Time to reach threshold from rest: ~28 steps.  Use 50 steps to be safe.
         lif = self._make_lif(100)
         any_spike = False
@@ -646,7 +647,7 @@ class TestV3PipelineWithRust:
     def _make_learner(self, **cfg_kwargs):
         from python.core.language.text_knowledge_learner import TextKnowledgeLearner
         cfg = NSCKConfig(**cfg_kwargs)
-        sem = SemanticMemory(use_rust=False, config=cfg)
+        sem = SemanticMemory(use_rust=True, config=cfg)
         epi = EpisodicMemory()
         return TextKnowledgeLearner(sem, epi, config=cfg), sem
 
@@ -728,7 +729,7 @@ class TestV3PipelineWithRust:
 
     def test_homeostasis_regulate(self):
         from python.core.memory.homeostasis import MemoryHomeostasis
-        mem = SemanticMemory(use_rust=False)
+        mem = SemanticMemory(use_rust=True)
         base = hv.HyperVector(42)
         for a in ["dog", "cat", "rabbit", "hamster", "gerbil"]:
             noise = hv.HyperVector(abs(hash(a)) % (2**32))
@@ -769,7 +770,7 @@ class TestRealWorldScenariosRust:
             enable_coreference=True,
             **cfg
         )
-        sem = SemanticMemory(use_rust=False, config=config)
+        sem = SemanticMemory(use_rust=True, config=config)
         epi = EpisodicMemory()
         tkl = TextKnowledgeLearner(sem, epi, config=config)
         for t in texts:
@@ -897,7 +898,7 @@ class TestScalabilityRust:
     def test_semantic_memory_5k(self):
         # Python backend linear scan: O(N × 10240 bits). Observed ~17s at 5K.
         # Allow 60s for headroom; note Rust backend with HNSW would be <100ms.
-        mem = SemanticMemory(use_rust=False)
+        mem = SemanticMemory(use_rust=True)
         t0 = time.perf_counter()
         for i in range(5000):
             mem.add_concept(f"c{i}", {"i": i})
@@ -911,7 +912,7 @@ class TestScalabilityRust:
         assert query_ms < 60_000, f"5K-concept query took {query_ms:.0f}ms"
 
     def test_spread_activation_ring_500(self):
-        mem = SemanticMemory(use_rust=False)
+        mem = SemanticMemory(use_rust=True)
         for i in range(500):
             mem.add_concept(f"ring_{i}", {})
         for i in range(500):
