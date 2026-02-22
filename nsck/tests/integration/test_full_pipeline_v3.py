@@ -90,6 +90,55 @@ class TestFullPipelineV3(unittest.TestCase):
         should_revise, reason = scorer.should_revise(meta, new_evidence_supports=False)
         self.assertTrue(should_revise)
 
+    def test_belief_revision_in_semantic_memory(self):
+        """With enable_free_energy_beliefs, contradictions are tracked in edge metadata."""
+        from python.core.integration.config import NSCKConfig
+        config = NSCKConfig(enable_free_energy_beliefs=True)
+        mem = SemanticMemory(use_rust=False, config=config)
+        mem.add_concept("Earth", {})
+        mem.add_concept("round", {})
+        mem.add_concept("flat", {})
+        # Add belief with 3 supporting mentions
+        for _ in range(3):
+            mem.add_relation("Earth", "shape_is", "round", timestamp=1.0)
+        edge = mem.concept_graph.get_edge_data("Earth", "round")
+        self.assertIsNotNone(edge)
+        meta = edge.get("belief_meta", {})
+        self.assertEqual(meta.get("evidence_count"), 3)
+        # Add contradictory belief: Earth shape_is flat
+        mem.add_relation("Earth", "shape_is", "flat", timestamp=2.0)
+        # round edge should have contradiction_count=1
+        round_edge = mem.concept_graph.get_edge_data("Earth", "round")
+        self.assertIsNotNone(round_edge)
+        self.assertEqual(round_edge.get("belief_meta", {}).get("contradiction_count"), 1)
+
+    def test_coreference_resolution(self):
+        """With enable_coreference, pronouns are resolved to registered entities."""
+        from python.core.language.coreference import EntityRegister
+
+        register = EntityRegister()
+        john_hv = hypervec_rs.HyperVector(hash("John") % (2**32))
+        register.register("John", john_hv, {"gender": "male", "animacy": "animate", "number": "singular"})
+
+        # "he" → should resolve to John
+        mention = register.resolve("he")
+        self.assertIsNotNone(mention)
+        self.assertEqual(mention.name, "John")
+
+        # "she" → no female entity → None
+        mention_she = register.resolve("she")
+        self.assertIsNone(mention_she)
+
+    def test_frame_semantics_verb_lookup(self):
+        """FrameLibrary.find_frame() returns relevant frame for known verbs."""
+        library = FrameLibrary()
+        frame = library.find_frame("buy")
+        self.assertIsNotNone(frame)
+        self.assertIn("buyer", frame.roles)
+
+        frame_unknown = library.find_frame("zargblarg")
+        self.assertIsNone(frame_unknown)
+
 
 if __name__ == "__main__":
     unittest.main()

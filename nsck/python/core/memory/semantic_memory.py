@@ -183,10 +183,20 @@ class SemanticMemory:
         """
         Add relation between concepts with temporal validation.
         Only updates if the new information is more recent or same time.
+
+        V3: When ``enable_free_energy_beliefs`` is set, checks for contradictory
+        relations before adding and applies free-energy belief scoring to decide
+        whether to revise, flag as contested, or keep the existing belief.
         """
         if concept1 not in self.concept_graph or concept2 not in self.concept_graph:
             return
-            
+
+        # V3: Free-energy belief scoring
+        if (self._config is not None and
+                getattr(self._config, 'enable_free_energy_beliefs', False)):
+            self._apply_belief_revision(concept1, relation, concept2, timestamp)
+            return
+
         # Check if edge exists
         if self.concept_graph.has_edge(concept1, concept2):
             existing_data = self.concept_graph.get_edge_data(concept1, concept2)
@@ -199,6 +209,99 @@ class SemanticMemory:
 
         # Update or create edge
         self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
+
+    def _apply_belief_revision(
+        self, concept1: str, relation: str, concept2: str, timestamp: float
+    ):
+        """V3: Free-energy belief revision logic for add_relation().
+
+        Detects contradictions: same (subject, relation_type) but different object.
+        For example: 'Paris capital_of France' contradicts 'Paris capital_of Germany'.
+        """
+        try:
+            from python.core.reasoning.belief_revision import BeliefMetadata, BeliefScorer
+        except ImportError:
+            self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
+            return
+
+        scorer = BeliefScorer()
+
+        # Check for contradictory relation: same concept1 + same relation type but different concept2
+        contradicted_target = None
+        for _, target, data in self.concept_graph.out_edges(concept1, data=True):
+            if data.get('relation') == relation and target != concept2:
+                contradicted_target = target
+                break
+
+        if contradicted_target is not None:
+            # Contradiction detected: (concept1, relation, contradicted_target) vs new (concept1, relation, concept2)
+            old_data = self.concept_graph.get_edge_data(concept1, contradicted_target) or {}
+            meta_dict = old_data.get('belief_meta', {})
+            meta = BeliefMetadata(
+                evidence_count=meta_dict.get('evidence_count', 1),
+                contradiction_count=meta_dict.get('contradiction_count', 0) + 1,
+                complexity=meta_dict.get('complexity', 1.0),
+                first_seen=meta_dict.get('first_seen', timestamp or 0.0),
+                last_confirmed=meta_dict.get('last_confirmed', timestamp or 0.0),
+                status=meta_dict.get('status', 'active'),
+            )
+            should_revise, reason = scorer.should_revise(meta, new_evidence_supports=False)
+            if should_revise:
+                # Revise: replace old belief with new one
+                self.concept_graph.remove_edge(concept1, contradicted_target)
+                self.concept_graph.add_edge(
+                    concept1, concept2, relation=relation, timestamp=timestamp,
+                    belief_meta={
+                        'evidence_count': 1,
+                        'contradiction_count': meta.contradiction_count,
+                        'complexity': meta.complexity,
+                        'first_seen': timestamp or 0.0,
+                        'last_confirmed': timestamp or 0.0,
+                        'status': 'active',
+                    }
+                )
+            else:
+                # Mark old belief as contested, record contradiction count
+                new_meta = {
+                    'evidence_count': meta.evidence_count,
+                    'contradiction_count': meta.contradiction_count,
+                    'complexity': meta.complexity,
+                    'first_seen': meta.first_seen,
+                    'last_confirmed': meta.last_confirmed,
+                    'status': meta.status,  # 'contested' if scored that way
+                }
+                self.concept_graph.add_edge(
+                    concept1, contradicted_target, relation=relation,
+                    timestamp=old_data.get('timestamp', 0.0), belief_meta=new_meta
+                )
+                # Also store the new contradicting claim
+                self.concept_graph.add_edge(
+                    concept1, concept2, relation=relation, timestamp=timestamp,
+                    belief_meta={
+                        'evidence_count': 1,
+                        'contradiction_count': 0,
+                        'complexity': 1.0,
+                        'first_seen': timestamp or 0.0,
+                        'last_confirmed': timestamp or 0.0,
+                        'status': 'active',
+                    }
+                )
+        else:
+            # No contradiction — add or increment evidence
+            edge_data = self.concept_graph.get_edge_data(concept1, concept2) or {}
+            meta_dict = edge_data.get('belief_meta', {})
+            evidence_count = meta_dict.get('evidence_count', 0) + 1
+            self.concept_graph.add_edge(
+                concept1, concept2, relation=relation, timestamp=timestamp,
+                belief_meta={
+                    'evidence_count': evidence_count,
+                    'contradiction_count': meta_dict.get('contradiction_count', 0),
+                    'complexity': meta_dict.get('complexity', 1.0),
+                    'first_seen': meta_dict.get('first_seen', timestamp or 0.0),
+                    'last_confirmed': timestamp or 0.0,
+                    'status': 'active',
+                }
+            )
     
     def query(self, query_hv: hypervec_rs.HyperVector, k: int = 5) -> List[Tuple[str, float]]:
         """

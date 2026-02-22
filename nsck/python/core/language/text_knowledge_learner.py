@@ -285,6 +285,26 @@ class TextKnowledgeLearner:
         
         # Extract concepts (simple noun extraction + named entities)
         concepts = self._extract_concepts(sentence)
+
+        # V3: Coreference resolution — scan for pronouns and resolve before relation extraction
+        if self._entity_register is not None:
+            words = self._tokenize(sentence)
+            _PRONOUNS = frozenset({'he', 'him', 'his', 'she', 'her', 'it', 'its',
+                                   'they', 'them', 'their', 'this', 'that'})
+            for word in words:
+                if word.lower() in _PRONOUNS:
+                    mention = self._entity_register.resolve(word.lower())
+                    if mention:
+                        # Replace the pronoun concept with the resolved entity name
+                        resolved = mention.name.capitalize()
+                        if resolved not in concepts:
+                            concepts.append(resolved)
+            # Register new named entities in the register
+            for concept in concepts:
+                if len(concept) > 2 and concept[0].isupper():
+                    c_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
+                    features: Dict[str, str] = {}
+                    self._entity_register.register(concept, c_hv, features)
         
         # Store concepts in semantic memory
         for concept in concepts:
@@ -304,6 +324,50 @@ class TextKnowledgeLearner:
         
         # Extract relations between concepts
         relations = []
+
+        # [V3-A] Frame Semantics — identify verb, lookup frame, fill roles
+        if self._frame_library is not None:
+            try:
+                words_list = self._tokenize(sentence)
+                for word in words_list:
+                    frame = self._frame_library.find_frame(word)
+                    if frame is not None:
+                        # Build filler HVs for concepts in sentence
+                        fillers: Dict[str, hypervec_rs.HyperVector] = {}
+                        for concept in concepts:
+                            for role in frame.roles:
+                                # Simple heuristic: first concept fills first role, etc.
+                                if role not in fillers:
+                                    fillers[role] = hypervec_rs.HyperVector(
+                                        hash(concept) % (2**32)
+                                    )
+                                    break
+                        if len(fillers) >= 2:
+                            roles_list = list(frame.roles.keys())
+                            filler_names = list(fillers.keys())
+                            if len(filler_names) >= 2:
+                                subj_role = filler_names[0]
+                                obj_role = filler_names[1]
+                                # Find the concept for each role
+                                subj_concept = None
+                                obj_concept = None
+                                for i, role in enumerate(roles_list):
+                                    if role in fillers and subj_concept is None and i == 0:
+                                        # Match concept by position
+                                        for c in concepts:
+                                            if c not in (subj_concept, obj_concept):
+                                                subj_concept = c
+                                                break
+                                    elif role in fillers and obj_concept is None and i == 1:
+                                        for c in concepts:
+                                            if c not in (subj_concept, obj_concept):
+                                                obj_concept = c
+                                                break
+                                if subj_concept and obj_concept:
+                                    relations.append((subj_concept, frame.name.lower(), obj_concept))
+                        break  # Use first frame match per sentence
+            except Exception:
+                pass  # graceful fallback
         
         # [A] Deep Parsing via LanguageModule (Prioritize if available)
         if self.language_module:
@@ -318,8 +382,6 @@ class TextKnowledgeLearner:
                 
                 # 2. Conditional Logic (The nuance we missed before)
                 if frames.get("condition"):
-                    # Rule: Condition -> (Agent Action Patient)
-                    # Rule: Condition -> (Agent Action Patient)
                     condition_text = frames["condition"]
                     
                     # Handle None values safely
@@ -329,14 +391,10 @@ class TextKnowledgeLearner:
                     
                     consequence_text = f"{ag} {ac} {pa}".strip()
                     
-                    # Store as a causal relation: Condition -> "implies" -> Consequence
-                    # We treat the condition itself as a high-level concept for now
                     relations.append((condition_text.capitalize(), "implies", consequence_text.capitalize()))
                     
-                    # Also try to extract core concepts from condition
                     cond_concepts = self._extract_concepts(condition_text)
                     for cc in cond_concepts:
-                         # Link condition concept to the consequence
                          relations.append((cc, "leads_to", consequence_text.capitalize()))
 
                 # 3. Causal Logic (Because...)

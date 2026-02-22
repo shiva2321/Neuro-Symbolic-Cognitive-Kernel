@@ -1,0 +1,26 @@
+NSCK V3 Benchmark Report
+========================================
+
+[NLU]
+  benchmark: nlu
+  sentences: 20
+  total_relations_learned: 38
+  avg_relations_per_sentence: 1.9
+  total_elapsed_s: 0.1885
+  avg_elapsed_s: 0.009424
+
+[MEMORY]
+  benchmark: memory
+
+[SNN]
+  ERROR: SNNPerceptionModule.__init__() missing 1 required positional argument: 'input_dim'
+
+[DECISION]
+  benchmark: decision
+  n_calls: 100
+  avg_latency_ms: 0.001
+  p50_latency_ms: 0.001
+  p95_latency_ms: 0.001
+  p99_latency_ms: 0.003
+  min_latency_ms: 0.0
+  max_latency_ms: 0.003

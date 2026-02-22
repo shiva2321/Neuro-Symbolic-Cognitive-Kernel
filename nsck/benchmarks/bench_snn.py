@@ -16,12 +16,13 @@ def run(n_trials: int = 100) -> Dict[str, Any]:
     import numpy as np
     from python.core.perception.snn_perception import SNNPerceptionModule
 
-    snn = SNNPerceptionModule()
+    input_dim = 10
+    snn = SNNPerceptionModule(input_dim=input_dim)
     latencies = []
     spike_counts = []
 
     for i in range(n_trials):
-        obs = np.random.rand(10).tolist()
+        obs = np.random.rand(input_dim).tolist()
         t0 = time.perf_counter()
         try:
             result = snn.perceive(obs)
