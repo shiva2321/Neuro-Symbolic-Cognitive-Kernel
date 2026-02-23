@@ -102,9 +102,17 @@ _Z_AXIS_SEED = 0xBEEF_0003
 _AXIS_FLIP_BITS = 50
 _HV_DIM = 10240
 
+# Offset added to negative-axis step numbers so their bit-flip seeds are
+# independent from the positive-axis seeds (avoids accidental symmetry).
+# Must be larger than the expected max coordinate magnitude.
+_NEGATIVE_STEP_OFFSET = 100_000
+
 # Spatial relation confidence thresholds
 _ADJACENT_MAX_DIST  = 1.5   # units — within this → "adjacent"
 _NEAR_DEFAULT_DIST  = 3.0   # units — default "near" radius
+# Minimum VSA similarity to accept a queried figure as a valid match.
+# Below this threshold the resonator result is too noisy to be reliable.
+_MIN_QUERY_SIMILARITY = 0.4
 
 
 # ---------------------------------------------------------------------------
@@ -218,7 +226,9 @@ class PositionCodebook:
             prev_bits = prev.bits.copy() if hasattr(prev, "bits") else base_bits.copy()
             bits = prev_bits.copy()
             for step in range(start - 1, n - 1, -1):
-                bits[self._flip_indices(axis_seed, step - 100000)] ^= 1
+                # Use a large offset so negative coordinates get independent flip sets
+                # (avoids any accidental symmetry with positive flip sets)
+                bits[self._flip_indices(axis_seed, step - _NEGATIVE_STEP_OFFSET)] ^= 1
         else:
             return cache[0]
         result = hypervec_rs.HyperVector.from_bits(bits)
@@ -347,7 +357,7 @@ class SpatialRelationEncoder:
             if sim > best_sim:
                 best_sim = sim
                 best_name = name
-        return best_name if best_sim > 0.4 else None
+        return best_name if best_sim > _MIN_QUERY_SIMILARITY else None
 
 
 # ---------------------------------------------------------------------------

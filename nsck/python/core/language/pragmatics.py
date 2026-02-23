@@ -258,8 +258,17 @@ class PragmaticAnalysis:
 
 
 # ---------------------------------------------------------------------------
-# PragmaticsEngine
+# Pragmatic thresholds
 # ---------------------------------------------------------------------------
+
+# Utterances shorter than this (in words) risk violating Quantity maxim.
+# Short yes/no answers and acknowledgements are intentionally excluded when
+# they end with "?" (questions are naturally short).
+_MIN_INFORMATIVE_WORDS = 3
+
+# Utterances longer than this risk violating Manner maxim (be brief).
+# This is a very permissive upper bound — only catches truly verbose utterances.
+_MAX_BRIEF_WORDS = 60
 
 class PragmaticsEngine:
     """
@@ -403,7 +412,7 @@ class PragmaticsEngine:
 
         # Quantity: very short responses may violate informativeness
         word_count = len(re.findall(r"\w+", utterance))
-        if word_count <= 2 and not utterance.strip().endswith("?"):
+        if word_count < _MIN_INFORMATIVE_WORDS and not utterance.strip().endswith("?"):
             violations.append(MaximViolation(
                 maxim="Quantity",
                 severity="low",
@@ -449,7 +458,7 @@ class PragmaticsEngine:
             ))
 
         # Manner: excessive length (very rough)
-        if word_count > 60:
+        if word_count > _MAX_BRIEF_WORDS:
             violations.append(MaximViolation(
                 maxim="Manner",
                 severity="low",

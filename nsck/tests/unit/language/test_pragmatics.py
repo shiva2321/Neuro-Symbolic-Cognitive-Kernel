@@ -4,7 +4,8 @@ Scalar implicature, Gricean maxims, indirect speech acts, presuppositions.
 """
 
 import unittest
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
 from python.core.language.pragmatics import (

@@ -4,7 +4,8 @@ VSA-native 2D/3D spatial relation encoding and querying.
 """
 
 import unittest
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', '..'))
 
 from python.core.reasoning.spatial_reasoning import (
