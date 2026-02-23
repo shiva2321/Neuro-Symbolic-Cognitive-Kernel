@@ -29,3 +29,5 @@ nsck-demo/10Minute_experiment_video.mp4
 
 # Virtualenv
 .venv/
+nsck/__init__.py
+nsck/*.so

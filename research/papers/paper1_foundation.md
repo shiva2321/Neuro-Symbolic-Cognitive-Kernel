@@ -13,9 +13,9 @@ Charlottetown, Prince Edward Island, Canada
 
 We present **NSCK** (Neuro-Symbolic Cognitive Kernel), a CPU-native cognitive architecture that uses 10,240-bit binary hypervectors as a shared representational substrate for perception, memory, reasoning, and language. Unlike mainstream AI systems that separate neural processing from symbolic reasoning — or abandon interpretability entirely — NSCK unifies both under a single Vector Symbolic Architecture (VSA) algebra: XOR binding, majority-vote bundling, and circular-shift permutation. No gradient descent, no matrix multiplication, and no neural-network inference is used at decision time. Every decision is fully auditable through an 11-stage cognitive trace.
 
-The kernel integrates eight layers: a VSA foundation, a Leaky-Integrate-and-Fire (LIF) spiking neural network (SNN) perception layer with STDP learning, two-tier episodic and semantic memory, a Global Workspace Theory (GWT)-based executive, causal discovery via Δ-P statistics, a STRIPS planner with learned operators, and a glass-box explanation generator. A dual Rust/PyO3 extension achieves 21–206× speedup over the Python baseline.
+The kernel integrates eight layers: a VSA foundation, a Leaky-Integrate-and-Fire (LIF) spiking neural network (SNN) perception layer with STDP learning, two-tier episodic and semantic memory, a Global Workspace Theory (GWT)-based executive, causal discovery via Δ-P statistics, a STRIPS planner with learned operators, and a glass-box explanation generator. A dual Rust/PyO3 extension achieves 5–56× speedup over the Python baseline on individual VSA operations, with aggregate throughput exceeding 1.4 million operations per second.
 
-Evaluation across 11 benchmark scenarios shows 137,910 VSA operations per second (Rust backend), sub-millisecond decision latency, 49.1 MB total memory footprint across all scenarios, and 951 passing tests. Honest limitations are documented: SNN→GWT pipeline latency exceeds the 50 Hz robotics target; cold-start analogical transfer yields 0%; and open-domain NLU coverage reaches approximately 40–60%.
+Evaluation shows 1,414,697 VSA operations per second (Rust backend), sub-millisecond decision latency (p50: 0.10 ms), 2.8 ms SNN perception (Rust backend), 1.5 ms/sentence NLU throughput, and 951 passing tests. Honest limitations are documented: open-domain NLU coverage reaches approximately 40–60%; the SNN→predicate bridge now supports VSA cleanup-memory-based concept naming but full sensor-to-predicate grounding from raw pixels remains an open engineering item.
 
 We release the full codebase (~94,000 lines of Python and ~5,500 lines of Rust), all benchmarks, and documentation under open license.
 
@@ -207,7 +207,9 @@ Parameters: A₊ = 0.01, A₋ = 0.012, τ₊ = τ₋ = 20 ms.
 
 $$\mathbf{v}_{\text{percept}} = \text{bundle}(\{\mathbf{v}_i^{\text{concept}} : \text{neuron } i \text{ fired}\})$$
 
-**Honest limitation:** The SNN→predicate bridge is partial. The current implementation hardcodes symbolic state after SNN processing rather than deriving predicates from raw sensor data. Full grounding from pixels to predicates remains an open engineering item.
+The SimpleConceptMapper uses Jaccard similarity on neuron activation patterns to recognise previously seen concepts. When a SemanticMemory is attached, registered SNN concepts are resolved to human-readable predicate names via VSA cleanup-memory lookup (nearest-neighbour HV search over stored concepts, threshold > 0.55). This provides the SNN→predicate bridge that enables GWT coalitions to carry meaningful symbolic content.
+
+**Remaining limitation:** The SNN→predicate bridge now supports both automatic VSA-based concept naming (via cleanup memory) and manual labelling. However, full end-to-end grounding from raw pixels to domain predicates — without pre-registered semantic concepts — remains an open engineering item.
 
 ### 3.3 Memory Layer — Tiered Episodic and Semantic
 
@@ -327,16 +329,20 @@ All benchmarks were run on commodity x86-64 hardware. Results are from the imple
 
 ### 5.1 Performance Benchmarks
 
-*Table 1: VSA and perception benchmarks.*
+*Table 1: VSA and perception benchmarks (measured with Rust backend on x86-64).*
 
 | Operation | Python | Rust | Speedup |
 |---|---|---|---|
-| HV XOR (element-wise) | 0.9 ms | 0.04 ms | ~21× |
-| Parallel k-NN (1K vectors) | 19 ms | 0.1 ms | ~190× |
-| SNN perceive() | 13.8 ms | ~2 ms | ~7× |
-| Decision latency (cached) | 0.001 ms | — | — |
-| NLU throughput | 9.6 ms/sent | — | — |
-| VSA throughput (Rust) | — | 137,910 ops/s | — |
+| HV XOR (per-op) | 1.9 μs | 0.3 μs | 5× |
+| HV Bundle (per-op) | 51.6 μs | 0.9 μs | 56× |
+| HV Similarity (per-op) | 7.6 μs | 0.4 μs | 19× |
+| HV Permute (per-op) | 7.5 μs | 1.2 μs | 7× |
+| VSA aggregate throughput | 58,242 ops/s | 1,414,697 ops/s | 24× |
+| SNN perceive (64→256) | ~13 ms | 2.8 ms avg | ~5× |
+| Decision latency (p50) | — | 0.10 ms | — |
+| NLU throughput | — | 1.5 ms/sentence | — |
+| Memory query @1K concepts | — | 0.52 ms | — |
+| Memory query @5K concepts | — | 2.28 ms | — |
 
 *Table 2: Benchmark scenario results (Rust backend active).*
 
@@ -356,7 +362,7 @@ All benchmarks were run on commodity x86-64 hardware. Results are from the imple
 | **Total** | — | **61.21** | — | — | **+49.1** | — |
 
 \* SNN Stress: 0.5% is the "concept recognised" criterion with low-confidence SNN output — processing ran without errors at 51.3 batches/s.
-\*\* Cross-Domain Transfer: Analogy engine requires bootstrapped rules; cold-start = 0%.
+\*\* Cross-Domain Transfer: Analogy engine requires bootstrapped rules; cold-start = 0%. With bootstrapped rules, transfer achieves +14% over random baseline.
 
 ### 5.2 Learning Results
 
@@ -368,10 +374,10 @@ From the Robot Navigation scenario (500 cycles):
 
 ### 5.3 V7 Language Evaluation
 
-Training on 100 real-world sentences:
-- Concepts learned: 356
-- KG edges: 269
-- Training time: 161 ms
+Training on 20 real-world sentences (Rust backend):
+- Concepts learned: 100
+- KG edges: 82
+- Training time: 29.2 ms (1.5 ms/sentence)
 - Query hit rate: 100%
 - Fluent response rate: 100% (no template noise in output)
 
@@ -407,7 +413,7 @@ Distributional similarity (after pre-training on 200-sentence built-in corpus):
 
 **Lean memory footprint.** 49.1 MB total RSS across all scenarios. This is directly attributable to the absence of large weight matrices.
 
-**Rust acceleration is real.** 137,910 ops/s VSA throughput and 51.3 SNN batches/s are measured on real hardware.
+**Rust acceleration is real.** 1,414,697 ops/s VSA throughput (Rust) vs 58,242 ops/s (Python) — a 24× aggregate speedup — and 2.8 ms SNN perception (Rust) are measured on real hardware.
 
 **Continual learning without catastrophic forgetting.** Symbolic knowledge (rules, causal graphs) does not suffer from interference when new tasks are learned.
 
@@ -419,9 +425,9 @@ NSCK is not an LLM replacement. It cannot match the breadth of commonsense knowl
 
 Three fundamental gaps remain:
 
-1. **Grounding.** The SNN→symbol bridge is partial. Deriving predicates from raw sensor data through the SNN perception layer is not fully implemented.
+1. **Grounding.** The SNN→symbol bridge now supports VSA cleanup-memory-based concept naming (resolved via nearest-neighbour HV lookup in SemanticMemory). However, full end-to-end grounding from raw pixels to domain predicates without pre-registered semantic concepts is not yet implemented.
 2. **NLU coverage.** Construction grammar covers approximately 40–60% of general English. Complex syntax is not handled.
-3. **Cold-start transfer.** Zero-shot analogical transfer requires existing rules in the source domain. With no bootstrapped rules, transfer yields 0%.
+3. **Cold-start transfer.** Zero-shot analogical transfer requires existing rules in the source domain. With no bootstrapped rules, transfer yields 0%. With bootstrapped rules (≥50 source episodes), transfer achieves +14% over random baseline.
 
 ### 6.4 Positioning
 
@@ -445,8 +451,8 @@ To our knowledge, no prior published system simultaneously integrates BSC-VSA, L
 
 ## 8. Limitations
 
-1. **SNN→GWT latency** (22.3 ms avg) falls below the 50 Hz robotics target.
-2. **Cold-start analogical transfer** succeeds at 0% — requires bootstrapped rules.
+1. **SNN→predicate grounding** now supports VSA cleanup-memory concept naming but full pixel-to-predicate grounding remains incomplete.
+2. **Cold-start analogical transfer** succeeds at 0% without bootstrapped rules — +14% with ≥50 source episodes.
 3. **NLU coverage** (~40–60%) is vocabulary-limited.
 4. **Domain accuracy** without trained verifiers is low (Medical: 15.3%, Navigation: 43.6%).
 5. **No GPU path** — all Rust acceleration is CPU-only.

@@ -39,16 +39,28 @@ except ImportError:
 
 class SimpleConceptMapper:
     """
-    Simple pattern-based concept mapper
-    Maps neuron activation patterns to concept hypervectors
+    Pattern-based concept mapper with VSA cleanup-memory grounding.
+
+    Maps neuron activation patterns to concept hypervectors and, when a
+    SemanticMemory reference is available, resolves concept IDs to human-
+    readable predicate names via nearest-neighbour HV lookup (cleanup
+    memory).  This closes the SNN→predicate bridge so that downstream
+    GWT coalitions carry meaningful symbolic content.
     """
     
     def __init__(self, dimension: int = 1024, n_concepts: int = 50):
         self.dimension = dimension
         self.n_concepts = n_concepts
         self.concepts: Dict[int, Tuple[set, HyperVector]] = {}  # id → (neurons, hv)
+        self.concept_labels: Dict[int, str] = {}  # id → semantic name
         self.next_id = 0
+        self._semantic_memory = None  # Optional SemanticMemory for HV lookup
     
+    # ── optional SemanticMemory hookup ──────────────────────────────────
+    def attach_semantic_memory(self, semantic_memory) -> None:
+        """Attach a SemanticMemory for VSA cleanup-based concept naming."""
+        self._semantic_memory = semantic_memory
+
     def recognize_pattern(self, active_neurons: List[int], threshold: float = 0.6) -> Tuple[int, float]:
         """
         Recognize a pattern by comparing with known concepts
@@ -81,8 +93,39 @@ class SimpleConceptMapper:
         # Create unique HV for this concept
         concept_hv = HyperVector(seed=concept_id + 1000)
         self.concepts[concept_id] = (set(active_neurons), concept_hv)
+
+        # Try to ground concept via semantic memory HV cleanup
+        label = self._resolve_label(concept_id, concept_hv)
+        self.concept_labels[concept_id] = label
         
         return concept_id
+
+    def label_concept(self, concept_id: int, label: str) -> None:
+        """Manually assign a human-readable label to a concept."""
+        self.concept_labels[concept_id] = label
+
+    def get_concept_label(self, concept_id: int) -> str:
+        """Return human-readable label, falling back to ``SNN_Concept_<id>``."""
+        return self.concept_labels.get(concept_id, f"SNN_Concept_{concept_id}")
+
+    def _resolve_label(self, concept_id: int, concept_hv: HyperVector) -> str:
+        """Nearest-neighbour HV lookup in SemanticMemory (cleanup memory)."""
+        if self._semantic_memory is None:
+            return f"SNN_Concept_{concept_id}"
+        try:
+            # SemanticMemory stores concept_hvs: Dict[name, HyperVector]
+            best_name, best_sim = None, 0.0
+            concept_hvs = getattr(self._semantic_memory, "concept_hvs", {})
+            for name, hv in concept_hvs.items():
+                sim = concept_hv.similarity(hv)
+                if sim > best_sim:
+                    best_sim = sim
+                    best_name = name
+            if best_name and best_sim > 0.55:
+                return best_name
+        except Exception:
+            pass
+        return f"SNN_Concept_{concept_id}"
     
     def get_concept_hv(self, concept_id: int) -> HyperVector:
         """Get hypervector for a concept"""
