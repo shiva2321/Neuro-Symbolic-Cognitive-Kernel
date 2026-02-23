@@ -252,7 +252,7 @@ where Φ is the standard normal CDF. This means false positive correspondences a
 | Average score | 0.0 | **+0.49** | +0.49 |
 | Rules transferred | — | 4 | — |
 | Abstract concepts discovered | — | 5 | — |
-| Transfer time | — | < 1 ms | — |
+| Transfer time | — | < 0.1 ms (Rust VSA) | — |
 
 The +14% improvement over random with zero target-domain training data demonstrates that structural alignment can provide a meaningful cold-start advantage.
 

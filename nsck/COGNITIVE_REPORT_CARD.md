@@ -69,15 +69,51 @@
 
 > Research mode creates ~15% more KG edges through transitive inference + co-occurrence relations.
 
-### VSA Operations (V7, Rust enabled)
+### VSA Operations (V7, Rust enabled — Verified Benchmarks)
 
-| Operation | Rust | Python |
-|---|---|---|
-| bundle ×100 | 0.07 ms | 0.07 ms |
-| xor ×100 | 0.02 ms | 0.02 ms |
-| similarity ×100 | 0.02 ms | 0.02 ms |
-| **negate() sim** | **0.5025** ✓ | **0.5025** ✓ |
-| negate idempotent | 1.0000 ✓ | 1.0000 ✓ |
+| Operation | Rust | Python | Speedup |
+|---|---|---|---|
+| XOR ×1000 | 0.3 μs/op | 1.9 μs/op | 5× |
+| Bundle ×1000 | 0.9 μs/op | 51.6 μs/op | 56× |
+| Similarity ×1000 | 0.4 μs/op | 7.6 μs/op | 19× |
+| Permute ×1000 | 1.2 μs/op | 7.5 μs/op | 7× |
+| **Aggregate throughput** | **1,414,697 ops/s** | **58,242 ops/s** | **24×** |
+| **negate() sim** | **0.5025** ✓ | **0.5025** ✓ | — |
+| negate idempotent | 1.0000 ✓ | 1.0000 ✓ | — |
+
+### SNN Perception (Rust backend, 64→256 neurons, ×50 runs)
+
+| Metric | Value |
+|---|---|
+| avg latency | **2.8 ms** |
+| p50 latency | 2.3 ms |
+| p95 latency | 5.2 ms |
+
+### Decision Latency (Rust VSA, ×200 runs)
+
+| Metric | Value |
+|---|---|
+| avg latency | **0.107 ms** |
+| p50 latency | **0.100 ms** |
+| p95 latency | 0.135 ms |
+
+### NLU Throughput (Rust backend)
+
+| Metric | Value |
+|---|---|
+| 20 sentences | 29.2 ms total |
+| Per-sentence | **1.5 ms** |
+| Concepts learned | 100 |
+| KG edges | 82 |
+
+### Memory Query Latency (Rust backend)
+
+| Concepts | Latency |
+|---|---|
+| 100 | 0.10 ms |
+| 500 | 0.30 ms |
+| 1,000 | **0.52 ms** |
+| 5,000 | 2.28 ms |
 
 ### Distributional Similarity (V7 — BUILTIN_CORPUS pre-training)
 
