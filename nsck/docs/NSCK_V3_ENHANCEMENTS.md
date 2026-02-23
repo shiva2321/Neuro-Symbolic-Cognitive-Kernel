@@ -346,3 +346,89 @@ All existing tests pass unchanged. V3 features tested and verified end-to-end.
 ---
 
 *Author: GitHub Copilot — February 22, 2026*
+
+---
+
+## Appendix: V4-V7 Enhancements (February 2026)
+
+*NSCK continued to evolve through V4, V5, V6, and V7 iterations in February 2026. This appendix summarizes what was added in each version.*
+
+### V4 Enhancements (Symbolic Reasoning Gaps)
+
+**5 new feature flags:**
+```python
+enable_negation_handling: bool = False
+enable_temporal_reasoning: bool = False
+enable_conditional_logic: bool = False
+enable_transitive_inference: bool = False
+enable_prototype_generalization: bool = False
+```
+
+**New modules:**
+- `reasoning/temporal_reasoning.py` — temporal event ordering (before/after/during)
+- `reasoning/abductive_reasoning.py` — inference to the best explanation
+- `reasoning/predictive_processor.py` — predictive processing, error minimisation
+- `learning/schema_induction.py` — pattern abstraction from repeated episodes
+- `learning/pmi_learner.py` — PMI-based co-occurrence learning
+- `learning/predictive_coding.py` — Bayesian prior update (PRIOR_UNCERTAINTY=0.5)
+- `learning/active_inference.py` — active inference (MIN_TEMP=0.1, MAX_TEMP=5.0)
+
+**ConstructionGrammar expanded:** +41 constructions (71 total) including negation, temporal connectives, conditionals. NEGATION_WORDS, TEMPORAL_CONNECTIVES, CONDITIONAL_CONNECTIVES frozensets added.
+
+**SemanticMemory expanded:** `infer_transitive(relation, max_hops)` and `build_prototypes(min_members)` added (Rosch 1973).
+
+**Test result:** 581 passed, 145 skipped.
+
+---
+
+### V5 Enhancements (Spatial + Pragmatic Reasoning)
+
+**2 new feature flags:**
+```python
+enable_spatial_reasoning: bool = False
+enable_pragmatics: bool = False
+```
+
+**New modules:**
+- `reasoning/spatial_reasoning.py` — `SpatialReasoner`, `PositionCodebook` (FPE bit-flip, 8 spatial relations). Uses `_AXIS_FLIP_BITS=50`, `_NEGATIVE_STEP_OFFSET=100_000`, `_MIN_QUERY_SIMILARITY=0.4`. **FPE chosen over permute because permute() gives ~0.50 similarity for all shifts — not monotone.**
+- `language/pragmatics.py` — `PragmaticEngine` (15 Horn scales, 7 speech acts, Gricean maxims, presuppositions)
+
+**Test result:** 671 passed, 145 skipped. New: `test_spatial_reasoning.py` (45 tests), `test_pragmatics.py` (45 tests).
+
+---
+
+### V6 Enhancements (Fluent NLG, Rust negate, NSW ANN)
+
+**New modules:**
+- `language/fluent_nlg.py` — `FluentResponseComposer`, `NSCKResponseEngine`, `RelationVerbalizer` — 5 query types, context-aware prose, anaphora, connectives
+- `language/pos_tagger.py` — `BrillPosTagger` — 300+ lexicon, 8 suffix rules, NEG/TEMP/COND tags
+
+**Extended modules:**
+- `vsa/hypervec_py.py` + `rust_vsa/src/lib.rs` — `negate()` added: `XOR(hv, NEG_SEED)` where `NEG_SEED=0xDEADBEEFCAFEBABE`. Properties: `sim(hv, negate(hv))≈0.50`; `negate(negate(hv))==hv`.
+- `memory/semantic_memory.py` — Pure-Python NSW ANN index (`_NSWIndex`) for O(log N) approximate k-NN without hnswlib
+- `multimodal/multimodal_processor.py` — `ConcurrentMultimodalProcessor` for parallel processing
+- `language/construction_grammar.py` — `tag_sentence()` exposed, `_ING_NOUNS`/`_NEGATORS`/`_ED_ADJECTIVES` sets added
+
+**Rust binaries rebuilt:** `hypervec_rs.so` (4.3 MB) + `snn_rs.so` (1.1 MB)
+
+**Test result:** 897 passed, 5 skipped. New: `test_v6_features.py` (86 tests).
+
+---
+
+### V7 Enhancements (KG Noise Filter, FluentNLG Wired, Distributional Pre-Training)
+
+**2 new feature flags:**
+```python
+enable_fluent_dialogue: bool = True   # on by default — safe drop-in
+enable_hf_corpus: bool = False         # requires internet + datasets library
+```
+
+**Key changes:**
+- `text_knowledge_learner.py` — `_STOP_CONCEPTS` frozenset (53 function words) prevents noise from entering the KG; `_GENERIC_RELATION_THRESHOLD=0.62` rejects overly similar concept pairs
+- `language/dialogue_manager.py` — All response methods now route through `NSCKResponseEngine` (FluentNLG)
+- `language/distributional_semantics.py` — `DistributionalCodebook` pre-trained on `BUILTIN_CORPUS` (200 sentences) at init when `enable_distributional_semantics=True`
+- `language/hf_corpus_loader.py` — `HFCorpusLoader` for HuggingFace dataset streaming with offline fallback
+
+**Test result:** 951 passed, 5 skipped, 4 xfailed. New: `test_v7_features.py` (54 tests).
+
+**Total flags as of V7:** 25 feature flags in `NSCKConfig`.

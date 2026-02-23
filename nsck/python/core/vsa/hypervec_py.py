@@ -106,6 +106,25 @@ class HyperVectorPy:
             # Use legacy Hamming
             return self.similarity(other)
 
+    # Fixed seed for the negation role vector — MUST match rust_vsa/src/lib.rs NEG_SEED
+    # Python: 0xDEAD_BEEF_CAFE_BABE as a positive seed for numpy default_rng
+    _NEG_ROLE_SEED: int = 0xDEAD_BEEF_CAFE_BABE
+
+    def negate(self) -> "HyperVectorPy":
+        """
+        VSA anti-bundling negation.
+
+        Returns a vector that is ~50 % similar to `self` (in the orthogonal
+        region) but is *deterministically* the same for the same input.
+        Convention: negate(negate(hv)) == hv (XOR is its own inverse).
+
+        Implementation: XOR `self` with a fixed "negation role" hypervector
+        (same seed as the Rust implementation for cross-backend consistency).
+        """
+        rng = np.random.default_rng(self._NEG_ROLE_SEED)
+        neg_role = rng.integers(0, 2, size=DIMENSION, dtype=np.int8)
+        return HyperVectorPy.from_bits(np.bitwise_xor(self.bits, neg_role))
+
     def permute(self, shift):
         """Circular bitwise permutation (rotation) of the hypervector."""
         shift_norm = shift % DIMENSION

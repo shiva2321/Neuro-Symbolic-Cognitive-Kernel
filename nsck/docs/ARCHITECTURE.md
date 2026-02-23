@@ -47,6 +47,10 @@ graph TB
         Ana["AnalogyEngine\nanalogy.py · 609 LOC"]
         Ctx["ContextEngine\ncontext_engine.py · 440 LOC"]
         Math["MathReasoner\nmath_reasoning.py\nFPE + algebra + word problems"]
+        Spatial["SpatialReasoner\nspatial_reasoning.py · V5\nFPE bit-flip positions · 8 relations"]
+        Temporal["TemporalReasoner\ntemporal_reasoning.py · V4\ntime points · before/after/during"]
+        Abduct["AbductiveReasoner\nabductive_reasoning.py · V4\nbest explanation selection"]
+        Predict["PredictiveProcessor\npredictive_processor.py · V4\nerror minimisation · precision"]
     end
 
     subgraph S4["4 · Perception"]
@@ -60,6 +64,10 @@ graph TB
         Hebb["HebbianMatrix + VSAHebbianLearner\nhebbian.py · 506 LOC\nOja's rule"]
         Cur["CuriosityModule\ncuriosity.py · 336 LOC"]
         XD["TransferEngine\ncross_domain.py\nSchema + Structure + Rule lifting"]
+        Schema["SchemaInduction\nschema_induction.py · V4\npattern abstraction · slot filling"]
+        PMI["PMILearner\npmi_learner.py · V4\nPointwise Mutual Information"]
+        PC["PredictiveCodingModule\npredictive_coding.py · V4\nPRIOR_UNCERTAINTY=0.5"]
+        AI["ActiveInferenceLearner\nactive_inference.py · V4\nMIN_TEMP=0.1 MAX_TEMP=5.0"]
     end
 
     subgraph S6["6 · Cognitive"]
@@ -70,19 +78,23 @@ graph TB
     end
 
     subgraph S7["7 · Language"]
-        TKL["TextKnowledgeLearner\ntext_knowledge_learner.py · 1,074 LOC"]
+        TKL["TextKnowledgeLearner\ntext_knowledge_learner.py · 1,074 LOC\n_STOP_CONCEPTS 53 words (V7)\nDistributionalCodebook pre-trained (V7)"]
         LM["LanguageModule + LinguaCortex\nlanguage_module.py · 526 LOC\nlingua_cortex.py · ~260 LOC"]
-        DM["DialogueManager\ndialogue_manager.py · 506 LOC"]
+        DM["DialogueManager\ndialogue_manager.py · 506 LOC\nFluentNLG wired (V7)"]
         UI["UniversalInput\nuniversal_input.py · 947 LOC"]
         SRL["SemanticRoleLabeler\nsemantic_roles.py\n12 thematic roles · resonator"]
         NLG["NLGEngine + DiscoursePlanner\nnlg.py\nconnectives · anaphora · steps"]
+        FlNLG["FluentResponseComposer + NSCKResponseEngine\nfluent_nlg.py · V6\nRelationVerbalizer · context-aware prose"]
+        POS["BrillPosTagger\npos_tagger.py · V6\n300+ lexicon · 8 suffix rules"]
+        Prag["PragmaticEngine\npragmatics.py · V5\n15 Horn scales · 7 speech acts\nGricean maxims · presuppositions"]
+        HFLoad["HuggingFace corpus loader\nhf_corpus_loader.py · V7\noffline fallback · streaming"]
     end
 
     subgraph S8["8 · Integration"]
         BS["BrainStore (SQLite)\npersistence.py · 852 LOC"]
         BF["BrainFusion\nbrain_fusion.py · 481 LOC"]
         EG["ExplanationGenerator\nexplanation.py · 433 LOC"]
-        Conf["NSCKConfig\nconfig.py · ~73 LOC"]
+        Conf["NSCKConfig\nconfig.py · ~100 LOC\n25 feature flags\nenable_fluent_dialogue=True (V7)\nenable_hf_corpus=False (V7)"]
     end
 
     CE --> GWT --> RL & Caus & Plan & Ana
@@ -110,11 +122,14 @@ classDiagram
         +bits: ndarray int8 10240
         +xor(other) HyperVectorPy
         +bundle(other) HyperVectorPy
+        +weighted_bundle(other, weight) HyperVectorPy
         +permute(shift) HyperVectorPy
         +permute_inverse(shift) HyperVectorPy
+        +negate() HyperVectorPy
         +similarity(other) float
         +cosine_similarity(other) float
         +similarity_robust(other, method) float
+        +lsh_hash(seed, n_bits) int
         +from_bits(bits)  HyperVectorPy
         +zero()  HyperVectorPy
     }
@@ -140,6 +155,7 @@ classDiagram
 | `xor(A, B)` | element-wise XOR | Binding — encodes role–filler pairs |
 | `bundle(A, B)` | majority vote; tie-breaking mask seeded from input bits | Superposition — "both A and B"; deterministic for the same pair |
 | `permute(k)` | `np.roll(bits, -k)` | Encodes position / temporal order |
+| `negate(A)` | `xor(A, NEG_SEED_HV)` | VSA anti-bundling — inverts membership; `sim(A, negate(A))≈0.50`; `negate(negate(A))==A` |
 | `similarity(A, B)` | `1 - Hamming/d` | Associative lookup distance |
 | `cosine_similarity(A, B)` | bipolar dot product / d | Noise-robust similarity |
 
@@ -182,13 +198,18 @@ graph LR
         RelW["Relation Weights\nis_a=0.9  has_property=0.7\ncauses/leads_to/results_in=0.6\nimplies=0.55  part_of=0.5\nsimilar_to=0.4  semantically_related=0.35"]
         SA["spread_activation(starts, steps, decay)"]
         Q["query(query_hv, k)"]
+        NSW["NSW ANN Index (V6)\n_NSWIndex pure-Python fallback\nO(log n) approximate k-NN\nfalls back to exact if hnswlib absent"]
+        Infer["infer_transitive(relation, max_hops)\nBFS up relation edges\nreturns count of new inferred edges"]
+        Proto["build_prototypes(min_members)\nbundle all member HVs per category\nprototype_hv = argmin dist to members"]
         RustBE["Rust Backend\nSemanticMemoryConcurrent\n(parallel spreading)"]
     end
 
     Graph --> SA
     RelW --> SA
     HVIdx --> Q
+    HVIdx --> NSW
     SA --> RustBE
+    NSW --> Q
 ```
 
 `add_concept(name, props)` — generates HV by binding property role–filler pairs via XOR + bundle.
@@ -196,6 +217,10 @@ graph LR
 `spread_activation(starts, steps=3, decay=0.7)` — iterates `steps` times; each active node propagates `activation × decay × edge_weight` to neighbours. Only top-200 activated nodes spread each step (prevents blow-up).
 
 `get_inherited_properties(concept)` — BFS up `is_a` edges; merges properties from general → specific (specific wins).
+
+`infer_transitive(relation_type, max_hops)` (V4) — adds implied edges: if `A→is_a→B` and `B→is_a→C`, asserts `A→is_a→C`.
+
+`build_prototypes(min_members)` (V4) — for each category with ≥ `min_members` instances, bundles all member HVs into a single prototype vector. Based on Rosch (1973) prototype theory: bundle = central tendency of members.
 
 ---
 
@@ -389,19 +414,24 @@ tom.get_beliefs(agent_id)   # → inferred goal + confidence
 
 ## 8. Language Layer
 
-### 8.1 Text Knowledge Learner
+### 8.1 Text Knowledge Learner (V7 pipeline)
+
+The TKL pipeline now has 7 stages, with V4-V7 additions shown:
 
 ```mermaid
 flowchart LR
     Text["Input sentence"]
-    Tok["Tokenise\nfilter stop words"]
-    SVO["Extract SVO triples\nheuristic NLP"]
-    Concept["Add concepts\nSemanticMemory\nbound property HVs"]
-    Rel["Add relations\ndirected edges\nis_a, causes, ..."]
-    Causal["Detect causal keywords\nAdd CausalLink\nto CausalGraph"]
-    Epi2["Store LiveEpisode\nEpisodicMemory"]
+    POS["BrillPosTagger (V6)\ntag_sentence()"]
+    CG["ConstructionMatcher (V3/V4)\n71 constructions\nNegation/Temporal/Conditional"]
+    SVO["Extract SVO triples\nheuristic NLP + SRL"]
+    Stop["_STOP_CONCEPTS filter (V7)\n53 words removed from KG"]
+    Concept["SemanticMemory\nadd_concept() + HV binding"]
+    Rel["add_relation()\n_GENERIC_RELATION_THRESHOLD=0.62 (V7)"]
+    Causal["CausalGraph\ndetect causal keywords"]
+    DistSem["DistributionalCodebook (V7)\nco-occurrence · context HVs"]
 
-    Text --> Tok --> SVO --> Concept --> Rel --> Causal --> Epi2
+    Text --> POS --> CG --> SVO --> Stop --> Concept --> Rel --> Causal
+    Concept --> DistSem
 ```
 
 ### 8.2 LinguaCortex — semantic folding
@@ -449,6 +479,68 @@ VSA-native SRL: identifies *who did what to whom, where, when, why, and how* wit
 - Formats procedural responses as numbered steps
 
 `NLGEngine` exposes both via `generate()` (single frame) and `generate_discourse()` (list of frames).
+
+### 8.6 Fluent NLG (`fluent_nlg.py`) — V6/V7
+
+`FluentResponseComposer` generates fluent English from semantic frame lists. Added in V6, wired into DialogueManager in V7.
+
+**5 query types:** `factual` | `explanatory` | `procedural` | `causal` | `comparative`
+
+`RelationVerbalizer` maps symbolic relation names to natural English:
+- `is_a` → "is a kind of" / "is a"
+- `causes` → "leads to" / "results in"
+- `has_property` → "is known for its" / "is characterized by"
+- `inhibits` → "prevents" / "reduces"
+- `part_of` → "is part of" / "belongs to"
+
+`NSCKResponseEngine.describe(concept, semantic_memory)`:
+1. Query semantic memory for up to `max_relations` edges for the concept
+2. Convert triples to frame dicts; detect query type from question word
+3. `FluentResponseComposer.compose(frames, query_type, topic)` → fluent paragraph
+4. Uses anaphora for repeated subjects and discourse connectives by relation type
+
+### 8.7 BrillPosTagger (`pos_tagger.py`) — V6
+
+Brill transformation-based POS tagger using a 300+ word lexicon and 8 suffix/prefix rules.
+
+**Key rules:**
+1. Words ending in `-ing` → VBG (gerund) unless in `_ING_NOUNS`
+2. Words ending in `-ed` unless in `_ED_ADJECTIVES` → VBD
+3. Words in NEGATORS → NEG tag (not, never, no, …)
+4. Words in TEMPORAL_CONNECTIVES → TEMP (before, after, while, …)
+5. Words in CONDITIONAL_CONNECTIVES → COND (if, unless, provided, …)
+6. Words in SIMILARITY_CONNECTIVES → SIM (like, as, similarly, …)
+7. Capitalized non-sentence-initial → NNP (proper noun)
+8. Words ending in `-tion`/`-ness`/`-ity`/`-ment`/`-ism` → NN
+
+`tag_sentence(sentence)` → `List[Tuple[str, str]]` (word, POS) pairs, used in TKL and CG matching.
+
+### 8.8 Pragmatics (`pragmatics.py`) — V5
+
+`PragmaticEngine` implements Gricean cooperative pragmatics for dialogue:
+
+- **Horn scales** (15 total): `(all, most, many, some)`, `(always, usually, sometimes)`, `(certain, probable, possible)`, `(and, or)`, `(know, believe)`, …
+- **Speech acts** (7): assertion, question, directive, commissive, expressive, declaration, threat
+- **Gricean maxims**: Quantity (be informative), Quality (be truthful), Relation (be relevant), Manner (be clear)
+- **Presupposition projection**: factive verbs (`know`, `realize`) project their complement as presupposed
+
+### 8.9 DistributionalCodebook (`distributional_semantics.py`) — V3/V7
+
+Co-occurrence based semantic similarity built from a corpus.
+
+**V7 addition:** Pre-trained on `BUILTIN_CORPUS` (200 curated sentences) at initialization. Results: semantically related word pairs achieve similarity 0.52–0.70 vs 0.50 random baseline.
+
+```
+co_occur[w1][w2] += 1  (within 5-word window)
+context_hv(w) = bundle(permute(word_hv(w2), k) for w2, k in context_window(w))
+similarity(w1, w2) = context_hv(w1).similarity(context_hv(w2))
+```
+
+### 8.10 HuggingFace Corpus Loader (`hf_corpus_loader.py`) — V7
+
+Streams text from HuggingFace datasets (FineWeb, C4, Wikipedia) for large-scale distributional pre-training. Falls back gracefully when offline.
+
+**Config flag:** `NSCKConfig(enable_hf_corpus=True)` — disabled by default (requires internet).
 
 ---
 

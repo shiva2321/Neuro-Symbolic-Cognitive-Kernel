@@ -36,6 +36,28 @@ _COREFERENCE_PRONOUNS: frozenset = frozenset({
     'they', 'them', 'their', 'this', 'that',
 })
 
+# Particles, adverbs and prepositions that should NEVER become concept nodes.
+# These slip through when a sentence fragment ends with them (e.g. "move away").
+_STOP_CONCEPTS: frozenset = frozenset({
+    'away', 'back', 'down', 'off', 'out', 'over', 'up', 'through', 'along',
+    'around', 'aside', 'ahead', 'behind', 'below', 'above', 'beside', 'between',
+    'beyond', 'within', 'without', 'toward', 'towards', 'inside', 'outside',
+    'across', 'against', 'among', 'amongst', 'upon', 'onto', 'into', 'unto',
+    'via', 'per', 'thus', 'hence', 'still', 'even', 'else', 'ever',
+    'never', 'often', 'always', 'usually', 'sometimes', 'rarely', 'already',
+    'soon', 'later', 'once', 'twice', 'again', 'much', 'many', 'few', 'less',
+    'more', 'most', 'very', 'quite', 'rather', 'nearly', 'almost', 'too',
+    'well', 'just', 'only', 'also', 'both', 'either', 'neither',
+    'but', 'and', 'or', 'not', 'nor', 'so', 'yet', 'for',
+})
+
+# Generic relation types — require stricter similarity threshold to avoid noise
+_GENERIC_RELATION_TYPES: frozenset = frozenset({'semantically_related', 'strongly_related'})
+
+# Similarity threshold applied to generic (co-occurrence only) relations.
+# Must be higher than the regular relation_threshold to suppress noisy edges.
+_GENERIC_RELATION_THRESHOLD: float = 0.62
+
 try:
     import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
@@ -158,7 +180,11 @@ class TextKnowledgeLearner:
             if getattr(config, 'enable_distributional_semantics', False):
                 try:
                     from python.core.language.distributional_semantics import DistributionalCodebook
-                    self._distrib_codebook = DistributionalCodebook()
+                    use_hf = getattr(config, 'enable_hf_corpus', False)
+                    # build_default pre-trains on BUILTIN_CORPUS (+HF when enabled)
+                    self._distrib_codebook = DistributionalCodebook.build_default(
+                        enable_hf_corpus=use_hf
+                    )
                 except Exception as e:
                     print(f"[TextLearner] Distributional semantics unavailable: {e}")
         
@@ -426,7 +452,13 @@ class TextKnowledgeLearner:
             # Ensure concepts exist before adding relation
             for concept in (subj, obj):
                 if concept not in self.semantic.concept_hvs:
-                    concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
+                    # Use distributional HV when available — gives better semantic
+                    # similarity than a raw hash (words in similar contexts cluster)
+                    concept_hv = None
+                    if self._distrib_codebook is not None:
+                        concept_hv = self._distrib_codebook.get_hv(concept.lower())
+                    if concept_hv is None:
+                        concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
                     self.semantic.add_concept(
                         concept_name=concept,
                         properties={'source': source, 'session': session_id},
@@ -464,6 +496,18 @@ class TextKnowledgeLearner:
             
             stats['relations'] += 1
             stats['facts'] += 1
+
+        # V4: transitive inference — derive new facts after each sentence
+        # (run lazily every 10 sentences to amortise cost)
+        if (self._config is not None and
+                getattr(self._config, 'enable_transitive_inference', False) and
+                getattr(self, '_tkl_sentence_count', 0) % 10 == 0):
+            try:
+                for rel_type in ("is_a", "part_of", "causes", "located_in"):
+                    self.semantic.infer_transitive(rel_type, max_hops=2)
+            except Exception:
+                pass
+        self._tkl_sentence_count = getattr(self, '_tkl_sentence_count', 0) + 1
         
         # Store experience in episodic memory
         episode = LiveEpisode(
@@ -592,7 +636,10 @@ class TextKnowledgeLearner:
             w_lower = word.lower()
             if w_lower in stop_words:
                 continue
-                
+            # V7: skip particle/adverb pseudo-concepts that produce noisy edges
+            if w_lower in _STOP_CONCEPTS:
+                continue
+
             # Allow length >= 3 (e.g. Sky, Red, Sun, Eye, Ear)
             if len(word) >= 3 and word.capitalize() not in concepts:
                 concepts.append(word.capitalize())
@@ -640,14 +687,51 @@ class TextKnowledgeLearner:
                 for match in cg_matches:
                     fillers = match.role_fillers
                     rel = match.construction.relation
-                    # Different constructions expose different roles
+                    cname = match.construction.name
+
+                    # V4: skip negation constructions unless the flag is on
+                    is_negation = rel.startswith("not_") or rel in ("lacks", "cannot_do", "never_does", "acts_without", "lacks_relation")
+                    if is_negation:
+                        if not (self._config is not None and getattr(self._config, 'enable_negation_handling', False)):
+                            continue
+
+                    # V4: skip temporal constructions unless the flag is on
+                    is_temporal = rel in ("precedes", "follows", "since_event", "until_event", "triggered_by", "occurs_during")
+                    if is_temporal:
+                        if not (self._config is not None and getattr(self._config, 'enable_temporal_reasoning', False)):
+                            continue
+
+                    # V4: skip conditional constructions unless the flag is on
+                    is_conditional = rel in ("implies", "conditional_on", "unless_condition", "when_then", "only_if", "leads_to", "results_in")
+                    if is_conditional:
+                        if not (self._config is not None and getattr(self._config, 'enable_conditional_logic', False)):
+                            continue
+
+                    # Extract subject/object from role fillers — V4 extended role name list
                     subj = None
                     obj = None
-                    for role_a in ('subject', 'cause', 'owner', 'entity', 'agent'):
+                    for role_a in (
+                        'subject', 'cause', 'owner', 'entity', 'agent',
+                        # V4:
+                        'antecedent', 'event1', 'early_subject', 'entity1',
+                        'condition_subject', 'negated_subject', 'dependent',
+                        'tool', 'part', 'person', 'artifact', 'left',
+                        'enabler', 'preventer', 'whole', 'term', 'quantity',
+                        'producer', 'container',
+                    ):
                         if role_a in fillers:
                             subj = fillers[role_a].capitalize()
                             break
-                    for role_b in ('attribute', 'effect', 'owned', 'location', 'patient', 'object'):
+                    for role_b in (
+                        'attribute', 'effect', 'owned', 'location', 'patient', 'object',
+                        # V4:
+                        'consequent', 'event2', 'late_subject', 'entity2',
+                        'condition_object', 'negated_attribute', 'negated_quality',
+                        'missing', 'alias', 'definition', 'purpose', 'material',
+                        'required', 'enabled', 'prevented', 'product', 'contained',
+                        'right', 'birthplace', 'dependency', 'responsibility',
+                        'capability', 'absent', 'excluded_location',
+                    ):
                         if role_b in fillers:
                             obj = fillers[role_b].capitalize()
                             break
@@ -657,7 +741,8 @@ class TextKnowledgeLearner:
                     # Construction grammar matched — still run heuristics to augment
                     pass
             except Exception as e:
-                pass  # graceful fallback
+                import logging as _log
+                _log.getLogger("nsck.tkl").debug("[TKL] Construction grammar matching failed: %s", e)
 
         sentence_lower = sentence.lower()
         
@@ -805,12 +890,17 @@ class TextKnowledgeLearner:
                             concept_a, concept_b, similarity, sentence
                         )
 
-                        # 2. Check criteria
-                        is_strong_relation = relation_type not in ['semantically_related', 'strongly_related']
-                        
-                        if is_strong_relation or (similarity > self.relation_threshold):
-                            # If specific linguistic marker exists (e.g. 'made of'), trust it even if similarity is low
-                            # Or if vector similarity is high, trust generic relation
+                        # 2. Check criteria — generic relations need a stricter
+                        #    threshold to suppress noise ("memory related to away")
+                        is_strong_relation = relation_type not in _GENERIC_RELATION_TYPES
+                        threshold = (
+                            _GENERIC_RELATION_THRESHOLD
+                            if not is_strong_relation
+                            else self.relation_threshold
+                        )
+                        if is_strong_relation or (similarity > threshold):
+                            # If specific linguistic marker exists, trust it even if
+                            # similarity is low; otherwise require high-confidence sim.
                             relations.append((concept_a, relation_type, concept_b))
                     except Exception:
                         pass  # Skip if similarity calculation fails

@@ -74,6 +74,31 @@ class NSCKConfig:
     enable_stigmergy: bool = False
     enable_auto_categories: bool = False
 
+    # === V4 Feature Flags — new cognitive capabilities ===
+    # Negation-aware relation extraction: "X does not Y" stored as not_relates_to
+    enable_negation_handling: bool = False
+    # Temporal ordering extraction: "X before Y" → precedes, "X after Y" → follows
+    enable_temporal_reasoning: bool = False
+    # Conditional logic extraction: "if X then Y" → implies / conditional_on
+    enable_conditional_logic: bool = False
+    # Taxonomic/transitive closure: A is_a B + B is_a C → A is_a C
+    enable_transitive_inference: bool = False
+    # Prototype-based category generalization via VSA bundling
+    enable_prototype_generalization: bool = False
+
+    # === V5 Feature Flags — remaining roadmap items ===
+    # Spatial reasoning: place entities and query above/below/left/right/near
+    enable_spatial_reasoning: bool = False
+    # Pragmatics: scalar implicature, Gricean maxims, indirect speech acts
+    enable_pragmatics: bool = False
+
+    # === V7 Feature Flags — dialogue quality, corpus training, noise filtering ===
+    # Wire FluentNLG into DialogueManager (replaces template-based realize_sentence)
+    enable_fluent_dialogue: bool = True   # safe drop-in replacement; on by default
+    # Try to download a HuggingFace corpus slice to augment distributional HV training.
+    # Requires internet access; falls back to BUILTIN_CORPUS silently when offline.
+    enable_hf_corpus: bool = False
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -91,7 +116,7 @@ class NSCKConfig:
 
     @classmethod
     def research(cls) -> "NSCKConfig":
-        """Research config: all V3 flags on for maximum capability exploration."""
+        """Research config: all V3+V4 flags on for maximum capability exploration."""
         return cls(
             enable_construction_grammar=True,
             enable_frame_semantics=True,
@@ -106,6 +131,17 @@ class NSCKConfig:
             enable_homeostasis=True,
             enable_stigmergy=True,
             enable_auto_categories=True,
+            # V4
+            enable_negation_handling=True,
+            enable_temporal_reasoning=True,
+            enable_conditional_logic=True,
+            enable_transitive_inference=True,
+            enable_prototype_generalization=True,
+            # V5
+            enable_spatial_reasoning=True,
+            enable_pragmatics=True,
+            # V7
+            enable_fluent_dialogue=True,
         )
 
     @classmethod
@@ -117,6 +153,13 @@ class NSCKConfig:
             enable_homeostasis=True,
             enable_stigmergy=True,
             enable_incremental_concept_refinement=True,
+            # V4: stable inference features on in production
+            enable_negation_handling=True,
+            enable_temporal_reasoning=True,
+            enable_conditional_logic=True,
+            enable_transitive_inference=True,
+            # V7: fluent dialogue on in production
+            enable_fluent_dialogue=True,
         )
 
 

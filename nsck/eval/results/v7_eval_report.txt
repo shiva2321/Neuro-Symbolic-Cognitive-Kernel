@@ -1,0 +1,69 @@
+NSCK V7 End-to-End Evaluation Report
+========================================================================
+
+Rust VSA: YES
+Rust SNN: YES
+
+RESEARCH MODE (all flags on):
+  Sentences trained : 100
+  Concepts learned  : 356
+  KG edges          : 269
+  Train time (ms)   : 161.0
+  Query hit rate    : 100.0%
+  Fluent rate       : 100.0%
+
+MINIMAL MODE (all flags off):
+  Sentences trained : 100
+  Concepts learned  : 354
+  KG edges          : 233
+  Train time (ms)   : 105.0
+  Query hit rate    : 100.0%
+  Fluent rate       : 100.0%
+
+DISTRIBUTIONAL SIMILARITY (Research mode):
+  sim(brain, memory) = 0.6583
+  sim(rain, flooding) = 0.0000
+  sim(dna, gene) = 0.0000
+  sim(gravity, mass) = 0.4922
+  sim(cell, nucleus) = 0.5035
+
+SAMPLE FLUENT RESPONSES (Research mode):
+  Q: What is DNA?
+  A: Dna and genetic are connected through a carries link.
+     Fluent=Y  Hit=Y
+
+  Q: What causes rain to rise?
+  A: I have not yet learned what causes rain to rise.
+     Fluent=Y  Hit=Y
+
+  Q: Explain photosynthesis
+  A: Understanding photosynthesis requires examining several aspects. Photosynthesis is related to sunlight (converts). To conclude, sunlight and
+     Fluent=Y  Hit=Y
+
+  Q: What is memory?
+  A: The following describes memory: Memory is connected to past. Finally, it and restores are connected through a and link.
+     Fluent=Y  Hit=Y
+
+  Q: What does gravity cause?
+  A: I do not know what Gravity causes yet.
+     Fluent=Y  Hit=Y
+
+  Q: What is photosynthesis?
+  A: Photosynthesis is related to sunlight (converts).
+     Fluent=Y  Hit=Y
+
+  Q: What causes immune response?
+  A: I have not yet learned what causes immune response.
+     Fluent=Y  Hit=Y
+
+  Q: Explain evolution
+  A: I know 'Evolution' exists but haven't learned any facts about it yet.
+     Fluent=Y  Hit=Y
+
+  Q: What does smoking cause?
+  A: Smoking can cause Causes, Disease, Lung, Rivers and Rise.
+     Fluent=Y  Hit=Y
+
+  Q: What is entropy?
+  A: Entropy can be described as follows. Entropy and increase are connected through a tends link. To conclude, there is a change relationship be
+     Fluent=Y  Hit=Y

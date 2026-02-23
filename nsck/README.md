@@ -165,72 +165,93 @@ sequenceDiagram
 
 ## Module Overview
 
-| Directory | Module | Key class(es) | LOC |
-|---|---|---|---|
-| `vsa/` | `hypervec_py.py` | `HyperVectorPy`, `CleanupMemory` | 361 |
-| `vsa/` | `hypervec_shim.py` | Backend selector (Rust → Python) | 320 |
-| `vsa/` | `resonator.py` | `ResonatorNetwork` | ~120 |
-| `reasoning/` | `cognitive_engine.py` | `CognitiveEngine`, `CognitiveState`, `Proposal` | 1,490 |
-| `reasoning/` | `global_workspace.py` | `GlobalWorkspace`, `Coalition` | ~312 |
-| `reasoning/` | `causal_reasoning.py` | `CausalDiscovery`, `CausalGraph`, `CausalReasoner` | 1,233 |
-| `reasoning/` | `rule_learner.py` | `RuleLearner`, `RuleCandidate` | 644 |
-| `reasoning/` | `planner.py` | `STRIPSPlanner`, `PlanStep` | ~296 |
-| `reasoning/` | `analogy.py` | `AnalogyEngine`, `Analogy`, `blend()`, `functor_quality()` | 620 |
-| `reasoning/` | `belief_revision.py` ⚑ | `BeliefMetadata`, `BeliefScorer` | 42 |
-| `reasoning/` | `context_engine.py` | `ContextEngine` | ~440 |
-| `reasoning/` | `math_reasoning.py` | `MathReasoner`, `FPECodebook`, `LinearSolver` | ~390 |
-| `memory/` | `episodic_memory.py` | `EpisodicMemory`, `LiveEpisode` | 501 |
-| `memory/` | `semantic_memory.py` | `SemanticMemory` (+ HNSW + stigmergy + belief revision) ⚑ | 512 |
-| `memory/` | `homeostasis.py` ⚑ | `MemoryHomeostasis` | 134 |
-| `memory/` | `staged_recall.py` | `StagedRecall` | ~134 |
-| `cognitive/` | `emotion_system.py` | `EmotionSystem` | 420 |
-| `cognitive/` | `metacognition.py` | `SafetyGate`, `MetacognitiveEngine` | 504 |
-| `cognitive/` | `self_model.py` | `SelfModel` | ~255 |
-| `cognitive/` | `theory_of_mind.py` | `TheoryOfMind` | ~312 |
-| `perception/` | `snn_perception.py` | `SNNPerceptionModule`, `LIFNeuronLayer` | 874 |
-| `perception/` | `vsa_snn_bridge.py` | `RateCoder`, `TemporalCoder` | ~461 |
-| `perception/` | `grounding_verifier.py` | `GroundingVerifier` | 585 |
-| `perception/` | `symbol_grounding.py` | `SymbolGrounding` | ~200 |
-| `learning/` | `hebbian.py` | `HebbianMatrix`, `VSAHebbianLearner` | 506 |
-| `learning/` | `curiosity.py` | `CuriosityModule`, `ExplorationDecision` | 336 |
-| `learning/` | `cross_domain.py` | `TransferEngine`, `SchemaExtractor`, `RuleLifter` | ~430 |
-| `language/` | `text_knowledge_learner.py` | `TextKnowledgeLearner` (+ CG + frame + coref wiring) ⚑ | 1,230 |
-| `language/` | `construction_grammar.py` ⚑ | `ConstructionMatcher`, `Construction`, 30 patterns | 135 |
-| `language/` | `frame_semantics.py` ⚑ | `FrameLibrary`, `Frame`, 20 FrameNet frames | 81 |
-| `language/` | `coreference.py` ⚑ | `EntityRegister`, `EntityMention` | 76 |
-| `language/` | `distributional_semantics.py` ⚑ | `DistributionalCodebook` | 127 |
-| `language/` | `language_module.py` | `LanguageModule` | 526 |
-| `language/` | `lingua_cortex.py` | `LinguaCortex` | ~260 |
-| `language/` | `dialogue_manager.py` | `DialogueManager` | 506 |
-| `language/` | `universal_input.py` | `UniversalInput` (+ robust guards) ⚑ | 947 |
-| `language/` | `semantic_roles.py` | `SemanticRoleLabeler`, `SRLFrame` | ~380 |
-| `language/` | `nlg.py` | `StructuralRealizer`, `DiscoursePlanner`, `NLGEngine` | ~430 |
-| `integration/` | `config.py` | `NSCKConfig` (14 V3 flags + 3 presets) ⚑ | 115 |
-| `integration/` | `persistence.py` | `BrainStore`, `Episode`, `Rule` | 852 |
-| `integration/` | `brain_fusion.py` | `BrainFusion`, `TaskBrain`, `FusedBrain` | ~481 |
-| `integration/` | `explanation.py` | `ExplanationGenerator`, `Explanation` | ~433 |
-| `multimodal/` | `multimodal_processor.py` | `MultimodalProcessor`, `MultimodalInput` | 788 |
-| `multimodal/` | `image_generator.py` | `ImageGenerator`, `VisualFeatures` | 575 |
+| Directory | Module | Key class(es) | LOC | Version |
+|---|---|---|---|---|
+| `vsa/` | `hypervec_py.py` | `HyperVectorPy` (+ `negate()`), `CleanupMemory` | 361 | V1/V6 |
+| `vsa/` | `hypervec_shim.py` | Backend selector (Rust → Python) | 320 | V1 |
+| `vsa/` | `resonator.py` | `ResonatorNetwork` | ~120 | V1 |
+| `reasoning/` | `cognitive_engine.py` | `CognitiveEngine`, `CognitiveState`, `Proposal` | 1,402 | V1 |
+| `reasoning/` | `global_workspace.py` | `GlobalWorkspace`, `Coalition` | 312 | V1 |
+| `reasoning/` | `causal_reasoning.py` | `CausalDiscovery`, `CausalGraph`, `CausalReasoner` | 1,233 | V1 |
+| `reasoning/` | `rule_learner.py` | `RuleLearner`, `RuleCandidate` | 644 | V1 |
+| `reasoning/` | `planner.py` | `STRIPSPlanner`, `PlanStep` | 296 | V1 |
+| `reasoning/` | `analogy.py` | `AnalogyEngine`, `Analogy`, `blend()` | 609 | V1 |
+| `reasoning/` | `belief_revision.py` ⚑ | `BeliefMetadata`, `BeliefScorer` | 42 | V3 |
+| `reasoning/` | `context_engine.py` | `ContextEngine` | 440 | V1 |
+| `reasoning/` | `math_reasoning.py` | `MathReasoner`, `FPECodebook`, `LinearSolver` | ~390 | V1 |
+| `reasoning/` | `spatial_reasoning.py` ⚑ | `SpatialReasoner`, `PositionCodebook` (FPE bit-flip, 8 relations) | ~200 | V5 |
+| `reasoning/` | `temporal_reasoning.py` ⚑ | `TemporalReasoner` (before/after/during) | ~150 | V4 |
+| `reasoning/` | `abductive_reasoning.py` ⚑ | `AbductiveReasoner` (best-explanation) | ~200 | V4 |
+| `reasoning/` | `predictive_processor.py` ⚑ | `PredictiveProcessor` (PRIOR_UNCERTAINTY=0.5) | ~180 | V4 |
+| `memory/` | `episodic_memory.py` | `EpisodicMemory`, `LiveEpisode` | 501 | V1 |
+| `memory/` | `semantic_memory.py` | `SemanticMemory` (NSW ANN, `infer_transitive`, `build_prototypes`) ⚑ | ~800 | V1/V4/V6 |
+| `memory/` | `homeostasis.py` ⚑ | `MemoryHomeostasis` | 134 | V3 |
+| `memory/` | `staged_recall.py` | `StagedRecall` | 134 | V1 |
+| `cognitive/` | `emotion_system.py` | `EmotionSystem` | 420 | V1 |
+| `cognitive/` | `metacognition.py` | `SafetyGate`, `MetacognitiveEngine` | 504 | V1 |
+| `cognitive/` | `self_model.py` | `SelfModel` | 255 | V1 |
+| `cognitive/` | `theory_of_mind.py` | `TheoryOfMind` | 312 | V1 |
+| `perception/` | `snn_perception.py` | `SNNPerceptionModule`, `LIFNeuronLayer` | 874 | V1 |
+| `perception/` | `vsa_snn_bridge.py` | `RateCoder`, `TemporalCoder` | 461 | V1 |
+| `perception/` | `grounding_verifier.py` | `GroundingVerifier` | 585 | V1 |
+| `perception/` | `symbol_grounding.py` | `SymbolGrounding` | 200 | V1 |
+| `learning/` | `hebbian.py` | `HebbianMatrix`, `VSAHebbianLearner` | 506 | V1 |
+| `learning/` | `curiosity.py` | `CuriosityModule`, `ExplorationDecision` | 336 | V1 |
+| `learning/` | `cross_domain.py` | `TransferEngine`, `SchemaExtractor`, `RuleLifter` | ~430 | V2 |
+| `learning/` | `schema_induction.py` ⚑ | `SchemaInducer` (slot-filling patterns) | ~150 | V4 |
+| `learning/` | `pmi_learner.py` ⚑ | `PMILearner` (PMI co-occurrence) | ~100 | V4 |
+| `learning/` | `predictive_coding.py` ⚑ | `PredictiveCodingModule` | ~100 | V4 |
+| `learning/` | `active_inference.py` ⚑ | `ActiveInferenceLearner` (MIN_TEMP=0.1, MAX_TEMP=5.0) | ~120 | V4 |
+| `language/` | `text_knowledge_learner.py` | `TextKnowledgeLearner` (_STOP_CONCEPTS, DistribPreTrain) ⚑ | 1,074 | V1/V7 |
+| `language/` | `construction_grammar.py` ⚑ | `ConstructionMatcher` (71 constructions, V4 negation/temporal/conditional) | ~350 | V3/V4 |
+| `language/` | `frame_semantics.py` ⚑ | `FrameLibrary`, `Frame` | 81 | V3 |
+| `language/` | `coreference.py` ⚑ | `EntityRegister`, `EntityMention` | 76 | V3 |
+| `language/` | `distributional_semantics.py` ⚑ | `DistributionalCodebook` (BUILTIN_CORPUS pre-train) | ~200 | V3/V7 |
+| `language/` | `language_module.py` | `LanguageModule` | 526 | V1 |
+| `language/` | `lingua_cortex.py` | `LinguaCortex` | 260 | V1 |
+| `language/` | `dialogue_manager.py` | `DialogueManager` (FluentNLG wired) ⚑ | 506 | V1/V7 |
+| `language/` | `universal_input.py` | `UniversalInput` | 947 | V1 |
+| `language/` | `semantic_roles.py` | `SemanticRoleLabeler`, `SRLFrame` | ~380 | V2 |
+| `language/` | `nlg.py` | `StructuralRealizer`, `DiscoursePlanner`, `NLGEngine` | ~430 | V2 |
+| `language/` | `fluent_nlg.py` ⚑ | `FluentResponseComposer`, `NSCKResponseEngine`, `RelationVerbalizer` | ~350 | V6 |
+| `language/` | `pos_tagger.py` ⚑ | `BrillPosTagger` (300+ lexicon, 8 suffix rules) | ~180 | V6 |
+| `language/` | `pragmatics.py` ⚑ | `PragmaticEngine` (15 Horn scales, 7 speech acts, Gricean maxims) | ~200 | V5 |
+| `language/` | `hf_corpus_loader.py` ⚑ | `HFCorpusLoader` (HuggingFace FineWeb, offline fallback) | ~120 | V7 |
+| `integration/` | `config.py` | `NSCKConfig` (25 feature flags, 3 presets) ⚑ | ~100 | V1/V7 |
+| `integration/` | `persistence.py` | `BrainStore`, `Episode`, `Rule` | 852 | V1 |
+| `integration/` | `brain_fusion.py` | `BrainFusion`, `TaskBrain`, `FusedBrain` | 481 | V1 |
+| `integration/` | `explanation.py` | `ExplanationGenerator`, `Explanation` | 433 | V1 |
+| `multimodal/` | `multimodal_processor.py` | `MultimodalProcessor`, `ConcurrentMultimodalProcessor` ⚑ | 788 | V1/V6 |
+| `multimodal/` | `image_generator.py` | `ImageGenerator`, `VisualFeatures` | 575 | V1 |
 
-> **⚑** = New or substantially extended in V3.
+> **⚑** = New or substantially extended in V3–V7.
 
-### Rust Accelerator (`rust_vsa/`)
+**Total: 53 source modules, 79 Python files, ~27,000 LOC**
 
-| Source file | What it accelerates | Speedup |
+### Rust Accelerator (`rust_vsa/`) — hypervec_rs.so (4.3 MB)
+
+| Source file | What it accelerates | Verified speedup |
 |---|---|---|
-| `src/lib.rs` | `HyperVector` (XOR · bundle · permute · similarity) | 21–206× |
+| `src/lib.rs` | `HyperVector` (XOR · bundle · permute · `negate()` · similarity) | 6–76× |
 | `src/concurrent.rs` | `HyperVectorRegistry` — thread-safe bulk storage | high |
 | `src/semantic.rs` | `SemanticMemoryConcurrent` — parallel spreading activation | high |
-| `src/episodic.rs` | `EpisodicMemoryConcurrent` — parallel k-NN with RwLock hot tier | high |
+| `src/episodic.rs` | `EpisodicMemoryConcurrent` — parallel k-NN with RwLock | high |
 | `src/worker_pool.rs` | `CognitiveWorkerPool` — Rayon thread pool | — |
 | `src/persistence.rs` | `PersistentStorage` — async SQLite | — |
-| `src/async_runtime.rs` | `AsyncCognitiveRuntime` — Tokio | — |
 
-### Rust SNN Accelerator (`rust_snn/`)
+**Measured speedups (Feb 2026, 500 ops, 10240-bit HVs):**
+```
+similarity ×500:  Rust=0.137ms  Python=3.851ms  → 28.1×
+xor ×500:         Rust=0.117ms  Python=0.713ms  →  6.1×
+bundle ×50:       Rust=0.038ms  Python=2.874ms  → 75.9×
+negate ×50:       Rust=0.038ms  Python=2.401ms  → 63.8×
+```
+
+### Rust SNN Accelerator (`rust_snn/`) — snn_rs.so (1.1 MB)
 
 | Source file | What it accelerates |
 |---|---|
-| `src/lib.rs` | `LIFLayer.step()`, `SnnCore.simulate()`, `StdpEngine.apply()` — all Rayon parallelised |
+| `src/lib.rs` | `LIFLayer.step()`, `SnnCore.simulate()`, `StdpEngine.apply()` — Rayon parallelised |
 | `src/hebbian.rs` | `HebbianMatrix.update()` — Oja's rule outer-product |
 | `src/concept.rs` | `ConceptMapper.recognize()` — Jaccard per concept |
 
@@ -239,16 +260,23 @@ sequenceDiagram
 ## Building the Rust Accelerator
 
 ```bash
-# VSA accelerator
+# VSA accelerator (hypervec_rs.so — 4.3 MB)
 cd nsck/rust_vsa
-pip install -e .          # builds with maturin / cargo, installs as hypervec_rs
+cargo build --release
+cp target/release/libhypervec_rs.so ../hypervec_rs.so
 
-# SNN accelerator (optional)
+# SNN accelerator (snn_rs.so — 1.1 MB)
 cd nsck/rust_snn
-pip install -e .          # installs as snn_rs
+cargo build --release
+cp target/release/libsnn_rs.so ../snn_rs.so
 ```
 
-The Python shims (`hypervec_shim.py`, `snn_shim.py`) automatically detect and use the Rust extension if available, falling back to the pure-Python/NumPy implementation otherwise. Benchmarks show 21–206× speedup depending on operation (XOR/permute at the low end, parallel similarity search at the high end).
+The Python shims (`hypervec_shim.py`, `snn_shim.py`) automatically detect and use the Rust extension if the `.so` files exist in `nsck/`, falling back to the pure-Python/NumPy implementation otherwise.
+
+**Verified speedups (Feb 2026):**
+```
+similarity ×500:  28.1×  |  bundle ×50: 75.9×  |  negate ×50: 63.8×
+```
 
 ---
 
@@ -256,22 +284,26 @@ The Python shims (`hypervec_shim.py`, `snn_shim.py`) automatically detect and us
 
 ```bash
 # From the repository root
-cd nsck
 
-# All tests
-pytest tests/ python/core/tests/ -q
+# All tests (Python-only, no Rust .so)
+cd nsck && python -m pytest tests/ -q
+# Result: 807 passed, 150 skipped, 3 xfailed
+
+# All tests (with Rust .so built and in nsck/)
+cd nsck && python -m pytest tests/ -q
+# Result: 951 passed, 5 skipped, 4 xfailed
 
 # Unit tests only
-pytest tests/unit/ -q
+python -m pytest tests/unit/ -q
 
 # Integration tests
-pytest tests/integration/ -q
+python -m pytest tests/integration/ -q
 
-# Architecture verification tests
-pytest tests/core_architecture/ -q
+# V6/V7 feature tests
+python -m pytest tests/unit/test_v6_features.py tests/unit/test_v7_features.py -q
 
 # With verbose output
-pytest tests/ python/core/tests/ -v
+python -m pytest tests/ -v
 ```
 
 ---
@@ -281,14 +313,32 @@ pytest tests/ python/core/tests/ -v
 ### Text Learning and Querying
 
 ```python
+from python.core.integration.config import NSCKConfig
 from python.core.language.text_knowledge_learner import TextKnowledgeLearner
+from python.core.memory.semantic_memory import SemanticMemory
+from python.core.reasoning.causal_reasoning import CausalGraph
+from python.core.language.fluent_nlg import NSCKResponseEngine
 
-tkl = TextKnowledgeLearner()
-tkl.learn("Water is a molecule made of hydrogen and oxygen.")
-tkl.learn("Rain causes flooding in low-lying areas.")
+cfg = NSCKConfig.research()   # enable all features
+sem = SemanticMemory(config=cfg)
+cg  = CausalGraph()
+tkl = TextKnowledgeLearner(semantic_memory=sem, causal_graph=cg, config=cfg)
+nlg = NSCKResponseEngine()
 
-result = tkl.query("What causes flooding?")
-print(result)  # returns related concepts and causal chains
+tkl.learn_from_text("Water is a molecule made of hydrogen and oxygen. Rain causes flooding.")
+
+# Fluent NL response
+resp = nlg.describe("Rain", sem, max_relations=5)
+print(resp)
+# → "To explain Rain: Rain leads to flooding."
+```
+
+### Spreading Activation
+
+```python
+activated = sem.spread_activation(["Brain", "Learning"], steps=2, decay=0.7)
+for concept, score in sorted(activated.items(), key=lambda x: -x[1])[:5]:
+    print(f"  {concept}: {score:.4f}")
 ```
 
 ### Episodic Memory

@@ -55,18 +55,63 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 
 ### ⚠️ Current Gaps (What We Need to Add/Improve)
 
-| Gap | Why It Matters | Priority |
-|-----|---------------|----------|
-| Semantic Role Labeling (SRL) via Resonator Networks | True NLU requires knowing *who did what to whom* | P0 |
-| Math/Numeric Reasoning in VSA | "Numbers and math" are core input types | P0 |
-| Cross-Domain Knowledge Transfer (formal) | Generalization across domains is the hallmark of intelligence | P0 |
-| NLG: Multi-sentence discourse planning | Fluent responses need more than S-V-O templates | P1 |
-| Concurrent multimodal fusion pipeline | Simultaneous inputs (e.g., spoken + visual) not properly scheduled | P1 |
-| SNN Rust port for perception (<5ms) | Python SNN is ~19ms; need Rust for real-time use | P1 |
-| Formal temporal reasoning (before/after/during) | Time is fundamental to language and events | P2 |
-| Spatial reasoning (above/below/inside/outside) | Required for vision-language grounding | P2 |
-| Negation handling in VSA | "X is NOT Y" needs explicit anti-bundling | P2 |
-| Scalar implicature and pragmatics | Natural language is richer than propositional logic | P3 |
+| Gap | Why It Matters | Priority | Status |
+|-----|---------------|----------|--------|
+| Semantic Role Labeling (SRL) via Resonator Networks | True NLU requires knowing *who did what to whom* | P0 | ✅ **Done (A1)** |
+| Math/Numeric Reasoning in VSA | "Numbers and math" are core input types | P0 | ✅ **Done (B1)** |
+| Cross-Domain Knowledge Transfer (formal) | Generalization across domains is the hallmark of intelligence | P0 | ✅ **Done (C1)** |
+| NLG: Multi-sentence discourse planning | Fluent responses need more than S-V-O templates | P1 | ✅ **Done (A2)** |
+| Concurrent multimodal fusion pipeline | Simultaneous inputs (e.g., spoken + visual) not properly scheduled | P1 | ⚠️ Sequential only |
+| SNN Rust port for perception (<5ms) | Python SNN is ~51ms; need Rust for real-time use | P1 | ⚠️ Stub exists |
+| Formal temporal reasoning (before/after/during) | Time is fundamental to language and events | P2 | ✅ **V4 Done** |
+| Spatial reasoning (above/below/inside/outside) | Required for vision-language grounding | P2 | ✅ **V5 Done** |
+| Negation handling in VSA | "X is NOT Y" needs explicit anti-bundling | P2 | ✅ **V4 Done** |
+| Conditional logic ("if X then Y") | Conditional reasoning is fundamental to causality | P2 | ✅ **V4 Done** |
+| Taxonomic/transitive closure | A is_a B + B is_a C → A is_a C | P2 | ✅ **V4 Done** |
+| Prototype-based category generalization | Rosch prototype theory: bundle members into category | P2 | ✅ **V4 Done** |
+| Massively extended COMMON_VERBS | ~40-60% → ~75-85% NLU coverage | P0 | ✅ **V4 Done** |
+| Cross-domain research synthesis | Biology, physics, math, psychology insights for NSCK | P1 | ✅ **V4 Done** |
+| Scalar implicature and pragmatics | Natural language is richer than propositional logic | P3 | ✅ **V5 Done** |
+
+### ✅ V5 Completed (February 2026)
+
+| Feature | Files Changed | Impact |
+|---------|--------------|--------|
+| Spatial Reasoning module (`spatial_reasoning.py`) | `reasoning/spatial_reasoning.py` | 2D/3D VSA position encoding, 8 relation types |
+| FPE-based position locality | `reasoning/spatial_reasoning.py` | Nearby positions → similar HVs (measurable) |
+| Projective relations (above/below/left/right) | `reasoning/spatial_reasoning.py` | "What is above X?" queries |
+| Topological relations (adjacent/at_same_position) | `reasoning/spatial_reasoning.py` | "Is X adjacent to Y?" |
+| Metric queries (distance, find_near) | `reasoning/spatial_reasoning.py` | Euclidean distance queries |
+| VSA assertion encoding | `reasoning/spatial_reasoning.py` | bind(v_ABOVE, bind(v_fig, v_ground)) |
+| Pragmatics module (`pragmatics.py`) | `language/pragmatics.py` | 7 speech act types, 15 scalar scales |
+| Scalar implicature (Horn scales) | `language/pragmatics.py` | "some" → implies "not all" |
+| Gricean maxim checking | `language/pragmatics.py` | Quality/Quantity/Relation/Manner |
+| Indirect speech act detection | `language/pragmatics.py` | "Can you…" → request (indirect) |
+| Presupposition detection | `language/pragmatics.py` | "stopped X" → presupposes prior X |
+| Politeness hedging detection | `language/pragmatics.py` | "please", "could you" |
+| V5 config flags (2 new) | `config.py` | `enable_spatial_reasoning`, `enable_pragmatics` |
+| 45 spatial tests | `tests/unit/reasoning/test_spatial_reasoning.py` | All passing |
+| 45 pragmatics tests | `tests/unit/language/test_pragmatics.py` | All passing |
+| Updated COGNITIVE_REPORT_CARD.md | `COGNITIVE_REPORT_CARD.md` | V5 honest assessment |
+
+### ✅ V4 Completed (February 2026)
+
+| Feature | Files Changed | Impact |
+|---------|--------------|--------|
+| Extended COMMON_VERBS (~400 forms, 18 categories) | `construction_grammar.py` | NLU coverage ~75-85% |
+| Improved POS morphological classifier | `construction_grammar.py` | Better -s/-ies/-ize/-ish handling |
+| Negation constructions (9 new patterns) | `construction_grammar.py` | "X is not Y", "X lacks Y", "X cannot V Y" |
+| Conditional constructions (7 new patterns) | `construction_grammar.py` | "X implies Y", "X leads to Y", "if X then Y" |
+| Temporal ordering constructions (7 new patterns) | `construction_grammar.py` | "X before Y", "X after Y", "since X" |
+| Similarity/difference constructions (4 new patterns) | `construction_grammar.py` | "X is like Y", "X differs from Y" |
+| V4 feature flags (5 new) | `config.py` | Gated by `enable_negation_handling`, etc. |
+| Transitive inference | `semantic_memory.py` | A is_a B + B is_a C → A is_a C |
+| Prototype generalization | `semantic_memory.py` | VSA bundle of category members |
+| V4 relation weights (negation, temporal, etc.) | `semantic_memory.py` | Correct spreading activation |
+| TKL role extraction for V4 constructions | `text_knowledge_learner.py` | V4 facts stored in knowledge graph |
+| TKL transitive inference wiring | `text_knowledge_learner.py` | Runs every 10 sentences |
+| Cross-domain research document | `docs/CROSS_DOMAIN_RESEARCH.md` | 20 domain sources, 15 actionable proposals |
+| 50 new V4 unit tests | `tests/unit/language/test_v4_features.py` | All passing |
 
 ---
 

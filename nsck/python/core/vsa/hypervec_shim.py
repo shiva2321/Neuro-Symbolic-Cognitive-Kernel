@@ -10,6 +10,14 @@ Modules throughout the codebase should import via::
 
 This guarantees they get the fastest available backend without crashing
 when the Rust build is missing.
+
+Startup cost
+------------
+The first import of this module incurs a one-time shared-library load cost
+(~700–1000 ms on a cold filesystem cache) when the Rust backend is used.
+This cost is paid once per Python process; all subsequent imports are free.
+For short-lived CLI scripts, prefer the Python backend (``use_rust=False``)
+or pre-warm the process with a no-op import before timing.
 """
 
 from __future__ import annotations
@@ -83,6 +91,34 @@ def _install_compat_methods(HV: Any) -> None:
             HV.from_bits = from_bits
         except (TypeError, AttributeError):
             pass
+
+    # --- negate (VSA anti-bundling negation) ---
+    # The Rust build now has negate() natively; this shim only installs it
+    # when running with the Python fallback or an older Rust build.
+    if not hasattr(HV, "negate"):
+        import numpy as _np
+        _NEG_SEED = 0xDEAD_BEEF_CAFE_BABE  # must match Rust NEG_SEED
+
+        def negate(self):
+            """VSA anti-bundling negation (XOR with fixed negation-role HV)."""
+            # Re-create the same negation role every call (deterministic)
+            rng = _np.random.default_rng(_NEG_SEED)
+            neg_role = rng.integers(0, 2, size=10240, dtype=_np.int8)
+            state = self.__getstate__()  # list[u64]
+            num_u64 = len(state)
+            new_state = [0] * num_u64
+            for wi in range(num_u64):
+                word = 0
+                for bi in range(64):
+                    role_bit = int(neg_role[wi * 64 + bi])
+                    orig_bit = (state[wi] >> bi) & 1
+                    word |= ((orig_bit ^ role_bit) << bi)
+                new_state[wi] = word
+            result = object.__new__(type(self))
+            result.__setstate__(new_state)
+            return result
+
+        setattr(HV, "negate", negate)
 
     # --- weighted_bundle ---
     if not hasattr(HV, "weighted_bundle"):

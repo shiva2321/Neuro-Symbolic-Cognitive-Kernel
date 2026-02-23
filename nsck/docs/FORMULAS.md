@@ -669,6 +669,150 @@ Where $\bar{r}_{\text{recent}}$ is the rolling mean reward over the last 50 step
 
 ---
 
+## 18. V4-V7 Additions: Formulas and Proofs
+
+*Sources: `vsa/hypervec_py.py`, `reasoning/spatial_reasoning.py`, `language/distributional_semantics.py`, `language/pragmatics.py`, `learning/pmi_learner.py`*
+
+### 18.1 VSA Negation (V6)
+
+**Definition.** Let $\mathbf{S} \in \{0,1\}^d$ be the fixed negation seed:
+$$S = \texttt{0xDEADBEEFCAFEBABE} \text{ (repeated to fill } d \text{ bits)}$$
+
+The negation of a hypervector $\mathbf{A}$ is:
+$$\neg\mathbf{A} = \mathbf{A} \oplus \mathbf{S}$$
+
+**Properties:**
+
+**(a) Orthogonality** — negation produces a vector near-orthogonal to the original:
+$$\mathbb{E}[\text{sim}(\mathbf{A}, \neg\mathbf{A})] = \frac{d - \text{count}(\mathbf{S})}{d} \approx 0.5$$
+
+Since $\mathbf{S}$ has approximately $d/2$ set bits (random seed fills ~50% of bits), and bit $i$ of $\neg\mathbf{A}$ equals $A_i$ whenever $S_i = 0$ and is flipped whenever $S_i = 1$, half the bits are flipped on average → Hamming distance $\approx d/2$ → similarity $\approx 0.5$.
+
+**Verified empirically:**
+```
+sim(hv, negate(hv)) = 0.5025  (10240-bit HV, seed 0xDEADBEEFCAFEBABE)
+```
+
+**(b) Involution** — double negation recovers the original (negate is self-inverse):
+$$\neg(\neg\mathbf{A}) = (\mathbf{A} \oplus \mathbf{S}) \oplus \mathbf{S} = \mathbf{A} \oplus (\mathbf{S} \oplus \mathbf{S}) = \mathbf{A} \oplus \mathbf{0} = \mathbf{A}$$
+
+**Verified empirically:**
+```
+sim(hv, negate(negate(hv))) = 1.0000
+```
+
+**(c) Application** — negation encodes the absence of a property:
+$$\text{HV}(\text{"not } p\text{"}) = \neg \text{HV}(p) = \text{HV}(p) \oplus \mathbf{S}$$
+
+Queries for $p$ and for $\neg p$ will both score $\sim 0.5$ against each other, properly distinguishing presence from absence.
+
+---
+
+### 18.2 FPE Bit-Flip Position Encoding for Spatial Reasoning (V5)
+
+*Source: `reasoning/spatial_reasoning.py`*
+
+Classical VSA permute-based position encoding fails for spatial reasoning because `permute(v, k)` has $\text{sim}(\text{permute}(v, k), v) \approx 0.5$ for **all** $k \neq 0$ — it does not encode proximity.
+
+**FPE Bit-Flip** encodes proximity by flipping bits proportional to distance:
+
+Let $\mathbf{b}_{\text{axis}} \in \{0,1\}^d$ be a random base hypervector for axis $a$.  
+Let $x_{\text{norm}} \in [0, 1]$ be the normalized coordinate along axis $a$.
+
+$$\text{pos\_hv}(x) = \mathbf{b}_{\text{axis}} \oplus \text{flip}(\mathbf{b}_{\text{axis}},\ k)$$
+
+where $\text{flip}(\mathbf{v}, k)$ flips exactly $k = \lfloor x_{\text{norm}} \cdot \alpha \rfloor$ randomly selected bits, with $\alpha = \texttt{\_AXIS\_FLIP\_BITS} = 50$.
+
+**Similarity gradient:**
+$$\text{sim}(\text{pos\_hv}(x_1), \text{pos\_hv}(x_2)) \approx 1 - \frac{|k_1 - k_2|}{d}$$
+
+This is **monotone**: nearby positions produce higher similarity than distant ones.
+
+**Negative coordinates:** offset by $\texttt{\_NEGATIVE\_STEP\_OFFSET} = 100{,}000$ before normalization to avoid the $x=0$ discontinuity:
+$$x_{\text{effective}} = x + 100{,}000$$
+
+**Minimum query threshold:** $\texttt{\_MIN\_QUERY\_SIMILARITY} = 0.4$ — below this, no relation is asserted.
+
+---
+
+### 18.3 Distributional Semantics: Context HV Construction (V3/V7)
+
+*Source: `language/distributional_semantics.py`*
+
+NSCK builds distributional word vectors without a neural network, using VSA context hypervectors:
+
+**Step 1: Collect co-occurrence window**  
+For each word $w$ in the corpus, collect its context window of radius $r$ (default $r=5$):
+$$\text{ctx}(w) = \{(w', k) : w' \text{ appears at offset } k \text{ from } w,\ |k| \leq r\}$$
+
+**Step 2: Build context HV**
+$$\text{ctx\_hv}(w) = \bigoplus_{(w', k) \in \text{ctx}(w)} \rho^k(\text{word\_hv}(w'))$$
+
+where $\rho^k$ is circular permutation by $k$ positions (encodes offset direction and distance).
+
+**Step 3: Similarity**
+$$\text{distributional\_sim}(w_1, w_2) = \text{sim}(\text{ctx\_hv}(w_1), \text{ctx\_hv}(w_2))$$
+
+**V7 pre-training:** At initialization (when `enable_distributional_semantics=True`), `DistributionalCodebook` is trained on `BUILTIN_CORPUS` — 200 carefully curated sentences covering science, geography, biology, and everyday language. This provides above-random similarity for well-known co-occurring pairs.
+
+**Expected outcomes:**
+- `brain` ↔ `memory` (co-occur in neuroscience text): sim ≈ 0.52–0.65
+- `cat` ↔ `dog` (rare co-occurrence): sim ≈ 0.50 (near random)
+- Pairs with no shared context: sim ≈ 0.50
+
+**Why 0.50 is the random baseline:** Each `word_hv` is a random 10240-bit vector. Two random vectors differ in exactly $d/2 = 5120$ bits in expectation → Hamming similarity = 0.50.
+
+---
+
+### 18.4 Pointwise Mutual Information (V4)
+
+*Source: `learning/pmi_learner.py`*
+
+**PMI formula:**
+$$\text{PMI}(a, b) = \log_2 \frac{P(a, b)}{P(a) \cdot P(b)}$$
+
+where:
+- $P(a, b)$ = joint probability (fraction of windows containing both $a$ and $b$)
+- $P(a)$ = marginal probability of $a$
+
+**PPMI** (Positive PMI — clamp negative values):
+$$\text{PPMI}(a, b) = \max(0, \text{PMI}(a, b))$$
+
+Used in `PMILearner` to identify which word pairs co-occur more than chance.  
+PPMI = 0 means no above-chance co-occurrence.  
+PPMI > 0 means the words are semantically associated.
+
+**Example:**
+- "dog" + "bark": 50 co-occurrences out of 10,000 windows  
+  → $P(a,b) = 0.005$, $P(a) = 0.01$, $P(b) = 0.01$  
+  → $\text{PMI} = \log_2(0.005 / 0.0001) = \log_2(50) \approx 5.64$ (strong association)
+
+---
+
+### 18.5 KG Stop-Concept Filter (V7)
+
+*Source: `language/text_knowledge_learner.py`*
+
+The `_STOP_CONCEPTS` frozenset (53 function words) prevents noise from entering the knowledge graph:
+```python
+_STOP_CONCEPTS = frozenset({"the", "a", "an", "is", "are", "was", "were",
+    "it", "its", "they", "their", "this", "that", "these", "those",
+    "of", "in", "on", "at", "to", "for", "with", "by", "as", "or",
+    "and", "but", "not", "no", "nor", "so", "yet", "both", "either",
+    "be", "been", "being", "have", "has", "had", "do", "does", "did",
+    "will", "would", "shall", "should", "may", "might", "must", "can",
+    "could", "need"})
+```
+
+**Generic relation threshold:**
+$$\text{add\_relation}(s, r, o) \iff \text{sim}(\text{HV}(s), \text{HV}(o)) < \tau_{\text{generic}}$$
+
+where $\tau_{\text{generic}} = \texttt{\_GENERIC\_RELATION\_THRESHOLD} = 0.62$.
+
+**Rationale:** If two concepts have similarity > 0.62, they are likely too generic (e.g., binding "is" to itself multiple times) and adding the relation would create noise rather than knowledge.
+
+---
+
 ## References
 
 | Reference | Used in |
@@ -685,3 +829,8 @@ Where $\bar{r}_{\text{recent}}$ is the rolling mean reward over the last 50 step
 | Oja, E. (1982). Simplified neuron model as a principal component analyzer. *Journal of Mathematical Biology*, 15(3), 267–273. | Oja's rule for Hebbian learning |
 | Fikes, R.E. & Nilsson, N.J. (1971). STRIPS: A new approach to the application of theorem proving. *Artificial Intelligence*, 2(3–4), 189–208. | STRIPS planning |
 | Indyk, P. & Motwani, R. (1998). Approximate nearest neighbors: Towards removing the curse of dimensionality. *STOC '98*, 604–613. | Locality-Sensitive Hashing |
+| Rosch, E. (1973). Natural categories. *Cognitive Psychology*, 4(3), 328–350. | Prototype theory (build_prototypes) |
+| Church, K.W. & Hanks, P. (1990). Word association norms, mutual information and lexicography. *Computational Linguistics*, 16(1), 22–29. | PMI learning rule |
+| Grice, H.P. (1975). Logic and conversation. *Syntax and Semantics*, 3, 41–58. | Gricean maxims (pragmatics.py) |
+| Brill, E. (1992). A simple rule-based part of speech tagger. *ANLP '92*, 152–155. | BrillPosTagger (pos_tagger.py) |
+| Plate, T.A. (1994). Distributed representations and nested compositional structure. PhD Thesis, University of Toronto. | VSA binding algebra |

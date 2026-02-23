@@ -16,25 +16,34 @@ graph TB
     end
 
     subgraph NSCK["nsck/"]
-        subgraph PythonCore["python/core/ — 41 files, ~17,300 LOC"]
+        subgraph PythonCore["python/core/ — 79 files, ~27,000 LOC (V7)"]
             subgraph VSA["vsa/"]
-                HVPy["hypervec_py.py<br/>361 LOC<br/>━━━━━━━━━━<br/>HyperVectorPy<br/>CleanupMemory"]
+                HVPy["hypervec_py.py<br/>361 LOC<br/>━━━━━━━━━━<br/>HyperVectorPy<br/>CleanupMemory<br/>negate() (V6)"]
                 HVShim["hypervec_shim.py<br/>320 LOC<br/>━━━━━━━━━━<br/>Backend selector<br/>Rust ↔ Python"]
             end
 
             subgraph ReasoningDir["reasoning/"]
-                CogEng["cognitive_engine.py<br/>1,188 LOC<br/>━━━━━━━━━━<br/>CognitiveEngine<br/>CognitiveState<br/>Proposal"]
+                CogEng["cognitive_engine.py<br/>1,402 LOC<br/>━━━━━━━━━━<br/>CognitiveEngine<br/>CognitiveState<br/>Proposal"]
                 GW["global_workspace.py<br/>312 LOC<br/>━━━━━━━━━━<br/>GlobalWorkspace<br/>Coalition<br/>WorkspaceModule"]
                 Plan["planner.py<br/>296 LOC<br/>━━━━━━━━━━<br/>STRIPSPlanner<br/>PlanStep"]
-                CausalR["causal_reasoning.py<br/>954 LOC<br/>━━━━━━━━━━<br/>CausalDiscovery<br/>CausalGraph<br/>CausalReasoner"]
-                RuleL["rule_learner.py<br/>624 LOC<br/>━━━━━━━━━━<br/>RuleLearner<br/>RuleCandidate"]
-                AnalE["analogy.py<br/>528 LOC<br/>━━━━━━━━━━<br/>AnalogyEngine<br/>Analogy"]
+                CausalR["causal_reasoning.py<br/>1,233 LOC<br/>━━━━━━━━━━<br/>CausalDiscovery<br/>CausalGraph<br/>CausalReasoner"]
+                RuleL["rule_learner.py<br/>644 LOC<br/>━━━━━━━━━━<br/>RuleLearner<br/>RuleCandidate"]
+                AnalE["analogy.py<br/>609 LOC<br/>━━━━━━━━━━<br/>AnalogyEngine<br/>Analogy"]
                 CtxE["context_engine.py<br/>440 LOC<br/>━━━━━━━━━━<br/>ContextEngine<br/>ContextFrame"]
+                MathR["math_reasoning.py<br/>━━━━━━━━━━<br/>MathReasoner<br/>FPECodebook<br/>LinearSolver"]
+                SpatialR["spatial_reasoning.py (V5)<br/>━━━━━━━━━━<br/>SpatialReasoner<br/>PositionCodebook<br/>FPE bit-flip · 8 relations"]
+                TemporalR["temporal_reasoning.py (V4)<br/>━━━━━━━━━━<br/>TemporalReasoner<br/>before/after/during"]
+                AbductR["abductive_reasoning.py (V4)<br/>━━━━━━━━━━<br/>AbductiveReasoner<br/>best-explanation"]
+                PredP["predictive_processor.py (V4)<br/>━━━━━━━━━━<br/>PredictiveProcessor<br/>PRIOR_UNCERTAINTY=0.5"]
             end
 
             subgraph LearningDir["learning/"]
                 Hebb["hebbian.py<br/>506 LOC<br/>━━━━━━━━━━<br/>HebbianMatrixNumPy<br/>VSAHebbianLearner"]
                 Curio["curiosity.py<br/>336 LOC<br/>━━━━━━━━━━<br/>CuriosityModule<br/>ExplorationDecision"]
+                SchemaI["schema_induction.py (V4)<br/>━━━━━━━━━━<br/>SchemaInducer<br/>slot-filling patterns"]
+                PMIL["pmi_learner.py (V4)<br/>━━━━━━━━━━<br/>PMILearner<br/>log₂(P(a,b)/P(a)P(b))"]
+                PredC["predictive_coding.py (V4)<br/>━━━━━━━━━━<br/>PredictiveCodingModule"]
+                ActiveI["active_inference.py (V4)<br/>━━━━━━━━━━<br/>ActiveInferenceLearner<br/>MIN_TEMP=0.1 MAX_TEMP=5.0"]
             end
 
             subgraph CognitiveDir["cognitive/"]
@@ -53,21 +62,27 @@ graph TB
             end
 
             subgraph MemoryDir["memory/"]
-                EpiMem["episodic_memory.py<br/>398 LOC<br/>━━━━━━━━━━<br/>EpisodicMemory<br/>LiveEpisode"]
-                SemMem["semantic_memory.py<br/>217 LOC<br/>━━━━━━━━━━<br/>SemanticMemory"]
+                EpiMem["episodic_memory.py<br/>501 LOC<br/>━━━━━━━━━━<br/>EpisodicMemory<br/>LiveEpisode"]
+                SemMem["semantic_memory.py<br/>~800 LOC<br/>━━━━━━━━━━<br/>SemanticMemory<br/>NSW ANN (V6)<br/>infer_transitive (V4)<br/>build_prototypes (V4)"]
                 StagedR["staged_recall.py<br/>134 LOC<br/>━━━━━━━━━━<br/>StagedRecall"]
             end
 
             subgraph LangDir["language/"]
-                LangMod["language_module.py<br/>484 LOC<br/>━━━━━━━━━━<br/>LanguageModule"]
-                Dialog["dialogue_manager.py<br/>145 LOC<br/>━━━━━━━━━━<br/>DialogueManager"]
-                TKL["text_knowledge_learner.py<br/>1,071 LOC<br/>━━━━━━━━━━<br/>TextKnowledgeLearner"]
+                LangMod["language_module.py<br/>526 LOC<br/>━━━━━━━━━━<br/>LanguageModule"]
+                Dialog["dialogue_manager.py<br/>506 LOC<br/>━━━━━━━━━━<br/>DialogueManager<br/>FluentNLG wired (V7)"]
+                TKL["text_knowledge_learner.py<br/>1,074 LOC<br/>━━━━━━━━━━<br/>TextKnowledgeLearner<br/>_STOP_CONCEPTS (V7)<br/>DistribPreTrain (V7)"]
                 UniIn["universal_input.py<br/>947 LOC<br/>━━━━━━━━━━<br/>UniversalInput"]
                 Lingua["lingua_cortex.py<br/>260 LOC<br/>━━━━━━━━━━<br/>LinguaCortex<br/>SemanticFingerprint"]
+                FlNLG["fluent_nlg.py (V6)<br/>━━━━━━━━━━<br/>FluentResponseComposer<br/>NSCKResponseEngine<br/>RelationVerbalizer"]
+                POS["pos_tagger.py (V6)<br/>━━━━━━━━━━<br/>BrillPosTagger<br/>300+ lexicon · 8 rules"]
+                Prag["pragmatics.py (V5)<br/>━━━━━━━━━━<br/>PragmaticEngine<br/>15 Horn scales<br/>7 speech acts"]
+                DistSem["distributional_semantics.py<br/>━━━━━━━━━━<br/>DistributionalCodebook<br/>BUILTIN_CORPUS (V7)"]
+                HFLoad["hf_corpus_loader.py (V7)<br/>━━━━━━━━━━<br/>HFCorpusLoader<br/>offline fallback"]
+                CG["construction_grammar.py<br/>━━━━━━━━━━<br/>ConstructionMatcher<br/>71 constructions (V4)"]
             end
 
             subgraph IntegDir["integration/"]
-                Config["config.py<br/>73 LOC<br/>━━━━━━━━━━<br/>NSCKConfig"]
+                Config["config.py<br/>~100 LOC<br/>━━━━━━━━━━<br/>NSCKConfig<br/>25 feature flags"]
                 Persist["persistence.py<br/>852 LOC<br/>━━━━━━━━━━<br/>BrainStore"]
                 BFusion["brain_fusion.py<br/>481 LOC<br/>━━━━━━━━━━<br/>BrainFusion<br/>FusedBrain"]
                 Explain["explanation.py<br/>433 LOC<br/>━━━━━━━━━━<br/>ExplanationGenerator"]
@@ -319,32 +334,52 @@ graph TD
 graph LR
     subgraph Python["Python Side"]
         Shim["hypervec_shim.py"]
-        Core["All 41 core modules"]
+        Core["All 79 core modules"]
+        SNNShim["snn_shim.py"]
     end
 
-    subgraph Compiled["Compiled Extension"]
-        PyO3["PyO3 Bindings<br/>lib.rs"]
+    subgraph Compiled["Compiled Extensions (in nsck/)"]
+        PyO3VSA["hypervec_rs.so (4.3 MB)<br/>PyO3 + Rust"]
+        PyO3SNN["snn_rs.so (1.1 MB)<br/>PyO3 + Rust + rayon"]
     end
 
-    subgraph Rust["Rust Side"]
-        RHV["HyperVector"]
-        RSem["SemanticMemoryConcurrent"]
-        REpi["EpisodicMemoryConcurrent"]
-        RPool["CognitiveWorkerPool"]
-        RPers["PersistentStorage"]
+    subgraph RustVSA["rust_vsa/"]
+        RHV["HyperVector<br/>XOR · bundle · permute<br/>negate · similarity · LSH"]
+        RSem["SemanticMemoryConcurrent<br/>DashMap"]
+        REpi["EpisodicMemoryConcurrent<br/>hot-tier + SQLite"]
+        RPool["CognitiveWorkerPool<br/>Tokio async"]
+        RPers["PersistentStorage<br/>rusqlite bundled"]
         RAsync["AsyncCognitiveRuntime"]
     end
 
+    subgraph RustSNN["rust_snn/"]
+        RLIF["LIFLayer<br/>rayon parallel step()"]
+        RStdp["StdpEngine<br/>Oja's rule"]
+        RSCore["SnnCore<br/>simulate()"]
+        RHebb["HebbianMatrix"]
+        RConcept["ConceptMapper<br/>Jaccard"]
+        RRate["RateCoder"]
+    end
+
     Core -->|"import"| Shim
-    Shim -->|"import hypervec_rs"| PyO3
-    PyO3 --> RHV
-    PyO3 --> RSem
-    PyO3 --> REpi
-    PyO3 --> RPool
-    PyO3 --> RPers
-    PyO3 --> RAsync
+    Core -->|"import"| SNNShim
+    Shim -->|"import hypervec_rs"| PyO3VSA
+    SNNShim -->|"import snn_rs"| PyO3SNN
+    PyO3VSA --> RHV
+    PyO3VSA --> RSem
+    PyO3VSA --> REpi
+    PyO3VSA --> RPool
+    PyO3VSA --> RPers
+    PyO3VSA --> RAsync
+    PyO3SNN --> RLIF
+    PyO3SNN --> RStdp
+    PyO3SNN --> RSCore
+    PyO3SNN --> RHebb
+    PyO3SNN --> RConcept
+    PyO3SNN --> RRate
 
     Shim -.->|"fallback if Rust unavailable"| FallPy["hypervec_py.py<br/>Pure Python"]
+    SNNShim -.->|"fallback"| FallSNN["snn_perception.py<br/>Pure Python"]
 ```
 
 ---
@@ -353,53 +388,43 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph TestSuite["Test Suite — 40 files, ~9,100 LOC"]
+    subgraph TestSuite["Test Suite — 78 files, ~13,500 LOC, 951 passing (V7)"]
         subgraph Unit["unit/"]
-            TU1["test_analogy.py"]
-            TU2["test_causal.py"]
-            TU3["test_context_engine.py"]
-            TU4["test_curiosity.py"]
-            TU5["test_emotion.py"]
-            TU6["test_episodic.py"]
-            TU7["test_global_workspace.py"]
-            TU8["test_grounding.py"]
-            TU9["test_hebbian.py"]
-            TU10["test_hypervec.py"]
-            TU11["test_language.py"]
-            TU12["test_metacognition.py"]
-            TU13["test_planner.py"]
-            TU14["test_rule_learner.py"]
-            TU15["test_self_model.py"]
-            TU16["test_semantic_memory.py"]
-            TU17["test_snn_perception.py"]
-            TU18["test_text_knowledge.py"]
-            TU19["test_theory_of_mind.py"]
-            TU20["test_universal_input.py"]
+            TU_vsa["vsa/test_hypervec*.py<br/>test_hypervec_parity.py"]
+            TU_cog["cognitive/<br/>8 test files"]
+            TU_mem["memory/<br/>4 test files"]
+            TU_lang["language/<br/>9 test files<br/>(+V4/V5/V6 additions)"]
+            TU_reason["reasoning/<br/>11 test files<br/>(+spatial, abductive)"]
+            TU_rust["rust/test_rust_backends.py<br/>81 tests — skip if no .so"]
+            TU_v6["test_v6_features.py<br/>86 tests (FluentNLG, POS, NSW, negate)"]
+            TU_v7["test_v7_features.py<br/>54 tests (KG filter, wired NLG, distributional)"]
         end
 
         subgraph Integration["integration/"]
-            TI1["test_cognitive_engine.py"]
-            TI2["test_full_pipeline.py"]
-            TI3["test_persistence.py"]
-            TI4["test_snn_integration.py"]
-            TI5["test_realworld_capabilities.py"]
+            TI1["test_system_capabilities.py<br/>53 tests"]
+            TI2["test_realworld_capabilities.py<br/>145 tests"]
+            TI3["test_cognitive_wiring.py<br/>19 tests"]
+            TI4["test_full_pipeline_v3.py<br/>9 tests"]
+            TI5["test_real_world_v3.py<br/>5 tests"]
+            TIX["8 more integration files"]
         end
 
         subgraph CoreArch["core_architecture/"]
-            TC1["test_architecture_compliance.py"]
-            TC2["test_cross_module.py"]
-            TC3["test_transparency.py"]
+            TC1["test_learning.py — 16"]
+            TC2["test_reasoning.py — 18"]
+            TC3["test_snn_integration.py — 29"]
         end
 
         subgraph Experiments["experiments/"]
-            TE1["test_belief_revision.py"]
-            TE2["test_causal_chains.py"]
-            TE3["test_text_learning.py"]
+            TE1["belief_revision_test.py"]
+            TE2["text_reasoning_test.py"]
+            TE3["transitive_test.py"]
+            TE4["verify_f1.py"]
         end
     end
 
     subgraph Modules["Core Modules"]
-        M1["41 Python files"]
+        M1["79 Python files<br/>+ hypervec_rs.so<br/>+ snn_rs.so"]
     end
 
     Unit -->|"covers"| M1
@@ -414,9 +439,13 @@ graph TD
 
 | Size Range | Count | Files |
 |-----------|-------|-------|
-| **1000+ LOC** | 3 | cognitive_engine (1,188), text_knowledge_learner (1,071), causal_reasoning (954) |
-| **500–999 LOC** | 10 | universal_input (947), persistence (852), rule_learner (624), snn_training (589), grounding_verifier (585), snn_perception (561), knowledge_integration (530), analogy (528), hebbian (506), metacognition (504) |
-| **200–499 LOC** | 13 | language_module (484), snn_benchmarks (483), brain_fusion (481), vsa_snn_bridge (461), context_engine (440), explanation (433), emotion_system (420), episodic_memory (398), hypervec_py (361), curiosity (336), hypervec_shim (320), global_workspace (312), theory_of_mind (312) |
-| **< 200 LOC** | 7 | planner (296), lingua_cortex (260), self_model (255), snn_integration (240), semantic_memory (217), symbol_grounding (196), dialogue_manager (145), staged_recall (134), config (73) |
+| **1000+ LOC** | 3 | cognitive_engine (1,402), text_knowledge_learner (1,074), causal_reasoning (1,233) |
+| **500–999 LOC** | 11 | universal_input (947), persistence (852), rule_learner (644), snn_training (589), grounding_verifier (585), snn_perception (561), knowledge_integration (530), analogy (609), hebbian (506), metacognition (504), dialogue_manager (506) |
+| **200–499 LOC** | 15 | language_module (526), snn_benchmarks (483), brain_fusion (481), vsa_snn_bridge (461), context_engine (440), explanation (433), emotion_system (420), episodic_memory (501), hypervec_py (361), curiosity (336), hypervec_shim (320), global_workspace (312), theory_of_mind (312), pragmatics (~200), fluent_nlg (~350) |
+| **< 200 LOC** | 12+ | planner (296), lingua_cortex (260), self_model (255), snn_integration (240), symbol_grounding (196), staged_recall (134), pos_tagger (~180), spatial_reasoning (~200), hf_corpus_loader (~120), schema_induction (~150), pmi_learner (~100), active_inference (~120) |
 
-**Total: 41 Python files, ~17,300 LOC** + **7 Rust files, ~2,665 LOC** = **~20,000 LOC**
+**Total: 79 Python source files, ~27,000 LOC** + **Rust: 2 crates (~3,100 LOC)** = **~30,000 LOC**
+
+**Rust binaries (build artifacts — gitignored):**
+- `nsck/hypervec_rs.so` — 4.3 MB — VSA operations
+- `nsck/snn_rs.so` — 1.1 MB — SNN simulation

@@ -2,13 +2,13 @@
 ========================================================================
   NSCK COMPREHENSIVE TRAINING & EVALUATION REPORT
 ========================================================================
-    Generated: 2026-02-22 10:31:48 UTC
+    Generated: 2026-02-23 02:12:32 UTC
     NSCK Version: V3 (Rust-accelerated)
 
   ────────────────────────────────────────────────────────────
   Backend Status
-    VSA backend (Rust accelerator):          ENABLED ✓
-    SNN backend (Rust accelerator):          ENABLED ✓
+    VSA backend (Rust accelerator):          Python fallback
+    SNN backend (Rust accelerator):          Python fallback
     HyperVector dimension:                   10240
     XOR reversibility:                       PASS ✓
 
@@ -16,20 +16,20 @@
   Real-World Training Results
     Total sentences processed:               150
     Total concepts learned:                  778
-    Total relations extracted:               2083
-    Total facts stored:                      2083
-    Total training time:                     0.461 s
-    Average time per sentence:               3.1 ms
-    Memory growth:                           20116 KB
-    Concepts in semantic memory:             797
+    Total relations extracted:               2149
+    Total facts stored:                      2149
+    Total training time:                     13.502 s
+    Average time per sentence:               90.0 ms
+    Memory growth:                           44544 KB
+    Concepts in semantic memory:             792
 
     Domain breakdown:
-      science             :  25 sent   139 concepts   308 relations  66 ms
-      geography           :  25 sent   131 concepts   383 relations  81 ms
-      history             :  25 sent   153 concepts    97 relations  78 ms
-      technology          :  25 sent   131 concepts   278 relations  73 ms
-      chess_knowledge     :  30 sent   142 concepts   575 relations  98 ms
-      go_knowledge        :  20 sent    82 concepts   442 relations  65 ms
+      science             :  25 sent   139 concepts   321 relations  1652 ms
+      geography           :  25 sent   131 concepts   385 relations  2454 ms
+      history             :  25 sent   153 concepts   116 relations  2365 ms
+      technology          :  25 sent   131 concepts   298 relations  2102 ms
+      chess_knowledge     :  30 sent   142 concepts   584 relations  2944 ms
+      go_knowledge        :  20 sent    82 concepts   445 relations  1987 ms
 
   ────────────────────────────────────────────────────────────
   Knowledge Retrieval Accuracy
@@ -42,7 +42,7 @@
     Scenarios tested:                        10
     Correct decisions:                       2/10
     Decision accuracy:                       20.0%
-    Average decision latency:                0.1695 ms
+    Average decision latency:                0.3020 ms
 
   ────────────────────────────────────────────────────────────
   Belief Revision Under Contradiction
@@ -55,8 +55,8 @@
   ────────────────────────────────────────────────────────────
   Construction Grammar
     Sentences tested:                        8
-    Constructions matched:                   3/8
-    Coverage:                                38%
+    Constructions matched:                   5/8
+    Coverage:                                62%
 
   ────────────────────────────────────────────────────────────
   Frame Semantics
@@ -73,23 +73,23 @@
 
   ────────────────────────────────────────────────────────────
   SNN Perception Module
-    Average latency (100 calls):             5.06 ms
+    Average latency (100 calls):             50.86 ms
     p99 latency:                             0.00 ms
 
   ────────────────────────────────────────────────────────────
   Memory Scalability
-    Size=100 query latency:                  0.081 ms
-    Size=100 add latency:                    0.004 ms/concept
-    Size=1000 query latency:                 0.427 ms
-    Size=1000 add latency:                   0.005 ms/concept
-    Size=5000 query latency:                 2.077 ms
-    Size=5000 add latency:                   0.006 ms/concept
+    Size=100 query latency:                  1.795 ms
+    Size=100 add latency:                    0.056 ms/concept
+    Size=1000 query latency:                 18.446 ms
+    Size=1000 add latency:                   0.117 ms/concept
+    Size=5000 query latency:                 95.081 ms
+    Size=5000 add latency:                   0.175 ms/concept
 
   ────────────────────────────────────────────────────────────
   Dual Process System
     System 1 rate (familiar state):          0%
     System 2 engagement (novel):             10/10
-    Avg decision latency:                    0.1374 ms
+    Avg decision latency:                    0.2694 ms
 
   ────────────────────────────────────────────────────────────
   Homeostasis & Stigmergy
@@ -100,12 +100,12 @@
 
   ────────────────────────────────────────────────────────────
   VSA Performance (Rust vs Python)
-    Rust  create 1000 HVs:                   0.6 ms
-    Python create 1000 HVs:                  46.0 ms
-    Rust  similarity 1000×:                  0.3 ms
-    Python similarity 1000×:                 7.9 ms
-    Speedup — create:                        73.2×
-    Speedup — similarity:                    27.6×
+    Rust  create 1000 HVs:                   45.0 ms
+    Python create 1000 HVs:                  44.5 ms
+    Rust  similarity 1000×:                  8.1 ms
+    Python similarity 1000×:                 8.0 ms
+    Speedup — create:                        1.0×
+    Speedup — similarity:                    1.0×
 
   ────────────────────────────────────────────────────────────
   Explainability
@@ -114,8 +114,8 @@
 
   ────────────────────────────────────────────────────────────
   End-to-End Research Config
-    Training time (solar system):            16.0 ms
-    Avg keyword coverage:                    89%
+    Training time (solar system):            411.9 ms
+    Avg keyword coverage:                    78%
 
 ========================================================================
   OVERALL CAPABILITY SUMMARY
@@ -125,11 +125,11 @@
   ────────────────────────────────────────────────────────────
   Knowledge Retrieval                87%   B  (Good)
   Game Decision Accuracy             20%   F  (Needs Work)
-  Construction Grammar Coverage      38%   F  (Needs Work)
+  Construction Grammar Coverage      62%   C  (Adequate)
   Frame Semantics Fidelity          100%   A  (Excellent)
   Dual Process System-1 Rate          0%   F  (Needs Work)
 
-  Overall average score:  49%   D  (Developing)
+  Overall average score:  54%   D  (Developing)
 
 ========================================================================
   WHAT NSCK CAN DO (Evidence-Based)

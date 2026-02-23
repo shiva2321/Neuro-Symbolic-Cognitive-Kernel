@@ -152,47 +152,53 @@ sequenceDiagram
 
 ---
 
-## 3. Text Knowledge Ingestion
+## 3. Text Knowledge Ingestion (V7 Pipeline)
 
-**Entry point:** `TextKnowledgeLearner.learn_from_text_file(path)`
+**Entry point:** `TextKnowledgeLearner.learn_from_text(text)` (V7: all stages shown)
 
 ```mermaid
 graph TD
-    File["Text File"]
-    
-    File -->|"read + split sentences"| Sent["Sentence List"]
-    
-    Sent -->|"for each sentence"| Step1["Step 1: Parse Intent<br/>LanguageModule.understand(text)<br/>→ structured frames"]
-    
-    Step1 --> Step2["Step 2: Extract Relations<br/>Pattern matching (regex)<br/>+ S-V-O scanning<br/>→ (subject, relation, object)"]
-    
-    Step2 --> Step3a["Step 3a: Semantic Memory<br/>add_concept(subject, props)<br/>add_relation(subject, rel, object)"]
-    
-    Step2 --> Step3b["Step 3b: Causal Graph<br/>add_causes(cause, effect)<br/>add_prevents(cause, effect)"]
-    
-    Step2 --> Step3c["Step 3c: Episodic Memory<br/>record(LiveEpisode with<br/>sentence context)"]
-    
-    Sent -->|"after all sentences"| Step4["Step 4: Semantic Folding<br/>Co-occurrence counting<br/>Context HV construction<br/>Implicit relation discovery"]
-    
-    Step4 --> Step5["Step 5: Implicit Relations<br/>For concepts with<br/>sim(ctx_a, ctx_b) > 0.55<br/>→ add_relation(a, 'related_to', b)"]
+    Text["Text Input (string)"]
+
+    Text -->|"split sentences"| Sent["Sentence List"]
+
+    Sent -->|"for each sentence"| POS["Step 1: BrillPosTagger (V6)<br/>tag_sentence() → [(word, POS)]<br/>300+ lexicon · NEG/TEMP/COND tags"]
+
+    POS --> CG["Step 2: ConstructionMatcher (V3/V4)<br/>71 constructions · 400+ COMMON_VERBS<br/>Negation · Temporal · Conditional (V4)"]
+
+    POS --> SRL["Step 3: SemanticRoleLabeler<br/>label() → SRLFrame<br/>12 thematic roles · resonator"]
+
+    CG --> SVO["Step 4: SVO Triple Extraction<br/>(subject, relation, object)<br/>_STOP_CONCEPTS filter (V7)"]
+
+    SRL --> SVO
+
+    SVO --> StopFilter["Step 5: Stop-concept filter (V7)<br/>_STOP_CONCEPTS 53 words removed<br/>_GENERIC_RELATION_THRESHOLD=0.62"]
+
+    StopFilter --> SemMem["Step 6a: SemanticMemory<br/>add_concept() + bound HV<br/>add_relation() + timestamp"]
+
+    StopFilter --> CausalG["Step 6b: CausalGraph<br/>causal keywords:<br/>causes/leads to/results in<br/>prevents/enables/requires"]
+
+    StopFilter --> EpiMem["Step 6c: EpisodicMemory<br/>LiveEpisode with sentence context"]
+
+    Sent -->|"after all sentences"| DistSem["Step 7: DistributionalCodebook (V7)<br/>Co-occurrence within 5-word windows<br/>context_hv = bundle(permute(w', k))<br/>sim(ctx_a, ctx_b) > 0.55 → implicit relations<br/>pre-trained on BUILTIN_CORPUS"]
 ```
 
-### Detailed Pipeline
+### Detailed Pipeline (V7)
 
-1. **File Reading**: Split into sentences on `.`/`!`/`?`
-2. **Per-Sentence Processing**:
-   - `LanguageModule.understand(sentence)` → structured intent (or heuristic NLU)
-   - Regex-based relation extraction: `"X causes Y"`, `"X is a Y"`, `"X has Y"`
-   - S-V-O scanning: identify subject/verb/object triples
-3. **Knowledge Storage**:
+1. **Split**: Sentence tokenization on `.`/`!`/`?`
+2. **POS Tagging** (`BrillPosTagger.tag_sentence`): Returns `[(word, POS)]` pairs.
+   - Special tags: `NEG` (negators), `TEMP` (temporal connectives), `COND` (conditionals)
+3. **Construction Matching** (`ConstructionMatcher.match`): Identifies construction type.
+   - 71 constructions including V4 additions: negation, temporal, conditional
+4. **Semantic Role Labeling** (`SemanticRoleLabeler.label`): Identifies AGENT, PATIENT, etc.
+5. **SVO Extraction**: Subject-Verb-Object triples from CG + SRL output.
+6. **Stop-concept filter** (V7): Remove function words from KG using `_STOP_CONCEPTS`; reject generic relations (`sim > 0.62`).
+7. **Knowledge Storage**:
    - Concepts → SemanticMemory graph nodes with VSA HyperVectors
    - Relations → SemanticMemory graph edges
    - Causal relations → CausalGraph
    - Full episodes → EpisodicMemory
-4. **Semantic Folding** (post-processing):
-   - Build co-occurrence matrix within 7-word windows
-   - Construct context HVs using permuted bundling
-   - Discover implicit relations via context similarity
+8. **Distributional Semantics** (V7): Build context HVs from co-occurrence; discover implicit relations.
 
 ---
 
@@ -326,33 +332,41 @@ engine.register_task(
 
 ## 8. Dialogue Processing
 
-**Entry point:** `DialogueManager.respond(user_text)` or `process_turn(text)`
+**Entry point:** `DialogueManager.process_turn(text)` — all response paths use `NSCKResponseEngine` (FluentNLG) in V7.
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant DM as DialogueManager
+    participant DM as DialogueManager (V7)
     participant LM as LanguageModule
     participant CE as CognitiveEngine
+    participant FlNLG as NSCKResponseEngine (V7)
+    participant SM as SemanticMemory
 
-    User->>DM: respond("set goal to find food")
-    DM->>LM: understand(text)
-    LM-->>DM: {intent: "set_goal", entities: ["food"]}
+    User->>DM: process_turn("What is memory?")
+    DM->>LM: understand(text) → {intent, entities}
     
-    alt intent == "set_goal"
-        DM->>CE: set_mission_goal("food")
-        DM-->>User: "Goal set to: food"
-    else intent == "query_status"
-        DM->>CE: get_stats()
-        DM-->>User: "Stats: {episodes: 42, rules: 5, ...}"
+    alt intent == "query_concept"
+        DM->>SM: extract_schema("Memory")
+        SM-->>DM: {properties, relations}
+        DM->>FlNLG: describe("Memory", semantic_memory)
+        FlNLG-->>DM: "Memory is stored in the hippocampus..."
+        DM-->>User: fluent multi-sentence response
+    else intent == "set_goal"
+        DM->>CE: set_mission_goal(entity)
+        DM->>FlNLG: respond([{subject:"goal", rel:"set_to", obj:entity}], "factual")
+        DM-->>User: "Goal set to: ..."
     else intent == "explain"
         DM->>CE: explain()
-        DM-->>User: "Last action: move_north because Q-value was highest"
+        DM->>FlNLG: answer_query("why", [(facts)], topic)
+        DM-->>User: fluent causal explanation
     else unknown
-        DM->>LM: generate(fallback_response)
-        DM-->>User: "I'm not sure how to help with that"
+        DM->>FlNLG: respond([], "factual", "help")
+        DM-->>User: "I'm not sure how to help with that."
     end
 ```
+
+**V7 change:** All branches now use `NSCKResponseEngine` instead of template strings, producing context-appropriate fluent prose.
 
 ---
 
