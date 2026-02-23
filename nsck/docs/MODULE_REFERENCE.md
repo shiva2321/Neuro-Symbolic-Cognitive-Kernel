@@ -45,6 +45,7 @@ HyperVectorPy(seed: Optional[int] = None)
 | `weighted_bundle` | `(other: HyperVectorPy, weight: float, seed=None) → HyperVectorPy` | `HyperVectorPy` | Weighted superposition — `weight∈[0,1]` biases toward `self`; `weight=0.5` equals plain bundle |
 | `permute` | `(shift: int) → HyperVectorPy` | `HyperVectorPy` | Circular bit-shift by `shift` positions |
 | `permute_inverse` | `(shift: int) → HyperVectorPy` | `HyperVectorPy` | Inverse circular shift |
+| `negate` | `() → HyperVectorPy` | `HyperVectorPy` | VSA anti-bundling negation: `XOR(self, NEG_SEED_HV)` where `NEG_SEED=0xDEADBEEFCAFEBABE`. Result: `sim(hv, negate(hv))≈0.50` (near-orthogonal); `negate(negate(hv))==hv` (involution — double negation recovers original). Both Rust and Python implementations. |
 | `similarity` | `(other: HyperVectorPy) → float` | `[0, 1]` | Normalised Hamming similarity (legacy) |
 | `cosine_similarity` | `(other: HyperVectorPy) → float` | `[-1, 1]` | Bipolar cosine similarity (recommended) |
 | `similarity_robust` | `(other, method='cosine') → float` | `[0, 1]` | Configurable similarity (normalises cosine to [0,1]) |
@@ -154,13 +155,17 @@ SemanticMemory(relation_weights: Optional[Dict] = None, use_rust: bool = True)
 | `add_concept` | `(name: str, properties: dict, hv_override=None)` | None | Add concept with bound property HVs |
 | `get_concept` | `(name: str) → Optional[HV]` | HV or None | Get concept HV |
 | `add_relation` | `(c1: str, rel: str, c2: str, timestamp: float = 0.0)` | None | Add directed edge with temporal validation |
-| `query` | `(query_hv: HV, k: int = 5) → List[Tuple[str, float]]` | list | Top-k similar concepts |
+| `query` | `(query_hv: HV, k: int = 5) → List[Tuple[str, float]]` | list | Top-k similar concepts via NSW ANN (V6) or exact scan |
 | `spread_activation` | `(start_concepts: List[str], steps: int = 3, decay: float = 0.7) → Dict[str, float]` | dict | Weighted spreading activation |
 | `get_inherited_properties` | `(concept: str) → dict` | dict | BFS up `is_a` edges + merge properties |
 | `extract_schema` | `(concept: str) → dict` | dict | Full schema: `{name, properties, is_a, parts, causes, caused_by}` |
+| `infer_transitive` | `(relation_type: str = 'is_a', max_hops: int = 3) → int` | int | V4: BFS up relation edges to close transitive chains; returns count of new inferred edges |
+| `build_prototypes` | `(category_relation: str = 'is_a', min_members: int = 2) → Dict[str, HV]` | dict | V4: Bundle all member HVs per category (Rosch 1973 prototype theory); returns `{category → prototype_hv}` |
 | `reset` | `()` | None | Clear all concepts and relations |
 | `save` | `(filepath: str)` | None | Pickle to disk |
 | `load` | `(filepath: str)` | None | Load from pickle |
+
+**V6 NSW ANN index:** `SemanticMemory` maintains a pure-Python `_NSWIndex` (Navigable Small World) for approximate nearest-neighbour queries. Falls back to exact scan when `hnswlib` is not installed. NSW index is rebuilt incrementally as concepts are added.
 
 **Default relation weights:** `is_a=0.9, has_property=0.7, causes=0.6, leads_to=0.6, results_in=0.6, implies=0.55, part_of=0.5, similar_to=0.4, semantically_related=0.35`
 
@@ -896,7 +901,401 @@ Thin orchestrator exposing both old and new APIs.
 
 ---
 
-### `integration/persistence.py` — 852 LOC
+### `language/fluent_nlg.py` — V6 (added Feb 2026)
+
+Fluent natural-language response generation from semantic frames.
+
+#### `FluentResponseComposer`
+
+```python
+FluentResponseComposer()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `compose` | `(frames, topic, query_type, max_sentences) → str` | str | Multi-sentence fluent response from frame list |
+
+**query_type options:** `"factual"` \| `"explanatory"` \| `"procedural"` \| `"causal"` \| `"comparative"`
+
+Each query type uses a different opening frame and connective pattern:
+- `factual`: "Understanding X requires examining…"
+- `causal`: "To explain X:" + "As a result," connectives
+- `explanatory`: "X can be understood in the following way."
+- `procedural`: Numbered step list
+- `comparative`: "By comparison," / "Unlike,"
+
+#### `RelationVerbalizer`
+
+Maps symbolic relations to English predicates:
+
+| Relation | Surface form |
+|---|---|
+| `is_a` / `categorization` | "is a kind of" / "is" |
+| `causes` / `leads_to` | "leads to" / "results in" |
+| `has_property` | "is known for its" / "is characterized by" |
+| `inhibits` / `prevents` | "prevents" / "reduces" |
+| `part_of` | "is part of" / "belongs to" |
+| `requires` | "requires" / "depends on" |
+| `contains` | "contains" / "includes" |
+| `comparison` | "relates to" |
+| `co_occurs` | "often appears alongside" |
+
+#### `NSCKResponseEngine`
+
+High-level response engine — the preferred public API.
+
+```python
+NSCKResponseEngine()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `respond` | `(frames, topic, query_type, max_sentences) → str` | str | Fluent paragraph from frame list |
+| `answer_query` | `(query: str, facts: List[Tuple], topic: str) → str` | str | Answer NL question from (s,r,o) triples; auto-detects query type |
+| `describe` | `(concept: str, semantic_memory, max_relations: int) → str` | str | Look up concept relations and describe in fluent prose |
+
+**V7:** `DialogueManager` routes all response methods through `NSCKResponseEngine` instead of template strings.
+
+---
+
+### `language/pos_tagger.py` — V6 (added Feb 2026)
+
+Brill transformation-based POS tagger.
+
+#### `BrillPosTagger`
+
+```python
+BrillPosTagger()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `tag_sentence` | `(sentence: str) → List[Tuple[str, str]]` | list | Tag each word with POS |
+| `tag_word` | `(word: str, context: List[str]) → str` | str | Tag single word using lexicon + rules |
+
+**POS tags used:**
+
+| Tag | Meaning | Examples |
+|---|---|---|
+| `NN` | Noun | brain, memory, cell |
+| `NNP` | Proper noun | Einstein, Earth |
+| `VB` / `VBD` / `VBG` | Verb forms | run, ran, running |
+| `JJ` | Adjective | large, important |
+| `RB` | Adverb | quickly, very |
+| `NEG` | Negator | not, never, no |
+| `TEMP` | Temporal connective | before, after, while |
+| `COND` | Conditional | if, unless, provided |
+| `SIM` | Similarity | like, as, similarly |
+
+**Lexicon:** 300+ common English words with hand-assigned tags.
+
+**Suffix rules (8):**
+1. `-ing` → VBG (unless in `_ING_NOUNS`)
+2. `-ed` → VBD (unless in `_ED_ADJECTIVES`)
+3. `-tion` / `-ness` / `-ity` / `-ment` / `-ism` → NN
+4. `-ful` / `-less` / `-ous` / `-ical` / `-ial` / `-ual` → JJ
+5. `-ly` → RB
+6. `-ize` / `-ise` → VB (unless in `_ING_NOUNS`)
+7. Starts with capital + not sentence-initial → NNP
+8. Single digit or pure number → CD
+
+---
+
+### `language/pragmatics.py` — V5 (added Feb 2026)
+
+Gricean cooperative pragmatics for dialogue.
+
+#### `PragmaticEngine`
+
+```python
+PragmaticEngine()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `classify_speech_act` | `(utterance: str) → str` | str | One of 7 speech-act labels |
+| `generate_implicature` | `(utterance: str) → List[str]` | list | List of pragmatic implicatures |
+| `check_maxims` | `(utterance: str, context: dict) → dict` | dict | Gricean maxim violations |
+| `project_presuppositions` | `(utterance: str) → List[str]` | list | Factive presuppositions |
+
+**Speech acts (7):** assertion, question, directive, commissive, expressive, declaration, threat
+
+**Horn scales (15):** `(all, most, many, some)`, `(always, usually, sometimes, rarely)`, `(certain, probable, possible)`, `(and, or)`, `(know, believe, think)`, …
+
+**Gricean maxims:**
+- **Quantity:** Be as informative as required, not more
+- **Quality:** Do not assert what you believe to be false
+- **Relation:** Be relevant
+- **Manner:** Avoid obscurity, ambiguity, verbosity
+
+**Presupposition triggers:** factive verbs (`know`, `realize`, `regret`), change-of-state verbs, definite descriptions
+
+---
+
+### `language/distributional_semantics.py` — V3/V7
+
+Co-occurrence based semantic similarity.
+
+#### `DistributionalCodebook`
+
+```python
+DistributionalCodebook(window_size: int = 5)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `train` | `(sentences: List[str])` | None | Build co-occurrence counts from corpus |
+| `get_context_hv` | `(word: str) → Optional[HV]` | HV or None | Context vector for word |
+| `similarity` | `(w1: str, w2: str) → float` | float | Cosine of context HVs |
+| `save` | `(path: str)` | None | Serialize to disk |
+| `load` | `(path: str)` | None | Load from disk |
+
+**V7 change:** `DistributionalCodebook` is pre-trained on `BUILTIN_CORPUS` (200 carefully selected sentences) at NSCK initialization when `enable_distributional_semantics=True`. This gives above-random similarity for well-known word pairs.
+
+**Context HV construction:**
+```
+context_hv(w) = bundle(permute(word_hv(w'), k) for (w', offset=k) in window(w, ±window_size))
+```
+
+---
+
+### `language/hf_corpus_loader.py` — V7 (added Feb 2026)
+
+HuggingFace dataset streaming for large-scale corpus ingestion.
+
+#### `HFCorpusLoader`
+
+```python
+HFCorpusLoader(dataset_name: str = "HuggingFaceFW/fineweb", max_sentences: int = 100_000)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `stream_sentences` | `(max: int) → Iterator[str]` | iterator | Yield clean sentences from HF dataset |
+| `load_offline_fallback` | `() → List[str]` | list | Return BUILTIN_CORPUS when offline |
+| `is_available` | `() → bool` | bool | Check if HF datasets library + internet available |
+
+**Enabled by:** `NSCKConfig(enable_hf_corpus=True)`. Disabled by default — requires `datasets` library and internet.
+
+**Offline fallback:** Returns `BUILTIN_CORPUS` (200 sentences hardcoded in the module) when `datasets` is not installed or network is unavailable.
+
+---
+
+### `language/construction_grammar.py` — V3/V4 (expanded)
+
+Construction grammar pattern matching for English NLU.
+
+#### `ConstructionMatcher`
+
+```python
+ConstructionMatcher()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `match` | `(tokens: List[str]) → List[ConstructionMatch]` | list | Match all applicable constructions |
+| `get_all_constructions` | `() → List[Construction]` | list | List all 71 constructions |
+
+**71 constructions** (V3+V4):
+
+| Category | Examples |
+|---|---|
+| Core SVO | `"X V Y"` → agent-action-patient |
+| Copular | `"X is Y"`, `"X is a Y"`, `"X is an Y"` |
+| Possessive | `"X has Y"`, `"X contains Y"` |
+| Causal | `"X causes Y"`, `"X leads to Y"`, `"X results in Y"` |
+| Similarity | `"X is like Y"`, `"X resembles Y"` |
+| Negation (V4) | `"X is not Y"`, `"X does not V"`, `"X cannot Y"` |
+| Temporal (V4) | `"After X, Y"`, `"Before X, Y"`, `"While X, Y"`, `"When X, Y"` |
+| Conditional (V4) | `"If X then Y"`, `"Unless X, Y"`, `"Provided X, Y"` |
+| Instrumental | `"X V Y using Z"`, `"X V Y by Z"` |
+| Comparative | `"X is more ADJ than Y"`, `"X is ADJ-er than Y"` |
+
+**Key constants:**
+- `_MIN_ISH_SUFFIX_LEN = 6` — minimum word length for `-ish` suffix rule
+- `NEGATION_WORDS` — `frozenset` of negators
+- `TEMPORAL_CONNECTIVES` — `frozenset` of temporal markers
+- `CONDITIONAL_CONNECTIVES` — `frozenset` of conditionals
+- `COMMON_VERBS` — 400+ verb forms for direct matching
+
+---
+
+### `reasoning/spatial_reasoning.py` — V5 (added Feb 2026)
+
+VSA-based spatial relation encoding using Fixed-Point Encoding (FPE) bit-flip.
+
+#### `PositionCodebook`
+
+```python
+PositionCodebook(dims: int = 3)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `encode_position` | `(coords: Tuple[float, ...]) → HV` | HV | Encode n-dimensional position as HV |
+| `decode_position` | `(hv: HV) → Tuple[float, ...]` | tuple | Approximate position from HV |
+
+**FPE bit-flip encoding:**
+```
+pos_hv(x) = base_hv
+  XOR flip(base_hv, AXIS_FLIP_BITS × |x_normalized|)   # flip bits proportional to magnitude
+```
+- `_AXIS_FLIP_BITS = 50` — bits flipped per unit of movement along each axis
+- `_NEGATIVE_STEP_OFFSET = 100_000` — large integer offset for negative coordinates (avoids 0-cross confusion)
+- `_MIN_QUERY_SIMILARITY = 0.4` — minimum similarity threshold for relation queries
+
+**Why FPE and not permute?** Python `permute()` gives ~0.50 similarity regardless of shift distance — it's not monotone. FPE bit-flip is monotone: adjacent positions are more similar than distant ones.
+
+#### `SpatialReasoner`
+
+```python
+SpatialReasoner(config: NSCKConfig)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `assert_spatial` | `(obj1: str, obj2: str, relation: str) → None` | None | Assert VSA spatial relationship |
+| `query_relation` | `(obj1: str, obj2: str) → str` | str | Query relationship between two objects |
+| `get_all_assertions` | `() → List[Tuple]` | list | All asserted (obj1, rel, obj2) triples |
+
+**8 relations:** `above`, `below`, `left`, `right`, `inside`, `outside`, `near`, `far`
+
+---
+
+### `reasoning/temporal_reasoning.py` — V4 (added Feb 2026)
+
+Temporal reasoning over ordered events and intervals.
+
+#### `TemporalReasoner`
+
+```python
+TemporalReasoner()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `add_event` | `(event: str, time: float)` | None | Add timestamped event |
+| `before` | `(e1: str, e2: str) → bool` | bool | Is e1 before e2? |
+| `after` | `(e1: str, e2: str) → bool` | bool | Is e1 after e2? |
+| `during` | `(event: str, interval: Tuple) → bool` | bool | Is event within interval? |
+| `get_timeline` | `() → List[Tuple[str, float]]` | list | All events sorted by time |
+
+---
+
+### `reasoning/abductive_reasoning.py` — V4 (added Feb 2026)
+
+Abductive reasoning — inference to the best explanation.
+
+#### `AbductiveReasoner`
+
+```python
+AbductiveReasoner(causal_graph: CausalGraph, semantic_memory: SemanticMemory)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `abduce` | `(observation: str, max_explanations: int = 5) → List[Explanation]` | list | Return best explanations for an observation |
+| `score_explanation` | `(hypothesis: str, observation: str) → float` | float | Score: plausibility × parsimony |
+
+**Selection criteria:** Plausibility (causal strength), parsimony (shortest chain), and coherence (consistent with known facts).
+
+---
+
+### `reasoning/predictive_processor.py` — V4 (added Feb 2026)
+
+Predictive processing and active inference engine.
+
+#### `PredictiveProcessor`
+
+```python
+PredictiveProcessor(config: NSCKConfig)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `predict` | `(context_hv: HV) → HV` | HV | Generate prediction from prior |
+| `compute_error` | `(prediction: HV, observation: HV) → float` | float | Prediction error (1 - similarity) |
+| `update_prior` | `(error: float, observation: HV)` | None | Bayesian prior update |
+
+**Key constants:**
+- `PRIOR_UNCERTAINTY = 0.5` — initial prior precision
+- Update rule: Bayesian: `posterior ∝ likelihood × prior`
+
+---
+
+### `learning/schema_induction.py` — V4 (added Feb 2026)
+
+Schema induction from repeated conceptual patterns.
+
+#### `SchemaInducer`
+
+```python
+SchemaInducer(semantic_memory: SemanticMemory)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `induce` | `(episodes: List[dict], min_support: int) → List[Schema]` | list | Extract recurring patterns |
+| `apply_schema` | `(schema: Schema, context: dict) → dict` | dict | Fill schema slots from context |
+
+---
+
+### `learning/pmi_learner.py` — V4 (added Feb 2026)
+
+Pointwise Mutual Information learner for co-occurrence patterns.
+
+#### `PMILearner`
+
+```python
+PMILearner()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `observe` | `(items: List[str])` | None | Record co-occurrence |
+| `pmi` | `(a: str, b: str) → float` | float | `log P(a,b) / (P(a)×P(b))` |
+| `top_associates` | `(word: str, k: int = 10) → List[Tuple]` | list | Top-k highest PMI partners |
+
+**Formula:** `PMI(a,b) = log₂(P(a,b) / (P(a) × P(b)))`
+
+Positive PMI = a and b co-occur more than chance. Clamped to `[0, ∞)` as PPMI.
+
+---
+
+### `learning/predictive_coding.py` — V4 (added Feb 2026)
+
+Predictive coding module for error-minimisation learning.
+
+#### `PredictiveCodingModule`
+
+```python
+PredictiveCodingModule(prior_uncertainty: float = PRIOR_UNCERTAINTY)
+```
+
+| Constant | Value | Description |
+|---|---|---|
+| `PRIOR_UNCERTAINTY` | 0.5 | Initial prior precision weight |
+
+---
+
+### `learning/active_inference.py` — V4 (added Feb 2026)
+
+Active inference learner — selects actions to minimise expected free energy.
+
+#### `ActiveInferenceLearner`
+
+```python
+ActiveInferenceLearner(config: NSCKConfig)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `select_action` | `(observations: List[HV], actions: List[str]) → str` | str | Select action minimising expected FE |
+| `update_beliefs` | `(observation: HV)` | None | Update posterior beliefs |
+
+**Key constants:**
+- `MIN_TEMP = 0.1` — minimum softmax temperature
+- `MAX_TEMP = 5.0` — maximum softmax temperature (exploration)
 
 #### `BrainStore`
 
@@ -974,7 +1373,9 @@ Fields: `winning_module`, `action`, `reason`, `evidence` (List[str]), `confidenc
 
 #### `NSCKConfig`
 
-Configuration dataclass with defaults for all tunable parameters:
+Configuration dataclass with defaults for all tunable parameters. 25 feature flags control optional subsystems.
+
+**Core numeric parameters:**
 
 | Parameter | Default | Description |
 |---|---|---|
@@ -987,6 +1388,44 @@ Configuration dataclass with defaults for all tunable parameters:
 | `rule_min_confidence` | 0.3 | Minimum confidence to promote rule |
 | `q_learning_rate` | 0.1 | TD(0) learning rate |
 | `q_discount` | 0.95 | Reward discount factor |
+
+**Feature flags (25 total):**
+
+| Flag | Default | Version | Description |
+|---|---|---|---|
+| `enable_snn` | True | V1 | Spiking neural network perception |
+| `enable_vsa` | True | V1 | VSA hypervector operations |
+| `enable_sleep` | True | V1 | Offline consolidation |
+| `enable_construction_grammar` | False | V3 | 71 CG constructions |
+| `enable_frame_semantics` | False | V3 | VerbNet-style verb frames |
+| `enable_coreference` | False | V3 | Pronoun resolution |
+| `enable_contextual_encoding` | False | V3 | Context-aware LinguaCortex |
+| `enable_free_energy_beliefs` | False | V3 | Belief revision via FE |
+| `enable_distributional_semantics` | False | V3 | Co-occurrence context HVs |
+| `enable_incremental_concept_refinement` | False | V3 | Incremental concept update |
+| `enable_dual_process` | False | V3 | System 1 / System 2 routing |
+| `enable_conceptual_blending` | False | V3 | Analogy blend HVs |
+| `enable_hnsw_index` | False | V3 | HNSW/NSW ANN for fast query |
+| `enable_homeostasis` | False | V3 | Memory homeostasis regulation |
+| `enable_stigmergy` | False | V3 | Pheromone-weighted spreading |
+| `enable_auto_categories` | False | V3 | Automatic concept categorisation |
+| `enable_negation_handling` | False | V4 | Negation as first-class operator |
+| `enable_temporal_reasoning` | False | V4 | Temporal connectives + ordering |
+| `enable_conditional_logic` | False | V4 | If/unless/provided logic |
+| `enable_transitive_inference` | False | V4 | Transitive is_a/causes closure |
+| `enable_prototype_generalization` | False | V4 | Category prototype bundling |
+| `enable_spatial_reasoning` | False | V5 | FPE spatial positions + 8 relations |
+| `enable_pragmatics` | False | V5 | Gricean maxims + speech acts |
+| `enable_fluent_dialogue` | **True** | V7 | FluentNLG wired into DialogueManager |
+| `enable_hf_corpus` | False | V7 | HuggingFace corpus pre-training |
+
+**Factory methods:**
+
+| Method | What it enables |
+|---|---|
+| `NSCKConfig.minimal()` | Core only — SNN + VSA + sleep |
+| `NSCKConfig.research()` | All 25 flags enabled |
+| `NSCKConfig.from_env()` | Read flags from environment variables |
 
 ---
 

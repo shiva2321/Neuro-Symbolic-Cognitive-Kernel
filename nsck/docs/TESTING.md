@@ -55,27 +55,30 @@ cd nsck/rust_vsa && cargo test --release
 | Layer | Location | Files | Tests | Description |
 |---|---|---|---|---|
 | Unit — core | `nsck/tests/unit/vsa/` `cognitive/` `learning/` | 9 files | ~115 | Core module isolation |
-| Unit — V3 language | `nsck/tests/unit/language/` | 4 files | ~26 | CG, frame semantics, coreference, distributional |
-| Unit — V3 memory | `nsck/tests/unit/memory/` | 4 files | ~24 | Homeostasis, stigmergy, HNSW, cleanup |
-| Unit — V3 reasoning | `nsck/tests/unit/reasoning/` | 9 files | ~65 | Belief revision, dual process, blending, analogy |
+| Unit — language (V3+) | `nsck/tests/unit/language/` | 9 files | ~105 | CG, frames, coreference, distributional, NLG, SRL, pragmatics, V4 features |
+| Unit — memory | `nsck/tests/unit/memory/` | 4 files | ~24 | Homeostasis, stigmergy, HNSW, cleanup |
+| Unit — reasoning (V3+) | `nsck/tests/unit/reasoning/` | 11 files | ~110 | Belief revision, dual process, blending, spatial, math |
+| Unit — V6 features | `nsck/tests/unit/test_v6_features.py` | 1 file | **86** | FluentNLG, Brill POS, NSW ANN, multimodal, concurrent, negate |
+| Unit — V7 features | `nsck/tests/unit/test_v7_features.py` | 1 file | **54** | KG stop-concept filter, FluentNLG wired, distributional init |
 | Unit — Rust backends | `nsck/tests/unit/rust/` | 1 file | **81** | HV math, cross-backend parity, SNN, pipeline |
 | Integration | `nsck/tests/integration/` | 12 files | ~315 | Cross-module + V3 pipeline + real-world |
 | Architecture | `nsck/tests/core_architecture/` | 4 files | ~63 | Architecture capability verification |
 | Experiments | `nsck/tests/experiments/` | 4 files | ~10 | Behavioural scenarios |
 | Regression | `nsck/tests/regression/` | 1 file | 6 | Known-fixed bug coverage |
 | Rust (Cargo) | `nsck/rust_vsa/tests/` | 1 file | 11 | Property-based VSA correctness |
-| Python core | `nsck/python/core/tests/` | 3 files | ~40 | Internal module tests |
 
-**Total: ~756 tests** across the codebase.
+**Total: ~951 tests passing** in `nsck/tests/` (78 test files).
 
-**Actual pytest run results:**
+**Actual pytest run results (verified Feb 2026):**
 
 | Build condition | `python -m pytest nsck/tests/ -q` result |
 |---|---|
-| Python-only (no Rust .so) | **531 passed**, 145 skipped, 3 xfailed |
-| With Rust .so (hypervec_rs + snn_rs) | **671 passed**, 4 skipped, 4 xfailed |
+| Python-only (no Rust .so) | **807 passed**, 150 skipped, 3 xfailed |
+| With Rust .so (hypervec_rs + snn_rs) | **951 passed**, 5 skipped, 4 xfailed |
 
-The 145 skipped tests (Python-only) are all in `nsck/tests/unit/rust/test_rust_backends.py` and `nsck/tests/unit/vsa/test_hypervec_parity.py` — they skip gracefully when the Rust extension is not installed.
+The 150 skipped tests (Python-only) are all in `nsck/tests/unit/rust/test_rust_backends.py` and `nsck/tests/unit/vsa/test_hypervec_parity.py` — they skip gracefully when the Rust `.so` files are not in `nsck/`.
+
+The additional `xfailed` test with Rust is `test_seed_determinism` in `test_hypervec_parity.py` — Rust uses ChaCha8 RNG, Python uses PCG64; seeded construction produces different bit sequences (accepted, documented limitation).
 
 ---
 
@@ -373,9 +376,9 @@ Unit tests target individual classes in isolation, using minimal or mocked depen
 
 ---
 
-## V3 Unit Tests
+## V3–V7 Unit Tests
 
-These tests were added in V3 and cover all new modules. They are skipped gracefully when optional dependencies (Rust, hnswlib) are not installed.
+These tests were added in V3 through V7 and cover all new modules. They skip gracefully when optional dependencies (Rust, hnswlib, torch) are not installed.
 
 ---
 
@@ -454,6 +457,82 @@ These tests were added in V3 and cover all new modules. They are skipped gracefu
 **What:** Tests `AnalogyEngine.blend()` and `functor_quality()`.
 
 **How:** Creates two small concept domains; verifies blend HV is non-zero; verifies `functor_quality()` = 1.0 on a perfect mapping.
+
+---
+
+### `unit/language/test_pragmatics.py` — 45 tests (V5)
+
+**What:** Tests `PragmaticEngine` — Gricean maxims, scalar implicatures, speech-act classification, and presupposition projection.
+
+**How:**
+- Feeds utterances to `classify_speech_act()`; verifies correct category (assertion, question, directive, promise, threat, warning).
+- Generates scalar implicatures: "some → not all", "possible → not certain", "warm → not hot".
+- Tests Gricean maxim violations: quantity-based reasoning.
+- Tests presupposition projection: "The king of France is bald" → presupposes "France has a king".
+
+**Why:** Pragmatic reasoning is needed for any natural dialogue system that must handle indirect speech acts. These tests verify the 15 Horn scales, 7 speech acts, and Gricean implicature logic are all correctly implemented.
+
+---
+
+### `unit/reasoning/test_spatial_reasoning.py` — 45 tests (V5)
+
+**What:** Tests `SpatialReasoner` and `PositionCodebook` — VSA-based spatial relation encoding.
+
+**How:**
+- Encodes positions with `PositionCodebook` using FPE bit-flip encoding; verifies adjacent positions are more similar than distant ones.
+- Tests `assert_spatial(obj1, obj2, relation)` for 8 relations: above, below, left, right, inside, outside, near, far.
+- Tests `query_relation(obj1, obj2)` returns correct relation string.
+- Tests boundary cases: `_MIN_QUERY_SIMILARITY=0.4` threshold, `_NEGATIVE_STEP_OFFSET=100_000` avoidance.
+
+**Why:** Spatial reasoning requires that position HVs have a monotone similarity gradient. FPE bit-flip is used instead of permute because Python permute() gives ~0.5 regardless of distance — verified and documented in `_AXIS_FLIP_BITS=50`.
+
+---
+
+### `unit/language/test_v4_features.py` — 50 tests (V4)
+
+**What:** Tests all V4 language enhancements: negation handling, temporal connectives, conditional logic, transitive inference, and prototype generalization.
+
+**How:**
+- Negation: `"The dog is not friendly"` → `NEGATION` tag present in parsed tokens; bound HV uses `negate()`.
+- Temporal: `"After the rain, the flowers bloom"` → `TEMPORAL_CONNECTIVE` construction matched; `"after"` as TEMP tag.
+- Conditional: `"If it rains, the ground gets wet"` → `CONDITIONAL` construction; antecedent/consequent separated.
+- Transitive: adds `A is_a B`, `B is_a C`; calls `SemanticMemory.infer_transitive()`; verifies `A is_a C` inferred.
+- Prototype: adds 3 members with `is_a Animal`; calls `build_prototypes()`; verifies prototype HV similarity to each member > 0.6.
+
+**Why:** V4 addressed 5 specific gaps: negation as first-class linguistic operator, temporal ordering, conditional reasoning, inheritance chains, and category prototypes. These tests ensure each gap is properly filled.
+
+---
+
+### `unit/test_v6_features.py` — 86 tests (V6)
+
+**What:** Comprehensive tests for all 6 V6 capabilities.
+
+| Section | Tests | Coverage |
+|---|---|---|
+| FluentNLG | 20 | `FluentResponseComposer`, `NSCKResponseEngine`, relation verbalization, anaphora |
+| BrillPosTagger | 14 | 300+ lexicon, suffix/prefix rules, unknown word handling |
+| VSA negate() | 12 | Rust+Python negate, orthogonality, idempotence, `negate_negate==original` |
+| DistributionalCodebook | 12 | PMI-weighted co-occurrence, context HV similarity, serialization |
+| ConcurrentMultimodal | 14 | Parallel image+text+state processing, thread safety |
+| NSW ANN fallback | 14 | `_NSWIndex` HNSW fallback, k-NN correctness without hnswlib |
+
+All 86 tests pass with or without Rust `.so`.
+
+---
+
+### `unit/test_v7_features.py` — 54 tests (V7)
+
+**What:** Tests for all V7 additions.
+
+| Section | Tests | Coverage |
+|---|---|---|
+| KG stop-concept filter | 12 | `_STOP_CONCEPTS` frozenset (53 words), `_GENERIC_RELATION_THRESHOLD=0.62`, no filter noise in graph |
+| FluentNLG wired into DM | 14 | `DialogueManager` uses `NSCKResponseEngine` for all response paths |
+| Distributional pre-training | 10 | `DistributionalCodebook` on BUILTIN_CORPUS at init, similarity improvement |
+| HF corpus loader | 10 | `hf_corpus_loader.py` offline fallback, `enable_hf_corpus=True/False` flag |
+| Config flags | 8 | `enable_fluent_dialogue`, `enable_hf_corpus` present in `NSCKConfig` |
+
+All 54 tests pass with Python-only backend.
 
 ---
 
