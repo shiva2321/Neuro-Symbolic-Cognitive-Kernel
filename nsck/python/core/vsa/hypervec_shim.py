@@ -10,6 +10,14 @@ Modules throughout the codebase should import via::
 
 This guarantees they get the fastest available backend without crashing
 when the Rust build is missing.
+
+Startup cost
+------------
+The first import of this module incurs a one-time shared-library load cost
+(~700–1000 ms on a cold filesystem cache) when the Rust backend is used.
+This cost is paid once per Python process; all subsequent imports are free.
+For short-lived CLI scripts, prefer the Python backend (``use_rust=False``)
+or pre-warm the process with a no-op import before timing.
 """
 
 from __future__ import annotations

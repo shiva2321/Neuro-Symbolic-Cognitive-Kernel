@@ -35,6 +35,7 @@ data science.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -320,7 +321,11 @@ class RelationVerbalizer:
             relation.lower().replace(" ", "_"),
             _DEFAULT_TEMPLATES,
         )
-        idx = (hash(subject + relation + obj) + variant_seed) % len(templates)
+        # Use hashlib for cross-session determinism (Python's built-in hash()
+        # is randomized per interpreter run via PYTHONHASHSEED)
+        _key = (subject + relation + obj).encode("utf-8")
+        _base = int.from_bytes(hashlib.md5(_key).digest()[:4], "little")
+        idx = (_base + variant_seed) % len(templates)
         template, hint = templates[idx]
         sentence = self._fill(template, subject, relation, obj)
         return sentence, hint

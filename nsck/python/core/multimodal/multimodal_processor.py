@@ -868,10 +868,9 @@ class ConcurrentMultimodalProcessor(MultimodalProcessor):
             "video":      lambda d: self._process_video(d),
         }
 
-        results: List["ModalityResult"] = [None] * len(tasks)  # type: ignore[list-item]
-        order = list(tasks.keys())
         concepts: List[str] = []
         cues: Dict[str, Any] = dict(inp.metadata)
+        valid_map: Dict[int, "ModalityResult"] = {}
 
         with _cf.ThreadPoolExecutor(max_workers=min(self._max_workers, len(tasks))) as executor:
             futures = {
@@ -882,16 +881,17 @@ class ConcurrentMultimodalProcessor(MultimodalProcessor):
                 i, mod = futures[future]
                 try:
                     r = future.result()
+                    valid_map[i] = r
                 except Exception as exc:
                     import logging as _log
                     _log.getLogger("nsck.multimodal").warning(
                         "Concurrent %s processing failed: %s", mod, exc
                     )
-                    continue
-                results[i] = r
 
-        # Remove any None slots (failed workers)
-        valid: List["ModalityResult"] = [r for r in results if r is not None]
+        # Rebuild results in original submission order
+        valid: List["ModalityResult"] = [
+            valid_map[i] for i in sorted(valid_map)
+        ]
 
         if not valid:
             fused = hypervec_rs.HyperVector(0)

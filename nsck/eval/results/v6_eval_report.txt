@@ -1,0 +1,228 @@
+
+══════════════════════════════════════════════════════════════════════
+  NSCK V6 End-to-End Evaluation — Backend: Rust
+══════════════════════════════════════════════════════════════════════
+
+[1] Setup: 989.5 ms ✓
+
+[2] Training:
+    Corpus size  : 135 sentences
+    Learned      : 135 sentences
+    Errors       : 0
+    Duration     : 1.87s
+    Concepts     : 644
+    Graph edges  : 671
+
+[3] VSA Operations (V6):
+    bundle ×100      : 0.07 ms
+    xor ×100         : 0.02 ms
+    similarity ×100  : 0.02 ms
+    negate() sim     : 0.5025 (expect ~0.50)
+    negate idempotent: 1.0000 (expect ~1.0)
+    permute sim      : 0.5047
+    permute⁻¹ sim    : 1.0000 (expect ~1.0)
+    corpus vocab     : 543 words
+    cat↔dog sim      : 0.5153
+    water↔ocean sim  : 0.4950
+    corpus build     : 13.2 ms
+
+[4] Brill POS Tagger (V6):
+    Accuracy : 73.7%
+    'The cat sat on the mat'
+      → The/DT cat/NN sat/VBD on/IN the/DT mat/NN
+    'The dog runs fast'
+      → The/DT dog/NN runs/VBZ fast/JJ
+    'Water is essential for life'
+      → Water/NN is/VBZ essential/JJ for/CC life/NN
+
+[5] Multimodal Fusion (V6):
+    Modalities fused  : 3
+    Sequential avg    : 5.1 ms
+    Concurrent avg    : 5.9 ms
+    Concepts extracted: ['a', 'large', 'dog', 'in', 'the']
+    Confidence        : 0.817
+
+[6] NSW Approximate NN (V6):
+    Vectors      : 200 × 128D
+    Build time   : 62.9 ms
+    Query time   : 0.19 ms/query
+    Recall @5    : 60%
+
+[7] Fluent Natural Language Responses (V6):
+
+    Q: What is water?
+    A: The following describes water: There is a categorization relationship between water and essential. In addition, it is related to molecule (categorization). Also, it forms a component of hydrogen. Also, it forms a component of oxygen. Finally, it forms a component of atom. Taken together, these facts illustrate the nature of water.
+       [concept coverage: 50%  gen: 0.5ms]
+
+    Q: Why does DNA matter?
+    A: Here is how dna relates to its effects. There is a related to relationship between dna and influence. Furthermore, it is related to slowly (related to). Furthermore, it and feelings are connected through a related to link. Lastly, it and everyday are connected through a related to link. In summary, dna is a multifaceted concept with these key characteristics.
+       [concept coverage: 33%  gen: 2.0ms]
+
+    Q: Explain photosynthesis
+    A: Photosynthesis is related to process (categorization).
+       [concept coverage: 33%  gen: 0.0ms]
+
+    Q: What is artificial intelligence?
+    A: Artificial intelligence can be described as follows. There is a cognition relationship between intelligence and involves. Finally, it is related to human (simulates).
+       [concept coverage: 33%  gen: 0.1ms]
+
+    Q: What causes earthquakes?
+    A: Earthquakes is related to volcanoes (and).
+       [concept coverage: 33%  gen: 0.0ms]
+
+    Q: Explain machine learning
+    A: To explain machine learning:  Learning is related to changes (involves). Finally, there is a enables relationship between it and computers.
+       [concept coverage: 67%  gen: 0.1ms]
+
+    Q: What is memory?
+    A: Here is what is known about memory: Memory is a process. Also, it represents a type of away. Also, it is one of the winds. Furthermore, there is a and relationship between it and restores. In summary, there is a stores relationship between it and memories. These properties make memory a well-defined concept in this domain.
+       [concept coverage: 33%  gen: 0.1ms]
+
+    Q: Why are cells important?
+    A: The causal chain involving cells unfolds as follows. Cells can be classified as a building. Lastly, they is a organisms.
+       [concept coverage: 50%  gen: 0.0ms]
+
+[8] Cognitive Engine:
+    Input: 'Water is a liquid substance.'
+      → 'I notices the the is. It involves the water.'  [0.2ms]
+    Input: 'DNA carries genetic information.'
+      → 'I notices the the genetic. It involves the dna carries.'  [0.1ms]
+    Input: 'Artificial intelligence simulates human reasoning.'
+      → 'I notices the the reasoning. It involves the artificial intelligence s…'  [0.1ms]
+    Input: 'The brain controls the nervous system.'
+      → 'I notices the the inform. It involves the the brain controls.'  [0.0ms]
+
+══════════════════════════════════════════════════════════════════════
+  SUMMARY — Backend: Rust
+══════════════════════════════════════════════════════════════════════
+  Training  : 135 sentences → 644 concepts, 671 edges
+  VSA negate: sim=0.502 (orthogonal ✓), idempotent=1.000 ✓
+  POS acc   : 74%
+  Multimodal: 3 modalities, 5ms seq / 6ms concurrent
+  NSW recall: 60%
+  Fluent NL : 42% concept coverage
+
+══════════════════════════════════════════════════════════════════════
+  NSCK V6 End-to-End Evaluation — Backend: Python
+══════════════════════════════════════════════════════════════════════
+
+[1] Setup: 2.9 ms ✓
+
+[2] Training:
+    Corpus size  : 135 sentences
+    Learned      : 135 sentences
+    Errors       : 0
+    Duration     : 1.92s
+    Concepts     : 644
+    Graph edges  : 671
+
+[3] VSA Operations (V6):
+    bundle ×100      : 0.07 ms
+    xor ×100         : 0.02 ms
+    similarity ×100  : 0.02 ms
+    negate() sim     : 0.5025 (expect ~0.50)
+    negate idempotent: 1.0000 (expect ~1.0)
+    permute sim      : 0.5047
+    permute⁻¹ sim    : 1.0000 (expect ~1.0)
+    corpus vocab     : 543 words
+    cat↔dog sim      : 0.5153
+    water↔ocean sim  : 0.4950
+    corpus build     : 13.5 ms
+
+[4] Brill POS Tagger (V6):
+    Accuracy : 73.7%
+    'The cat sat on the mat'
+      → The/DT cat/NN sat/VBD on/IN the/DT mat/NN
+    'The dog runs fast'
+      → The/DT dog/NN runs/VBZ fast/JJ
+    'Water is essential for life'
+      → Water/NN is/VBZ essential/JJ for/CC life/NN
+
+[5] Multimodal Fusion (V6):
+    Modalities fused  : 3
+    Sequential avg    : 4.9 ms
+    Concurrent avg    : 5.4 ms
+    Concepts extracted: ['a', 'large', 'dog', 'in', 'the']
+    Confidence        : 0.817
+
+[6] NSW Approximate NN (V6):
+    Vectors      : 200 × 128D
+    Build time   : 80.1 ms
+    Query time   : 0.20 ms/query
+    Recall @5    : 70%
+
+[7] Fluent Natural Language Responses (V6):
+
+    Q: What is water?
+    A: The following describes water: There is a categorization relationship between water and essential. In addition, it is related to molecule (categorization). Also, it forms a component of hydrogen. Also, it forms a component of oxygen. Finally, it forms a component of atom. Taken together, these facts illustrate the nature of water.
+       [concept coverage: 50%  gen: 0.1ms]
+
+    Q: Why does DNA matter?
+    A: Here is how dna relates to its effects. DNA is related to networks (related to). Furthermore, it and prevents are connected through a related to link. Furthermore, it is related to average (related to). Lastly, there is a related to relationship between it and frequency. In summary, dna is a multifaceted concept with these key characteristics.
+       [concept coverage: 33%  gen: 2.5ms]
+
+    Q: Explain photosynthesis
+    A: Photosynthesis is related to process (categorization).
+       [concept coverage: 33%  gen: 0.0ms]
+
+    Q: What is artificial intelligence?
+    A: Artificial intelligence can be described as follows. There is a cognition relationship between intelligence and involves. Finally, it is related to human (simulates).
+       [concept coverage: 33%  gen: 0.1ms]
+
+    Q: What causes earthquakes?
+    A: Earthquakes is related to volcanoes (and).
+       [concept coverage: 33%  gen: 0.0ms]
+
+    Q: Explain machine learning
+    A: To explain machine learning:  Learning is related to changes (involves). Finally, there is a enables relationship between it and computers.
+       [concept coverage: 67%  gen: 0.1ms]
+
+    Q: What is memory?
+    A: Here is what is known about memory: Memory is a process. Also, it represents a type of away. Also, it is one of the winds. Furthermore, there is a and relationship between it and restores. In summary, there is a stores relationship between it and memories. These properties make memory a well-defined concept in this domain.
+       [concept coverage: 33%  gen: 0.1ms]
+
+    Q: Why are cells important?
+    A: The causal chain involving cells unfolds as follows. Cells can be classified as a building. Lastly, they is a organisms.
+       [concept coverage: 50%  gen: 0.0ms]
+
+[8] Cognitive Engine:
+    Input: 'Water is a liquid substance.'
+      → 'I notices the the is. It involves the water.'  [0.1ms]
+    Input: 'DNA carries genetic information.'
+      → 'I notices the the genetic. It involves the dna carries.'  [0.1ms]
+    Input: 'Artificial intelligence simulates human reasoning.'
+      → 'I notices the the reasoning. It involves the artificial intelligence s…'  [0.0ms]
+    Input: 'The brain controls the nervous system.'
+      → 'I notices the the inform. It involves the the brain controls.'  [0.0ms]
+
+══════════════════════════════════════════════════════════════════════
+  SUMMARY — Backend: Python
+══════════════════════════════════════════════════════════════════════
+  Training  : 135 sentences → 644 concepts, 671 edges
+  VSA negate: sim=0.502 (orthogonal ✓), idempotent=1.000 ✓
+  POS acc   : 74%
+  Multimodal: 3 modalities, 5ms seq / 5ms concurrent
+  NSW recall: 70%
+  Fluent NL : 42% concept coverage
+
+╔════════════════════════════════════════════════════════════════════╗
+║             NSCK V6 — Rust vs Python Backend Comparison            ║
+╠════════════════════════════════════════════════════════════════════╣
+║ Metric                                      Rust       Python     Δ ║
+╠════════════════════════════════════════════════════════════════════╣
+║ Setup (ms)                              989.47ms       2.93ms +33670% ║
+║ Training duration (s)                      1.87s        1.92s   -3% ║
+║ Concepts learned                           135.0        135.0   +0% ║
+║ VSA bundle ×100 (ms)                       0.1ms        0.1ms   +0% ║
+║ VSA similarity ×100 (ms)                   0.0ms        0.0ms   N/A ║
+║ Corpus build (ms)                        13.24ms      13.52ms   -2% ║
+║ Vocab size                                 543.0        543.0   +0% ║
+║ Negate sim (~0.50)                        0.5025       0.5025   +0% ║
+║ POS accuracy (%)                           73.7%        73.7%   +0% ║
+║ Multimodal seq (ms)                       5.07ms       4.93ms   +3% ║
+║ Multimodal concurrent (ms)                5.94ms       5.37ms  +11% ║
+║ NSW build (ms)                           62.91ms      80.14ms  -21% ║
+║ NSW query (ms)                            0.19ms        0.2ms   -5% ║
+║ NSW recall @5 (%)                          60.0%        70.0%  -14% ║
+║ Fluent NL coverage (%)                     42.0%        42.0%   +0% ║
+╚════════════════════════════════════════════════════════════════════╝

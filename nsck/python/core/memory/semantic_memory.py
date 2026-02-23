@@ -11,7 +11,6 @@ import numpy as np
 import pickle
 import os
 import heapq
-import random as _random
 from typing import Dict, List, Any, Optional, Set, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
 
@@ -110,14 +109,15 @@ class _NSWIndex:
         return results[:k]
 
     def _greedy_search(self, query: np.ndarray, ef: int) -> List[Tuple[int, float]]:
-        """Greedy beam search from a random entry point."""
+        """Greedy beam search from a deterministic entry point (node 0)."""
         if not self._vectors:
             return []
 
-        # Random entry point
-        entry = _random.randrange(len(self._vectors))
+        # Use node 0 as the fixed entry point for determinism and cache locality.
+        # A random entry point gives better average recall but high variance at
+        # small N — deterministic is more predictable for a unit-tested component.
+        entry = 0
         visited: Set[int] = {entry}
-        # Min-heap by distance (negate for max-heap of candidates)
         dist0 = 1.0 - float(np.dot(self._vectors[entry], query))
         candidates: List[Tuple[float, int]] = [(dist0, entry)]
         results: List[Tuple[float, int]] = [(dist0, entry)]
