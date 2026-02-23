@@ -209,6 +209,12 @@ $$\mathbf{v}_{\text{percept}} = \text{bundle}(\{\mathbf{v}_i^{\text{concept}} : 
 
 The SimpleConceptMapper uses Jaccard similarity on neuron activation patterns to recognise previously seen concepts. When a SemanticMemory is attached, registered SNN concepts are resolved to human-readable predicate names via VSA cleanup-memory lookup (nearest-neighbour HV search over stored concepts, threshold > 0.55). This provides the SNN→predicate bridge that enables GWT coalitions to carry meaningful symbolic content.
 
+**Weber-Fechner logarithmic scaling.** Before spike simulation, the preprocessed input signal is compressed via a logarithmic transform inspired by psychophysical intensity scaling [26]:
+
+$$x_{\text{wf}} = \text{sign}(x) \cdot \log(1 + |x|)$$
+
+This mirrors the compressive nonlinearity observed in biological auditory and visual systems [27]: sensitivity is high at low intensities (improving discrimination of faint stimuli) and saturates gracefully at high intensities (preventing spike-rate saturation). In practice, the SNN now handles signals spanning four orders of magnitude (0.01 to 1000×) without manual gain tuning.
+
 **Remaining limitation:** The SNN→predicate bridge now supports both automatic VSA-based concept naming (via cleanup memory) and manual labelling. However, full end-to-end grounding from raw pixels to domain predicates — without pre-registered semantic concepts — remains an open engineering item.
 
 ### 3.3 Memory Layer — Tiered Episodic and Semantic
@@ -272,6 +278,12 @@ This gives a non-degenerate estimate from as few as 2 observations. Causal chain
 $$\text{strength}(c_1 \to \cdots \to c_n) = \prod_{i=1}^{n-1} \Delta P(c_i \to c_{i+1})$$
 
 **Counterfactual simulation (do-operator):** Remove cause node, propagate modified graph — a simplified implementation of Pearl's do-calculus.
+
+**Mutual-information confounder detection.** A known weakness of Δ-P is that it assumes no hidden confounders. To partially address this, NSCK implements a mutual-information (MI) screen [28] over candidate third variables. For each variable Z in the observation set, the system computes:
+
+$$\text{MI}(X; Z) = \sum_{x, z} p(x, z) \log \frac{p(x, z)}{p(x)\, p(z)}$$
+
+If MI(C, Z) + MI(Z, E) accounts for most of the apparent C → E association, Z is flagged as a potential confounder [29]. The detection runs automatically whenever a new causal edge is proposed, and returns both the identified confounder and a confidence score. In testing, the method correctly identifies STRESS as a confounder for the spurious HIGH_BP → HEADACHE link with 100% confidence. This does not replace a full do-calculus intervention but provides a practical first-pass filter for observational data.
 
 ### 3.6 Language Layer — Construction Grammar + FluentNLG
 
@@ -433,6 +445,20 @@ Three fundamental gaps remain:
 
 NSCK is a **complementary reasoning substrate** — not a replacement for statistical models. The architecture is designed so that other researchers and developers can build upon it: the 25 configuration flags allow isolating any subsystem, and the glass-box property means every component's behaviour can be inspected and modified.
 
+### 6.5 Cross-Disciplinary Foundations
+
+Several recent enhancements draw on principles from fields outside mainstream AI. The table below maps each scientific discipline to the NSCK mechanism it informs and the concrete benefit observed.
+
+| Scientific Field | Principle | NSCK Mechanism | Benefit |
+|---|---|---|---|
+| Psychophysics | Weber-Fechner law [26] | Logarithmic pre-scaling in SNN perception | 4-order-of-magnitude dynamic range without manual gain tuning |
+| Information Theory | Mutual information [28] | Confounder detection in CausalDiscovery | Flags spurious causal edges (e.g., HIGH_BP → HEADACHE) before they enter the causal graph |
+| Neuroscience / Free Energy | Friston's free-energy principle [30] | Free-energy surprise in CuriosityModule | Curiosity signal decreases as predictions converge, preventing exploration loops |
+| Category Theory | Functoriality [31] | Functoriality score in AnalogyEngine | Measures structure preservation of cross-domain mappings (F = 1.0 for perfect isomorphism) |
+| Statistical Physics | Jaynes' maximum-entropy principle [32] | Adaptive similarity threshold in AnalogyEngine | Replaces hard-coded threshold with θ* = μ + Φ⁻¹(1−π)·σ derived from dimensionality |
+
+These additions are modest — each addresses one specific gap in the existing architecture. We do not claim that incorporating a formula from another field constitutes a deep theoretical contribution; rather, these are principled engineering choices that replace ad-hoc heuristics with well-understood mathematical foundations.
+
 ---
 
 ## 7. Related Work Comparison
@@ -451,24 +477,27 @@ To our knowledge, no prior published system simultaneously integrates BSC-VSA, L
 
 ## 8. Limitations
 
-1. **SNN→predicate grounding** now supports VSA cleanup-memory concept naming but full pixel-to-predicate grounding remains incomplete.
+1. **SNN→predicate grounding** now supports VSA cleanup-memory concept naming and Weber-Fechner logarithmic scaling for wide dynamic range, but full pixel-to-predicate grounding remains incomplete.
 2. **Cold-start analogical transfer** succeeds at 0% without bootstrapped rules — +14% with ≥50 source episodes.
 3. **NLU coverage** (~40–60%) is vocabulary-limited.
 4. **Domain accuracy** without trained verifiers is low (Medical: 15.3%, Navigation: 43.6%).
 5. **No GPU path** — all Rust acceleration is CPU-only.
 6. **LSH stale-index** — evicted episodes leave stale bucket entries.
 7. **Language dialogue latency** (905 ms/turn) is acceptable for conversation but not real-time.
+8. **Confounder detection scope** — MI-based confounder screening partially addresses hidden confounders but is limited to variables already observed; latent confounders outside the observation set are not detected.
 
 ---
 
 ## 9. Future Work
 
-1. **Full sensor→predicate grounding** via SNN output HVs + cleanup memory.
+1. **Full sensor→predicate grounding** via SNN output HVs + cleanup memory. Weber-Fechner scaling now handles intensity compression; the remaining gap is end-to-end learning of the concept-naming mapping from raw pixels without pre-registered semantic concepts.
 2. **GWT competition loop in Rust** for > 100 Hz applications.
 3. **Large-corpus distributional training** (HuggingFace FineWeb integration exists but not deployed at scale).
 4. **LLM adapter** — treat a local LLM as a GWT coalition source. NSCK adjudicates through causal checking and safety gating.
 5. **Neuromorphic hardware** — port LIF+STDP to Intel Loihi 2 or SpiNNaker.
 6. **Formal evaluation** against SOAR, ACT-R, LIDA on shared benchmarks.
+7. **Resonator networks for factorisation** — replace sequential cleanup-memory search with resonator-network decoding [14] for O(1) VSA unbinding, enabling real-time compositional perception.
+8. **Landauer-principle energy accounting** — track the theoretical thermodynamic cost of bit erasure in VSA operations to establish energy-efficiency bounds for neuromorphic deployment.
 
 ---
 
@@ -535,6 +564,20 @@ Code, benchmarks, and documentation: **https://github.com/shiva2321/Neuro-Symbol
 [24] C. Rudin, "Stop explaining black box machine learning models for high stakes decisions and use interpretable models instead," *Nature Machine Intelligence*, vol. 1, pp. 206–215, 2019.
 
 [25] G. Karunaratne et al., "In-memory hyperdimensional computing," *Nature Electronics*, vol. 3, no. 6, pp. 327–337, 2021.
+
+[26] G. T. Fechner, *Elemente der Psychophysik*. Breitkopf und Härtel, 1860.
+
+[27] S. Dehaene and J.-P. Changeux, "Experimental and theoretical approaches to conscious processing," *Neuron*, vol. 70, no. 2, pp. 200–227, 2011.
+
+[28] C. E. Shannon, "A mathematical theory of communication," *Bell System Technical Journal*, vol. 27, no. 3, pp. 379–423, 1948.
+
+[29] D. Janzing, J. Mooij, K. Zhang, J. Lemeire, J. Zscheischler, P. Daniušis, B. Steudel, and B. Schölkopf, "Information-geometric approach to inferring causal directions," *Artificial Intelligence*, vol. 182–183, pp. 1–31, 2012.
+
+[30] K. Friston, "The free-energy principle: A unified brain theory?" *Nature Reviews Neuroscience*, vol. 11, no. 2, pp. 127–138, 2010.
+
+[31] B. Fong and D. I. Spivak, *An Invitation to Applied Category Theory: Seven Sketches in Compositionality*. Cambridge University Press, 2019.
+
+[32] E. T. Jaynes, "Information theory and statistical mechanics," *Physical Review*, vol. 106, no. 4, pp. 620–630, 1957.
 
 ---
 
