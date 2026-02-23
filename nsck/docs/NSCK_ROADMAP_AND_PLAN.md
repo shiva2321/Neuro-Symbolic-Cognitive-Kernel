@@ -57,21 +57,42 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 
 | Gap | Why It Matters | Priority | Status |
 |-----|---------------|----------|--------|
-| Semantic Role Labeling (SRL) via Resonator Networks | True NLU requires knowing *who did what to whom* | P0 | Pending |
-| Math/Numeric Reasoning in VSA | "Numbers and math" are core input types | P0 | Pending |
-| Cross-Domain Knowledge Transfer (formal) | Generalization across domains is the hallmark of intelligence | P0 | Pending |
-| NLG: Multi-sentence discourse planning | Fluent responses need more than S-V-O templates | P1 | Pending |
-| Concurrent multimodal fusion pipeline | Simultaneous inputs (e.g., spoken + visual) not properly scheduled | P1 | Pending |
-| SNN Rust port for perception (<5ms) | Python SNN is ~19ms; need Rust for real-time use | P1 | Pending |
+| Semantic Role Labeling (SRL) via Resonator Networks | True NLU requires knowing *who did what to whom* | P0 | ✅ **Done (A1)** |
+| Math/Numeric Reasoning in VSA | "Numbers and math" are core input types | P0 | ✅ **Done (B1)** |
+| Cross-Domain Knowledge Transfer (formal) | Generalization across domains is the hallmark of intelligence | P0 | ✅ **Done (C1)** |
+| NLG: Multi-sentence discourse planning | Fluent responses need more than S-V-O templates | P1 | ✅ **Done (A2)** |
+| Concurrent multimodal fusion pipeline | Simultaneous inputs (e.g., spoken + visual) not properly scheduled | P1 | ⚠️ Sequential only |
+| SNN Rust port for perception (<5ms) | Python SNN is ~51ms; need Rust for real-time use | P1 | ⚠️ Stub exists |
 | Formal temporal reasoning (before/after/during) | Time is fundamental to language and events | P2 | ✅ **V4 Done** |
-| Spatial reasoning (above/below/inside/outside) | Required for vision-language grounding | P2 | Pending |
+| Spatial reasoning (above/below/inside/outside) | Required for vision-language grounding | P2 | ✅ **V5 Done** |
 | Negation handling in VSA | "X is NOT Y" needs explicit anti-bundling | P2 | ✅ **V4 Done** |
 | Conditional logic ("if X then Y") | Conditional reasoning is fundamental to causality | P2 | ✅ **V4 Done** |
 | Taxonomic/transitive closure | A is_a B + B is_a C → A is_a C | P2 | ✅ **V4 Done** |
 | Prototype-based category generalization | Rosch prototype theory: bundle members into category | P2 | ✅ **V4 Done** |
 | Massively extended COMMON_VERBS | ~40-60% → ~75-85% NLU coverage | P0 | ✅ **V4 Done** |
 | Cross-domain research synthesis | Biology, physics, math, psychology insights for NSCK | P1 | ✅ **V4 Done** |
-| Scalar implicature and pragmatics | Natural language is richer than propositional logic | P3 | Pending |
+| Scalar implicature and pragmatics | Natural language is richer than propositional logic | P3 | ✅ **V5 Done** |
+
+### ✅ V5 Completed (February 2026)
+
+| Feature | Files Changed | Impact |
+|---------|--------------|--------|
+| Spatial Reasoning module (`spatial_reasoning.py`) | `reasoning/spatial_reasoning.py` | 2D/3D VSA position encoding, 8 relation types |
+| FPE-based position locality | `reasoning/spatial_reasoning.py` | Nearby positions → similar HVs (measurable) |
+| Projective relations (above/below/left/right) | `reasoning/spatial_reasoning.py` | "What is above X?" queries |
+| Topological relations (adjacent/at_same_position) | `reasoning/spatial_reasoning.py` | "Is X adjacent to Y?" |
+| Metric queries (distance, find_near) | `reasoning/spatial_reasoning.py` | Euclidean distance queries |
+| VSA assertion encoding | `reasoning/spatial_reasoning.py` | bind(v_ABOVE, bind(v_fig, v_ground)) |
+| Pragmatics module (`pragmatics.py`) | `language/pragmatics.py` | 7 speech act types, 15 scalar scales |
+| Scalar implicature (Horn scales) | `language/pragmatics.py` | "some" → implies "not all" |
+| Gricean maxim checking | `language/pragmatics.py` | Quality/Quantity/Relation/Manner |
+| Indirect speech act detection | `language/pragmatics.py` | "Can you…" → request (indirect) |
+| Presupposition detection | `language/pragmatics.py` | "stopped X" → presupposes prior X |
+| Politeness hedging detection | `language/pragmatics.py` | "please", "could you" |
+| V5 config flags (2 new) | `config.py` | `enable_spatial_reasoning`, `enable_pragmatics` |
+| 45 spatial tests | `tests/unit/reasoning/test_spatial_reasoning.py` | All passing |
+| 45 pragmatics tests | `tests/unit/language/test_pragmatics.py` | All passing |
+| Updated COGNITIVE_REPORT_CARD.md | `COGNITIVE_REPORT_CARD.md` | V5 honest assessment |
 
 ### ✅ V4 Completed (February 2026)
 

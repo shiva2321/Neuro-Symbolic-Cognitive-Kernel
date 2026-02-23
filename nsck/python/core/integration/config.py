@@ -86,6 +86,12 @@ class NSCKConfig:
     # Prototype-based category generalization via VSA bundling
     enable_prototype_generalization: bool = False
 
+    # === V5 Feature Flags — remaining roadmap items ===
+    # Spatial reasoning: place entities and query above/below/left/right/near
+    enable_spatial_reasoning: bool = False
+    # Pragmatics: scalar implicature, Gricean maxims, indirect speech acts
+    enable_pragmatics: bool = False
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -124,6 +130,9 @@ class NSCKConfig:
             enable_conditional_logic=True,
             enable_transitive_inference=True,
             enable_prototype_generalization=True,
+            # V5
+            enable_spatial_reasoning=True,
+            enable_pragmatics=True,
         )
 
     @classmethod
