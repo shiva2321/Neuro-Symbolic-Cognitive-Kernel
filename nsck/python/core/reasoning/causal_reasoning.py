@@ -174,6 +174,95 @@ class CausalDiscovery:
         
         return p_e_c - p_e_nc, nc
 
+    # ── Information-Theoretic Confounder Detection ───────────────────────
+    # Inspired by information geometry (Janzing et al. 2012) and mutual
+    # information analysis.  If MI(C, E | Z) ≈ 0 for some third variable Z
+    # while MI(C, E) > 0, then Z is a likely common cause (hidden confounder)
+    # that explains the C–E association.
+
+    def _mutual_information(self, context: str, x: str, y: str) -> float:
+        """Compute empirical mutual information I(X; Y) from contingency counts.
+
+        Uses the plug-in estimator:
+            MI = Σ_{x,y} P(x,y) log [ P(x,y) / (P(x) P(y)) ]
+
+        Looks up counts from both cause and effect tables so that any
+        pair of variables (regardless of their causal role) can be compared.
+
+        Returns 0.0 when data is insufficient.
+        """
+        t = self.total_steps[context]
+        if t < 2:
+            return 0.0
+        # Total presence count of x (union of cause and effect tables)
+        nx = max(self.count_c[context].get(x, 0),
+                 self.count_e[context].get(x, 0))
+        ny = max(self.count_c[context].get(y, 0),
+                 self.count_e[context].get(y, 0))
+        # Co-occurrence: check cause→effect table in both directions,
+        # and also check if both appear as causes in the same timestep
+        # by using their individual cause counts and joint Δ-P.
+        nxy = self.count_ce[context].get((x, y), 0) + \
+              self.count_ce[context].get((y, x), 0)
+        # If both are causes, estimate co-occurrence from their counts
+        # (both present in same timestep ≈ n_x × n_y / T if independent)
+        if nxy == 0 and x in self.count_c[context] and y in self.count_c[context]:
+            # Use min of individual counts as upper bound on co-occurrence
+            nxy = min(self.count_c[context][x], self.count_c[context][y])
+        if nx == 0 or ny == 0 or nxy == 0:
+            return 0.0
+        pxy = min(nxy / t, 1.0)
+        px  = nx / t
+        py  = ny / t
+        if px * py == 0:
+            return 0.0
+        ratio = pxy / (px * py)
+        if ratio <= 0:
+            return 0.0
+        return pxy * np.log2(ratio)
+
+    def detect_confounders(
+        self, context: str, cause: str, effect: str,
+        mi_drop_threshold: float = 0.5,
+    ) -> List[Tuple[str, float]]:
+        """Detect potential confounders for a (cause, effect) pair.
+
+        For every observed third variable Z, compute:
+            MI(C, E)  — unconditional mutual information
+            MI(C, Z)  — how strongly C is associated with Z
+            MI(Z, E)  — how strongly Z is associated with E
+
+        A variable Z is flagged as a *candidate confounder* when:
+            MI(C, Z) > 0  AND  MI(Z, E) > 0
+            AND   the association C→E weakens after accounting for Z
+            (heuristic: MI(C,Z) + MI(Z,E) explains > mi_drop_threshold
+             fraction of MI(C,E)).
+
+        Returns a list of (confounder_name, confidence) pairs sorted by
+        confidence (descending).  Empty list = no confounders detected.
+        """
+        mi_ce = self._mutual_information(context, cause, effect)
+        if mi_ce < 1e-6:
+            return []
+
+        all_vars = self.observed_causes[context] | self.observed_effects[context]
+        candidates: List[Tuple[str, float]] = []
+
+        for z in all_vars:
+            if z == cause or z == effect:
+                continue
+            mi_cz = self._mutual_information(context, cause, z)
+            mi_ze = self._mutual_information(context, z, effect)
+            if mi_cz > 0 and mi_ze > 0:
+                # Heuristic: Z explains C→E if the Z-mediated path carries
+                # a substantial fraction of the total C-E association.
+                explained_fraction = min((mi_cz + mi_ze) / (mi_ce + 1e-9), 1.0)
+                if explained_fraction >= mi_drop_threshold:
+                    candidates.append((z, explained_fraction))
+
+        candidates.sort(key=lambda x: -x[1])
+        return candidates
+
     def incremental_update(self, context: str, graph: 'CausalGraph',
                             min_confidence: float = 0.3, min_evidence: int = 2):
         """Incrementally add new links to an existing graph from latest stats.

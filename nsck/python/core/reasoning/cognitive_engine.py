@@ -368,8 +368,9 @@ class CognitiveEngine:
             snn_result = self.perception.perceive(sensory_input, learn=learn_this_step)
             
         # 2. Convert SNN result to State Dict for symbol grounding.
-        # Extract meaningful predicates from the sensory array so the GWT
-        # decision has real symbolic state rather than the hardcoded stub.
+        # Extract meaningful predicates from the sensory array and from the
+        # SNN concept mapper (which may resolve to semantic-memory labels via
+        # VSA cleanup-memory lookup when a SemanticMemory is attached).
         state: Dict[str, Any] = {"snn_active": True}
         
         if sensory_input is not None and hasattr(sensory_input, '__len__') and len(sensory_input) > 0:
@@ -377,34 +378,38 @@ class CognitiveEngine:
             mean_val  = float(np.mean(arr))
             std_val   = float(np.std(arr))
             max_val   = float(np.max(arr))
-            # Populate a minimal predicate-compatible state dict so verifiers
-            # can fire their grounding rules (e.g. RobotVerifier checks x/y).
             state["signal_mean"]   = mean_val
             state["signal_std"]    = std_val
             state["signal_max"]    = max_val
             state["high_activity"] = int(mean_val > 0.6)
             state["low_activity"]  = int(mean_val < 0.2)
             state["noisy"]         = int(std_val > 0.4)
-            # Map snn concept to a symbolic form usable by the verifier
             if snn_result:
-                state["concept_id"]    = snn_result.get("concept_id", 0)
+                concept_id = snn_result.get("concept_id", 0)
+                state["concept_id"]    = concept_id
                 state["snn_strength"]  = float(snn_result.get("strength", 0.0))
                 n_spikes = snn_result.get("n_spikes", 0)
                 state["active_firing"] = int(n_spikes > 10)
                 state["sparse_firing"] = int(n_spikes <= 10)
+                # Resolve semantic label via concept mapper cleanup memory
+                if self.perception and hasattr(self.perception, "concept_mapper"):
+                    label = self.perception.concept_mapper.get_concept_label(concept_id)
+                    state["concept_label"] = label
         
         # 3. Inject SNN Concept into Global Workspace (as a 'Bot-Up' Coalition)
         snn_coalition = None
         if snn_result:
-            # Start logic to form a Coalition from the SNN concept
-            # We treat the recognized Concept ID as a symbol (e.g., "Concept_42")
-            # If we had a mapping to names (Concept_42 -> "Dog"), we'd use that.
-            concept_name = f"Percept_{snn_result['concept_id']}"
+            concept_id = snn_result['concept_id']
+            # Resolve to a semantic label when the mapper has one
+            if self.perception and hasattr(self.perception, "concept_mapper"):
+                concept_name = self.perception.concept_mapper.get_concept_label(concept_id)
+            else:
+                concept_name = f"Percept_{concept_id}"
             activation = snn_result['strength']
             
             snn_coalition = Coalition(
                 source="SNN_PERCEPTION",
-                content=concept_name, # The 'Thought' that enters consciousness
+                content=concept_name,
                 base_salience=activation,
                 relevance=0.8, # High relevance for sensory data
                 sender_confidence=activation

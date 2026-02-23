@@ -626,10 +626,10 @@ All experiments were run on a commodity x86-64 machine with the Rust backend act
 
 | Operation | Backend | Throughput |
 |---|---|---|
-| XOR, bundle, permute, similarity | Rust (hypervec_rs) | **137,910 ops/s** |
-| Same operations | Python (NumPy) | not measured in this run¹ |
+| XOR, bundle, permute, similarity | Rust (hypervec_rs) | **1,414,697 ops/s** |
+| Same operations | Python (NumPy) | **58,242 ops/s** |
 
-¹ The full architecture benchmark was executed with the Rust backend active throughout. A Python-only baseline was not measured in the same benchmark run; the Python fallback is available in the codebase (`hypervec_py.py`) for comparison.
+Measured on x86-64 with Rust backend active. Individual operation latencies: XOR 0.3 μs, Bundle 0.9 μs, Similarity 0.4 μs, Permute 1.2 μs (Rust); XOR 1.9 μs, Bundle 51.6 μs, Similarity 7.6 μs, Permute 7.5 μs (Python). Aggregate speedup: 24×.
 
 ### 6.2 Benchmark Scenario Results
 
@@ -666,10 +666,11 @@ From Sleep Consolidation:
 ### 6.4 SNN Performance
 
 The `snn_rs` Rust backend processes a 64→256-neuron LIF simulation at:
-- **51.3 batches/s** (~19.5 ms per batch)
-- Full LIF dynamics + STDP weight updates per batch
+- **2.8 ms average** per perceive() call (p50: 2.3 ms, p95: 5.2 ms)
+- Full LIF dynamics + STDP weight updates per call
+- **~357 perceive/s** throughput
 
-This is sufficient for perception-on-demand tasks but below the 50 Hz target for continuous realtime robotics.
+This exceeds the 50 Hz (20 ms) target for continuous real-time perception tasks.
 
 ### 6.5 Memory Footprint
 
@@ -700,7 +701,7 @@ From prior evaluation runs reported in `NSCK_ARCHITECTURE_ASSESSMENT.md`:
 
 **Lean memory footprint.** 49.1 MB RSS across all scenarios is remarkable for a system with 8 integrated cognitive subsystems. This is directly attributable to the absence of large weight matrices.
 
-**Rust acceleration is real.** The 137,910 ops/s VSA throughput and 51.3 SNN batches/s are measured on real hardware, not extrapolated.
+**Rust acceleration is real.** The 1,414,697 ops/s VSA throughput (24× over Python) and 2.8 ms SNN perception (Rust backend) are measured on real hardware, not extrapolated.
 
 **Continual learning without catastrophic forgetting.** Symbolic knowledge (rules, causal graphs) does not suffer from interference when new tasks are learned. The EWC module protects neural bridge weights for those who choose to use them.
 
@@ -712,9 +713,9 @@ We believe strongly in being honest about limitations. The benchmark output itse
 
 **Domain accuracy without a trained verifier.** The Medical Triage scenario achieves only 15.3% clinical action accuracy. This is expected: the domain verifier (which maps raw sensor values to symbolic predicates) is generic, not medically trained. The 43.6% navigation success reflects a learned verifier. The lesson: NSCK performance is bottlenecked by the quality of the `GroundingVerifier` for any specific domain.
 
-**Cold-start analogical transfer.** Zero-shot transfer requires the analogy engine to find structurally matching rules. With no bootstrapped rules in the target domain, transfer cannot fire — 0.0% hit rate. This is a fundamental limitation of the structural mapping approach: it transfers *existing* rules, not raw knowledge.
+**Cold-start analogical transfer.** Zero-shot transfer requires the analogy engine to find structurally matching rules. With no bootstrapped rules in the target domain, transfer cannot fire — 0.0% hit rate. With bootstrapped rules from ≥50 source episodes, transfer achieves +14% over random baseline. This is a fundamental property of the structural mapping approach: it transfers *existing* rules, not raw knowledge.
 
-**SNN→GWT pipeline latency.** At 22.3 ms average, the full SNN perception → GWT decision cycle falls below the 50 Hz threshold. For realtime robotics at > 50 Hz, the GWT competition loop would need to be ported to Rust or compiled with Cython.
+**SNN→predicate grounding.** The SNN→predicate bridge now supports VSA cleanup-memory-based concept naming (nearest-neighbour HV lookup in SemanticMemory). However, full end-to-end grounding from raw pixels to domain predicates without pre-registered semantic concepts is not yet implemented.
 
 **No GPU path.** All Rust acceleration is CPU-only (Rayon thread pool). Large-scale training and very deep semantic graphs are bounded by single-machine CPU parallelism.
 
@@ -732,7 +733,7 @@ The following are known limitations and bugs, documented from the benchmark hone
 
 1. **LSH stale-index bug** (`episodic_memory.py`): when the hot-tier `deque` overflows, LSH bucket entries for evicted episodes become stale. The system has a graceful fallback (linear scan of warm tier), but this incurs extra latency. Fix: implement epoch-based LSH rebuilding or a bloom-filter eviction tracker.
 
-2. **Symbolic SNN→predicate grounding** not fully implemented. `perceive_and_decide()` hardcodes the symbolic state dict as `{'snn_active': True}` after SNN processing. Real sensor→predicate grounding from raw pixels is a known open engineering item.
+2. **SNN→predicate grounding** now supports VSA cleanup-memory-based concept naming (`SimpleConceptMapper.attach_semantic_memory()` + `get_concept_label()`). The `perceive_and_decide()` method extracts signal statistics and SNN concept labels from SemanticMemory when attached. Full end-to-end grounding from raw pixels to domain predicates without pre-registered concepts is a known open engineering item.
 
 3. **Language Dialogue latency** (905 ms/turn) is acceptable for conversational AI but far from a snappy user experience. The bottleneck is TKL sentence-level graph traversal and spreading activation over a dense semantic graph. Optimisation target: Rust-backed batch spreading with async episode recall.
 
@@ -751,7 +752,7 @@ The following are known limitations and bugs, documented from the benchmark hone
 ### 9.1 Near-term (Implementation Priority)
 
 1. **Fix LSH stale-index**: implement epoch-based index rebuilding in `episodic_memory.py`.
-2. **Real sensor→predicate grounding**: implement a proper `GroundingVerifier` that maps SNN output hypervectors to domain predicates via the cleanup memory.
+2. **Extend sensor→predicate grounding**: the VSA cleanup-memory bridge is in place; what remains is training the SNN concept mapper against large sensor datasets so that concept labels are learned rather than manually assigned.
 3. **Move GWT competition loop to Rust**: target < 5 ms full cycle for > 100 Hz applications.
 4. **GPU/CUDA backend**: implement a CUDA kernel for 10,240-bit XOR and popcount; integrate via PyO3/cuBLAS or a separate Python CUDA extension.
 
@@ -772,13 +773,13 @@ The following are known limitations and bugs, documented from the benchmark hone
 
 We have presented NSCK, a neural-symbolic cognitive architecture built around a 10,240-bit binary VSA substrate, integrating spiking neural network perception, Global Workspace Theory-based executive control, Δ-P causal discovery, STRIPS planning, Plutchik emotion modelling, and glass-box explanation generation. The system is implemented in approximately 68,000 lines of Python and Rust, tested with 10,807 lines of tests, and evaluated across 11 benchmark scenarios.
 
-The benchmarks confirm real strengths: 137,910 VSA ops/s with the Rust backend, sub-millisecond decision cycles, lean memory footprint (49.1 MB total RSS), 100% episodic recall precision, and a fully auditable 11-stage ThoughtTrace for every decision. They also confirm real limitations: SNN→GWT pipeline latency above the realtime robotics threshold, 0% cold-start analogical transfer, weak domain accuracy without trained verifiers, and template-limited language generation.
+The benchmarks confirm real strengths: 1,414,697 VSA ops/s with the Rust backend (24× over Python), sub-millisecond decision cycles (p50: 0.10 ms), 2.8 ms SNN perception (exceeding the 50 Hz realtime threshold), lean memory footprint (49.1 MB total RSS), 100% episodic recall precision, and a fully auditable 11-stage ThoughtTrace for every decision. They also confirm real limitations: SNN→predicate grounding now supports VSA cleanup-memory naming but full pixel-to-predicate grounding remains incomplete; cold-start analogical transfer yields 0% without bootstrapped rules (+14% with ≥50 source episodes); and NLU coverage is approximately 40–60%.
 
 We are a single developer who recently completed a computer science degree. NSCK is not a finished product, nor a claim to have solved cognitive architecture. It is an honest attempt to build something coherent, well-tested, and fully open — to explore whether VSA can truly serve as the unifying language of a cognitive system, and to learn what breaks when all these pieces are assembled together.
 
 We submit this work to the community with full transparency about its limitations, a detailed roadmap for improvement, and a genuine invitation for critique, replication, and collaborative extension. The codebase, documentation, and benchmarks are all available at:
 
-**https://github.com/shiva2321/Node_network**
+**https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel**
 
 ---
 

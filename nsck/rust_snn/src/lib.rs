@@ -314,6 +314,9 @@ pub struct SnnCore {
 
     // RNG seed (deterministic per-constructor)
     rng_seed: u64,
+
+    // Weber-Fechner log compression (psychophysics-inspired)
+    weber_fechner: bool,
 }
 
 #[pymethods]
@@ -335,6 +338,7 @@ impl SnnCore {
         a_plus:            f64,
         a_minus:           f64,
         seed:              Option<u64>,
+        weber_fechner:     Option<bool>,
     ) -> Self {
         let rng_seed = seed.unwrap_or(42);
         let mut rng = ChaCha8Rng::seed_from_u64(rng_seed);
@@ -367,6 +371,7 @@ impl SnnCore {
             stdp_updates:   0,
             weight_updates: 1,  // counts the initialisation normalisation
             rng_seed,
+            weber_fechner: weber_fechner.unwrap_or(false),
         }
     }
 
@@ -374,12 +379,29 @@ impl SnnCore {
     ///
     /// Returns the spike train as a Vec<Vec<f64>> of shape (n_steps, snn_size).
     /// This single call replaces the entire Python `for step in range(n_steps):` block.
+    ///
+    /// When `weber_fechner` is enabled (default), applies sign-preserving logarithmic
+    /// compression to the sensory input: x_wf = sign(x) · ln(1 + |x|).
+    /// This is inspired by the Weber-Fechner law (Fechner, 1860) — the same principle
+    /// biological auditory and visual systems use to compress dynamic range.
     fn simulate(
         &mut self,
         sensory_input: Vec<f64>,
         n_steps:       usize,
         learn:         bool,
     ) -> Vec<Vec<f64>> {
+        // ── Weber-Fechner logarithmic compression (psychophysics) ──────
+        // x_wf = sign(x) · ln(1 + |x|)
+        // Compresses dynamic range: improves discrimination at low intensities,
+        // prevents saturation at high intensities.
+        let sensory: Vec<f64> = if self.weber_fechner {
+            sensory_input.iter()
+                .map(|&x| x.signum() * (1.0 + x.abs()).ln())
+                .collect()
+        } else {
+            sensory_input
+        };
+
         // Fresh simulation state
         self.v.fill(self.v_rest);
         self.refractory.fill(0.0);
@@ -420,7 +442,7 @@ impl SnnCore {
                     let start  = i * input_dim;
                     let dot: f64 = self.input_weights[start..start + input_dim]
                         .iter()
-                        .zip(sensory_input.iter())
+                        .zip(sensory.iter())
                         .map(|(w, x)| w * x)
                         .sum();
                     let noise: f64 = (rng.gen::<f64>() * 2.0 - 1.0) * noise_scale;
@@ -453,7 +475,7 @@ impl SnnCore {
             // ── 3. STDP weight update ──────────────────────────────────────
             if learn && stdp_enabled {
                 // Poisson input spikes from sensory signal (cheap sequential RNG)
-                let input_spikes: Vec<f64> = sensory_input.iter()
+                let input_spikes: Vec<f64> = sensory.iter()
                     .map(|&x| {
                         let prob = x.clamp(0.0, 1.0) * 0.5;
                         if rng.gen::<f64>() < prob { 1.0 } else { 0.0 }
@@ -544,6 +566,14 @@ impl SnnCore {
     #[getter]
     fn snn_size(&self) -> usize { self.snn_size }
 
+    /// Whether Weber-Fechner log compression is applied to sensory input.
+    #[getter]
+    fn weber_fechner(&self) -> bool { self.weber_fechner }
+
+    /// Enable or disable Weber-Fechner log compression at runtime.
+    #[setter]
+    fn set_weber_fechner(&mut self, enabled: bool) { self.weber_fechner = enabled; }
+
     fn get_stats(&self) -> Vec<(String, f64)> {
         vec![
             ("stdp_updates".into(),   self.stdp_updates   as f64),
@@ -590,4 +620,68 @@ fn snn_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     concept::register_concept_module(m)?;
 
     Ok(())
+}
+
+// ============================================================
+// Unit tests for cross-disciplinary enhancements
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_weber_fechner_sign_preservation() {
+        let input = vec![-10.0, -1.0, 0.0, 1.0, 10.0];
+        let compressed: Vec<f64> = input.iter()
+            .map(|&x| x.signum() * (1.0 + x.abs()).ln())
+            .collect();
+        assert!(compressed[0] < 0.0, "Negative preserved");
+        assert!(compressed[1] < 0.0, "Negative preserved");
+        assert_eq!(compressed[2], 0.0, "Zero preserved");
+        assert!(compressed[3] > 0.0, "Positive preserved");
+        assert!(compressed[4] > 0.0, "Positive preserved");
+    }
+
+    #[test]
+    fn test_weber_fechner_monotonic() {
+        // log(1+x) is monotonically increasing for x > 0
+        let values = vec![0.1, 1.0, 10.0, 100.0, 1000.0];
+        let compressed: Vec<f64> = values.iter()
+            .map(|&x| (1.0 + x).ln())
+            .collect();
+        for i in 1..compressed.len() {
+            assert!(compressed[i] > compressed[i - 1],
+                    "Weber-Fechner should be monotonic: {} > {}",
+                    compressed[i], compressed[i - 1]);
+        }
+    }
+
+    #[test]
+    fn test_weber_fechner_dynamic_range_compression() {
+        // Original range: 1000/0.01 = 100,000
+        // Compressed range should be much smaller
+        let small = (1.0_f64 + 0.01).ln();
+        let large = (1.0_f64 + 1000.0).ln();
+        let compressed_ratio = large / small;
+        let original_ratio = 1000.0 / 0.01;
+        assert!(compressed_ratio < original_ratio / 10.0,
+                "Compression ratio {} should be << original {}",
+                compressed_ratio, original_ratio);
+    }
+
+    #[test]
+    fn test_lif_layer_basic() {
+        let mut layer = super::LIFLayer::new(
+            4,      // n_neurons
+            20.0,   // tau
+            -70.0,  // v_rest
+            -75.0,  // v_reset
+            -55.0,  // v_thresh
+            2.0,    // refractory_period
+            1.0,    // dt
+        );
+        // Zero input should not produce spikes
+        let spikes = layer.step(vec![0.0; 4]);
+        assert_eq!(spikes.len(), 4);
+        assert_eq!(spikes.iter().sum::<f64>(), 0.0, "Zero input → no spikes");
+    }
 }

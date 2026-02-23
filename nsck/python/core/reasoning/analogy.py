@@ -5,6 +5,7 @@ Cross-task transfer via structural alignment of concepts.
 Uses VSA binding and symbolic mapping to identify analogous patterns
 across different task domains for zero-shot knowledge transfer.
 """
+import math
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple, Any
 from collections import defaultdict
@@ -607,6 +608,98 @@ class AnalogyEngine:
             name: dict(ac.grounding_predicates)
             for name, ac in self.abstract_concepts.items()
         }
+
+    # ── Category-Theoretic Transfer Quality Score ───────────────────────
+    # From category theory (Fong & Spivak 2019), a functor F: C → D is
+    # "faithful" if it preserves distinctions between morphisms.  In VSA
+    # terms, a mapping is faithful when the pairwise similarity structure
+    # among source concepts is preserved among target concepts.
+    #
+    # The *functoriality score* measures how well the discovered mapping
+    # preserves relational structure:
+    #     F = 1 − mean|sim(a_i, a_j) − sim(F(a_i), F(a_j))|
+    # A perfect functor yields F = 1; random mapping yields F ≈ 0.5.
+
+    def functoriality_score(
+        self,
+        mappings: List['ConceptMapping'],
+        concept_hvs_a: Dict[str, Any],
+        concept_hvs_b: Dict[str, Any],
+    ) -> float:
+        """Compute category-theoretic functoriality score for a mapping.
+
+        Measures how well the pairwise similarity structure among source
+        concepts is preserved among target concepts (faithfulness of the
+        functor F: DomainA → DomainB).
+
+        Returns a value in [0, 1] where 1 = perfect structure preservation.
+        """
+        mapped_pairs = [
+            (m.source_concept, m.target_concept)
+            for m in mappings
+            if m.source_concept in concept_hvs_a and m.target_concept in concept_hvs_b
+        ]
+        if len(mapped_pairs) < 2:
+            return 0.5  # insufficient data to assess structure
+
+        distortions = []
+        for i in range(len(mapped_pairs)):
+            for j in range(i + 1, len(mapped_pairs)):
+                src_i, tgt_i = mapped_pairs[i]
+                src_j, tgt_j = mapped_pairs[j]
+                sim_src = concept_hvs_a[src_i].similarity(concept_hvs_a[src_j])
+                sim_tgt = concept_hvs_b[tgt_i].similarity(concept_hvs_b[tgt_j])
+                distortions.append(abs(sim_src - sim_tgt))
+
+        mean_distortion = sum(distortions) / len(distortions)
+        return max(0.0, 1.0 - mean_distortion)
+
+    # ── Maximum-Entropy Adaptive Threshold ──────────────────────────────
+    # Jaynes' principle of maximum entropy (1957): choose the threshold
+    # that maximizes Shannon entropy over the binary classification
+    # "matched" vs "unmatched", given that we expect a fraction π of
+    # concept pairs to be true correspondences.
+    #
+    # For a uniform prior on true matches, the max-entropy threshold is:
+    #     θ* = μ + Φ⁻¹(1 − π) · σ
+    # where μ = 0.5 and σ ≈ 1/(2√d) for d-dimensional binary vectors.
+
+    @staticmethod
+    def max_entropy_threshold(
+        dim: int = 10_240,
+        expected_match_fraction: float = 0.1,
+    ) -> float:
+        """Compute the maximum-entropy similarity threshold.
+
+        Instead of a hard-coded 0.52, derive the threshold from the
+        dimensionality and the expected fraction of true matches using
+        the inverse-normal quantile (Jaynes' max-entropy principle).
+
+        Args:
+            dim: Hypervector dimension (default 10,240).
+            expected_match_fraction: Prior on the fraction of concept
+                pairs expected to be true correspondences (default 10%).
+
+        Returns:
+            Optimal similarity threshold θ*.
+        """
+        mu = 0.5
+        sigma = 0.5 / math.sqrt(dim)
+        # Inverse CDF of standard normal (Φ⁻¹) for the (1−π) quantile
+        # Using the Beasley-Springer-Moro approximation for probit
+        p = 1.0 - expected_match_fraction
+        # clamp p to avoid numerical issues
+        p = max(0.001, min(p, 0.999))
+        # Rational approximation of Φ⁻¹(p) (Abramowitz & Stegun 26.2.23)
+        if p < 0.5:
+            t = math.sqrt(-2.0 * math.log(p))
+            z = -(t - (2.515517 + t * (0.802853 + t * 0.010328)) /
+                  (1.0 + t * (1.432788 + t * (0.189269 + t * 0.001308))))
+        else:
+            t = math.sqrt(-2.0 * math.log(1.0 - p))
+            z = t - (2.515517 + t * (0.802853 + t * 0.010328)) / \
+                (1.0 + t * (1.432788 + t * (0.189269 + t * 0.001308)))
+        return mu + z * sigma
 
     # ----------------------------------------------------------------
     # V3: Conceptual Blending

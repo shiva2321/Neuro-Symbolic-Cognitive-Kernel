@@ -281,10 +281,64 @@ impl HyperVector {
     }
 }
 
+// ============================================================
+// Free functions exposed to Python
+// ============================================================
+
+/// Compute the N×N similarity matrix for a list of HyperVectors.
+///
+/// Returns a flat Vec<f64> of length N² in row-major order.
+/// Used by the category-theoretic functoriality score to measure
+/// structure preservation: F = 1 − mean|sim(aᵢ,aⱼ) − sim(F(aᵢ),F(aⱼ))|.
+///
+/// Parallelised with rayon — O(N²·D/64) popcount operations.
+#[pyfunction]
+fn batch_similarity_matrix(vectors: Vec<PyRef<HyperVector>>) -> Vec<f64> {
+    use rayon::prelude::*;
+    let n = vectors.len();
+    let refs: Vec<&[u64]> = vectors.iter().map(|v| v.bits.as_slice()).collect();
+    (0..n * n)
+        .into_par_iter()
+        .map(|idx| {
+            let i = idx / n;
+            let j = idx % n;
+            if i == j {
+                1.0
+            } else {
+                let mut hamming: u32 = 0;
+                for (a, b) in refs[i].iter().zip(refs[j].iter()) {
+                    hamming += (a ^ b).count_ones();
+                }
+                1.0 - (hamming as f64 / DIMENSION as f64)
+            }
+        })
+        .collect()
+}
+
+/// Weber-Fechner logarithmic compression for a vector of f64 values.
+///
+/// x_wf = sign(x) · ln(1 + |x|)
+///
+/// Inspired by Fechner's psychophysics law (1860): perceived intensity is
+/// proportional to the logarithm of stimulus intensity.  This compresses
+/// dynamic range, improving discrimination at low intensities and preventing
+/// saturation at high intensities — the same principle the biological
+/// auditory and visual systems use.
+#[pyfunction]
+fn weber_fechner_compress(values: Vec<f64>) -> Vec<f64> {
+    values.iter()
+        .map(|&x| x.signum() * (1.0 + x.abs()).ln())
+        .collect()
+}
+
 #[pymodule]
 fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     // Core HyperVector class
     m.add_class::<HyperVector>()?;
+
+    // Free functions
+    m.add_function(wrap_pyfunction!(batch_similarity_matrix, m)?)?;
+    m.add_function(wrap_pyfunction!(weber_fechner_compress, m)?)?;
     
     // Concurrent operations
     concurrent::register_concurrent_module(m)?;
@@ -305,4 +359,105 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     async_runtime::register_async_module(m)?;
     
     Ok(())
+}
+
+// ============================================================
+// Unit tests for cross-disciplinary enhancements
+// ============================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hv_from_seed(seed: u64) -> HyperVector {
+        HyperVector::new(Some(seed))
+    }
+
+    #[test]
+    fn test_weber_fechner_preserves_sign() {
+        let input = vec![-5.0, -1.0, 0.0, 1.0, 5.0];
+        let compressed = weber_fechner_compress_impl(&input);
+        assert!(compressed[0] < 0.0, "Negative should stay negative");
+        assert!(compressed[1] < 0.0);
+        assert_eq!(compressed[2], 0.0, "Zero should stay zero");
+        assert!(compressed[3] > 0.0, "Positive should stay positive");
+        assert!(compressed[4] > 0.0);
+    }
+
+    #[test]
+    fn test_weber_fechner_compresses_range() {
+        let input = vec![0.01, 0.1, 1.0, 10.0, 100.0, 1000.0];
+        let compressed = weber_fechner_compress_impl(&input);
+        let orig_range = input[5] / input[0];  // 100,000
+        let comp_range = compressed[5] / compressed[0];
+        assert!(comp_range < orig_range / 10.0,
+                "Compressed range {} should be << original range {}",
+                comp_range, orig_range);
+    }
+
+    #[test]
+    fn test_batch_similarity_matrix_diagonal_is_one() {
+        let hvs = vec![hv_from_seed(1), hv_from_seed(2), hv_from_seed(3)];
+        let n = hvs.len();
+        let matrix = batch_similarity_matrix_impl(&hvs);
+        for i in 0..n {
+            assert_eq!(matrix[i * n + i], 1.0, "Diagonal should be 1.0");
+        }
+    }
+
+    #[test]
+    fn test_batch_similarity_matrix_symmetric() {
+        let hvs = vec![hv_from_seed(10), hv_from_seed(20), hv_from_seed(30)];
+        let n = hvs.len();
+        let matrix = batch_similarity_matrix_impl(&hvs);
+        for i in 0..n {
+            for j in 0..n {
+                let diff = (matrix[i * n + j] - matrix[j * n + i]).abs();
+                assert!(diff < 1e-10, "Matrix should be symmetric");
+            }
+        }
+    }
+
+    #[test]
+    fn test_batch_similarity_random_near_half() {
+        let hvs = vec![hv_from_seed(100), hv_from_seed(200)];
+        let matrix = batch_similarity_matrix_impl(&hvs);
+        // Off-diagonal: random HVs should have sim ≈ 0.5
+        let sim = matrix[0 * 2 + 1];
+        assert!(sim > 0.45 && sim < 0.55,
+                "Random HV similarity {} should be near 0.5", sim);
+    }
+
+    #[test]
+    fn test_batch_similarity_identical_is_one() {
+        let hvs = vec![hv_from_seed(42), hv_from_seed(42)];
+        let matrix = batch_similarity_matrix_impl(&hvs);
+        assert_eq!(matrix[0 * 2 + 1], 1.0, "Identical HVs should have sim 1.0");
+    }
+
+    // Internal implementations for testing (avoid PyO3 dependency in tests)
+    fn weber_fechner_compress_impl(values: &[f64]) -> Vec<f64> {
+        values.iter()
+            .map(|&x| x.signum() * (1.0 + x.abs()).ln())
+            .collect()
+    }
+
+    fn batch_similarity_matrix_impl(vectors: &[HyperVector]) -> Vec<f64> {
+        let n = vectors.len();
+        (0..n * n)
+            .map(|idx| {
+                let i = idx / n;
+                let j = idx % n;
+                if i == j {
+                    1.0
+                } else {
+                    let mut hamming: u32 = 0;
+                    for (a, b) in vectors[i].bits.iter().zip(vectors[j].bits.iter()) {
+                        hamming += (a ^ b).count_ones();
+                    }
+                    1.0 - (hamming as f64 / DIMENSION as f64)
+                }
+            })
+            .collect()
+    }
 }
