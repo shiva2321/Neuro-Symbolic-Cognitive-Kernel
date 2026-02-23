@@ -290,7 +290,7 @@ where:
 
 The winner: C* = argmax_C α(C), subject to α(C*) ≥ 0.5 (attention threshold).
 
-This coalition competition is architecturally parallel to Friston's Free Energy Principle [18]: the system selects the action whose predicted outcome minimises expected surprise (equivalently, maximises expected reward while minimising uncertainty). In active inference terms, each coalition represents a policy whose "free energy" is evaluated by the activation score — lower-scoring coalitions are effectively higher in free energy and are suppressed. While we do not claim a formal equivalence, the structural similarity suggests that GWT coalition competition may be a discrete, symbolic approximation of variational free energy minimisation.
+This coalition competition is architecturally parallel to Friston's Free Energy Principle [18]: the system selects the action whose predicted outcome minimizes expected surprise (equivalently, maximizes expected reward while minimizing uncertainty). In active inference terms, each coalition represents a policy whose "free energy" is evaluated by the activation score — lower-scoring coalitions are effectively higher in free energy and are suppressed. While we do not claim a formal equivalence, the structural similarity suggests that GWT coalition competition may be a discrete, symbolic approximation of variational free energy minimization.
 
 ### 5.2 SafetyGate Veto
 

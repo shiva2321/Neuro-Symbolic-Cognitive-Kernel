@@ -145,7 +145,7 @@ INPUT: concepts_a = {(name, HV)} from domain_a
 
 $$\theta^* = \mu + \Phi^{-1}(1 - \pi) \cdot \sigma$$
 
-where Φ⁻¹ is the standard normal quantile function. For d = 10,240 and π = 0.1: θ* ≈ 0.506. This is the threshold that maximises entropy subject to the constraint that only a fraction π of random pairs should exceed it — the least-informative threshold consistent with the desired selectivity. The `max_entropy_threshold()` method in AnalogyEngine computes this adaptively from the VSA dimensionality and domain statistics.
+where Φ⁻¹ is the standard normal quantile function. For d = 10,240 and π = 0.1: θ* ≈ 0.506. This is the threshold that maximizes entropy subject to the constraint that only a fraction π of random pairs should exceed it — the least-informative threshold consistent with the desired selectivity. The `max_entropy_threshold()` method in AnalogyEngine computes this adaptively from the VSA dimensionality and domain statistics.
 
 ### 3.3 Rule Lifting and Application
 

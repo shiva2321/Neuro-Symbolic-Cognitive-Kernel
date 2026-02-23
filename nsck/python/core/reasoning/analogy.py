@@ -656,7 +656,7 @@ class AnalogyEngine:
 
     # ── Maximum-Entropy Adaptive Threshold ──────────────────────────────
     # Jaynes' principle of maximum entropy (1957): choose the threshold
-    # that maximises Shannon entropy over the binary classification
+    # that maximizes Shannon entropy over the binary classification
     # "matched" vs "unmatched", given that we expect a fraction π of
     # concept pairs to be true correspondences.
     #
