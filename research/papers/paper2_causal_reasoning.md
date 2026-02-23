@@ -114,6 +114,8 @@ $$\alpha = \begin{cases} 1.0 & \text{if } T < 10 \\ 0.0 & \text{if } T \geq 10 \
 
 When observations are sparse (T < 10), Laplace smoothing prevents degenerate probability estimates (division by zero, probabilities of 0 or 1). Once sufficient data has been collected (T ≥ 10), the smoothing is removed to avoid biasing the estimate.
 
+**Connection to Jaynes' Maximum Entropy Principle:** This adaptive smoothing embodies the spirit of Jaynes' MaxEnt principle [15]: when data is sparse, the uniform (maximum-entropy) prior α = 1 encodes minimal assumptions about the distribution; when sufficient data has been collected, the prior is removed and the empirical distribution speaks for itself. The transition at T = 10 is a pragmatic threshold, but the underlying logic — *use the least informative prior consistent with the evidence* — follows directly from Jaynes (1957).
+
 **Property:** With α = 1 and a single observation (T = 1, N(c) = 1, N(c,e) = 1):
 
 $$P(e \mid c) = \frac{1 + 1}{1 + 2} = \frac{2}{3} \approx 0.67$$
@@ -181,6 +183,47 @@ $$\text{strength}(c_1 \to \cdots \to c_n) = \prod_{i=1}^{n-1} \Delta P(c_i \to c
 
 This product formula assumes independence between links — a simplification that we acknowledge as a limitation (Section 7).
 
+### 3.6 Confounder Detection via Mutual Information
+
+A key weakness of Δ-P is its vulnerability to confounders — unobserved variables that cause both the putative cause and the effect, creating a spurious causal link. To partially address this, we implement a confounder detection mechanism based on mutual information (MI) from information theory [16], following the information-geometric approach to causal inference pioneered by Janzing et al. [17].
+
+**Mutual information** between two discrete variables X and Y is defined as:
+
+$$I(X; Y) = \sum_{x, y} P(x, y) \log \frac{P(x, y)}{P(x) P(y)}$$
+
+MI quantifies the amount of information shared between two variables. If X and Y are independent, I(X; Y) = 0. If all of Y's variation is explained by X, MI is maximised.
+
+**Algorithm 3: Confounder Detection**
+
+```
+DETECT_CONFOUNDERS(cause, effect, context, threshold=0.3):
+    confounders ← []
+    mi_ce ← mutual_information(cause, effect, context)
+    
+    for each candidate Z in observed_predicates(context):
+        if Z == cause or Z == effect:
+            continue
+        mi_cz ← mutual_information(cause, Z, context)
+        mi_ze ← mutual_information(Z, effect, context)
+        
+        # If Z explains a large fraction of the cause-effect association
+        if mi_ce > 0 and (mi_cz + mi_ze) / mi_ce ≥ threshold:
+            confounders.append(Z)
+    
+    return confounders
+```
+
+The MI between two predicates is computed from the same count tables used for Δ-P (N(c), N(e), N(c,e), T), requiring no additional data collection. Joint and marginal probabilities are estimated directly from co-occurrence counts.
+
+**Medical example (from the test suite):** Consider the causal link HIGH_BP → HEADACHE with Δ-P > 0. When the confounder detection algorithm examines the candidate variable STRESS, it finds:
+- MI(HIGH_BP, STRESS) is high — stress is associated with high blood pressure
+- MI(STRESS, HEADACHE) is high — stress is associated with headaches
+- The sum MI(HIGH_BP, STRESS) + MI(STRESS, HEADACHE) explains a large fraction of MI(HIGH_BP, HEADACHE)
+
+STRESS is correctly flagged as a potential confounder. This does not automatically invalidate the HIGH_BP → HEADACHE link — STRESS may be a genuine common cause, or it may be a mediator. But the detection alerts the system (and the auditor) that this causal link should be interpreted with caution.
+
+**Honest limitations of this approach:** MI-based confounder detection is a heuristic, not a replacement for Pearl's full do-calculus. It detects *potential* confounders among observed variables only — truly hidden confounders (variables not in the observation stream) remain undetectable. The threshold parameter (default 0.3) requires tuning, and the additive MI heuristic is an approximation that does not account for complex multi-variable interactions. Nonetheless, it represents a meaningful step beyond the prior assumption that all relevant causes are observed.
+
 ---
 
 ## 4. Counterfactual Simulation
@@ -246,6 +289,8 @@ where:
 - q(C) = sender_confidence — the causal module's self-assessed reliability
 
 The winner: C* = argmax_C α(C), subject to α(C*) ≥ 0.5 (attention threshold).
+
+This coalition competition is architecturally parallel to Friston's Free Energy Principle [18]: the system selects the action whose predicted outcome minimises expected surprise (equivalently, maximises expected reward while minimising uncertainty). In active inference terms, each coalition represents a policy whose "free energy" is evaluated by the activation score — lower-scoring coalitions are effectively higher in free energy and are suppressed. While we do not claim a formal equivalence, the structural similarity suggests that GWT coalition competition may be a discrete, symbolic approximation of variational free energy minimisation.
 
 ### 5.2 SafetyGate Veto
 
@@ -355,7 +400,7 @@ We document the following limitations honestly:
 
 3. **Ground-truth causal graphs are synthetic.** The evaluation domains use hand-crafted causal structures, not real-world observational data. This means our "accuracy" numbers reflect the system's ability to recover known synthetic structures, not its performance on genuine causal discovery in noisy, complex environments.
 
-4. **No hidden confounders.** Δ-P assumes that all relevant causes are observed. Hidden confounders (unobserved variables that cause both the putative cause and the effect) can create spurious causal links that Δ-P cannot detect. Pearl's full do-calculus with graphical models handles this; our simplified implementation does not.
+4. **Hidden confounders partially addressed.** Δ-P assumes that all relevant causes are observed. Hidden confounders (unobserved variables that cause both the putative cause and the effect) can create spurious causal links that Δ-P cannot detect. The MI-based confounder detection mechanism (Section 3.6) now partially addresses this for *observed* variables — it can flag potential confounders like STRESS in the HIGH_BP → HEADACHE example. However, truly hidden confounders (variables absent from the observation stream) remain undetectable without Pearl's full do-calculus with graphical models.
 
 5. **Binary causal types.** Causal links are typed as CAUSES or PREVENTS, but real-world causation includes probabilistic, dose-dependent, and context-sensitive relationships that our binary typing does not capture.
 
@@ -377,7 +422,7 @@ Our approach is closest to Cheng's [5] original Δ-P model, extended with: (a) a
 ## 9. Future Work
 
 1. **Conditional Δ-P tables:** Model interactions between causes to handle non-independent causal chains.
-2. **Hidden confounder detection:** Implement front-door and back-door criteria from Pearl's framework.
+2. **Hidden confounder detection — beyond MI:** The MI-based confounder detection (Section 3.6) addresses observed confounders, but truly hidden confounders require structural approaches. Future work should implement Pearl's front-door and back-door criteria and explore conditional MI tables that condition on sets of observed variables to better isolate genuine causal effects from confounded associations.
 3. **Continuous-valued causal discovery:** Extend Δ-P to handle graded causes and effects, not just binary predicates.
 4. **Real-world evaluation:** Test on publicly available causal benchmark datasets (e.g., Tübingen cause-effect pairs, CausalDiscovery.org).
 5. **Temporal Δ-P:** Model time-lagged causal relationships with configurable temporal windows.
@@ -394,7 +439,7 @@ We have presented an auditable causal reasoning system that:
 
 The system learned 9 causal rules from 500 navigation cycles, correctly rejected spurious correlations, and produced fully traceable causal explanations for every decision. These results demonstrate that principled causal reasoning can be embedded within a lightweight, interpretable cognitive architecture.
 
-The honest limitations are clear: synthetic ground truth, independence assumptions in chain strength, no hidden confounder handling, and a dependence on discrete symbolic grounding. We present this as a foundation for further research in auditable causal AI.
+The honest limitations are clear: synthetic ground truth, independence assumptions in chain strength, partially addressed confounder detection (MI-based for observed variables, but not for truly hidden confounders), and a dependence on discrete symbolic grounding. We present this as a foundation for further research in auditable causal AI.
 
 Code and benchmarks: **https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel**
 
@@ -429,6 +474,14 @@ Code and benchmarks: **https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Ker
 [13] Y. Bengio et al., "A meta-transfer objective for learning to disentangle causal mechanisms," in *Proc. ICLR 2020*.
 
 [14] S. Franklin and F. G. Patterson, "The LIDA architecture: Adding new modes of learning to an intelligent, autonomous, software agent," in *Proc. IDPT*, 2006.
+
+[15] E. T. Jaynes, "Information theory and statistical mechanics," *Physical Review*, vol. 106, no. 4, pp. 620–630, 1957.
+
+[16] C. E. Shannon, "A mathematical theory of communication," *Bell System Technical Journal*, vol. 27, no. 3, pp. 379–423, 1948.
+
+[17] D. Janzing, J. Mooij, K. Zhang, J. Lemeire, J. Zscheischler, P. Daniušis, B. Steudel, and B. Schölkopf, "Information-geometric approach to inferring causal directions," *Artificial Intelligence*, vol. 182–183, pp. 1–31, 2012.
+
+[18] K. Friston, "The free-energy principle: A unified brain theory?" *Nature Reviews Neuroscience*, vol. 11, no. 2, pp. 127–138, 2010.
 
 ---
 
