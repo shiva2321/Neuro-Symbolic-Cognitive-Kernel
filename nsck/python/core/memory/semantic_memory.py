@@ -10,10 +10,12 @@ import networkx as nx
 import numpy as np
 import pickle
 import os
+import heapq
+import random as _random
 from typing import Dict, List, Any, Optional, Set, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
 
-# V3: optional HNSW index
+# V3: optional HNSW index (external hnswlib)
 try:
     import hnswlib as _hnswlib
     _HNSWLIB_AVAILABLE = True
@@ -22,6 +24,120 @@ except ImportError:
     _HNSWLIB_AVAILABLE = False
 
 logger = logging.getLogger("nsck.semantic_memory")
+
+
+# ---------------------------------------------------------------------------
+# NSW (Navigable Small World) — pure-Python ANN fallback
+# ---------------------------------------------------------------------------
+
+class _NSWIndex:
+    """
+    Navigable Small World approximate nearest-neighbour index.
+
+    A lightweight greedy graph search ANN that gives sub-linear query time
+    at scale (O(log N) with good graph construction) without any external
+    dependencies.  Used automatically when ``hnswlib`` is not installed.
+
+    Complexity
+    ----------
+    * Build: O(N · M · D)  where M = max_connections, D = vector dimension
+    * Query: O(log N · ef · D)
+
+    Parameters
+    ----------
+    M  : int  — max outgoing edges per node (higher = better recall, slower build)
+    ef : int  — beam width during search (higher = better recall, slower query)
+    """
+
+    def __init__(self, M: int = 16, ef: int = 50) -> None:
+        self._M = M
+        self._ef = ef
+        self._vectors: List[np.ndarray] = []       # float32 L2-normalised
+        self._graph: Dict[int, List[int]] = {}      # adjacency list
+
+    def add_item(self, vec: np.ndarray) -> int:
+        """Insert a float32 vector. Returns the assigned integer ID."""
+        v = vec.astype(np.float32)
+        norm = np.linalg.norm(v)
+        if norm > 1e-8:
+            v = v / norm
+        idx = len(self._vectors)
+        self._vectors.append(v)
+        self._graph[idx] = []
+
+        if idx == 0:
+            return idx
+
+        # Find M nearest neighbours among existing nodes (greedy search)
+        neighbours = self._greedy_search(v, ef=max(self._ef, self._M + 1))
+        # Keep top-M
+        neighbours = neighbours[: self._M]
+        self._graph[idx] = [n for n, _ in neighbours]
+
+        # Reciprocal edges (bidirectional; trim to M if over limit)
+        for n, _ in neighbours:
+            if len(self._graph[n]) < self._M:
+                self._graph[n].append(idx)
+            else:
+                # Replace the farthest existing neighbour if new one is closer
+                farthest_dist = max(
+                    1.0 - float(np.dot(self._vectors[n], self._vectors[e]))
+                    for e in self._graph[n]
+                )
+                new_dist = 1.0 - float(np.dot(self._vectors[n], v))
+                if new_dist < farthest_dist:
+                    # Find and replace
+                    farthest = max(
+                        self._graph[n],
+                        key=lambda e: 1.0 - float(np.dot(self._vectors[n], self._vectors[e]))
+                    )
+                    self._graph[n].remove(farthest)
+                    self._graph[n].append(idx)
+        return idx
+
+    def search(self, query: np.ndarray, k: int = 10) -> List[Tuple[int, float]]:
+        """
+        Return the k approximate nearest neighbours as [(id, distance), ...].
+        Distance is cosine distance (1 − similarity), ascending.
+        """
+        if not self._vectors:
+            return []
+        q = query.astype(np.float32)
+        norm = np.linalg.norm(q)
+        if norm > 1e-8:
+            q = q / norm
+        results = self._greedy_search(q, ef=max(self._ef, k))
+        return results[:k]
+
+    def _greedy_search(self, query: np.ndarray, ef: int) -> List[Tuple[int, float]]:
+        """Greedy beam search from a random entry point."""
+        if not self._vectors:
+            return []
+
+        # Random entry point
+        entry = _random.randrange(len(self._vectors))
+        visited: Set[int] = {entry}
+        # Min-heap by distance (negate for max-heap of candidates)
+        dist0 = 1.0 - float(np.dot(self._vectors[entry], query))
+        candidates: List[Tuple[float, int]] = [(dist0, entry)]
+        results: List[Tuple[float, int]] = [(dist0, entry)]
+
+        while candidates:
+            d, node = heapq.heappop(candidates)
+            if results and d > results[-1][0] and len(results) >= ef:
+                break
+            for neighbour in self._graph.get(node, []):
+                if neighbour in visited:
+                    continue
+                visited.add(neighbour)
+                nd = 1.0 - float(np.dot(self._vectors[neighbour], query))
+                if len(results) < ef or nd < results[-1][0]:
+                    heapq.heappush(candidates, (nd, neighbour))
+                    results.append((nd, neighbour))
+                    results.sort()
+                    if len(results) > ef:
+                        results.pop()
+        return [(idx, d) for d, idx in results]
 
 class SemanticMemory:
     """
@@ -99,32 +215,38 @@ class SemanticMemory:
         # V3: Stigmergy — edge-level pheromone strengths
         self._stigmergy: Dict[Tuple[str, str], float] = {}
 
-        # V3: HNSW approximate nearest-neighbour index
+        # V3/V6: ANN index for fast nearest-concept lookup
+        # Uses hnswlib when available; falls back to pure-Python NSW otherwise.
         self._hnsw_index = None
         self._hnsw_id_to_concept: List[str] = []
         self._hnsw_dim: int = 0
         self._hnsw_enabled: bool = False
-        if _HNSWLIB_AVAILABLE and config is not None and getattr(config, 'enable_hnsw_index', False):
+        if getattr(config, 'enable_hnsw_index', False):
             self._hnsw_enabled = True
-            logger.info("[SEMANTIC] HNSW index enabled (hnswlib available)")
-        elif getattr(config, 'enable_hnsw_index', False) and not _HNSWLIB_AVAILABLE:
-            logger.warning("[SEMANTIC] enable_hnsw_index=True but hnswlib not installed; "
-                           "falling back to linear scan. Install with: pip install hnswlib")
+            if _HNSWLIB_AVAILABLE:
+                logger.info("[SEMANTIC] HNSW index enabled (hnswlib)")
+            else:
+                logger.info("[SEMANTIC] HNSW index enabled (pure-Python NSW fallback)")
 
     def _init_hnsw(self, dim: int):
-        """Lazily initialise the HNSW index once the HV dimension is known."""
-        if not self._hnsw_enabled or _hnswlib is None:
+        """Lazily initialise the ANN index once the HV dimension is known."""
+        if not self._hnsw_enabled:
             return
-        try:
-            idx = _hnswlib.Index(space='cosine', dim=dim)
-            idx.init_index(max_elements=100_000, ef_construction=200, M=16)
-            idx.set_ef(50)
-            self._hnsw_index = idx
-            self._hnsw_dim = dim
-            self._hnsw_id_to_concept = []
-        except Exception as e:
-            logger.warning("[SEMANTIC] HNSW init failed: %s; falling back to linear scan", e)
-            self._hnsw_enabled = False
+        if _HNSWLIB_AVAILABLE and _hnswlib is not None:
+            try:
+                idx = _hnswlib.Index(space='cosine', dim=dim)
+                idx.init_index(max_elements=100_000, ef_construction=200, M=16)
+                idx.set_ef(50)
+                self._hnsw_index = idx
+                self._hnsw_dim = dim
+                self._hnsw_id_to_concept = []
+                return
+            except Exception as e:
+                logger.warning("[SEMANTIC] hnswlib init failed: %s; switching to NSW", e)
+        # Pure-Python NSW fallback
+        self._hnsw_index = _NSWIndex(M=16, ef=50)
+        self._hnsw_dim = dim
+        self._hnsw_id_to_concept = []
 
     def reset(self):
         """Clear all semantic knowledge and re-initialize."""
@@ -182,7 +304,7 @@ class SemanticMemory:
         
         self.concept_graph.add_node(concept_name, **properties)
 
-        # V3: Insert into HNSW index if enabled
+        # V3/V6: Insert into ANN index if enabled
         if self._hnsw_enabled:
             try:
                 bits = np.asarray(hv.bits, dtype=np.float32)
@@ -192,9 +314,14 @@ class SemanticMemory:
                 if self._hnsw_index is not None:
                     idx = len(self._hnsw_id_to_concept)
                     self._hnsw_id_to_concept.append(concept_name)
-                    self._hnsw_index.add_items(bits.reshape(1, -1), [idx])
+                    if _HNSWLIB_AVAILABLE and not isinstance(self._hnsw_index, _NSWIndex):
+                        # External hnswlib API
+                        self._hnsw_index.add_items(bits.reshape(1, -1), [idx])
+                    else:
+                        # Pure-Python NSW fallback API
+                        self._hnsw_index.add_item(bits)
             except Exception as e:
-                logger.debug("[SEMANTIC] HNSW add failed: %s", e)
+                logger.debug("[SEMANTIC] ANN index add failed: %s", e)
     
     def get_concept(self, concept_name: str) -> Optional[hypervec_rs.HyperVector]:
         """Retrieve the hypervector for a given concept."""
@@ -328,22 +455,31 @@ class SemanticMemory:
     def query(self, query_hv: hypervec_rs.HyperVector, k: int = 5) -> List[Tuple[str, float]]:
         """
         Find concepts most similar to query HV.
-        Uses HNSW when available, then Rust parallel search, then Python fallback.
+        Uses hnswlib (if installed) → NSW fallback → Rust parallel search → Python linear scan.
         """
-        # V3: HNSW approximate nearest-neighbour
+        # V3/V6: ANN index (hnswlib or pure-Python NSW)
         if self._hnsw_enabled and self._hnsw_index is not None and self._hnsw_id_to_concept:
             try:
-                bits = np.asarray(query_hv.bits, dtype=np.float32).reshape(1, -1)
+                bits = np.asarray(query_hv.bits, dtype=np.float32)
                 n_results = min(k, len(self._hnsw_id_to_concept))
-                labels, distances = self._hnsw_index.knn_query(bits, k=n_results)
-                results = []
-                for label, dist in zip(labels[0], distances[0]):
-                    concept = self._hnsw_id_to_concept[label]
-                    sim = 1.0 - float(dist)  # cosine distance → similarity
-                    results.append((concept, sim))
+                if _HNSWLIB_AVAILABLE and not isinstance(self._hnsw_index, _NSWIndex):
+                    # External hnswlib API
+                    labels, distances = self._hnsw_index.knn_query(bits.reshape(1, -1), k=n_results)
+                    results = []
+                    for label, dist in zip(labels[0], distances[0]):
+                        concept = self._hnsw_id_to_concept[label]
+                        results.append((concept, 1.0 - float(dist)))
+                else:
+                    # Pure-Python NSW API
+                    raw = self._hnsw_index.search(bits, k=n_results)
+                    results = [
+                        (self._hnsw_id_to_concept[idx], 1.0 - dist)
+                        for idx, dist in raw
+                        if idx < len(self._hnsw_id_to_concept)
+                    ]
                 return results
             except Exception as e:
-                logger.debug("[SEMANTIC] HNSW query failed: %s; falling back", e)
+                logger.debug("[SEMANTIC] ANN query failed: %s; falling back", e)
 
         # Try Rust backend
         if self._rust_backend is not None and hasattr(self._rust_backend, 'parallel_semantic_search'):
@@ -351,15 +487,16 @@ class SemanticMemory:
                 return self._rust_backend.parallel_semantic_search(query_hv, k)
             except Exception as e:
                 print(f"[WARNING] Rust backend query failed: {e}, falling back to Python")
-        
-        # Python fallback
+
+        # Python linear scan fallback
         similarities = []
         for concept_name, concept_hv in self.concept_hvs.items():
             sim = query_hv.cosine_similarity(concept_hv) if hasattr(query_hv, 'cosine_similarity') else query_hv.similarity(concept_hv)
             similarities.append((concept_name, sim))
-        
+
         similarities.sort(key=lambda x: x[1], reverse=True)
         return similarities[:k]
+
     
     def spread_activation(self, start_concepts: List[str], steps: int = 3, decay: float = 0.7) -> Dict[str, float]:
         """

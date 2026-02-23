@@ -417,10 +417,12 @@ class FluentResponseComposer:
         n = len(frames)
         sentences: List[str] = []
         seen_subjects: List[str] = []
+        topic_sentence_added = False
 
         # ── Topic sentence ───────────────────────────────────────────────
         if n > 1 and topic:
             sentences.append(self._topic_sentence(topic, query_type))
+            topic_sentence_added = True
 
         # ── Main facts ───────────────────────────────────────────────────
         for i, frame in enumerate(frames):
@@ -437,10 +439,11 @@ class FluentResponseComposer:
             display_s = self._anaphora(s, seen_subjects, topic)
 
             if negate:
-                # Convert to negated relation if one exists
-                neg_rel = "not_" + r if "not_" + r not in _RELATION_TEMPLATES else r
+                # Use a dedicated negated relation template if one exists,
+                # otherwise fall back to the original relation + force-insert "not"
+                neg_rel = "not_" + r if "not_" + r in _RELATION_TEMPLATES else r
                 sentence, hint = self._verbalizer.verbalize(display_s, neg_rel, o, variant)
-                if "not" not in sentence.lower():
+                if "not" not in sentence.lower() and "lacks" not in sentence.lower():
                     # Force insert negation
                     sentence = self._insert_negation(sentence)
             else:
@@ -462,7 +465,8 @@ class FluentResponseComposer:
 
         # ── Procedural numbering ─────────────────────────────────────────
         if query_type == "procedural":
-            fact_sents = sentences[1:] if len(sentences) > 1 else sentences
+            # Skip the topic sentence (if added) — number only the fact sentences
+            fact_sents = sentences[1:] if topic_sentence_added else sentences
             return self._format_steps(fact_sents)
 
         # ── Conclusion ───────────────────────────────────────────────────

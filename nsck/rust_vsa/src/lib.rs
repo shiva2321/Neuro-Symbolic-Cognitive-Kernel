@@ -237,6 +237,32 @@ impl HyperVector {
         signature
     }
 
+    /// VSA anti-bundling negation.
+    ///
+    /// Returns a vector that is ~50 % similar to `self` (orthogonal region)
+    /// but is *deterministically* the same for the same input — i.e. it is
+    /// the "negation role" XOR of `self`.  This is the VSA convention for
+    /// negation: `negate(negate(hv))` ≈ `hv` (idempotent up to the fixed role).
+    ///
+    /// Implementation: XOR `self` with a fixed "negation role" hypervector
+    /// seeded at the compile-time constant 0xDEAD_BEEF_CAFE_BABE.
+    fn negate(&self) -> HyperVector {
+        // Fixed negation-role seed — must match Python `hypervec_py.py`
+        const NEG_SEED: u64 = 0xDEAD_BEEF_CAFE_BABEu64;
+        let mut rng = ChaCha8Rng::seed_from_u64(NEG_SEED);
+        let num_u64 = DIMENSION / 64;
+        let neg_role: Vec<u64> = (0..num_u64).map(|_| rng.gen()).collect();
+        let bits: Vec<u64> = self.bits.iter().zip(neg_role.iter()).map(|(a, n)| a ^ n).collect();
+        HyperVector { bits }
+    }
+
+    /// Create a HyperVector from a flat list of u64 words (160 words for D=10240).
+    /// Useful for reconstructing HVs from stored state or Python `from_bits()` calls.
+    #[staticmethod]
+    fn from_u64_words(words: Vec<u64>) -> HyperVector {
+        HyperVector { bits: words }
+    }
+
     fn __repr__(&self) -> String {
         format!("<HyperVector dim={}>", DIMENSION)
     }
