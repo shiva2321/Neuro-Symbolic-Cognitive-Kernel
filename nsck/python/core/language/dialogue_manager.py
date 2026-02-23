@@ -16,13 +16,23 @@ import re
 from python.core.language.nlg import NLGEngine
 from python.core.reasoning.causal_interface import CausalQueryService, MockCausalService, Explanation, Prediction
 
+try:
+    from python.core.language.fluent_nlg import NSCKResponseEngine as _FluentEngine
+    _FLUENT_AVAILABLE = True
+except Exception:
+    _FluentEngine = None  # type: ignore[assignment,misc]
+    _FLUENT_AVAILABLE = False
+
 class DialogueManager:
     def __init__(self, cognitive_engine, language_module, causal_service: Optional[CausalQueryService] = None):
         self.engine = cognitive_engine
         self.language = language_module
         self.causal_service = causal_service or MockCausalService()
         self.nlg = NLGEngine()
-        
+        # Fluent NLG engine — produces natural-sounding multi-sentence responses.
+        # Type is NSCKResponseEngine when available, None otherwise.
+        self._fluent = _FluentEngine() if _FLUENT_AVAILABLE else None
+
         # Store last 10 turns given as (Sender, Text)
         self.context_window = deque(maxlen=10) 
     
@@ -74,23 +84,20 @@ class DialogueManager:
         elif intent == "question":
              response = self.handle_question(structured)
         elif intent != "unknown":
-            # Generic acknowledgement using Structural NLG
-            action = intent
+            # Generic acknowledgement — use fluent NLG when available
             targets = structured.get("entities", [])
             target = targets[0] if targets else "something"
-            
-            # Generate: "I noticed that you mentioned [action] related to [target]"
-            # Using Frame: (I, noticed, that...)
-            # We can use the Realizer for the core proposition
-            # But "that you mentioned..." is a sub-clause. 
-            # Let's simplify: "I noticed the [action]."
-            
-            response = self.nlg.realizer.realize_sentence("I", "notice", f"the {action}")
-            # Append context
-            if target != "something":
-                 response += " " + self.nlg.realizer.realize_sentence("It", "involve", target)
+            if self._fluent is not None:
+                frames = [{"subject": "I", "relation": "understand", "object": intent}]
+                if target != "something":
+                    frames.append({"subject": "It", "relation": "involves", "object": target})
+                response = self._fluent.respond(frames, topic=intent, max_sentences=2)
+            else:
+                response = f"I understand you are asking about {intent}."
+                if target != "something":
+                    response += f" This relates to {target}."
         else:
-            response = "I am unable to parse that structure."
+            response = "I didn't quite follow that — could you rephrase?"
         
         # 5. Add response to context
         self.context_window.append(("agent", response))
@@ -99,37 +106,31 @@ class DialogueManager:
     def retrieve_knowledge(self, subject: str) -> str:
         """Retrieve knowledge about a subject from Semantic Memory."""
         if not self.engine or not hasattr(self.engine, "semantic_memory"):
-            return "I have no memory module."
-            
+            return "I don't have a memory module connected."
+
         mem = self.engine.semantic_memory
-        
-        # 1. Check if concept exists (Case handling by VSA usually capitalizes)
         sub_cap = subject.capitalize()
-        
+
         if sub_cap not in mem.concept_graph:
-             # Try to find closest match?
-             return self.nlg.realizer.realize_sentence("I", "do not know", sub_cap)
-        
-        # 2. Get immediate relations
+            return f"I haven't learned about {subject!r} yet."
+
+        # Get immediate relations
         out_edges = list(mem.concept_graph.out_edges(sub_cap, data=True))
-        
         if not out_edges:
-             return self.nlg.realizer.realize_sentence("I", "know", sub_cap) + ". But I have no details."
-             
-        # 3. Generate response using Structural NLG
-        # Pick top 2 relations
-        responses = []
+            return f"I know {subject!r} exists, but I haven't learned any details about it yet."
+
+        # Use fluent NLG when available
+        if self._fluent is not None:
+            facts = [(sub_cap, d.get("relation", "relates to"), n)
+                     for _, n, d in out_edges[:6]]
+            return self._fluent.answer_query(f"What is {subject}?", facts, topic=subject)
+
+        # Fallback: plain sentences
+        parts = []
         for _, neighbor, data in out_edges[:3]:
-            relation = data.get("relation", "related_to")
-            
-            # Map relation to verb if needed
-            # "is_a" -> handled by realizer (be)
-            # "has_property" -> handled by realizer (have)
-            
-            sentence = self.nlg.realizer.realize_sentence(sub_cap, relation, neighbor)
-            responses.append(sentence)
-                 
-        return " ".join(responses)
+            rel = data.get("relation", "related to").replace("_", " ")
+            parts.append(f"{sub_cap} {rel} {neighbor}.")
+        return " ".join(parts)
     
     def respond(self, text: str) -> str:
         """
@@ -204,51 +205,35 @@ class DialogueManager:
         """Retrieve knowledge about a subject from Semantic Memory."""
         if not self.engine or not hasattr(self.engine, "semantic_memory"):
             return "I don't have a semantic memory connected."
-            
+
         mem = self.engine.semantic_memory
-        
-        # 1. Check if concept exists
-        # Normalize subject?
-        # subject = subject.lower().capitalize() # Or keep as is? Memory is likely case-sensitive or lower
-        
-        # Try direct lookup
+
+        # Case-insensitive look-up
+        matched = subject
         if subject not in mem.concept_graph:
-            # Try lowercase
-            if subject.lower() in mem.concept_graph:
-                subject = subject.lower()
-            elif subject.title() in mem.concept_graph:
-                subject = subject.title()
+            for candidate in (subject.lower(), subject.title(), subject.capitalize()):
+                if candidate in mem.concept_graph:
+                    matched = candidate
+                    break
             else:
-                 return f"I don't know much about '{subject}' yet."
-        
-        # 2. Get immediate relations
-        out_edges = list(mem.concept_graph.out_edges(subject, data=True))
-        
+                return f"I haven't learned about {subject!r} yet."
+
+        out_edges = list(mem.concept_graph.out_edges(matched, data=True))
         if not out_edges:
-             return f"I know '{subject}' exists, but I haven't learned its relationships yet."
-             
-        # 3. Generate response using NLG
-        # Pick top 2 relations
-        responses = []
-        for _, neighbor, data in out_edges[:2]:
-            relation = data.get("relation", "related_to")
-            
-            # Use specific template per relation type if possible
-            if relation == "is_a":
-                 responses.append(self.nlg.generate("fact", {
-                     "subject": subject, "object": neighbor, "relation": "is a"
-                 }))
-            elif relation == "has_property":
-                 # neighbor might be "red", relation "has_property"
-                 responses.append(self.nlg.generate("fact", {
-                     "subject": subject, "property": "characteristic", "value": neighbor
-                 }))
-            else:
-                 responses.append(self.nlg.generate("fact", {
-                     "subject": subject, "relation": relation, "object": neighbor
-                 }))
-                 
-        return " ".join(responses)
+            return f"I know {matched!r} exists, but I haven't learned its relationships yet."
+
+        # Use fluent NLG when available
+        if self._fluent is not None:
+            facts = [(matched, d.get("relation", "relates to"), n)
+                     for _, n, d in out_edges[:6]]
+            return self._fluent.answer_query(f"What is {subject}?", facts, topic=subject)
+
+        # Fallback: plain sentences
+        parts = []
+        for _, neighbor, data in out_edges[:3]:
+            rel = data.get("relation", "related_to").replace("_", " ")
+            parts.append(f"{matched} {rel} {neighbor}.")
+        return " ".join(parts)
 
     def handle_question(self, structured: Dict) -> str:
         """Answer a query about current cognitive state or world knowledge."""
@@ -441,13 +426,13 @@ class DialogueManager:
         return f"I do not know what {cause.replace('_', ' ')} causes yet."
 
     def _answer_what_is(self, topic: str) -> str:
-        """Return a brief definition / description of *topic* from semantic memory."""
+        """Return a fluent definition/description of *topic* from semantic memory."""
         mem = self._sem_mem()
         if mem is None:
             return f"I have no information about {topic}."
 
         g = mem.concept_graph
-        # Case-insensitive node look-up
+        # Case-insensitive look-up
         matched = None
         for node in g.nodes():
             if str(node).lower().replace("_", " ") == topic.lower():
@@ -455,17 +440,22 @@ class DialogueManager:
                 break
 
         if matched is None:
-            return f"I have not learned about {topic} yet."
+            return f"I haven't learned about {topic!r} yet."
 
-        parts = []
-        # Gather all outgoing relations
-        for _, tgt, data in g.out_edges(matched, data=True):
-            rel = data.get("relation", "related to")
-            parts.append(f"{rel.replace('_', ' ')} {str(tgt).replace('_', ' ')}")
+        # Collect facts
+        facts = [(str(matched), data.get("relation", "related to"), str(tgt))
+                 for _, tgt, data in g.out_edges(matched, data=True)]
 
-        if parts:
-            return f"{str(matched).capitalize()} is {'; '.join(parts[:3])}."
-        return f"I know {str(matched)} but have no detailed relations for it yet."
+        if not facts:
+            return f"I know about {str(matched)!r} but haven't learned any details about it yet."
+
+        # Fluent NLG when available
+        if self._fluent is not None:
+            return self._fluent.answer_query(f"What is {topic}?", facts[:5], topic=topic)
+
+        # Fallback: plain list
+        descriptions = [f"{r.replace('_', ' ')} {o}" for _, r, o in facts[:3]]
+        return f"{str(matched).capitalize()} is {'; '.join(descriptions)}."
 
     def _answer_explain(self, topic: str) -> str:
         """Return a multi-sentence explanation of *topic* using spread activation."""
@@ -482,25 +472,24 @@ class DialogueManager:
                 break
 
         if matched is None:
-            # Try spread activation from word fragments
-            return f"I do not have enough information to explain {topic} yet."
+            return f"I don't have enough information to explain {topic!r} yet."
 
-        # Collect the immediate neighbourhood
-        sentences = []
+        # Gather outgoing and incoming facts
+        facts: list = []
         for _, tgt, data in g.out_edges(matched, data=True):
-            rel = data.get("relation", "relates to").replace("_", " ")
-            sentences.append(
-                f"{str(matched).capitalize()} {rel} {str(tgt).replace('_', ' ')}"
-            )
-        # Incoming causal edges
+            facts.append((str(matched), data.get("relation", "relates to"), str(tgt)))
         for src, _, data in g.in_edges(matched, data=True):
-            rel = data.get("relation", "relates to").replace("_", " ")
-            sentences.append(
-                f"{str(src).capitalize()} {rel} {str(matched).replace('_', ' ')}"
-            )
+            facts.append((str(src), data.get("relation", "relates to"), str(matched)))
 
-        if not sentences:
-            return f"I know {str(matched)} exists but have no associated facts yet."
+        if not facts:
+            return f"I know {str(matched)!r} exists but haven't learned any facts about it yet."
 
-        intro = f"Here is what I know about {topic}: "
-        return intro + ". ".join(sentences[:5]) + "."
+        if self._fluent is not None:
+            return self._fluent.answer_query(f"Explain {topic}", facts[:6], topic=topic)
+
+        # Fallback: plain paragraph
+        sentences = [
+            f"{s.capitalize()} {r.replace('_', ' ')} {o}."
+            for s, r, o in facts[:5]
+        ]
+        return f"Here is what I know about {topic}: " + " ".join(sentences)

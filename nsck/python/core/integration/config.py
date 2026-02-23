@@ -92,6 +92,13 @@ class NSCKConfig:
     # Pragmatics: scalar implicature, Gricean maxims, indirect speech acts
     enable_pragmatics: bool = False
 
+    # === V7 Feature Flags — dialogue quality, corpus training, noise filtering ===
+    # Wire FluentNLG into DialogueManager (replaces template-based realize_sentence)
+    enable_fluent_dialogue: bool = True   # safe drop-in replacement; on by default
+    # Try to download a HuggingFace corpus slice to augment distributional HV training.
+    # Requires internet access; falls back to BUILTIN_CORPUS silently when offline.
+    enable_hf_corpus: bool = False
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -133,6 +140,8 @@ class NSCKConfig:
             # V5
             enable_spatial_reasoning=True,
             enable_pragmatics=True,
+            # V7
+            enable_fluent_dialogue=True,
         )
 
     @classmethod
@@ -149,6 +158,8 @@ class NSCKConfig:
             enable_temporal_reasoning=True,
             enable_conditional_logic=True,
             enable_transitive_inference=True,
+            # V7: fluent dialogue on in production
+            enable_fluent_dialogue=True,
         )
 
 

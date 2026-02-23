@@ -205,9 +205,13 @@ BUILTIN_CORPUS: List[List[str]] = [
 
 
 class DistributionalCodebook:
-    def __init__(self, window_size: int = 5):
+    def __init__(self, window_size: int = 5, pretrain: bool = True):
         self.window_size = window_size
         self._codebook: Dict[str, HyperVector] = {}
+        # Pre-train on the built-in corpus so semantic similarity is meaningful
+        # from the very first sentence processed (rather than random-hash fallback).
+        if pretrain:
+            self.build_from_corpus(BUILTIN_CORPUS)
 
     def build_from_corpus(self, sentences: List[List[str]]) -> None:
         word_contexts: Dict[str, List[HyperVector]] = {}
@@ -262,7 +266,31 @@ class DistributionalCodebook:
             return 0.0
 
     @classmethod
-    def build_default(cls, window_size: int = 3) -> "DistributionalCodebook":
-        cb = cls(window_size=window_size)
-        cb.build_from_corpus(BUILTIN_CORPUS)
+    def build_default(cls, window_size: int = 3, enable_hf_corpus: bool = False) -> "DistributionalCodebook":
+        """Build a codebook pre-trained on the built-in corpus (and optionally HuggingFace data).
+
+        Parameters
+        ----------
+        window_size     : context window radius for co-occurrence bundling.
+        enable_hf_corpus: when True, attempt to download a slice of
+                          ``fka/awesome-chatgpt-prompts`` to augment the
+                          built-in sentences.  Falls back silently.
+        """
+        cb = cls(window_size=window_size, pretrain=False)
+        if enable_hf_corpus:
+            try:
+                from python.core.language.hf_corpus_loader import load_hf_corpus
+                hf_sents = load_hf_corpus("auto", max_sentences=2000)
+                if hf_sents:
+                    corpus = list(BUILTIN_CORPUS) + hf_sents
+                    logger.info("[DistribCodebook] Extended corpus with %d HF sentences "
+                                "(total %d)", len(hf_sents), len(corpus))
+                else:
+                    corpus = BUILTIN_CORPUS
+            except Exception as exc:
+                logger.debug("[DistribCodebook] HF corpus load failed: %s", exc)
+                corpus = BUILTIN_CORPUS
+        else:
+            corpus = BUILTIN_CORPUS
+        cb.build_from_corpus(corpus)
         return cb

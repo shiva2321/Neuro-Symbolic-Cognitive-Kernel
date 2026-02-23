@@ -36,6 +36,28 @@ _COREFERENCE_PRONOUNS: frozenset = frozenset({
     'they', 'them', 'their', 'this', 'that',
 })
 
+# Particles, adverbs and prepositions that should NEVER become concept nodes.
+# These slip through when a sentence fragment ends with them (e.g. "move away").
+_STOP_CONCEPTS: frozenset = frozenset({
+    'away', 'back', 'down', 'off', 'out', 'over', 'up', 'through', 'along',
+    'around', 'aside', 'ahead', 'behind', 'below', 'above', 'beside', 'between',
+    'beyond', 'within', 'without', 'toward', 'towards', 'inside', 'outside',
+    'across', 'against', 'among', 'amongst', 'upon', 'onto', 'into', 'unto',
+    'via', 'per', 'thus', 'hence', 'still', 'even', 'else', 'ever',
+    'never', 'often', 'always', 'usually', 'sometimes', 'rarely', 'already',
+    'soon', 'later', 'once', 'twice', 'again', 'much', 'many', 'few', 'less',
+    'more', 'most', 'very', 'quite', 'rather', 'nearly', 'almost', 'too',
+    'well', 'just', 'only', 'also', 'both', 'either', 'neither',
+    'but', 'and', 'or', 'not', 'nor', 'so', 'yet', 'for',
+})
+
+# Generic relation types — require stricter similarity threshold to avoid noise
+_GENERIC_RELATION_TYPES: frozenset = frozenset({'semantically_related', 'strongly_related'})
+
+# Similarity threshold applied to generic (co-occurrence only) relations.
+# Must be higher than the regular relation_threshold to suppress noisy edges.
+_GENERIC_RELATION_THRESHOLD: float = 0.62
+
 try:
     import python.core.vsa.hypervec_shim as hypervec_rs
 except ImportError:
@@ -158,7 +180,11 @@ class TextKnowledgeLearner:
             if getattr(config, 'enable_distributional_semantics', False):
                 try:
                     from python.core.language.distributional_semantics import DistributionalCodebook
-                    self._distrib_codebook = DistributionalCodebook()
+                    use_hf = getattr(config, 'enable_hf_corpus', False)
+                    # build_default pre-trains on BUILTIN_CORPUS (+HF when enabled)
+                    self._distrib_codebook = DistributionalCodebook.build_default(
+                        enable_hf_corpus=use_hf
+                    )
                 except Exception as e:
                     print(f"[TextLearner] Distributional semantics unavailable: {e}")
         
@@ -426,7 +452,13 @@ class TextKnowledgeLearner:
             # Ensure concepts exist before adding relation
             for concept in (subj, obj):
                 if concept not in self.semantic.concept_hvs:
-                    concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
+                    # Use distributional HV when available — gives better semantic
+                    # similarity than a raw hash (words in similar contexts cluster)
+                    concept_hv = None
+                    if self._distrib_codebook is not None:
+                        concept_hv = self._distrib_codebook.get_hv(concept.lower())
+                    if concept_hv is None:
+                        concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
                     self.semantic.add_concept(
                         concept_name=concept,
                         properties={'source': source, 'session': session_id},
@@ -604,7 +636,10 @@ class TextKnowledgeLearner:
             w_lower = word.lower()
             if w_lower in stop_words:
                 continue
-                
+            # V7: skip particle/adverb pseudo-concepts that produce noisy edges
+            if w_lower in _STOP_CONCEPTS:
+                continue
+
             # Allow length >= 3 (e.g. Sky, Red, Sun, Eye, Ear)
             if len(word) >= 3 and word.capitalize() not in concepts:
                 concepts.append(word.capitalize())
@@ -855,12 +890,17 @@ class TextKnowledgeLearner:
                             concept_a, concept_b, similarity, sentence
                         )
 
-                        # 2. Check criteria
-                        is_strong_relation = relation_type not in ['semantically_related', 'strongly_related']
-                        
-                        if is_strong_relation or (similarity > self.relation_threshold):
-                            # If specific linguistic marker exists (e.g. 'made of'), trust it even if similarity is low
-                            # Or if vector similarity is high, trust generic relation
+                        # 2. Check criteria — generic relations need a stricter
+                        #    threshold to suppress noise ("memory related to away")
+                        is_strong_relation = relation_type not in _GENERIC_RELATION_TYPES
+                        threshold = (
+                            _GENERIC_RELATION_THRESHOLD
+                            if not is_strong_relation
+                            else self.relation_threshold
+                        )
+                        if is_strong_relation or (similarity > threshold):
+                            # If specific linguistic marker exists, trust it even if
+                            # similarity is low; otherwise require high-confidence sim.
                             relations.append((concept_a, relation_type, concept_b))
                     except Exception:
                         pass  # Skip if similarity calculation fails
