@@ -376,17 +376,18 @@ We tested the spurious correlation rejection capability using the CLAP→BIRD_CH
 
 ### 6.5 Performance
 
-*Table 2: Causal computation latency (measured with Rust backend on x86-64).*
+*Table 2: Causal computation latency (measured with Rust VSA backend on x86-64, February 2026).*
 
-| Operation | Latency |
+| Operation | Latency (p50) |
 |---|---|
 | observe() — single timestep | < 0.01 ms |
-| induce_graph() — 500 observations | ~0.5 ms |
+| induce_graph() — 100 observations | 0.013 ms |
+| detect_confounders() — MI-based | 0.014 ms |
 | counterfactual query | ~0.1 ms |
 | Causal chain lookup (3-hop) | < 0.01 ms |
-| Full decision cycle with causal | 0.10–0.13 ms (p50–p95) |
+| Full decision cycle with causal | 0.149–0.180 ms (p50–p95) |
 
-All causal operations are sub-millisecond, making them practical for real-time decision loops. With the Rust VSA backend active, the full decision cycle (including causal chain evaluation) runs at p50 = 0.10 ms — well under the 1 ms threshold for real-time systems.
+All causal operations are sub-millisecond, making them practical for real-time decision loops. With the Rust VSA backend active, the full decision cycle (including causal chain evaluation and MI confounder check) runs at p50 = 0.149 ms — well under the 1 ms threshold for real-time systems.
 
 ---
 

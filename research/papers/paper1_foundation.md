@@ -13,11 +13,11 @@ Charlottetown, Prince Edward Island, Canada
 
 We present **NSCK** (Neuro-Symbolic Cognitive Kernel), a CPU-native cognitive architecture that uses 10,240-bit binary hypervectors as a shared representational substrate for perception, memory, reasoning, and language. Unlike mainstream AI systems that separate neural processing from symbolic reasoning — or abandon interpretability entirely — NSCK unifies both under a single Vector Symbolic Architecture (VSA) algebra: XOR binding, majority-vote bundling, and circular-shift permutation. No gradient descent, no matrix multiplication, and no neural-network inference is used at decision time. Every decision is fully auditable through an 11-stage cognitive trace.
 
-The kernel integrates eight layers: a VSA foundation, a Leaky-Integrate-and-Fire (LIF) spiking neural network (SNN) perception layer with STDP learning, two-tier episodic and semantic memory, a Global Workspace Theory (GWT)-based executive, causal discovery via Δ-P statistics, a STRIPS planner with learned operators, and a glass-box explanation generator. A dual Rust/PyO3 extension achieves 5–56× speedup over the Python baseline on individual VSA operations, with aggregate throughput exceeding 1.4 million operations per second.
+The kernel integrates eight layers: a VSA foundation, a Leaky-Integrate-and-Fire (LIF) spiking neural network (SNN) perception layer with STDP learning, two-tier episodic and semantic memory, a Global Workspace Theory (GWT)-based executive, causal discovery via Δ-P statistics, a STRIPS planner with learned operators, and a glass-box explanation generator. A dual Rust/PyO3 extension achieves 3–54× speedup over the Python baseline on individual VSA operations, with aggregate throughput exceeding 1.5 million operations per second.
 
-Evaluation shows 1,414,697 VSA operations per second (Rust backend), sub-millisecond decision latency (p50: 0.10 ms), 2.8 ms SNN perception (Rust backend), 1.5 ms/sentence NLU throughput, and 951 passing tests. Honest limitations are documented: open-domain NLU coverage reaches approximately 40–60%; the SNN→predicate bridge now supports VSA cleanup-memory-based concept naming but full sensor-to-predicate grounding from raw pixels remains an open engineering item.
+Evaluation on x86-64 with Rust backend shows 1,528,662 VSA operations per second, sub-millisecond decision latency (p50: 0.149 ms), 2.37 ms SNN perception pipeline, 1.25 ms/sentence NLU throughput, and 971 passing tests (5 skipped, 4 xfailed). Honest limitations are documented: open-domain NLU coverage reaches approximately 40–60%; the SNN→predicate bridge now supports VSA cleanup-memory-based concept naming but full sensor-to-predicate grounding from raw pixels remains an open engineering item. The Rust advantage is concentrated on VSA bitwise operations (33×); for SNN simulation, numpy vectorized operations are competitive with Rust+PyO3 at small neuron counts.
 
-We release the full codebase (~94,000 lines of Python and ~5,500 lines of Rust), all benchmarks, and documentation under open license.
+We release the full codebase (88 Python source files and 17 Rust source files across 2 crates), all benchmarks, and documentation under open license.
 
 **Keywords:** Vector Symbolic Architecture, Hyperdimensional Computing, Neuro-Symbolic AI, Cognitive Architecture, Spiking Neural Networks, Global Workspace Theory, Causal Reasoning, Interpretable AI
 
@@ -51,7 +51,7 @@ The implementation was done with substantial assistance from AI coding agents. T
 
 ### 1.3 Contributions
 
-1. A complete, open-source implementation of a unified neuro-symbolic cognitive architecture with 65+ Python modules, two Rust extension crates, and ~10,800 lines of tests (951 passing).
+1. A complete, open-source implementation of a unified neuro-symbolic cognitive architecture with 88 Python modules, two Rust extension crates, and 79 test files (971 passing, 5 skipped, 4 xfailed).
 2. A principled integration of Binary VSA with GWT, LIF-SNN, Δ-P causal inference, STRIPS planning, and Plutchik emotion within a single 10,240-bit representational space.
 3. A glass-box 11-stage decision trace (ThoughtTrace) that makes every cognitive step auditable at runtime — not post-hoc rationalisation.
 4. Empirical benchmarks across 11 real-world scenarios, reported with full honesty including failures.
@@ -303,7 +303,7 @@ If MI(C, Z) + MI(Z, E) accounts for most of the apparent C → E association, Z 
 
 | Component | Files | Lines of Code |
 |---|---|---|
-| nsck/python/core/ (8 subsystems) | 65+ | ~21,500 |
+| nsck/python/core/ (8 subsystems) | 88 | ~25,000 |
 | nsck/rust_vsa/ (Rust VSA crate) | 7 | ~4,048 |
 | nsck/rust_snn/ (Rust SNN crate) | 3 | ~1,500 |
 | nsck_ai_model/ (conversational layer) | 14 | ~11,028 |
@@ -316,7 +316,7 @@ The backend selector `hypervec_shim.py` transparently imports the Rust extension
 
 ### 4.3 Configuration
 
-NSCKConfig provides **25 feature flags** (13 V3, 5 V4, 2 V5, 3 V6, 2 V7), enabling minimal/research/production presets. Researchers can toggle individual subsystems (dual-process routing, homeostasis, stigmergy, pragmatics, spatial reasoning, fluent dialogue) to study component interactions.
+NSCKConfig provides **25 feature flags**, enabling minimal/research/production presets. Researchers can toggle individual subsystems (dual-process routing, homeostasis, stigmergy, pragmatics, spatial reasoning, fluent dialogue) to study component interactions.
 
 ### 4.4 Decision Loop
 
@@ -345,16 +345,22 @@ All benchmarks were run on commodity x86-64 hardware. Results are from the imple
 
 | Operation | Python | Rust | Speedup |
 |---|---|---|---|
-| HV XOR (per-op) | 1.9 μs | 0.3 μs | 5× |
-| HV Bundle (per-op) | 51.6 μs | 0.9 μs | 56× |
-| HV Similarity (per-op) | 7.6 μs | 0.4 μs | 19× |
-| HV Permute (per-op) | 7.5 μs | 1.2 μs | 7× |
-| VSA aggregate throughput | 58,242 ops/s | 1,414,697 ops/s | 24× |
-| SNN perceive (64→256) | ~13 ms | 2.8 ms avg | ~5× |
-| Decision latency (p50) | — | 0.10 ms | — |
-| NLU throughput | — | 1.5 ms/sentence | — |
-| Memory query @1K concepts | — | 0.52 ms | — |
-| Memory query @5K concepts | — | 2.28 ms | — |
+| HV XOR (per-op) | 1.3 μs | 0.43 μs | 3× |
+| HV Bundle (per-op) | 55.6 μs | 1.02 μs | 54× |
+| HV Similarity (per-op) | 7.5 μs | 0.51 μs | 15× |
+| HV Permute (per-op) | 7.9 μs | 1.15 μs | 7× |
+| HV Negate (per-op) | — | 0.97 μs | — |
+| VSA aggregate throughput | 46,590 ops/s | 1,528,662 ops/s | 33× |
+| SNN perceive pipeline (64→256) | 1.81 ms | 2.31 ms | 0.8×† |
+| SNN core simulate() only | 0.55 ms | 1.01 ms | 0.5×† |
+| Decision latency (p50/p95) | — | 0.149/0.180 ms | — |
+| NLU throughput | — | 1.25 ms/sentence | — |
+| Memory query @1K concepts (p50) | — | 0.42 ms | — |
+| Episodic recall @500 eps (p50) | — | 0.27 ms | — |
+| Batch similarity 50×50 | — | 0.51 ms | — |
+| Weber-Fechner 10K values | — | 0.58 ms | — |
+
+† **Honest note on SNN performance:** The Rust SNN backend is *slower* than the Python backend for small neuron counts (256) because numpy vectorized operations are highly optimised with BLAS, while the Rust path incurs PyO3 FFI overhead on list↔Vec conversion at each call. The Rust advantage is concentrated on VSA bitwise operations (33× speedup) where numpy's float-based routines cannot compete with native bit manipulation. At larger neuron counts (>1024) or when eliminating the FFI boundary, the Rust SNN core would show its advantage.
 
 *Table 2: Benchmark scenario results (Rust backend active).*
 
@@ -425,7 +431,7 @@ Distributional similarity (after pre-training on 200-sentence built-in corpus):
 
 **Lean memory footprint.** 49.1 MB total RSS across all scenarios. This is directly attributable to the absence of large weight matrices.
 
-**Rust acceleration is real.** 1,414,697 ops/s VSA throughput (Rust) vs 58,242 ops/s (Python) — a 24× aggregate speedup — and 2.8 ms SNN perception (Rust) are measured on real hardware.
+**Rust acceleration is real — and honest.** 1,528,662 ops/s VSA throughput (Rust) vs 46,590 ops/s (Python) — a 33× aggregate speedup on bitwise operations. However, for SNN simulation at small neuron counts (256), the Python numpy backend is competitive due to BLAS optimisation and the absence of PyO3 FFI overhead. This is an important finding: *Rust acceleration is most impactful where the workload is inherently bitwise (VSA) rather than floating-point (SNN), and where data transfer costs are amortised over larger computations.*
 
 **Continual learning without catastrophic forgetting.** Symbolic knowledge (rules, causal graphs) does not suffer from interference when new tasks are learned.
 

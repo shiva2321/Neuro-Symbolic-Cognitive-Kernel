@@ -270,8 +270,8 @@ The maximum-entropy adaptive threshold (Section 3.2) provides the formal connect
 | Average score | 0.0 | **+0.49** | +0.49 |
 | Rules transferred | — | 4 | — |
 | Abstract concepts discovered | — | 5 | — |
-| Transfer time | — | < 0.1 ms (Rust VSA) | — |
-| Functoriality score | — | 1.0 | — |
+| Transfer time | — | 0.81 ms (Rust VSA) | — |
+| Functoriality score | — | 0.995 | — |
 
 The +14% improvement over random with zero target-domain training data demonstrates that structural alignment can provide a meaningful cold-start advantage.
 

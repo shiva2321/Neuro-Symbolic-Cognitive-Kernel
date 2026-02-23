@@ -1,9 +1,9 @@
 # Cognitive Capabilities Report Card
 
 **Date:** February 23, 2026  
-**Version:** NSCK V7 (V3 → V4 → V5 → V6 → V7)  
-**Test environment:** Python 3.12 + Rust backends (both measured)  
-**Total tests:** 951 collected · **951 passed** · 5 skipped (torch/Rust-parity) · 4 xfailed
+**Version:** NSCK V8 (V3 → V4 → V5 → V6 → V7 → V8 cross-disciplinary)  
+**Test environment:** Python 3.12 + Rust backends (both measured, x86-64)  
+**Total tests:** 980 collected · **971 passed** · 5 skipped (torch/Rust-parity) · 4 xfailed
 
 ---
 
@@ -31,14 +31,16 @@
 
 ---
 
-## System Summary (V7)
+## System Summary (V8)
 
 | Metric | Value |
 |---|---|
-| Total Python source files | 65+ |
-| Total test items | **951** |
-| Tests passing (Rust + Python) | **951** |
-| Config feature flags | **25 total** (13 V3 + 5 V4 + 2 V5 + 3 V6 + 2 V7) |
+| Total Python source files | 88 |
+| Total Rust source files | 17 (2 crates) |
+| Total test files | 79 |
+| Total test items | **980** |
+| Tests passing (Rust + Python) | **971** |
+| Config feature flags | **25 total** |
 | HyperVector dimension | 10,240 bits |
 | Construction grammar constructions | ~71 |
 | COMMON_VERBS forms | ~400 |
@@ -52,6 +54,7 @@
 | Concurrent modalities | ThreadPoolExecutor |
 | Rust backends | hypervec_rs.so (4.3 MB) + snn_rs.so (1.1 MB) |
 | HuggingFace corpus loader | `hf_corpus_loader.py` (graceful offline fallback) |
+| Cross-disciplinary enhancements | MI confounder, Weber-Fechner, Free Energy, Functoriality, MaxEnt |
 
 ---
 
@@ -69,51 +72,73 @@
 
 > Research mode creates ~15% more KG edges through transitive inference + co-occurrence relations.
 
-### VSA Operations (V7, Rust enabled — Verified Benchmarks)
+### VSA Operations (V8, Rust enabled — Verified Benchmarks, Feb 23 2026)
 
 | Operation | Rust | Python | Speedup |
 |---|---|---|---|
-| XOR ×1000 | 0.3 μs/op | 1.9 μs/op | 5× |
-| Bundle ×1000 | 0.9 μs/op | 51.6 μs/op | 56× |
-| Similarity ×1000 | 0.4 μs/op | 7.6 μs/op | 19× |
-| Permute ×1000 | 1.2 μs/op | 7.5 μs/op | 7× |
-| **Aggregate throughput** | **1,414,697 ops/s** | **58,242 ops/s** | **24×** |
+| XOR ×1000 | 0.43 μs/op | 1.3 μs/op | 3× |
+| Bundle ×1000 | 1.02 μs/op | 55.6 μs/op | 54× |
+| Similarity ×1000 | 0.51 μs/op | 7.5 μs/op | 15× |
+| Permute ×1000 | 1.15 μs/op | 7.9 μs/op | 7× |
+| Negate ×1000 | 0.97 μs/op | — | — |
+| **Aggregate throughput** | **1,528,662 ops/s** | **46,590 ops/s** | **33×** |
+| Batch sim 50×50 | 0.51 ms | — | — |
+| Weber-Fechner 10K | 0.58 ms | — | — |
 | **negate() sim** | **0.5025** ✓ | **0.5025** ✓ | — |
 | negate idempotent | 1.0000 ✓ | 1.0000 ✓ | — |
 
-### SNN Perception (Rust backend, 64→256 neurons, ×50 runs)
+### SNN Perception (Rust backend, 64→256 neurons, ×100 runs)
+
+| Metric | Rust Pipeline | Python Pipeline | Note |
+|---|---|---|---|
+| perceive() p50 | **2.31 ms** | **1.81 ms** | Python numpy faster† |
+| perceive() p95 | 2.66 ms | 2.13 ms | |
+| simulate() only p50 | 1.01 ms | 0.55 ms | |
+
+† **Honest note:** For SNN at 256 neurons, numpy/BLAS vectorized operations beat Rust+PyO3 due to FFI overhead. Rust advantage is on VSA bitwise operations.
+
+### Decision Latency (Rust VSA, ×100 runs)
 
 | Metric | Value |
 |---|---|
-| avg latency | **2.8 ms** |
-| p50 latency | 2.3 ms |
-| p95 latency | 5.2 ms |
-
-### Decision Latency (Rust VSA, ×200 runs)
-
-| Metric | Value |
-|---|---|
-| avg latency | **0.107 ms** |
-| p50 latency | **0.100 ms** |
-| p95 latency | 0.135 ms |
+| avg latency | **0.153 ms** |
+| p50 latency | **0.149 ms** |
+| p95 latency | 0.180 ms |
+| p99 latency | 0.201 ms |
 
 ### NLU Throughput (Rust backend)
 
 | Metric | Value |
 |---|---|
-| 20 sentences | 29.2 ms total |
-| Per-sentence | **1.5 ms** |
-| Concepts learned | 100 |
-| KG edges | 82 |
+| 50 sentences | 67 ms total |
+| Per-sentence p50 | **1.25 ms** |
+| Throughput | **744 sentences/sec** |
+| Concepts learned | 47 |
+| KG edges | 28 |
 
 ### Memory Query Latency (Rust backend)
 
-| Concepts | Latency |
+| Operation | Latency (p50) |
 |---|---|
-| 100 | 0.10 ms |
-| 500 | 0.30 ms |
-| 1,000 | **0.52 ms** |
-| 5,000 | 2.28 ms |
+| Semantic query @1K concepts | **0.42 ms** |
+| Spreading activation (2 steps) | **0.009 ms** |
+| Episodic recall @500 episodes | **0.27 ms** |
+
+### Causal Reasoning Latency
+
+| Operation | Latency (p50) |
+|---|---|
+| induce_graph() | **0.013 ms** |
+| detect_confounders() (MI) | **0.014 ms** |
+
+### Analogy & Transfer Latency
+
+| Operation | Latency (p50) |
+|---|---|
+| auto_discover_abstractions (20×20) | **0.81 ms** |
+| functoriality_score | **0.117 ms** |
+| max_entropy_threshold | **0.73 μs** |
+| MaxEnt threshold (d=10240) | **0.506** |
 
 ### Distributional Similarity (V7 — BUILTIN_CORPUS pre-training)
 
