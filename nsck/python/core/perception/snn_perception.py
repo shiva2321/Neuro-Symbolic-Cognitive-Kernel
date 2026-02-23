@@ -678,6 +678,16 @@ class SNNPerceptionModule:
             # Constant (zero-variance) input: uniform drive at effective_gain.
             x_proc = np.ones_like(x_raw) * effective_gain
 
+        # ── Weber-Fechner logarithmic compression ───────────────────────
+        # Psychophysics (Fechner 1860): perceived intensity S = k·log(I/I₀)
+        # This compresses the dynamic range of sensory input, improving
+        # discrimination at low intensities and preventing saturation at
+        # high intensities — the same principle the biological auditory and
+        # visual systems use.  The sign-preserving form:
+        #     x_wf = sign(x) · log(1 + |x|)
+        # maps linearly near zero and logarithmically for large values.
+        x_proc = np.sign(x_proc) * np.log1p(np.abs(x_proc))
+
         # 1. Simulate SNN dynamics
         n_steps = int(self.simulation_time_ms / self.snn_layer.dt)
 

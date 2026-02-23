@@ -6,6 +6,7 @@ Implements VSA-based novelty detection, prototype memory maintenance,
 and planner-guided exploration for directed curiosity.
 """
 import time
+import math
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, Tuple
@@ -130,6 +131,57 @@ class CuriosityModule:
         past_rate = sum(past) / len(past) if past else 0
         
         return recent_rate - past_rate
+
+    # ── Free Energy Surprise (Friston's Free Energy Principle) ──────────
+    # The brain minimises variational free energy F = DKL(q || p) + H(q),
+    # where q is the internal model and p is the true posterior.  In VSA
+    # space, we approximate F as the divergence between predicted and
+    # observed situation HVs:
+    #     F ≈ −log P(observation | model) ≈ 1 − sim(predicted, actual)
+    # plus a model uncertainty term estimated from the variance of recent
+    # prediction errors.
+
+    def compute_free_energy_surprise(
+        self,
+        situation_hv: hypervec_rs.HyperVector,
+        predicted_hv: Optional[hypervec_rs.HyperVector],
+        task_tag: str,
+    ) -> float:
+        """Compute variational free-energy surprise for the current observation.
+
+        F = prediction_error + model_uncertainty
+
+        * prediction_error = 1 − sim(predicted_hv, situation_hv)
+          (0 = perfect prediction, 1 = maximally surprising)
+        * model_uncertainty = σ of recent prediction errors (bounded 0–1)
+
+        Falls back to pure novelty when no prediction is available.
+
+        Returns a value in [0, 2] — sum of error and uncertainty.
+        """
+        if predicted_hv is None:
+            # No prediction available → fall back to novelty score
+            return self.compute_novelty(situation_hv, task_tag)
+
+        # Prediction error (Hamming distance in VSA space)
+        prediction_error = 1.0 - situation_hv.similarity(predicted_hv)
+
+        # Track prediction errors for model uncertainty estimation
+        key = f"_fe_errors_{task_tag}"
+        if not hasattr(self, key):
+            setattr(self, key, deque(maxlen=50))
+        error_history: deque = getattr(self, key)
+        error_history.append(prediction_error)
+
+        # Model uncertainty = standard deviation of recent prediction errors
+        if len(error_history) >= 2:
+            mean_err = sum(error_history) / len(error_history)
+            variance = sum((e - mean_err) ** 2 for e in error_history) / len(error_history)
+            model_uncertainty = math.sqrt(variance)
+        else:
+            model_uncertainty = 0.5  # high uncertainty initially
+
+        return prediction_error + model_uncertainty
     
     def update_prototype(
         self,
