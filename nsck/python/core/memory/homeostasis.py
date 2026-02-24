@@ -29,6 +29,19 @@ class MemoryHomeostasis:
         new_categories = self._auto_categorize(memory)
         for cat in new_categories:
             actions.append(f"created_category:{cat}")
+        # V8: decay and prune if memory supports it
+        if hasattr(memory, 'decay_concepts') and hasattr(memory, 'prune_below'):
+            try:
+                decay_lambda = getattr(self, '_decay_lambda', 0.01)
+                prune_thresh = getattr(self, '_prune_threshold', 0.1)
+                decayed = memory.decay_concepts(decay_lambda)
+                pruned = memory.prune_below(prune_thresh)
+                if decayed > 0:
+                    actions.append(f"decayed_concepts:{decayed}")
+                if pruned > 0:
+                    actions.append(f"pruned_below_threshold:{pruned}")
+            except Exception:
+                pass
         return actions
 
     def _measure_edge_density(self, memory) -> float:

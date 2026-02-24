@@ -6,7 +6,7 @@ Implements two-layer knowledge architecture with conflict resolution and provena
 import python.core.vsa.hypervec_shim as hypervec_rs
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, List, Tuple, Set, Optional
+from typing import Dict, List, Tuple, Set, Optional, Any
 from enum import Enum
 import uuid
 
@@ -479,3 +479,53 @@ class BrainFusion:
                 
         if promoted:
             print(f"Promoted {len(promoted)} concepts to global: {promoted}")
+
+
+class MultiAgentSession:
+    """
+    Multi-agent session for cognitive fusion and belief negotiation.
+    """
+    
+    def __init__(self, engines=None):
+        self.engines = list(engines) if engines else []
+        self._snapshots: Dict[int, Any] = {}
+    
+    def add_engine(self, engine) -> int:
+        idx = len(self.engines)
+        self.engines.append(engine)
+        return idx
+    
+    def exchange_snapshots(self) -> Dict[int, Any]:
+        """Each agent shares its SemanticMemory HV summary."""
+        snapshots = {}
+        for i, engine in enumerate(self.engines):
+            mem = getattr(engine, 'semantic_memory', None)
+            if mem is not None and hasattr(mem, 'concept_hvs') and mem.concept_hvs:
+                hvs = list(mem.concept_hvs.values())
+                summary = hvs[0]
+                for h in hvs[1:min(10, len(hvs))]:
+                    summary = summary.bundle(h)
+                snapshots[i] = summary
+            else:
+                snapshots[i] = hypervec_rs.HyperVector(i + 100)
+        self._snapshots = snapshots
+        return snapshots
+    
+    def negotiate_beliefs(self, topic_hv) -> Any:
+        """For a topic, each agent proposes a belief HV; returns consensus bundle."""
+        proposals = []
+        for engine in self.engines:
+            if hasattr(engine, 'get_belief_summary'):
+                belief = engine.get_belief_summary(topic_hv)
+            else:
+                belief = topic_hv
+            proposals.append(belief)
+        if not proposals:
+            return topic_hv
+        consensus = proposals[0]
+        for p in proposals[1:]:
+            consensus = consensus.bundle(p)
+        return consensus
+    
+    def __len__(self):
+        return len(self.engines)

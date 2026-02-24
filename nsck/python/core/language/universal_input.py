@@ -1013,3 +1013,21 @@ class UniversalInput:
         if full_key not in self._role_hvs:
             self._role_hvs[full_key] = hv.HyperVector(_stable_seed(full_key))
         return self._role_hvs[full_key]
+
+    def is_mathematical(self, text: str) -> bool:
+        """Returns True if text appears to be a math query."""
+        import re
+        text_lower = text.lower()
+        patterns = [
+            r'\d+\s*[+\-*/^]\s*\d+',
+            r'\b(solve|calculate|compute|evaluate)\b',
+            r'\b\d+\s+(plus|minus|times|divided by|multiplied by)\s+\d+\b',
+            r'what\s+is\s+\d',
+            r'how\s+many\b.*\d',
+            r'\bsum\s+of\b',
+            r'x\s*[+\-*/]\s*\d+\s*=',
+        ]
+        for pat in patterns:
+            if re.search(pat, text_lower):
+                return True
+        return False

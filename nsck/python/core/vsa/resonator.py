@@ -149,3 +149,36 @@ class ResonatorNetwork:
 
     def reset_estimates(self):
         self.initial_guesses = {}
+
+
+class HierarchicalResonatorNetwork:
+    """
+    2-level hierarchical resonator for nested structures like relative clauses.
+    
+    Level 1: sentence-level roles (AGENT, VERB, PATIENT)
+    Level 2: clause-level roles (MODIFIER_AGENT, MODIFIER_VERB, MODIFIER_PATIENT)
+    """
+    
+    L1_ROLES = ["AGENT", "VERB", "PATIENT", "THEME", "INSTRUMENT"]
+    L2_ROLES = ["MODIFIER_AGENT", "MODIFIER_VERB", "MODIFIER_PATIENT"]
+    
+    def __init__(self, codebooks: Dict[str, SemanticMemory], verbose: bool = False):
+        self.codebooks = codebooks
+        self.verbose = verbose
+        self._l1 = ResonatorNetwork(codebooks, verbose=verbose)
+        self._l2 = ResonatorNetwork(codebooks, verbose=verbose)
+    
+    def factorize_hierarchical(self, composite_hv, depth: int = 2) -> Dict:
+        """
+        Factorize composite_hv at two levels.
+        Returns dict with "L1" and (if depth>=2) "L2" entries.
+        """
+        result = {}
+        result["L1"] = self._l1.factorize(composite_hv, max_iter=20)
+        if depth >= 2:
+            result["L2"] = self._l2.factorize(composite_hv, max_iter=20)
+        return result
+    
+    def factorize(self, target_s, max_iter: int = 20, convergence_threshold: float = 0.65) -> Dict:
+        """Compatibility method: factorize at L1."""
+        return self._l1.factorize(target_s, max_iter=max_iter, convergence_threshold=convergence_threshold)

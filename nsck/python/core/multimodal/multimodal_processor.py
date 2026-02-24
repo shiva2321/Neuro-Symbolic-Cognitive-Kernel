@@ -933,3 +933,176 @@ class ConcurrentMultimodalProcessor(MultimodalProcessor):
             confidence=avg_conf,
         )
 
+
+# ---------------------------------------------------------------------------
+# V8: ConcurrentMultimodalScheduler
+# ---------------------------------------------------------------------------
+
+import time as _time
+import concurrent.futures as _futures
+from dataclasses import dataclass as _dataclass
+from typing import Callable as _Callable
+
+
+@_dataclass
+class _TimestampedResult:
+    """Modality result with wall-clock timestamp."""
+    result: ModalityResult
+    timestamp_ms: float
+
+
+class ConcurrentMultimodalScheduler:
+    """
+    V8 concurrent scheduler that wraps MultimodalProcessor and processes
+    each modality pipeline in parallel using a ThreadPoolExecutor.
+
+    Attention-weighted fusion:
+        HV_fused = Σ_m(conf_m × bind(role_m, HV_m)) / Σ_m conf_m
+
+    Timestamps each output; only fuses results that arrive within
+    ``coherence_window_ms`` of the first-arriving modality result.
+    """
+
+    def __init__(
+        self,
+        processor: Optional[MultimodalProcessor] = None,
+        max_workers: int = 4,
+        coherence_window_ms: float = 50.0,
+    ):
+        self._processor = processor or MultimodalProcessor()
+        self._executor = _futures.ThreadPoolExecutor(max_workers=max_workers)
+        self.coherence_window_ms = coherence_window_ms
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def process_concurrent(self, inp: MultimodalInput) -> ProcessedInput:
+        """Process each modality in parallel, then fuse coherent results."""
+        tasks: Dict[str, _Callable] = {}
+
+        if inp.text is not None:
+            tasks["text"] = lambda: self._processor._process_text(inp.text)
+        if inp.image is not None:
+            tasks["image"] = lambda: self._processor._process_image(inp.image)
+        if inp.audio is not None:
+            tasks["audio"] = lambda: self._processor._process_audio(inp.audio)
+        if inp.structured is not None:
+            tasks["structured"] = lambda: self._processor._process_structured(inp.structured)
+        if inp.video is not None:
+            tasks["video"] = lambda: self._processor._process_video(inp.video)
+
+        if not tasks:
+            fused = hypervec_rs.HyperVector(0)
+            return ProcessedInput(
+                fused_hv=fused,
+                modality_results=[],
+                extracted_concepts=[],
+                context_cues=dict(inp.metadata),
+                confidence=0.0,
+            )
+
+        # Submit all modality processors concurrently
+        future_map: Dict[str, _futures.Future] = {
+            name: self._executor.submit(fn)
+            for name, fn in tasks.items()
+        }
+
+        # Collect results with timestamps
+        stamped: List[_TimestampedResult] = []
+        for name, fut in future_map.items():
+            try:
+                result: ModalityResult = fut.result(timeout=5.0)
+                stamped.append(_TimestampedResult(
+                    result=result,
+                    timestamp_ms=_time.monotonic() * 1000.0,
+                ))
+            except Exception:
+                pass
+
+        if not stamped:
+            fused = hypervec_rs.HyperVector(0)
+            return ProcessedInput(
+                fused_hv=fused,
+                modality_results=[],
+                extracted_concepts=[],
+                context_cues=dict(inp.metadata),
+                confidence=0.0,
+            )
+
+        # Coherence filtering: keep results within coherence_window_ms of first
+        first_ts = min(s.timestamp_ms for s in stamped)
+        coherent = [
+            s for s in stamped
+            if (s.timestamp_ms - first_ts) <= self.coherence_window_ms
+        ]
+
+        results = [s.result for s in coherent]
+        fused = self._attention_weighted_fuse(results)
+        avg_conf = sum(r.confidence for r in results) / len(results)
+
+        concepts: List[str] = []
+        cues: Dict[str, Any] = dict(inp.metadata)
+        for r in results:
+            concepts.extend(r.features.get("tokens", []))
+            concepts.extend(r.features.get("descriptors", []))
+            concepts.extend(r.features.get("predicates", []))
+
+        return ProcessedInput(
+            fused_hv=fused,
+            modality_results=results,
+            extracted_concepts=concepts,
+            context_cues=cues,
+            confidence=avg_conf,
+        )
+
+    def close(self) -> None:
+        """Shut down the executor."""
+        self._executor.shutdown(wait=False)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    # ------------------------------------------------------------------
+    # Internal fusion
+    # ------------------------------------------------------------------
+
+    def _attention_weighted_fuse(self, results: List[ModalityResult]) -> Any:
+        """
+        Attention-weighted fusion:
+            HV_fused = Σ_m(conf_m × bind(role_m, HV_m)) / Σ_m conf_m
+
+        Since binary HVs don't support scalar multiply, we approximate by
+        including each modality HV proportionally via majority bundling:
+        round(conf_m * N) copies in the bundle where N = normalisation factor.
+        """
+        if not results:
+            return hypervec_rs.HyperVector(0)
+
+        total_conf = sum(r.confidence for r in results)
+        if total_conf <= 0:
+            total_conf = len(results)
+
+        # Collect weighted HVs (role-bind then weight)
+        weighted: List[Any] = []
+        for r in results:
+            role_hv = self._processor.roles.get(r.modality)
+            if role_hv is not None:
+                bound = role_hv.xor(r.hv)
+            else:
+                bound = r.hv
+            # Weight by rounding confidence * 10 to integer copy count
+            copies = max(1, round(r.confidence / total_conf * 10 * len(results)))
+            for _ in range(copies):
+                weighted.append(bound)
+
+        if not weighted:
+            return hypervec_rs.HyperVector(0)
+
+        fused = weighted[0]
+        for w in weighted[1:]:
+            fused = fused.bundle(w)
+        return fused

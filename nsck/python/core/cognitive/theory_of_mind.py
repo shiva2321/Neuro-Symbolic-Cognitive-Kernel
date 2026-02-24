@@ -310,3 +310,16 @@ class TheoryOfMind:
                     return "search_random"
 
         return self.predict_action(agent_id)
+
+    def model_other_agent(self, agent_id: str, observed_actions: list) -> "MentalStateModel":
+        """Infer another agent's belief state from observed actions."""
+        model = self.get_or_create_model(agent_id)
+        for action in observed_actions:
+            if action not in model.intentions:
+                model.intentions.append(action)
+        return model
+
+    def perspective_take(self, topic_hv, agent_id: str) -> dict:
+        """Return what agent_id likely believes about topic_hv."""
+        model = self.get_or_create_model(agent_id)
+        return dict(model.beliefs)

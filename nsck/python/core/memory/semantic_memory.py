@@ -302,7 +302,14 @@ class SemanticMemory:
             except Exception as e:
                 print(f"[WARNING] Rust backend add_concept failed: {e}")
         
-        self.concept_graph.add_node(concept_name, **properties)
+        import time as _time
+        self.concept_graph.add_node(
+            concept_name,
+            access_count=0,
+            last_accessed=_time.time(),
+            importance_score=1.0,
+            **properties,
+        )
 
         # V3/V6: Insert into ANN index if enabled
         if self._hnsw_enabled:
@@ -325,7 +332,13 @@ class SemanticMemory:
     
     def get_concept(self, concept_name: str) -> Optional[hypervec_rs.HyperVector]:
         """Retrieve the hypervector for a given concept."""
-        return self.concept_hvs.get(concept_name)
+        import time as _time
+        hv = self.concept_hvs.get(concept_name)
+        if hv is not None and concept_name in self.concept_graph:
+            d = self.concept_graph.nodes[concept_name]
+            d["access_count"] = d.get("access_count", 0) + 1
+            d["last_accessed"] = _time.time()
+        return hv
     
     def add_relation(self, concept1: str, relation: str, concept2: str, timestamp: float = 0.0):
         """
@@ -775,3 +788,29 @@ class SemanticMemory:
             print(f"[SEMANTIC] Loaded {len(self.concept_hvs)} concepts.")
         except Exception as e:
             print(f"[SEMANTIC] Failed to load memory: {e}")
+
+    def decay_concepts(self, lambda_decay: float = 0.01) -> int:
+        """Exponential decay of importance_score based on time since last access."""
+        import math, time
+        now = time.time()
+        count = 0
+        for node in list(self.concept_graph.nodes()):
+            d = self.concept_graph.nodes[node]
+            last = d.get("last_accessed", now)
+            hours = (now - last) / 3600.0
+            old = d.get("importance_score", 1.0)
+            new_val = old * math.exp(-lambda_decay * hours)
+            self.concept_graph.nodes[node]["importance_score"] = new_val
+            count += 1
+        return count
+
+    def prune_below(self, threshold: float = 0.1) -> int:
+        """Remove concepts whose importance_score is below threshold."""
+        to_remove = [
+            n for n, d in self.concept_graph.nodes(data=True)
+            if d.get("importance_score", 1.0) < threshold
+        ]
+        for node in to_remove:
+            self.concept_graph.remove_node(node)
+            self.concept_hvs.pop(node, None)
+        return len(to_remove)

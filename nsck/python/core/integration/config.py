@@ -99,6 +99,17 @@ class NSCKConfig:
     # Requires internet access; falls back to BUILTIN_CORPUS silently when offline.
     enable_hf_corpus: bool = False
 
+    # === V8 Feature Flags — new capabilities (all off by default → zero regressions) ===
+    enable_concurrent_multimodal: bool = False
+    enable_full_rust_snn: bool = False
+    memory_decay_lambda: float = 0.01
+    memory_prune_threshold: float = 0.1
+    enable_dialogue_state_tracking: bool = False
+    enable_hierarchical_srl: bool = False
+    enable_multi_agent: bool = False
+    enable_active_inference: bool = False
+    active_inference_weight: float = 0.2
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -142,6 +153,12 @@ class NSCKConfig:
             enable_pragmatics=True,
             # V7
             enable_fluent_dialogue=True,
+            # V8
+            enable_concurrent_multimodal=True,
+            enable_dialogue_state_tracking=True,
+            enable_hierarchical_srl=True,
+            enable_multi_agent=True,
+            enable_active_inference=True,
         )
 
     @classmethod
