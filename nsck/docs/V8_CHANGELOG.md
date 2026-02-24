@@ -86,3 +86,43 @@ NSCK V8 adds 9 new capabilities to the Neural-Symbolic Cognitive Kernel, enhanci
 - `tests/unit/integration/test_multi_agent.py` (15+ tests)
 - `tests/unit/learning/test_active_inference_integration.py` (15+ tests)
 - `tests/integration/test_benchmarks.py` (10+ tests)
+
+## Test Results (Verified February 2026)
+
+### With Rust Extensions Active
+```
+1111 passed, 5 skipped, 4 xfailed, 4 warnings in 10.99s
+```
+
+### Without Rust Extensions (Python fallback)
+```
+967 passed, 150 skipped, 3 xfailed, 4 warnings in 97.76s
+```
+
+The difference: 144 additional tests become active when `hypervec_rs.so` + `snn_rs.so` are present (Rust parity and backend tests).
+
+### Skipped Tests (5)
+- 1 integration: IntrinsicCuriosityModule archived
+- 2 integration: WorldModel archived (2×)
+- 1 regression: WorldModel archived
+- 1 unit: Rust cross-backend test (only skipped without .so)
+
+### XFailed Tests (4)
+- `test_no_gradient_learning_in_vsa` — expected: NSCK uses no gradient descent ✓
+- `test_no_real_language_understanding` — expected: open-domain NLU limited to ~40-60% ✓
+- `test_no_pixel_level_perception` — expected: raw pixel grounding incomplete ✓
+- `test_seed_determinism` — expected: PCG64 (Python) vs ChaCha8 (Rust) RNG differ ✓
+
+## Rust Build Instructions
+```bash
+pip install maturin
+cd nsck/rust_vsa && maturin build --release
+unzip -o target/wheels/*.whl "hypervec_rs*" -d /tmp/vsa_w
+find /tmp/vsa_w -name "*.so" -exec cp {} nsck/ \;
+
+cd nsck/rust_snn && maturin build --release
+unzip -o target/wheels/*.whl "snn_rs*" -d /tmp/snn_w
+find /tmp/snn_w -name "*.so" -exec cp {} nsck/ \;
+```
+
+Requires: `rustc 1.93+`, `maturin 1.12+`, `Python 3.12`.

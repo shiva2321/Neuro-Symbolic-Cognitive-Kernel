@@ -346,6 +346,9 @@ We document the following limitations honestly:
 4. **Multi-source transfer.** Aggregate correspondences from multiple source domains for more robust target-domain bootstrapping.
 5. **Formal verification.** Prove conditions under which greedy matching produces optimal or near-optimal alignments in VSA.
 6. **Categorical analysis of transfer conditions.** Formalise the relationship between VSA structural alignment and category-theoretic functors. The functoriality score (Section 3.6) is a first step; a full categorical treatment would characterise when domain transfer preserves compositional structure (natural transformations) and when it does not, potentially yielding necessary and sufficient conditions for successful transfer.
+7. ~~**Hierarchical resonator decoding for transfer.**~~ ✅ **Done (V8)** — `HierarchicalResonatorNetwork` now provides 2-level (L1 sentence-role + L2 clause-role) factorization, enabling structural alignment at multiple levels of abstraction. The `factorize_hierarchical(hv, depth=2)` method returns a `{"L1": …, "L2": …}` dict that can be used as the alignment substrate for cross-domain transfer.
+
+**Current test suite (V8, February 2026): 1,111 passed, 5 skipped, 4 xfailed.**
 
 ---
 

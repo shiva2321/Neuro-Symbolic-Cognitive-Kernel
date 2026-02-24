@@ -57,7 +57,7 @@ graph TB
         SNN["SNNPerceptionModule\nsnn_perception.py · 874 LOC\nLIF neurons + STDP"]
         Br["VSA-SNN Bridge\nvsa_snn_bridge.py · ~461 LOC\nRate/Temporal coding"]
         Gr["GroundingVerifier\ngrounding_verifier.py · 585 LOC"]
-        MM["MultimodalProcessor\nmultimodal_processor.py · 788 LOC\nHOG · color · LBP · edges"]
+        MM["MultimodalProcessor + ConcurrentMultimodalScheduler\nmultimodal_processor.py · 788 LOC\nHOG · color · LBP · edges\nV8: attention-weighted coherence fusion"]
     end
 
     subgraph S5["5 · Learning"]
@@ -67,20 +67,20 @@ graph TB
         Schema["SchemaInduction\nschema_induction.py · V4\npattern abstraction · slot filling"]
         PMI["PMILearner\npmi_learner.py · V4\nPointwise Mutual Information"]
         PC["PredictiveCodingModule\npredictive_coding.py · V4\nPRIOR_UNCERTAINTY=0.5"]
-        AI["ActiveInferenceLearner\nactive_inference.py · V4\nMIN_TEMP=0.1 MAX_TEMP=5.0"]
+        AI["ActiveInferenceLearner\nactive_inference.py · V8\nfree-energy F=pred_error−epi_value\ncoalition salience bias"]
     end
 
     subgraph S6["6 · Cognitive"]
         Emo["EmotionSystem\nemotion_system.py · 420 LOC\nPluchtik 8 + Circumplex"]
         Meta["SafetyGate + MetacognitiveEngine\nmetacognition.py · 504 LOC"]
         Self["SelfModel\nself_model.py · ~255 LOC"]
-        ToM["TheoryOfMind\ntheory_of_mind.py · 312 LOC"]
+        ToM["TheoryOfMind\ntheory_of_mind.py · 312 LOC\nV8: model_other_agent()\nV8: perspective_take()"]
     end
 
     subgraph S7["7 · Language"]
         TKL["TextKnowledgeLearner\ntext_knowledge_learner.py · 1,074 LOC\n_STOP_CONCEPTS 53 words (V7)\nDistributionalCodebook pre-trained (V7)"]
         LM["LanguageModule + LinguaCortex\nlanguage_module.py · 526 LOC\nlingua_cortex.py · ~260 LOC"]
-        DM["DialogueManager\ndialogue_manager.py · 506 LOC\nFluentNLG wired (V7)"]
+        DM["DialogueManager\ndialogue_manager.py · 506 LOC\nFluentNLG wired (V7)\nV8: rolling history HV\nV8: topic-shift detection\nV8: clarification_request()"]
         UI["UniversalInput\nuniversal_input.py · 947 LOC"]
         SRL["SemanticRoleLabeler\nsemantic_roles.py\n12 thematic roles · resonator"]
         NLG["NLGEngine + DiscoursePlanner\nnlg.py\nconnectives · anaphora · steps"]
@@ -92,9 +92,9 @@ graph TB
 
     subgraph S8["8 · Integration"]
         BS["BrainStore (SQLite)\npersistence.py · 852 LOC"]
-        BF["BrainFusion\nbrain_fusion.py · 481 LOC"]
+        BF["BrainFusion + MultiAgentSession\nbrain_fusion.py · 481 LOC\nV8: exchange_snapshots()\nV8: negotiate_beliefs()"]
         EG["ExplanationGenerator\nexplanation.py · 433 LOC"]
-        Conf["NSCKConfig\nconfig.py · ~100 LOC\n25 feature flags\nenable_fluent_dialogue=True (V7)\nenable_hf_corpus=False (V7)"]
+        Conf["NSCKConfig\nconfig.py · ~120 LOC\n34 feature flags\nenable_fluent_dialogue=True (V7)\nenable_hf_corpus=False (V7)\nenable_active_inference=False (V8)\nenable_concurrent_multimodal=False (V8)"]
     end
 
     CE --> GWT --> RL & Caus & Plan & Ana
@@ -779,3 +779,62 @@ graph TB
 | 9 | Self-model | `SelfModel.get_confidence()` |
 | 10 | Curiosity | `CuriosityModule.evaluate()` |
 | 11 | Response generation | `ResponseComposer.compose()` |
+
+---
+
+## 14. V8 Subsystems (February 2026)
+
+**Test suite: 1,111 passed, 5 skipped, 4 xfailed** (with Rust extensions active).
+
+```mermaid
+graph TB
+    subgraph V8["V8 New Capabilities"]
+        CMS["ConcurrentMultimodalScheduler\nmultimodal_processor.py\nThreadPoolExecutor · 50ms coherence window\nAttention-weighted HV fusion"]
+        MLC["Memory Lifecycle\nsemantic_memory.py\ndecay_concepts(λ) · prune_below(θ)\nEpisodic reconsolidation"]
+        DST["Dialogue State Tracker\ndialogue_manager.py\nRolling history HV · topic shift\nclarification_request()"]
+        MathW["MathReasoner–GWT\ncognitive_engine.py + math_reasoning.py\nMATH coalition salience=0.95\nis_mathematical() regex classifier"]
+        HRN["HierarchicalResonatorNetwork\nresonator.py\nL1: AGENT/VERB/PATIENT\nL2: MODIFIER roles"]
+        MAS["MultiAgentSession\nbrain_fusion.py\nexchange_snapshots() · negotiate_beliefs()\nVSA consensus bundling"]
+        AIF["ActiveInferenceLearner\nactive_inference.py\nF=prediction_error−epistemic_value\nCoalition salience bias · SafetyGate.check_free_energy()"]
+        EVAL["NSCK-Eval Benchmarks\nbenchmarks/\nbAbI · math · transfer\nNLG · dialogue · BenchmarkRunner"]
+    end
+
+    CMS --> MLC
+    DST --> MathW
+    HRN --> MAS
+    AIF --> EVAL
+```
+
+### V8 Config Flags Added
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `enable_concurrent_multimodal` | `False` | Use `ConcurrentMultimodalScheduler` |
+| `enable_full_rust_snn` | `False` | Full Rust SNN backend |
+| `memory_decay_lambda` | `0.01` | Ebbinghaus decay rate λ |
+| `memory_prune_threshold` | `0.1` | Prune below this importance score |
+| `enable_dialogue_state_tracking` | `False` | Rolling history HV in DialogueManager |
+| `enable_hierarchical_srl` | `False` | Use HierarchicalResonatorNetwork |
+| `enable_multi_agent` | `False` | MultiAgentSession consensus |
+| `enable_active_inference` | `False` | ActiveInferenceLearner in decide() |
+| `active_inference_weight` | `0.2` | Weight w for salience adjustment |
+
+### V8 New Files
+
+| File | Purpose |
+|---|---|
+| `python/core/learning/active_inference.py` | ActiveInferenceLearner — free energy loop |
+| `benchmarks/babi_tasks.py` | 20 bAbI-style QA tasks |
+| `benchmarks/math_word_problems.py` | 50 arithmetic word problems |
+| `benchmarks/cross_domain_transfer.py` | 5 cross-domain transfer tests |
+| `benchmarks/nlg_quality.py` | 10 NLG fluency checks |
+| `benchmarks/dialogue_coherence.py` | Multi-turn coherence test |
+| `benchmarks/runner.py` | BenchmarkRunner orchestrator |
+| `tests/unit/multimodal/test_concurrent_multimodal.py` | 20 tests |
+| `tests/unit/memory/test_memory_lifecycle.py` | 20 tests |
+| `tests/unit/language/test_dialogue_state.py` | 20 tests |
+| `tests/unit/reasoning/test_math_integration.py` | 15 tests |
+| `tests/unit/vsa/test_hierarchical_resonator.py` | 15 tests |
+| `tests/unit/integration/test_multi_agent.py` | 15 tests |
+| `tests/unit/learning/test_active_inference_integration.py` | 15 tests |
+| `tests/integration/test_benchmarks.py` | 10 tests |

@@ -389,6 +389,18 @@ We tested the spurious correlation rejection capability using the CLAP→BIRD_CH
 
 All causal operations are sub-millisecond, making them practical for real-time decision loops. With the Rust VSA backend active, the full decision cycle (including causal chain evaluation and MI confounder check) runs at p50 = 0.149 ms — well under the 1 ms threshold for real-time systems.
 
+### 6.6 V8 Active Inference Integration
+
+NSCK V8 (February 2026) adds an `ActiveInferenceLearner` that computes free energy for each coalition action:
+
+```
+F(action) = prediction_error(action, state_hv) − epistemic_value(action, state_hv)
+```
+
+where `prediction_error` is the normalised Hamming distance between the predicted next state HV and the observed next state HV, and `epistemic_value` is the curiosity score from the `CuriosityModule` (Section 3.4 of Paper 1). The free energy is wired into `decide()` to adjust coalition salience by `w × (0.5 − F)` (default `w = 0.2`). This provides a principled mechanism for penalising high-prediction-error actions while rewarding exploratory actions that resolve uncertainty — consistent with Friston's free-energy principle [18].
+
+The `SafetyGate.check_free_energy()` method vetoes actions with `F > threshold` (default 0.7), providing an additional safety layer beyond the existing confidence-based veto. Full test suite: **1,111 passed, 5 skipped, 4 xfailed** (V8).
+
 ---
 
 ## 7. Limitations

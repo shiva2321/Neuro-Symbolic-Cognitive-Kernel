@@ -1741,3 +1741,150 @@ Flask app with 15 endpoints. See [nsck_ai_model/README.md](../../nsck_ai_model/R
 | `test_ai_engine.py` | 77 | Engine internals, ThoughtTrace structure, encoding, edge cases |
 | `test_production.py` | 46 | End-to-end: QA, reasoning, conversation, emotion, performance |
 | `test_multimodal.py` | — | Image training and description pipeline |
+
+---
+
+## V8 New Classes and Methods
+
+*Added in V8 (February 2026). Full test suite: **1,111 passed, 5 skipped, 4 xfailed**.*
+
+---
+
+### `multimodal/multimodal_processor.py` — `ConcurrentMultimodalScheduler`
+
+```python
+ConcurrentMultimodalScheduler(
+    max_workers: int = 4,
+    coherence_window_ms: float = 50.0,
+    context_engine=None,
+    semantic_memory=None,
+)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `process_concurrent` | `(inp: MultimodalInput) → ProcessedInput` | `ProcessedInput` | Process all modalities in parallel; fuse within coherence window using attention-weighted HV: `Σ(conf_m · bind(role_m, HV_m)) / Σconf_m` |
+| `close` | `() → None` | `None` | Shut down the ThreadPoolExecutor |
+
+---
+
+### `memory/semantic_memory.py` — Memory Lifecycle Methods
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `decay_concepts` | `(lambda_decay: float = 0.01) → int` | `int` | Exponential Ebbinghaus decay: `importance *= exp(−λ · hours_since_access)`. Returns count of concepts updated |
+| `prune_below` | `(threshold: float = 0.1) → int` | `int` | Remove all concepts with `importance_score < threshold`. Returns count removed |
+
+`add_concept()` now initialises `access_count=0`, `last_accessed=time.time()`, `importance_score=1.0` on every new node. `get_concept()` increments `access_count` and updates `last_accessed`.
+
+---
+
+### `language/dialogue_manager.py` — Dialogue State Tracking
+
+```python
+DialogueManager(cognitive_engine, language_module, causal_service=None, config=None)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `get_context_hv` | `() → Optional[HyperVector]` | `HyperVector or None` | Returns current dialogue history HV `d_t = bundle(permute(d_{t-1}), utterance_hv)` |
+| `clarification_request` | `(term: str) → str` | `str` | Returns `"Could you clarify what you mean by {term}?"` |
+
+When `config.enable_dialogue_state_tracking=True`, each `process_turn()` call updates the rolling history HV, checks for topic shift (cosine sim < 0.3), and registers new entities via `EntityRegister`.
+
+---
+
+### `language/universal_input.py` — `UniversalInput.is_mathematical`
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `is_mathematical` | `(text: str) → bool` | `bool` | Returns `True` if text matches any of 7 arithmetic/word-problem regex patterns |
+
+---
+
+### `vsa/resonator.py` — `HierarchicalResonatorNetwork`
+
+```python
+HierarchicalResonatorNetwork(codebooks: Dict[str, SemanticMemory], verbose: bool = False)
+```
+
+**L1 roles:** `AGENT`, `VERB`, `PATIENT`, `THEME`, `INSTRUMENT`  
+**L2 roles:** `MODIFIER_AGENT`, `MODIFIER_VERB`, `MODIFIER_PATIENT`
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `factorize_hierarchical` | `(composite_hv, depth: int = 2) → Dict` | `{"L1": …, "L2": …}` | Factorize at two levels of abstraction |
+| `factorize` | `(target_s, max_iter=20, convergence_threshold=0.65) → Dict` | `Dict` | Compatibility wrapper — factorizes at L1 |
+
+---
+
+### `integration/brain_fusion.py` — `MultiAgentSession`
+
+```python
+MultiAgentSession(engines=None)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `add_engine` | `(engine) → int` | `int` | Add engine and return its index |
+| `exchange_snapshots` | `() → Dict[int, HyperVector]` | `Dict` | Each agent bundles up to 10 SemanticMemory HVs into a summary |
+| `negotiate_beliefs` | `(topic_hv) → HyperVector` | `HyperVector` | Majority-vote bundle of all agent belief proposals about `topic_hv` |
+| `__len__` | `() → int` | `int` | Number of engines in session |
+
+---
+
+### `cognitive/theory_of_mind.py` — V8 Additions
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `model_other_agent` | `(agent_id: str, observed_actions: list) → MentalStateModel` | `MentalStateModel` | Update model of `agent_id`'s intentions from observed actions |
+| `perspective_take` | `(topic_hv, agent_id: str) → dict` | `dict` | Return `agent_id`'s believed state about `topic_hv` |
+
+---
+
+### `learning/active_inference.py` — `ActiveInferenceLearner`
+
+```python
+ActiveInferenceLearner(curiosity_module=None, safety_threshold: float = 0.7)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `prediction_error` | `(action: str, state_hv) → float` | `[0, 1]` | Hamming distance between predicted and actual next state HV |
+| `epistemic_value` | `(action: str, state_hv) → float` | `[0, 1]` | Curiosity/novelty value from `CuriosityModule` |
+| `free_energy` | `(action: str, state_hv) → float` | `float` | `F = prediction_error − epistemic_value` |
+| `should_veto` | `(action: str, state_hv) → bool` | `bool` | Returns `True` if `F > safety_threshold` |
+| `update_world_model` | `(state_hv, action: str, next_state_hv) → None` | `None` | Predict next state via bundle of observed transitions |
+
+**CognitiveEngine integration:** `decide()` calls `active_inference.free_energy(c.content, situation_hv)` for each coalition and adjusts `c.base_salience += w × (0.5 − F)` (default `w=0.2`). `record_outcome()` calls `update_world_model()`.
+
+---
+
+### `cognitive/metacognition.py` — V8 Additions
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `SafetyGate.check_free_energy` | `(action: str, state_hv, active_inference_learner) → bool` | `bool` | `True` if action passes free energy check (F ≤ threshold) |
+
+---
+
+### `reasoning/cognitive_engine.py` — V8 Additions
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `_solve_math` | `(text: str) → Optional[Dict]` | `{"answer", "expression", "explanation"} or None` | Route text through MathReasoner; returns result dict |
+| `get_belief_summary` | `(topic_hv) → HyperVector` | `HyperVector` | Bundle of up to 3 SemanticMemory HVs as agent belief summary |
+
+---
+
+### `benchmarks/runner.py` — `BenchmarkRunner`
+
+```python
+BenchmarkRunner()
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `run_all` | `() → Dict[str, float]` | `{"babi_tasks": %, "math_word_problems": %, …}` | Run all 5 benchmarks and print tabular summary |
+
+**Benchmark modules:** `babi_tasks` (20 tasks), `math_word_problems` (50 problems), `cross_domain_transfer` (5 tasks), `nlg_quality` (10 prompts), `dialogue_coherence` (multi-turn). Each exposes a `run_*_benchmark(engine=None) → float` function returning 0–100%.
