@@ -1070,6 +1070,11 @@ class ConcurrentMultimodalScheduler:
     # Internal fusion
     # ------------------------------------------------------------------
 
+    # Normalisation scale for approximate scalar weighting:
+    # each modality's weight = round(conf_m / total_conf * FUSION_WEIGHT_SCALE * n_modalities)
+    # so the highest-confidence modality contributes ~FUSION_WEIGHT_SCALE copies.
+    _FUSION_WEIGHT_SCALE = 10
+
     def _attention_weighted_fuse(self, results: List[ModalityResult]) -> Any:
         """
         Attention-weighted fusion:
@@ -1077,7 +1082,7 @@ class ConcurrentMultimodalScheduler:
 
         Since binary HVs don't support scalar multiply, we approximate by
         including each modality HV proportionally via majority bundling:
-        round(conf_m * N) copies in the bundle where N = normalisation factor.
+        round(conf_m * FUSION_WEIGHT_SCALE) copies in the bundle.
         """
         if not results:
             return hypervec_rs.HyperVector(0)
@@ -1094,8 +1099,8 @@ class ConcurrentMultimodalScheduler:
                 bound = role_hv.xor(r.hv)
             else:
                 bound = r.hv
-            # Weight by rounding confidence * 10 to integer copy count
-            copies = max(1, round(r.confidence / total_conf * 10 * len(results)))
+            # Weight by rounding normalized confidence to an integer copy count
+            copies = max(1, round(r.confidence / total_conf * self._FUSION_WEIGHT_SCALE * len(results)))
             for _ in range(copies):
                 weighted.append(bound)
 

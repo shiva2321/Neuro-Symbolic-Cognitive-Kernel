@@ -21,7 +21,7 @@ def run_transfer_benchmark(engine=None) -> float:
                 if results and len(results) > 0:
                     correct += 1
             except Exception:
-                correct += 1  # give benefit of doubt if method unavailable
+                pass  # skip unavailable methods; don't inflate score
         return correct / len(TRANSFER_TASKS) * 100
     except Exception:
-        return 60.0  # default passing score when module unavailable
+        return 0.0
