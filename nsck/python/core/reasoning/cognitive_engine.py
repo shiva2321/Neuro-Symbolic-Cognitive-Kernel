@@ -37,6 +37,8 @@ from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
 from python.core.memory.semantic_memory import SemanticMemory
 from python.core.learning.curiosity import CuriosityModule
 from python.core.reasoning.analogy import AnalogyEngine
+from python.core.reasoning.math_reasoning import MathReasoner
+from python.core.learning.active_inference import ActiveInferenceLearner
 from python.core.reasoning.planner import STRIPSPlanner
 from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
 from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner, CausalDiscovery
@@ -152,13 +154,18 @@ class CognitiveEngine:
         self.analogy.load_sensor_domain_defaults()  # IIT: robot/env structural abstractions
         self.explainer = ExplanationGenerator()
         self.fusion = BrainFusion()
+        self.math_reasoner = MathReasoner()
+        self.active_inference = ActiveInferenceLearner(
+            curiosity_module=self.curiosity,
+            safety_threshold=0.7,
+        )
 
         # --- Language ---
         self.universal_input = UniversalInput()
         # --- Language ---
         self.universal_input = UniversalInput()
         self.language = LanguageModule(semantic_memory=self.semantic_memory, use_vsa=True) # [Phase 2] Default VSA
-        self.dialogue = DialogueManager(self, self.language)
+        self.dialogue = DialogueManager(self, self.language, config=self.config)
         
         # --- Perception (SNN) [Phase 2] ---
         # Initialize the "Eyes" of the system
@@ -482,6 +489,19 @@ class CognitiveEngine:
         if external_coalition:
             coalitions.append(external_coalition)
 
+        # Math routing (V8) — detect math queries and add high-confidence coalition
+        _math_text = state.get("math_query") or (state.get("text", "") if isinstance(state.get("text"), str) else "")
+        if _math_text and self.universal_input.is_mathematical(_math_text):
+            _math_result = self._solve_math(_math_text)
+            if _math_result is not None:
+                coalitions.append(Coalition(
+                    source="MATH",
+                    content=str(_math_result.get("answer", "")),
+                    base_salience=0.95,
+                    relevance=0.5,
+                    sender_confidence=0.95,
+                ))
+
         # B. Rule-based proposal
         applicable = self.rule_learner.get_applicable_rules(active_preds, task_tag)
         if applicable:
@@ -580,6 +600,13 @@ class CognitiveEngine:
             )
             if planner_coalition:
                 coalitions.append(planner_coalition)
+
+        # Active inference (V8) — adjust coalition salience by free energy
+        if self.config.enable_active_inference and situation_hv is not None:
+            _ai_weight = getattr(self.config, 'active_inference_weight', 0.2)
+            for _c in coalitions:
+                _fe = self.active_inference.free_energy(_c.content, situation_hv)
+                _c.base_salience += _ai_weight * (0.5 - _fe)
 
         # 5. GWT competition (only if System 1 didn't already win)
         if not goto_action_determination:
@@ -737,6 +764,23 @@ class CognitiveEngine:
         if reward > 0 and self.config.enable_stigmergy:
             if self._last_reasoning_path and hasattr(self.semantic_memory, 'mark_path'):
                 self.semantic_memory.mark_path(self._last_reasoning_path, reward)
+
+        # V8: update active inference world model if we have state context
+        if hasattr(self, 'current_state') and self.current_state is not None:
+            try:
+                if hasattr(self.current_state, 'situation_hv') and self.current_state.situation_hv is not None:
+                    next_hv = self.current_state.situation_hv
+                    action = self.current_state.chosen_action
+                    if new_state is not None:
+                        _nsk = self._get_state_key(new_state, task_tag)
+                        next_hv_candidate = hypervec_rs.HyperVector(hash(_nsk) % (2**32))
+                    else:
+                        next_hv_candidate = next_hv
+                    self.active_inference.update_world_model(
+                        self.current_state.situation_hv, action, next_hv_candidate
+                    )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # Learning
@@ -1114,6 +1158,33 @@ class CognitiveEngine:
         return self.curiosity.get_exploration_action(
             possible, probs, explore_rate=0.7
         )
+
+    def _solve_math(self, text: str) -> Optional[Dict]:
+        """Route math text through MathReasoner."""
+        try:
+            result = self.math_reasoner.solve_word_problem(text)
+            if result and result.get("answer") is not None:
+                return result
+        except Exception:
+            pass
+        try:
+            val = self.math_reasoner.solve_expression(text)
+            if val is not None:
+                return {"answer": val, "expression": text, "explanation": f"{text} = {val}"}
+        except Exception:
+            pass
+        return None
+
+    def get_belief_summary(self, topic_hv) -> Any:
+        """Return agent's belief HV about a topic via SemanticMemory."""
+        if hasattr(self.semantic_memory, 'concept_hvs') and self.semantic_memory.concept_hvs:
+            hvs = list(self.semantic_memory.concept_hvs.values())[:3]
+            if hvs:
+                summary = hvs[0]
+                for h in hvs[1:]:
+                    summary = summary.bundle(h)
+                return summary
+        return topic_hv
 
     def _default_action(
         self, state: Dict[str, Any], task_tag: str

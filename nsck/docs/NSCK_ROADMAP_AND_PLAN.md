@@ -51,7 +51,7 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 | Persistence (SQLite + BrainStore) | ✅ Operational | `persistence.py` |
 | Explanation Generator (11-stage traces) | ✅ Operational | `explanation.py` |
 | Rust Concurrent Layer (21-206× speedup) | ✅ Operational | `rust_vsa/`, `rust_snn/` |
-| Test Coverage (731 tests, 99.3% pass) | ✅ Operational | `nsck/tests/` |
+| Test Coverage (1,111 tests, 99.6% pass) | ✅ Operational | `nsck/tests/` |
 
 ### ⚠️ Current Gaps (What We Need to Add/Improve)
 
@@ -61,8 +61,8 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 | Math/Numeric Reasoning in VSA | "Numbers and math" are core input types | P0 | ✅ **Done (B1)** |
 | Cross-Domain Knowledge Transfer (formal) | Generalization across domains is the hallmark of intelligence | P0 | ✅ **Done (C1)** |
 | NLG: Multi-sentence discourse planning | Fluent responses need more than S-V-O templates | P1 | ✅ **Done (A2)** |
-| Concurrent multimodal fusion pipeline | Simultaneous inputs (e.g., spoken + visual) not properly scheduled | P1 | ⚠️ Sequential only |
-| SNN Rust port for perception (<5ms) | Python SNN is ~51ms; need Rust for real-time use | P1 | ⚠️ Stub exists |
+| Concurrent multimodal fusion pipeline | Simultaneous inputs (e.g., spoken + visual) not properly scheduled | P1 | ✅ **Done (V8)** |
+| SNN Rust port for perception (<5ms) | Python SNN is ~51ms; need Rust for real-time use | P1 | ✅ **Done (V8 — snn_rs.so)** |
 | Formal temporal reasoning (before/after/during) | Time is fundamental to language and events | P2 | ✅ **V4 Done** |
 | Spatial reasoning (above/below/inside/outside) | Required for vision-language grounding | P2 | ✅ **V5 Done** |
 | Negation handling in VSA | "X is NOT Y" needs explicit anti-bundling | P2 | ✅ **V4 Done** |
@@ -72,6 +72,31 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 | Massively extended COMMON_VERBS | ~40-60% → ~75-85% NLU coverage | P0 | ✅ **V4 Done** |
 | Cross-domain research synthesis | Biology, physics, math, psychology insights for NSCK | P1 | ✅ **V4 Done** |
 | Scalar implicature and pragmatics | Natural language is richer than propositional logic | P3 | ✅ **V5 Done** |
+| Memory lifecycle (decay + prune) | Prevent unbounded growth; Ebbinghaus forgetting | P1 | ✅ **Done (V8)** |
+| Multi-turn dialogue state tracking | Coreference + topic coherence across turns | P1 | ✅ **Done (V8)** |
+| Hierarchical resonator networks | Nested predicate-argument structure (relative clauses) | P1 | ✅ **Done (V8)** |
+| Multi-agent cognitive fusion | Shared belief negotiation across agents | P2 | ✅ **Done (V8)** |
+| Active inference full loop | Free-energy minimisation for action selection | P1 | ✅ **Done (V8)** |
+| NSCK-Eval benchmark suite | Formal evaluation beyond internal tests | P1 | ✅ **Done (V8)** |
+
+### ✅ V8 Completed (February 2026)
+
+**Test suite: 1,111 passed, 5 skipped, 4 xfailed.** Rust extensions (`hypervec_rs.so` + `snn_rs.so`) built and active.
+
+| Feature | Files Changed | Impact |
+|---------|--------------|--------|
+| `ConcurrentMultimodalScheduler` | `multimodal_processor.py` | Parallel per-modality processing; attention-weighted 50ms coherence fusion |
+| Memory lifecycle (decay + prune + reconsolidation) | `semantic_memory.py`, `homeostasis.py`, `episodic_memory.py` | Ebbinghaus forgetting; prune low-importance concepts; episodic HV blending on recall |
+| Multi-turn dialogue state tracking | `dialogue_manager.py` | Rolling history HV; topic-shift detection; `get_context_hv()`; `clarification_request()` |
+| MathReasoner–GWT integration | `cognitive_engine.py`, `universal_input.py` | MATH coalition (salience 0.95); `is_mathematical()` regex classifier |
+| `HierarchicalResonatorNetwork` | `resonator.py` | 2-level L1/L2 factorization; `factorize_hierarchical(hv, depth=2)` |
+| `MultiAgentSession` + ToM extensions | `brain_fusion.py`, `theory_of_mind.py` | `exchange_snapshots()`, `negotiate_beliefs()`, `model_other_agent()`, `perspective_take()` |
+| NSCK-Eval benchmark suite | `benchmarks/` (6 new files) | bAbI, math, transfer, NLG, dialogue; `BenchmarkRunner.run_all()` |
+| `ActiveInferenceLearner` | `active_inference.py`, `cognitive_engine.py`, `metacognition.py` | `F=pred_error−epi_value` wired into decide(); `SafetyGate.check_free_energy()` |
+| V8 config flags (9 new) | `config.py` | `enable_active_inference`, `enable_concurrent_multimodal`, etc. |
+| Rust extensions built | `nsck/*.so` | `hypervec_rs.so` + `snn_rs.so` via maturin; 1,111 tests pass with Rust active |
+| 140 new tests | `tests/unit/**` | 20+20+20+15+15+15+15+10 = 140 new tests |
+| V8_CHANGELOG.md | `docs/V8_CHANGELOG.md` | Complete feature log |
 
 ### ✅ V5 Completed (February 2026)
 

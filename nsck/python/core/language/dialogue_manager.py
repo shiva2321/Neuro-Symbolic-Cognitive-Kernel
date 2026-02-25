@@ -14,6 +14,7 @@ import re
 # from cognitive_engine import CognitiveEngine (Passed in dependency injection)
 
 from python.core.language.nlg import NLGEngine
+from python.core.language.coreference import EntityRegister
 from python.core.reasoning.causal_interface import CausalQueryService, MockCausalService, Explanation, Prediction
 
 try:
@@ -24,7 +25,7 @@ except Exception:
     _FLUENT_AVAILABLE = False
 
 class DialogueManager:
-    def __init__(self, cognitive_engine, language_module, causal_service: Optional[CausalQueryService] = None):
+    def __init__(self, cognitive_engine, language_module, causal_service: Optional[CausalQueryService] = None, config=None):
         self.engine = cognitive_engine
         self.language = language_module
         self.causal_service = causal_service or MockCausalService()
@@ -34,7 +35,13 @@ class DialogueManager:
         self._fluent = _FluentEngine() if _FLUENT_AVAILABLE else None
 
         # Store last 10 turns given as (Sender, Text)
-        self.context_window = deque(maxlen=10) 
+        self.context_window = deque(maxlen=10)
+        # V8 dialogue state tracking
+        self._config = config
+        self._dialogue_history_hv = None
+        self._turn_count = 0
+        self._current_topic_hv = None
+        self._entity_register = EntityRegister()
     
     def reset(self):
         """Clear the dialogue context window."""
@@ -45,6 +52,9 @@ class DialogueManager:
         """Process one dialogue turn from the user."""
         # 1. Add to context
         self.context_window.append(("user", user_input))
+        # V8: update dialogue state if tracking enabled
+        if self._config is not None and getattr(self._config, 'enable_dialogue_state_tracking', False):
+            self._update_dialogue_state(user_input)
         
         # 2. Resolve references using context
         # (e.g. "eat it" -> "eat food")
@@ -493,3 +503,44 @@ class DialogueManager:
             for s, r, o in facts[:5]
         ]
         return f"Here is what I know about {topic}: " + " ".join(sentences)
+
+    def get_context_hv(self):
+        """Return the current dialogue history HyperVector."""
+        return self._dialogue_history_hv
+
+    def _update_dialogue_state(self, text: str) -> None:
+        """Update rolling dialogue state HV from utterance text."""
+        try:
+            import python.core.vsa.hypervec_shim as _hv
+            # Create utterance HV from word hashing
+            words = text.lower().split()
+            if not words:
+                return
+            utt_hv = _hv.HyperVector(hash(words[0]) % (2**32))
+            for i, w in enumerate(words[1:], 1):
+                w_hv = _hv.HyperVector(hash(w) % (2**32))
+                pos_hv = _hv.HyperVector((7919 + i) % (2**32))
+                utt_hv = utt_hv.bundle(w_hv.xor(pos_hv))
+
+            # Update history: bundle with position permutation
+            if self._dialogue_history_hv is None:
+                self._dialogue_history_hv = utt_hv
+            else:
+                permuted = utt_hv.permute(self._turn_count % 16) if hasattr(utt_hv, 'permute') else utt_hv
+                self._dialogue_history_hv = self._dialogue_history_hv.bundle(permuted)
+
+            # Topic shift detection
+            if self._current_topic_hv is not None:
+                sim = float(utt_hv.similarity(self._current_topic_hv))
+                if sim < 0.3:
+                    self._current_topic_hv = utt_hv  # new topic
+            else:
+                self._current_topic_hv = utt_hv
+
+            self._turn_count += 1
+        except Exception:
+            pass
+
+    def clarification_request(self, term: str) -> str:
+        """Return a clarification request for the given term."""
+        return f"Could you clarify what you mean by {term}?"

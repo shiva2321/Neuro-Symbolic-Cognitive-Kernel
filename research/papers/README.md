@@ -2,6 +2,8 @@
 
 This directory contains three research papers derived from the NSCK (Neuro-Symbolic Cognitive Kernel) project. Each paper is independent and can be submitted separately.
 
+**Current implementation status (V8, February 2026): 1,111 tests passing, 5 skipped, 4 xfailed — with Rust extensions active.**
+
 ## Papers
 
 ### Paper 1 — Foundation Paper

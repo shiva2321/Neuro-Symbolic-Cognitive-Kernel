@@ -203,6 +203,12 @@ class SafetyGate:
             
         return True
 
+    def check_free_energy(self, action: str, state_hv, active_inference_learner) -> bool:
+        """Returns True if action passes free energy safety check."""
+        if active_inference_learner is None:
+            return True
+        return not active_inference_learner.should_veto(action, state_hv)
+
 # --- Metacognitive Engine ---
 
 class MetacognitiveEngine:
