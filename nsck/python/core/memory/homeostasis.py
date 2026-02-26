@@ -1,7 +1,7 @@
 """Memory Homeostasis module for NSCK V3 - keeps memory healthy."""
 from __future__ import annotations
 import time
-from typing import List, TYPE_CHECKING
+from typing import Any, List, TYPE_CHECKING
 import python.core.vsa.hypervec_shim as hypervec_rs
 
 if TYPE_CHECKING:
@@ -145,3 +145,44 @@ class MemoryHomeostasis:
                     used.add(c2)
             clusters.append(cluster)
         return clusters
+
+    # V9: Rule pruning for lifelong stability
+    def prune_unused_rules(self, rule_learner: Any, max_idle_episodes: int = 200) -> int:
+        """Remove rules that haven't fired in *max_idle_episodes* episodes (V9).
+
+        Parameters
+        ----------
+        rule_learner : RuleLearner
+            The engine's rule learner instance.
+        max_idle_episodes : int
+            Rules whose ``fire_count`` is 0 after this many total episodes
+            across all tasks are pruned (default: 200).
+
+        Returns
+        -------
+        int
+            Number of rules pruned.
+        """
+        import time as _time
+        pruned_total = 0
+        cutoff_time = _time.time() - max_idle_episodes * 0.1  # rough idle cutoff
+
+        for task_tag in list(rule_learner.learned_rules.keys()):
+            rules = rule_learner.learned_rules[task_tag]
+            keep = []
+            for rule in rules:
+                # Keep bootstrap rules always
+                if getattr(rule, "source", "") == "bootstrap":
+                    keep.append(rule)
+                    continue
+                fire_count = getattr(rule, "fire_count", 0)
+                last_fired = getattr(rule, "last_fired", 0.0)
+                # Prune if never fired and rule is old enough
+                created_at = getattr(rule, "created_at", 0.0)
+                if fire_count == 0 and created_at > 0 and (created_at < cutoff_time):
+                    pruned_total += 1
+                    continue
+                keep.append(rule)
+            rule_learner.learned_rules[task_tag] = keep
+
+        return pruned_total
