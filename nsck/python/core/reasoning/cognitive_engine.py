@@ -223,6 +223,9 @@ class CognitiveEngine:
             "auto_transfers": 0,
         }
         self.current_state = CognitiveState(task_tag="unknown")
+
+        # V10: Optional neural rule scorer
+        self.rule_scorer = None  # type: Optional[Any]
         self.msg_broadcaster = None
 
         # --- V3: Homeostasis ---
@@ -557,7 +560,14 @@ class CognitiveEngine:
         # B. Rule-based proposal
         applicable = self.rule_learner.get_applicable_rules(active_preds, task_tag)
         if applicable:
-            rule, score = applicable[0]
+            # V10: re-rank with neural scorer if available
+            if self.rule_scorer is not None and len(applicable) > 1:
+                rules_only = [r for r, _ in applicable]
+                scored = self.rule_scorer.rank_rules(rules_only)
+                rule = scored[0]
+                score = applicable[0][1]
+            else:
+                rule, score = applicable[0]
             coalitions.append(Coalition(
                 source="RULES",
                 content=rule.consequence,
@@ -1340,6 +1350,11 @@ class CognitiveEngine:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def enable_neural_rule_scoring(self):
+        """Instantiate RuleNeuralScorer and attach to engine."""
+        from python.core.learning.rule_neural_scorer import RuleNeuralScorer
+        self.rule_scorer = RuleNeuralScorer()
 
     def get_allowed_actions(self, task_tag: str) -> List[str]:
         """Return symbolic action names for a task.
