@@ -365,14 +365,14 @@ class MultimodalProcessor:
         elif edge_density < 0.05:
             descriptors.append("smooth")
             
-        # [Phase 3] Texture detection via LBP variance/entropy
+        # Texture detection via LBP variance/entropy
         lbp_variance = float(np.var(lbp_features))
         if lbp_variance > 0.005:  # High variance in LBP codes = textured
             descriptors.append("textured")
         else:
             descriptors.append("smooth_texture")
 
-        # [Phase 3] Circularity detection via HOG orientation uniformity
+        # Circularity detection via HOG orientation uniformity
         # A circle has gradients in all directions. 
         # Sum of HOG bins across all cells should be relatively uniform.
         hog_sums = np.sum(hog_features.reshape(-1, n_orient_bins), axis=0)

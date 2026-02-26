@@ -265,3 +265,75 @@ homeostasis.prune_unused_rules(rule_learner, max_idle_episodes=200)
 New integration tests: `tests/integration/test_v9_substrate.py` (32 tests).
 
 All 967 V1–V8 tests continue to pass unchanged.
+
+---
+
+## V11 Additions — NumericSequenceAdapter + TimeSeriesEncoder + NSCKSubstrate
+
+### NumericSequenceAdapter (`adapters/numeric_sequence_adapter.py`)
+
+Encodes 1-D lists/arrays of numbers as `PerceptPacket` using `TimeSeriesEncoder`:
+
+- **FPE encoding**: each value quantised to 1024 bins; positionally bound with `permute(t)` for position `t`; all bound HVs bundled
+- **Statistical predicates**: `RISING`, `FALLING`, `STABLE`, `PERIODIC`, `ANOMALY`, `PEAK_*`, `TROUGH_*`
+
+### TimeSeriesEncoder (`perception/stream_encoder.py`)
+
+| Method | Returns | Description |
+|---|---|---|
+| `encode_value(value)` | `HyperVector` | FPE quantise single float |
+| `encode_sequence(values, window_size=32)` | `HyperVector` | Positionally-encoded bundle |
+| `encode_features(values)` | `dict` | `{mean, std, min, max, trend, rate_of_change, anomaly_score, periodicity_score}` |
+| `features_to_predicates(feats, channel)` | `List[str]` | Convert features to symbolic predicates |
+
+### NSCKSubstrate (`substrate.py`)
+
+`NSCKSubstrate` is the single recommended developer-facing API:
+
+```python
+from python.core.substrate import NSCKSubstrate
+substrate = NSCKSubstrate()
+result = substrate.process([1.0, 1.5, 2.1, 2.9, 3.8], "sensor")
+result = substrate.sleep("sensor")
+```
+
+See `MODULE_REFERENCE.md §17` for the full method table.
+
+---
+
+## V12 Additions — ImageAdapter + AudioAdapter
+
+### ImageAdapter (`adapters/image_adapter.py`)
+
+Accepts `np.ndarray` with `ndim >= 2` (any shape H×W or H×W×C). Extracts a **65-dimensional** feature vector using pure numpy (no neural nets):
+- Spatial 4×4 grid mean + std (32), colour histograms (24), Sobel edge density (1), global stats (3), quadrant means (4), aspect ratio (1)
+- Feature vector encoded via FPE → similarity-preserving `HyperVector`
+
+Wired into `NSCKSubstrate.process()`: any 2D/3D `ndarray` automatically routes here.
+
+### AudioAdapter (`adapters/audio_adapter.py`)
+
+Accepts 1-D float `np.ndarray` (16 kHz mono assumed). Extracts a **23-dimensional** feature vector:
+- 13 MFCC (via mel filterbank → log → DCT), 4 energy bands, ZCR, spectral centroid, spectral rolloff, RMS, peak, log-length
+- Feature vector encoded via FPE → similarity-preserving `HyperVector`
+
+Wired into `NSCKSubstrate._encode_single()` and `process_multimodal()` for the `"audio"` key.
+
+### Updated File Index
+
+| File | Purpose |
+|---|---|
+| `python/core/adapters/numeric_sequence_adapter.py` | 1-D numeric sequences → FPE PerceptPacket (V11) |
+| `python/core/adapters/image_adapter.py` | 2D/3D images → FPE PerceptPacket with CV features (V12) |
+| `python/core/adapters/audio_adapter.py` | 1-D audio waveforms → FPE PerceptPacket with DSP features (V12) |
+| `python/core/substrate.py` | `NSCKSubstrate` — recommended developer API (V11) |
+| `python/core/perception/stream_encoder.py` | `TimeSeriesEncoder`, `StreamBuffer` (V11) |
+
+### Updated Test Count
+
+| Version | Tests passing |
+|---|---|
+| V9 baseline | 999 |
+| V10 | 1,199 |
+| V11 (NumericSequenceAdapter + NSCKSubstrate) | 1,199 |
+| V12 (ImageAdapter + AudioAdapter) | 1,199 |

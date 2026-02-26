@@ -61,19 +61,19 @@ class SelfModel:
         })
         self.current_confidence = defaultdict(lambda: 0.5)
         
-        # [Phase 3.2] Identity HV
+        # Identity HV
         self.identity_hv = hypervec_rs.HyperVector(hash("SELF_NSCK_V1") % (2**32))
         
-        # [Phase 3.2] Capability Map: action -> success_score
+        # Capability Map: action -> success_score
         self.capabilities: Dict[str, float] = defaultdict(lambda: 0.0)
 
-        # [Phase 3.3] Context-specific performance tracking
+        # Context-specific performance tracking
         # (task_tag, context_key) -> {attempts, successes}
         self.context_stats: Dict[Tuple[str, str], Dict[str, int]] = defaultdict(
             lambda: {"attempts": 0, "successes": 0}
         )
 
-        # [Phase 3.3] Recent performance window for trend detection
+        # Recent performance window for trend detection
         self.recent_window: Dict[str, List[bool]] = defaultdict(list)
         self.RECENT_WINDOW_SIZE = 20
         

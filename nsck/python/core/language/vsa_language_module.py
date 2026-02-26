@@ -14,7 +14,7 @@ using only algebra and high-dimensional vectors.
 from typing import Dict, Any, List, Tuple, Optional
 import sys
 import os
-import nltk # [Phase 3] NLTK for robust POS tagging
+import nltk
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
 
 import python.core.vsa.hypervec_shim as hv
@@ -35,8 +35,7 @@ class VSALanguageModule:
         self.agent_mem = self.memory
         self.action_mem = self.memory
         
-        # [Phase 3] Dynamic Vocabulary via NLTK
-        # Ensure NLTK resources are available
+        # Dynamic Vocabulary via NLTK — ensure resources are available
         try:
             nltk.data.find('taggers/averaged_perceptron_tagger_eng')
         except LookupError:
@@ -52,7 +51,7 @@ class VSALanguageModule:
              if role not in self.memory.concept_hvs:
                   self.memory.add_concept(role, {}, hv_override=self.parser.get_vector(role))
         
-        # [Phase 3] Parser vectors synced on fly
+        # Parser vectors synced on fly
         pass
             
         # Initialize Resonator
@@ -103,7 +102,7 @@ class VSALanguageModule:
         """
         # 1. Tokenize (Simple split for demo)
         # Expects: "The dog run" (Mapped to tags)
-        # [Phase 3] NLTK Tokenization & Tagging
+        # NLTK Tokenization & Tagging
         text = text.lower() # VSA is case-insensitive for now
         nltk_tokens = nltk.word_tokenize(text)
         nltk_tags = nltk.pos_tag(nltk_tokens)

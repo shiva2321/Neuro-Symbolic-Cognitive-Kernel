@@ -43,6 +43,9 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 | Continual Learning (EWC + task isolation) | ✅ Operational | `continual_learning.py` |
 | Meta-Learning (MAML-style fast adaptation) | ✅ Operational | `meta_learning.py` |
 | Multimodal Processor (text/image/audio/video) | ✅ Operational | `multimodal_processor.py` |
+| Image Perception Adapter (classical CV + FPE) | ✅ Operational | `adapters/image_adapter.py` — V12 |
+| Audio Perception Adapter (MFCC + FPE) | ✅ Operational | `adapters/audio_adapter.py` — V12 |
+| NSCKSubstrate developer API | ✅ Operational | `substrate.py` — V11 |
 | Emotion System | ✅ Operational | `emotion_system.py` |
 | Self-Model + Theory of Mind | ✅ Operational | `self_model.py`, `theory_of_mind.py` |
 | Metacognition + Safety Gate | ✅ Operational | `metacognition.py` |
@@ -51,7 +54,7 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 | Persistence (SQLite + BrainStore) | ✅ Operational | `persistence.py` |
 | Explanation Generator (11-stage traces) | ✅ Operational | `explanation.py` |
 | Rust Concurrent Layer (21-206× speedup) | ✅ Operational | `rust_vsa/`, `rust_snn/` |
-| Test Coverage (1,111 tests, 99.6% pass) | ✅ Operational | `nsck/tests/` |
+| Test Coverage (1,199 tests, ≥99% pass) | ✅ Operational | `nsck/tests/` |
 
 ### ⚠️ Current Gaps (What We Need to Add/Improve)
 
@@ -81,7 +84,7 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 
 ### ✅ V8 Completed (February 2026)
 
-**Test suite: 1,111 passed, 5 skipped, 4 xfailed.** Rust extensions (`hypervec_rs.so` + `snn_rs.so`) built and active.
+**Test suite: 1,199 passed, 150 skipped, 3 xfailed.** Rust extensions (`hypervec_rs.so` + `snn_rs.so`) built and active.
 
 | Feature | Files Changed | Impact |
 |---------|--------------|--------|
@@ -94,7 +97,7 @@ cross-domain knowledge transfer (AAAI 2024), resonator networks (Nature 2024), s
 | NSCK-Eval benchmark suite | `benchmarks/` (6 new files) | bAbI, math, transfer, NLG, dialogue; `BenchmarkRunner.run_all()` |
 | `ActiveInferenceLearner` | `active_inference.py`, `cognitive_engine.py`, `metacognition.py` | `F=pred_error−epi_value` wired into decide(); `SafetyGate.check_free_energy()` |
 | V8 config flags (9 new) | `config.py` | `enable_active_inference`, `enable_concurrent_multimodal`, etc. |
-| Rust extensions built | `nsck/*.so` | `hypervec_rs.so` + `snn_rs.so` via maturin; 1,111 tests pass with Rust active |
+| Rust extensions built | `nsck/*.so` | `hypervec_rs.so` + `snn_rs.so` via maturin; 1,199 tests pass |
 | 140 new tests | `tests/unit/**` | 20+20+20+15+15+15+15+10 = 140 new tests |
 | V8_CHANGELOG.md | `docs/V8_CHANGELOG.md` | Complete feature log |
 

@@ -2142,3 +2142,117 @@ NSCKApiServer(config=None)
 | `handle_status` | `() → dict` | `{status, tasks, decisions, config}` | System health |
 | `create_app` | `() → FastAPI or None` | FastAPI app or None | Build FastAPI app if available |
 | `run` | `(host="127.0.0.1", port=8000)` | — | Start HTTP server (FastAPI+uvicorn or stdlib fallback) |
+
+---
+
+## 17. V12 — ImageAdapter, AudioAdapter, NSCKSubstrate
+
+---
+
+### `adapters/image_adapter.py` — `ImageAdapter`
+
+```python
+ImageAdapter()
+```
+
+Encodes 2D (H×W) or 3D (H×W×C) numpy image arrays into `PerceptPacket` using a 65-dimensional feature vector (spatial-grid statistics, colour histograms, Sobel edge density) encoded via FPE.
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `encode` | `(image: np.ndarray, task_tag: str) → PerceptPacket` | `PerceptPacket(modality="image")` | Extract features → FPE HV + predicates |
+
+**Predicates emitted:** `IMAGE_BRIGHT`, `IMAGE_DARK`, `IMAGE_UNIFORM`, `IMAGE_HIGH_CONTRAST`, `IMAGE_DETAILED`, `IMAGE_SMOOTH`, `IMAGE_COLOR`, `IMAGE_GRAYSCALE`, `IMAGE_DEGENERATE`.
+
+**Module-level helpers:**
+
+| Symbol | Description |
+|---|---|
+| `_extract_image_features(img)` | Returns `np.ndarray` of 65 features |
+| `_features_to_hv(feature_vec)` | FPE: quantise each dim → bind with role HV → bundle |
+| `_get_descriptors(img, feature_vec)` | Returns `List[str]` of human-readable descriptors |
+| `_CODEBOOK` | Module-level list of 256 HVs (seeds `i*31+7777`) |
+
+---
+
+### `adapters/audio_adapter.py` — `AudioAdapter`
+
+```python
+AudioAdapter()
+```
+
+Encodes 1-D float audio waveforms into `PerceptPacket` using a 23-dimensional feature vector (13 MFCC + 4 energy bands + ZCR + spectral centroid/rolloff + RMS/peak/log-length) encoded via FPE.
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `encode` | `(audio: np.ndarray, task_tag: str) → PerceptPacket` | `PerceptPacket(modality="audio")` | Extract DSP features → FPE HV + predicates |
+
+**Class attribute:** `SAMPLE_RATE = 16000` (assumed default sample rate).
+
+**Predicates emitted:** `AUDIO_LOUD`, `AUDIO_QUIET`, `AUDIO_NOISY`, `AUDIO_TONAL`, `AUDIO_HIGH_FREQ`, `AUDIO_LOW_FREQ`, `AUDIO_NARROW_BAND`, `AUDIO_WIDE_BAND`, `AUDIO_SIGNAL`, `AUDIO_SILENT`, `AUDIO_UNKNOWN`.
+
+**Module-level helpers:**
+
+| Symbol | Description |
+|---|---|
+| `_extract_audio_features(audio, sample_rate)` | Returns `np.ndarray` of 23 features |
+| `_features_to_hv(feature_vec)` | FPE: quantise each dim → bind with role HV → bundle |
+| `_get_audio_descriptors(feature_vec)` | Returns `List[str]` of descriptors |
+| `_AUDIO_CODEBOOK` | Module-level list of 256 HVs (seeds `i*37+8888`) |
+
+---
+
+### `substrate.py` — `NSCKSubstrate`, `SubstrateResult`
+
+```python
+NSCKSubstrate(config: NSCKConfig = None)
+SubstrateResult  # frozen dataclass
+```
+
+`NSCKSubstrate` is the recommended high-level API for all third-party code. It wraps `CognitiveEngine` with automatic input-type routing, a plugin encoder registry, and cross-modal learning.
+
+**SubstrateResult fields:**
+
+| Field | Type | Description |
+|---|---|---|
+| `chosen_action` | `str` | Selected action from GWT competition |
+| `confidence` | `float` | Decision confidence (0.0–1.0) |
+| `explanation` | `str` | Human-readable reasoning trace |
+| `predicates` | `Set[str]` | Active symbolic predicates |
+| `trace` | `Dict[str, Any]` | Full glass-box trace |
+| `modalities_processed` | `List[str]` | Which modalities were active |
+| `generalization_triggered` | `bool` | Whether generalisation ran this cycle |
+
+**NSCKSubstrate methods:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `register_task` | `(task_tag: str)` | — | Register a new task/domain |
+| `process` | `(input_data, task_tag, available_actions?) → SubstrateResult` | `SubstrateResult` | Process any input: `str` → text, 2D+ndarray → `ImageAdapter`, 1D list/array → `NumericSequenceAdapter`, `dict` → `DictStateAdapter`, `PerceptPacket` → direct |
+| `process_multimodal` | `(inputs: Dict[str, Any], task_tag) → SubstrateResult` | `SubstrateResult` | Fuse multiple modalities simultaneously; keys `"image"` and `"audio"` routed to respective adapters |
+| `learn` | `(state, action, reward, task_tag, outcome)` | — | Record a (state, action, reward) experience |
+| `sleep` | `(task_tag?)` | `dict` | Offline consolidation + generalisation |
+| `remember` | `(query, task_tag?, top_k) → List[dict]` | `List[dict]` | Recall similar past episodes |
+| `register_encoder` | `(modality_name: str, encoder_fn)` | — | Register custom encoder `fn(data, task_tag) → PerceptPacket` |
+| `get_knowledge` | `(concept: str) → dict` | `{concept, known, similar}` | Query semantic memory |
+| `get_stats` | `() → dict` | stats dict | System statistics |
+
+**Input routing in `process()`:**
+
+| Input type | Routed to |
+|---|---|
+| `str` | `DictStateAdapter` (via `{"text": ...}`) |
+| `np.ndarray` with `ndim >= 2` | `ImageAdapter` |
+| `np.ndarray` with `ndim == 1` | `NumericSequenceAdapter` |
+| `list/tuple` of numbers | `NumericSequenceAdapter` |
+| `dict` | `DictStateAdapter` |
+| `PerceptPacket` | Direct pass-through |
+
+**Modality routing in `_encode_single()` / `process_multimodal()`:**
+
+| Modality key | Adapter |
+|---|---|
+| `"image"` | `ImageAdapter` |
+| `"audio"` | `AudioAdapter` |
+| `str` data | Text path |
+| `list` / `ndarray` data | `NumericSequenceAdapter` |
+| `dict` data | `DictStateAdapter` |

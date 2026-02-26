@@ -111,8 +111,10 @@ class NSCKSubstrate:
             modalities = ["text"]
         elif isinstance(input_data, np.ndarray):
             if input_data.ndim >= 2:
-                # Image input
-                state = {"image_shape": list(input_data.shape), "image_mean": float(input_data.mean())}
+                # Image input — use ImageAdapter for FPE-based similarity-preserving encoding
+                from python.core.adapters.image_adapter import ImageAdapter
+                pkt = ImageAdapter().encode(input_data, task_tag)
+                state = pkt
                 modalities = ["image"]
             else:
                 # 1D array — numeric sequence
@@ -260,6 +262,14 @@ class NSCKSubstrate:
                     active_predicates=frozenset(preds),
                     raw_state=state,
                 )
+            elif modality == "image" or (
+                isinstance(data, np.ndarray) and data.ndim >= 2
+            ):
+                from python.core.adapters.image_adapter import ImageAdapter
+                return ImageAdapter().encode(data, task_tag)
+            elif modality == "audio":
+                from python.core.adapters.audio_adapter import AudioAdapter
+                return AudioAdapter().encode(data, task_tag)
             elif isinstance(data, (list, np.ndarray)):
                 try:
                     vals = [float(v) for v in data]

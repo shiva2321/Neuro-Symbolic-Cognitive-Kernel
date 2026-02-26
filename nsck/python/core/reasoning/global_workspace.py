@@ -35,7 +35,7 @@ class Coalition:
     base_salience: float      # Intrinsic loudness (0.0 - 1.0)
     relevance: float = 0.0    # Match with current context/goal
     affect_match: float = 0.0 # Match with current Drives (e.g. "Food" matches "Hunger")
-    sender_confidence: float = 0.5 # [Phase 3.3] Metadata from module
+    sender_confidence: float = 0.5
     
     @property
     def activation(self) -> float:

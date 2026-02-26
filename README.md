@@ -41,7 +41,7 @@ This repository contains two things:
 | **Conceptual blending** | `AnalogyEngine.blend()` merges two domains via shared generic space (V3) |
 | **Episodic memory** | Two-tier store: in-memory hot tier + SQLite warm tier, LSH k-NN retrieval |
 | **Semantic memory** | NetworkX directed graph + HV index + spreading activation |
-| **Perception** | Leaky Integrate-and-Fire spiking neurons (LIF) with STDP; Rate/Temporal VSA bridge |
+| **Perception** | Leaky Integrate-and-Fire spiking neurons (LIF) with STDP; Rate/Temporal VSA bridge; `ImageAdapter` (HOG + colour histogram + Sobel FPE); `AudioAdapter` (MFCC + spectral FPE) |
 | **Language understanding** | SRL + Construction Grammar (V3) + Frame Semantics (V3) + Coreference (V3) |
 | **Knowledge extraction** | TextKnowledgeLearner parses text → SVO triples + frame-filled relations → SemanticMemory |
 | **Belief revision** | Free-energy belief scoring detects and resolves contradictions (V3) |
@@ -71,6 +71,8 @@ Input (text / state dict / image)
 ├───────────────────────────────────────────────────────────────┤
 │  2. Perception       LIF spiking neurons + STDP               │
 │                      VSA-SNN Bridge (Rate/Temporal coding)    │
+│                      ImageAdapter (HOG/color/Sobel FPE)       │
+│                      AudioAdapter (MFCC/spectral FPE)         │
 │                      Multimodal processor (HOG/color/LBP)     │
 ├───────────────────────────────────────────────────────────────┤
 │  3. Memory           EpisodicMemory  hot-deque + SQLite + LSH │
@@ -111,14 +113,13 @@ Input (text / state dict / image)
 | Metric | Value |
 |---|---|
 | HyperVector dimension | 10,240 bits |
-| Python source files (nsck core) | ~53 files, ~26,000 LOC |
+| Python source files (nsck core) | ~55 files, ~28,000 LOC |
 | Rust source files | 9 (rust_vsa + rust_snn) |
 | Rust speedup over Python VSA | 21× (element-wise) – 206× (parallel k-NN over 1,000 vectors) |
-| Test files / tests | ~50 files · 531 passing (Python-only) / **671 passing** (with Rust .so) |
-| V3 feature flags | 14 (all off by default — zero regressions) |
-| New V3 modules | 6 (construction_grammar, frame_semantics, coreference, distributional_semantics, belief_revision, homeostasis) |
+| Test files / tests | ~90 files · 1,199 passing (Python-only) |
+| Feature flags (NSCKConfig) | 34 (all off by default — zero regressions) |
 | SNN layers | LIF + STDP + Hebbian + Rate/Temporal VSA bridge |
-| Decision latency (Python) | ~0.001 ms (cached rules) |
+| Decision latency (Python) | ~2.4 ms p50 (full GWT loop) |
 | Memory query @ 1K concepts | ~19 ms Python / ~0.1 ms Rust |
 
 ---
@@ -126,8 +127,8 @@ Input (text / state dict / image)
 ## Quick Start
 
 ```bash
-git clone https://github.com/shiva2321/Node_network.git
-cd Node_network
+git clone https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel.git
+cd Neuro-Symbolic-Cognitive-Kernel
 pip install -r requirements.txt
 
 # Optional: build Rust accelerator for 21-206× speedup
@@ -239,6 +240,7 @@ print(response['trace'])      # full 11-stage ThoughtTrace dict
 | Roadmap — what's done, what's next, research gaps | [`nsck/docs/NSCK_ROADMAP_AND_PLAN.md`](nsck/docs/NSCK_ROADMAP_AND_PLAN.md) |
 | Analysis and real-world use cases | [`nsck/docs/ANALYSIS_AND_USECASES.md`](nsck/docs/ANALYSIS_AND_USECASES.md) |
 | **V9 substrate philosophy, PerceptPacket, adapters** | [`nsck/docs/NSCK_V9_SUBSTRATE.md`](nsck/docs/NSCK_V9_SUBSTRATE.md) |
+| **V10 intelligence extensions** | [`nsck/docs/NSCK_V10_EXTENSIONS.md`](nsck/docs/NSCK_V10_EXTENSIONS.md) |
 | NSCK package quick start + module list | [`nsck/README.md`](nsck/README.md) |
 | AI model API reference + dashboard | [`nsck_ai_model/README.md`](nsck_ai_model/README.md) |
 
