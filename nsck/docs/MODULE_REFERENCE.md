@@ -1888,3 +1888,75 @@ BenchmarkRunner()
 | `run_all` | `() → Dict[str, float]` | `{"babi_tasks": %, "math_word_problems": %, …}` | Run all 5 benchmarks and print tabular summary |
 
 **Benchmark modules:** `babi_tasks` (20 tasks), `math_word_problems` (50 problems), `cross_domain_transfer` (5 tasks), `nlg_quality` (10 prompts), `dialogue_coherence` (multi-turn). Each exposes a `run_*_benchmark(engine=None) → float` function returning 0–100%.
+
+---
+
+## V9 — Substrate Modules
+
+### `python/core/types/percept_packet.py` — `PerceptPacket`
+
+Frozen dataclass. Universal input contract for all modality adapters.
+
+| Field | Type | Description |
+|---|---|---|
+| `modality` | str | "text", "numeric", "dict", "snn", "multimodal", "stream" |
+| `situation_hv` | HyperVector | Bundled situation representation |
+| `active_predicates` | frozenset\[str\] | Grounded symbolic predicates |
+| `entity_hvs` | dict | Named concept → HV |
+| `relation_hvs` | list | (subj, pred, obj, triple_hv) |
+| `confidence` | float | Encoding confidence |
+| `raw_state` | dict\|None | Original raw input |
+| `adapter_name` | str | Name of producing adapter |
+| `adapter_trace` | dict | Glass-box metadata |
+
+| Method | Signature | Description |
+|---|---|---|
+| `make` | `(modality, situation_hv, active_predicates, **kw) → PerceptPacket` | Convenience factory with defaults |
+
+### `python/core/types/modality_adapter.py` — `ModalityAdapter`
+
+Abstract base class. One abstract method: `encode(raw_input, task_tag) → PerceptPacket`.
+
+### `python/core/adapters/dict_state_adapter.py` — `DictStateAdapter`
+
+Wraps `GroundingVerifier + EpisodicMemory.create_situation_hv()`. Default adapter registered automatically by `register_task()`.
+
+### `python/core/adapters/text_adapter.py` — `TextAdapter`
+
+Delegates to `UniversalInput.ground_text()`.
+
+### `python/core/adapters/numeric_adapter.py` — `NumericAdapter`
+
+Delegates to `UniversalInput.ground_scalar()` or `ground_sequence()` depending on input type.
+
+### `python/core/adapters/snn_adapter.py` — `SNNAdapter`
+
+Wraps `SNNPerceptionModule.perceive()` with the same lazy-STDP scheduling as `perceive_and_decide()`.
+
+### `python/core/adapters/multimodal_fuser.py` — `MultimodalFuser`
+
+| Method | Signature | Description |
+|---|---|---|
+| `fuse` | `(packets: List[PerceptPacket]) → PerceptPacket` | VSA bundle of situation HVs, predicate union, averaged confidence |
+
+### `python/core/adapters/stream_processor.py` — `StreamProcessor`, `StreamVerifier`
+
+**StreamProcessor:**
+
+| Method | Signature | Description |
+|---|---|---|
+| `ingest` | `(channel, value, timestamp?)` | Add data point to channel |
+| `ready` | `() → bool` | True when any channel has ≥ window_size points |
+| `emit` | `(adapter, task_tag) → PerceptPacket` | Compute temporal features and emit packet |
+| `_extract_features` | `() → dict` | mean, min, max, trend, rate, anomaly per channel |
+
+**StreamVerifier** extends `GroundingVerifier` — auto-generates `RISING_X`, `FALLING_X`, `ANOMALY_X` predicates from feature dicts.
+
+### `eval/substrate_benchmarks.py`
+
+| Function | Returns | Description |
+|---|---|---|
+| `benchmark_learning_curve(engine, task, gen, n)` | `[(ep, rate)]` | Per-episode success rate (rolling 10-episode avg) |
+| `benchmark_transfer(engine, src, tgt, gen, ...)` | `{zero_shot_rate, few_shot_rate, delta}` | Zero-shot and few-shot transfer rates |
+| `benchmark_lifelong(engine, tasks, gens, ...)` | `{peak_rates, final_rates, forgetting_ratio}` | Peak success + catastrophic forgetting measurement |
+| `benchmark_efficiency(engine, task, gen, n)` | `{avg_ms, p95_ms, max_ms}` | Decision latency statistics |

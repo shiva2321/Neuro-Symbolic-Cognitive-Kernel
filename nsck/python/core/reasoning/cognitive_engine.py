@@ -345,7 +345,7 @@ class CognitiveEngine:
         logger.info("Registered task '%s'", task_tag)
 
         # V9: Auto-transfer — try to transfer rules from existing tasks to this new one
-        if getattr(self.config, "enable_auto_transfer", True):
+        if self.config.enable_auto_transfer:
             self._auto_transfer_to_task(task_tag)
 
     # ------------------------------------------------------------------

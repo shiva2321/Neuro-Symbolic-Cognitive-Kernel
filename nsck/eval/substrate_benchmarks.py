@@ -49,9 +49,11 @@ def benchmark_learning_curve(
         episodes (or all episodes so far if < 10).
     """
     if reward_fn is None:
-        reward_fn = lambda action, state: 1.0  # noqa: E731
+        def reward_fn(action, state):  # noqa: E306
+            return 1.0
     if action_oracle is None:
-        action_oracle = lambda state: None  # noqa: E731
+        def action_oracle(state):  # noqa: E306
+            return None
 
     results: List[Tuple[int, float]] = []
     recent_outcomes: List[float] = []
@@ -111,7 +113,8 @@ def benchmark_transfer(
            "delta": float}``
     """
     if action_oracle is None:
-        action_oracle = lambda state: None  # noqa: E731
+        def action_oracle(state):  # noqa: E306
+            return None
 
     def _eval_rate(n: int) -> float:
         successes = 0

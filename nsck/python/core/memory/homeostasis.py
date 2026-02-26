@@ -163,9 +163,8 @@ class MemoryHomeostasis:
         int
             Number of rules pruned.
         """
-        import time as _time
+        cutoff_time = time.time() - max_idle_episodes * 0.1  # rough idle cutoff
         pruned_total = 0
-        cutoff_time = _time.time() - max_idle_episodes * 0.1  # rough idle cutoff
 
         for task_tag in list(rule_learner.learned_rules.keys()):
             rules = rule_learner.learned_rules[task_tag]

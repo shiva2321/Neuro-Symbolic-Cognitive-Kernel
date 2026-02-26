@@ -154,6 +154,58 @@ print(result.chosen_action)   # e.g. "wait"
 print(result.explanation)     # human-readable reasoning trace
 ```
 
+### V9: PerceptPacket — modality-agnostic input (new in V9)
+
+```python
+import sys; sys.path.insert(0, 'nsck')
+from python.core.reasoning.cognitive_engine import CognitiveEngine
+from python.core.types.percept_packet import PerceptPacket
+from python.core.adapters.text_adapter import TextAdapter
+from python.core.adapters.numeric_adapter import NumericAdapter
+from python.core.adapters.stream_processor import StreamProcessor
+from python.core.language.universal_input import UniversalInput
+
+engine = CognitiveEngine()
+engine.register_task("sensor_task")
+ui = UniversalInput()
+
+# --- Text input ---
+text_adapter = TextAdapter(ui)
+packet = text_adapter.encode("obstacle detected ahead", "sensor_task")
+cs = engine.decide(packet, "sensor_task")
+
+# --- Numeric input ---
+num_adapter = NumericAdapter(ui, min_val=0.0, max_val=100.0)
+cs = engine.decide(num_adapter.encode(42.5, "sensor_task"), "sensor_task")
+
+# --- Multimodal input ---
+cs = engine.decide_multimodal(
+    [{"obstacle": True}, "high alert", 0.95],
+    "sensor_task"
+)
+
+# --- Stream input ---
+sp = StreamProcessor(window_size=10)
+for t, v in enumerate(my_sensor_readings):
+    sp.ingest("pressure", v, float(t))
+    if sp.ready():
+        cs = engine.decide(sp.emit(None, "sensor_task"), "sensor_task")
+```
+
+### V9: Evaluation harness
+
+```python
+from eval.substrate_benchmarks import (
+    benchmark_learning_curve, benchmark_efficiency
+)
+
+curve = benchmark_learning_curve(engine, "nav", lambda: {"x": 1}, n_episodes=100)
+# → [(10, 0.6), (20, 0.7), ..., (100, 0.9)]
+
+timing = benchmark_efficiency(engine, "nav", lambda: {"x": 1}, n=200)
+# → {"avg_ms": 0.15, "p95_ms": 0.22, "max_ms": 0.48}
+```
+
 ### Use the conversational AI layer
 
 ```bash
@@ -186,6 +238,7 @@ print(response['trace'])      # full 11-stage ThoughtTrace dict
 | Data-flow walkthroughs (decision loop, learning loop) | [`nsck/docs/WORKFLOWS.md`](nsck/docs/WORKFLOWS.md) |
 | Roadmap — what's done, what's next, research gaps | [`nsck/docs/NSCK_ROADMAP_AND_PLAN.md`](nsck/docs/NSCK_ROADMAP_AND_PLAN.md) |
 | Analysis and real-world use cases | [`nsck/docs/ANALYSIS_AND_USECASES.md`](nsck/docs/ANALYSIS_AND_USECASES.md) |
+| **V9 substrate philosophy, PerceptPacket, adapters** | [`nsck/docs/NSCK_V9_SUBSTRATE.md`](nsck/docs/NSCK_V9_SUBSTRATE.md) |
 | NSCK package quick start + module list | [`nsck/README.md`](nsck/README.md) |
 | AI model API reference + dashboard | [`nsck_ai_model/README.md`](nsck_ai_model/README.md) |
 

@@ -838,3 +838,51 @@ graph TB
 | `tests/unit/integration/test_multi_agent.py` | 15 tests |
 | `tests/unit/learning/test_active_inference_integration.py` | 15 tests |
 | `tests/integration/test_benchmarks.py` | 10 tests |
+
+---
+
+## 14. V9 — Modality-Agnostic Cognitive Substrate
+
+### 14.1 PerceptPacket Contract
+
+V9 introduces a **universal percept contract** that decouples perception from cognition.
+Every modality adapter converts raw input into a `PerceptPacket` before the reasoning core sees it.
+
+```
+Any Modality Input (dict/text/number/ndarray/stream/multimodal)
+         ↓
+   ModalityAdapter.encode(raw_input, task_tag)
+         ↓
+   PerceptPacket  ← frozen dataclass — universal currency
+         ↓
+   CognitiveEngine.decide(percept_or_dict, task_tag)
+```
+
+`decide()` accepts both `Dict[str, Any]` (backward-compatible) and `PerceptPacket`.
+Dicts are auto-wrapped via the task's registered `DictStateAdapter`.
+
+### 14.2 Adapter Layer
+
+| Adapter | Input | Key Delegation |
+|---|---|---|
+| `DictStateAdapter` | `dict` | `GroundingVerifier + EpisodicMemory.create_situation_hv()` |
+| `TextAdapter` | `str` | `UniversalInput.ground_text()` |
+| `NumericAdapter` | `float` or `list` | `UniversalInput.ground_scalar/sequence()` |
+| `SNNAdapter` | `np.ndarray` | `SNNPerceptionModule.perceive()` |
+| `MultimodalFuser` | `List[PerceptPacket]` | VSA bundle + predicate union |
+| `StreamProcessor` | timestamped channel readings | temporal feature extraction → StreamVerifier |
+
+### 14.3 Generalization Pipeline (sleep())
+
+After the existing consolidation steps, `sleep()` now automatically runs:
+1. `SemanticMemory.build_prototypes(min_members=2)` — VSA prototype per category
+2. `SemanticMemory.infer_transitive("is_a", 3)` + `infer_transitive("causes", 2)`
+3. `AnalogyEngine.auto_discover_abstractions()` for every task pair
+
+### 14.4 Lifelong Stability Additions
+
+- `Rule.confidence_history` / `last_fired` / `fire_count` fields
+- `_detect_rule_drift()` in `sleep()` — marks rules where recent confidence < 50% of older average
+- `MemoryHomeostasis.prune_unused_rules()` — wired into `sleep()`
+
+See `docs/NSCK_V9_SUBSTRATE.md` for the full V9 specification.

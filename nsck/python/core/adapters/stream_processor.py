@@ -104,7 +104,8 @@ class StreamProcessor:
             situation_hv = base_packet.situation_hv
         else:
             # Fallback: hash the feature dict into a stable HV seed
-            import hashlib, json
+            import hashlib
+            import json
             seed_bytes = hashlib.sha256(
                 json.dumps(sorted(features.items()), default=str).encode()
             ).digest()

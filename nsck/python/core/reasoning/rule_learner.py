@@ -209,10 +209,9 @@ class RuleLearner(WorkspaceModule):
 
         # V9: Periodically append confidence snapshot to existing learned rules
         if cand.support % 10 == 0:
-            for rule in self.learned_rules.get(task_tag, []):
-                if rule.condition == pred_set and rule.consequence == action:
-                    rule.confidence_history.append(rule.confidence)
-                    break
+            existing_rule = self._find_existing_rule(pred_set, action, task_tag)
+            if existing_rule is not None:
+                existing_rule.confidence_history.append(existing_rule.confidence)
         
         # 5. Approximate matching: also credit overlapping patterns
         if self.use_approximate_matching:

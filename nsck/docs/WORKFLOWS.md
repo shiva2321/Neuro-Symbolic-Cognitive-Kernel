@@ -451,3 +451,59 @@ stateDiagram-v2
 | **Learn** | Episodes stored, rules induced, causal graph updated | `learn()` |
 | **Sleep** | Offline consolidation, pruning, operator learning | `sleep()` |
 | **Save** | Brain state persisted to SQLite | `BrainStore.checkpoint()` |
+
+---
+
+## 8. V9 Substrate — PerceptPacket Flow
+
+### 8.1 decide() with PerceptPacket
+
+```mermaid
+graph TD
+    Input["Any raw input\n(dict / text / number / ndarray / stream)"]
+    Adapter["ModalityAdapter.encode()\n(DictState / Text / Numeric / SNN / Stream)"]
+    Packet["PerceptPacket\n(situation_hv, active_predicates, confidence, ...)"]
+    Decide["CognitiveEngine.decide(percept, task_tag)"]
+    GWT["Global Workspace Theory competition"]
+    CS["CognitiveState (action, explanation, trace)"]
+
+    Input --> Adapter --> Packet --> Decide --> GWT --> CS
+```
+
+Passing a plain `dict` to `decide()` is fully backward-compatible — it is auto-wrapped via the registered `DictStateAdapter`.
+
+### 8.2 sleep() — Generalization Pipeline (V9)
+
+```mermaid
+graph TD
+    Sleep["sleep()"]
+    R1["1. Replay + Rule Induction"]
+    R2["2. Causal Discovery"]
+    R3["3. Semantic Extraction _consolidate_semantic()"]
+    R4["4. Planner Operator Refresh"]
+    R4a["4a. Prototype Building\nbuild_prototypes(min_members=2)"]
+    R4b["4b. Transitive Inference\ninfer_transitive(is_a, 3) + (causes, 2)"]
+    R4c["4c. Cross-task Auto-Abstraction\nauto_discover_abstractions()"]
+    R5["5. Drift Detection _detect_rule_drift()"]
+    R6["6. Homeostasis + Rule Pruning"]
+
+    Sleep --> R1 --> R2 --> R3 --> R4
+    R4 --> R4a --> R4b --> R4c
+    R4c --> R5 --> R6
+```
+
+### 8.3 Stream Processing Workflow
+
+```mermaid
+graph LR
+    Sensor["Sensor stream\n(channel, value, timestamp)"]
+    SP["StreamProcessor\n.ingest()"]
+    Ready{"ready()?"}
+    Features["_extract_features()\nmean, trend, rate, anomaly"]
+    SV["StreamVerifier\nRISING_X / FALLING_X / ANOMALY_X"]
+    Packet["PerceptPacket (modality='stream')"]
+    Decide["engine.decide(packet, task)"]
+
+    Sensor --> SP --> Ready -- yes --> Features --> SV --> Packet --> Decide
+    Ready -- no --> SP
+```
