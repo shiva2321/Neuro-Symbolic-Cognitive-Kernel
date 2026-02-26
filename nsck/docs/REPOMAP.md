@@ -16,7 +16,7 @@ graph TB
     end
 
     subgraph NSCK["nsck/"]
-        subgraph PythonCore["python/core/ — 79 files, ~27,000 LOC (V7)"]
+        subgraph PythonCore["python/core/ — ~90 files, ~28,000 LOC (V12)"]
             subgraph VSA["vsa/"]
                 HVPy["hypervec_py.py<br/>361 LOC<br/>━━━━━━━━━━<br/>HyperVectorPy<br/>CleanupMemory<br/>negate() (V6)"]
                 HVShim["hypervec_shim.py<br/>320 LOC<br/>━━━━━━━━━━<br/>Backend selector<br/>Rust ↔ Python"]
@@ -93,6 +93,20 @@ graph TB
                 SNNTrain["snn_training.py<br/>589 LOC<br/>━━━━━━━━━━<br/>SNNTrainer"]
                 SNNBench["snn_benchmarks.py<br/>483 LOC<br/>━━━━━━━━━━<br/>Benchmark suite"]
             end
+
+            subgraph AdaptersDir["adapters/ (V9–V12)"]
+                DictAdapt["dict_state_adapter.py<br/>━━━━━━━━━━<br/>DictStateAdapter"]
+                TextAdapt["text_adapter.py<br/>━━━━━━━━━━<br/>TextAdapter"]
+                NumAdapt["numeric_adapter.py<br/>━━━━━━━━━━<br/>NumericAdapter"]
+                NumSeqAdapt["numeric_sequence_adapter.py (V11)<br/>━━━━━━━━━━<br/>NumericSequenceAdapter<br/>FPE + stat predicates"]
+                SNNAdapt["snn_adapter.py<br/>━━━━━━━━━━<br/>SNNAdapter"]
+                MMFuse["multimodal_fuser.py<br/>━━━━━━━━━━<br/>MultimodalFuser"]
+                StreamProc["stream_processor.py<br/>━━━━━━━━━━<br/>StreamProcessor<br/>StreamVerifier"]
+                ImgAdapt["image_adapter.py (V12)<br/>━━━━━━━━━━<br/>ImageAdapter<br/>65-dim FPE · CV features"]
+                AudAdapt["audio_adapter.py (V12)<br/>━━━━━━━━━━<br/>AudioAdapter<br/>23-dim FPE · MFCC"]
+            end
+
+            Substrate["substrate.py (V11)<br/>━━━━━━━━━━<br/>NSCKSubstrate<br/>SubstrateResult<br/>Developer public API"]
         end
 
         subgraph RustVSA["rust_vsa/ — 7 files, ~2,665 LOC"]
@@ -388,7 +402,7 @@ graph LR
 
 ```mermaid
 graph TD
-    subgraph TestSuite["Test Suite — 78 files, ~13,500 LOC, 951 passing (V7)"]
+    subgraph TestSuite["Test Suite — ~90 files, ~15,000 LOC, 1,199 passing (V12)"]
         subgraph Unit["unit/"]
             TU_vsa["vsa/test_hypervec*.py<br/>test_hypervec_parity.py"]
             TU_cog["cognitive/<br/>8 test files"]
@@ -424,7 +438,7 @@ graph TD
     end
 
     subgraph Modules["Core Modules"]
-        M1["79 Python files<br/>+ hypervec_rs.so<br/>+ snn_rs.so"]
+        M1["~90 Python files<br/>+ hypervec_rs.so<br/>+ snn_rs.so"]
     end
 
     Unit -->|"covers"| M1
@@ -444,7 +458,7 @@ graph TD
 | **200–499 LOC** | 15 | language_module (526), snn_benchmarks (483), brain_fusion (481), vsa_snn_bridge (461), context_engine (440), explanation (433), emotion_system (420), episodic_memory (501), hypervec_py (361), curiosity (336), hypervec_shim (320), global_workspace (312), theory_of_mind (312), pragmatics (~200), fluent_nlg (~350) |
 | **< 200 LOC** | 12+ | planner (296), lingua_cortex (260), self_model (255), snn_integration (240), symbol_grounding (196), staged_recall (134), pos_tagger (~180), spatial_reasoning (~200), hf_corpus_loader (~120), schema_induction (~150), pmi_learner (~100), active_inference (~120) |
 
-**Total: 79 Python source files, ~27,000 LOC** + **Rust: 2 crates (~3,100 LOC)** = **~30,000 LOC**
+**Total: ~90 Python source files, ~28,000 LOC** + **Rust: 2 crates (~3,100 LOC)** = **~31,000 LOC**
 
 **Rust binaries (build artifacts — gitignored):**
 - `nsck/hypervec_rs.so` — 4.3 MB — VSA operations

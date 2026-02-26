@@ -53,7 +53,7 @@ class LiveEpisode:
         # Compress state to sketch (task-specific key fields only)
         sketch = self._extract_sketch(self.state, self.task_tag)
         
-        # [Phase 3.1] Store emotion/ToM in sketch
+        # Store emotion/ToM in sketch
         sketch["emotion"] = self.emotion
         if self.tom_beliefs:
             sketch["tom_beliefs"] = self.tom_beliefs

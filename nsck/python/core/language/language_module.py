@@ -39,7 +39,6 @@ class LanguageModule:
     - LLM (Llama/Phi) for broad natural language.
     - VSA (VSALanguageModule) for neuro-symbolic grounding on CPU.
     """
-    # [Phase 2] Defaulting to VSA mode (Neuro-Symbolic)
     def __init__(self, model_path: str = DEFAULT_MODEL_PATH, semantic_memory: Optional[Any] = None, use_vsa: bool = True):
         self.cortex = get_lingua_cortex()
         self.llm = None

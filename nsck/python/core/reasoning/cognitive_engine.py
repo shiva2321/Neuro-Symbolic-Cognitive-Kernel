@@ -31,7 +31,7 @@ import python.core.vsa.hypervec_shim as hypervec_rs
 from python.core.integration.config import NSCKConfig
 from python.core.integration.explanation import ExplanationGenerator, Explanation
 from python.core.perception.grounding_verifier import GroundingVerifier
-from python.core.perception.snn_perception import SNNPerceptionModule  # [Phase 2]
+from python.core.perception.snn_perception import SNNPerceptionModule
 from python.core.reasoning.rule_learner import RuleLearner
 from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
 from python.core.memory.semantic_memory import SemanticMemory
@@ -171,7 +171,7 @@ class CognitiveEngine:
         self.universal_input = UniversalInput()
         # --- Language ---
         self.universal_input = UniversalInput()
-        self.language = LanguageModule(semantic_memory=self.semantic_memory, use_vsa=True) # [Phase 2] Default VSA
+        self.language = LanguageModule(semantic_memory=self.semantic_memory, use_vsa=True)
         self.dialogue = DialogueManager(self, self.language, config=self.config)
 
         # V11: NgramNLU integration
@@ -194,7 +194,7 @@ class CognitiveEngine:
             except Exception as _exc:
                 logger.warning("CrossModal init failed: %s", _exc)
         
-        # --- Perception (SNN) [Phase 2] ---
+        # --- Perception (SNN) ---
         # Initialize the "Eyes" of the system
         try:
             self.perception = SNNPerceptionModule(
@@ -417,7 +417,7 @@ class CognitiveEngine:
         sensory_input: np.ndarray,
         task_tag: str
     ) -> CognitiveState:
-        """ [Phase 2] Full Neuro-Symbolic Cycle: SNN Perception -> Global Workspace -> Action """
+        """Full Neuro-Symbolic Cycle: SNN Perception -> Global Workspace -> Action."""
         
         # 1. Run SNN Perception
         snn_result = None
@@ -486,7 +486,7 @@ class CognitiveEngine:
         state: Union[Dict[str, Any], PerceptPacket],
         task_tag: str,
         metacognition_result: Optional[Dict] = None,
-        external_coalition: Optional[Any] = None, # [Phase 2] Added generic external input
+        external_coalition: Optional[Any] = None,
         fast_mode: bool = False  # Skip memory+planner coalitions for low-latency GWT path
     ) -> CognitiveState:
         """Run one cognitive cycle and return a decision.
@@ -587,7 +587,7 @@ class CognitiveEngine:
                 sender_confidence=self.self_model.get_confidence(task_tag),
             ))
 
-        # A2. [Phase 2] SNN Perception Coalition
+        # A2. SNN Perception Coalition
         if external_coalition:
             coalitions.append(external_coalition)
 

@@ -4,7 +4,7 @@ NSCK is a **glass-box cognitive architecture** that combines Vector Symbolic Arc
 
 > Everything is inspectable. Every action traces back to specific rules, causal links, and episodic memories — no gradient tensors, no hidden layers.
 
-**Current release: V10** — adds FHRR phasor VSA, dense-embedding bridge, Rust concurrent memory, n-gram NLU, attention-GWT arbitration, neural rule scoring, formal safety verification, and a REST API.  1 248 tests, ≥ 87 % pass rate on all benchmarks.
+**Current release: V12** — adds `ImageAdapter` (spatial-grid + colour histogram + Sobel FPE, 65 dims) and `AudioAdapter` (MFCC + spectral FPE, 23 dims), both wired into `NSCKSubstrate` for inherent image and audio perception.  1,199 tests, ≥ 87 % pass rate on all benchmarks.
 
 ---
 
@@ -165,6 +165,49 @@ sequenceDiagram
 
 ---
 
+## V12 Capabilities — Image & Audio Perception
+
+V12 adds native image and audio perception to the modality-agnostic substrate.
+
+| Capability | Module | Description |
+|---|---|---|
+| **Image perception** | `adapters/image_adapter.py` | `ImageAdapter`: spatial-grid stats + colour histograms + Sobel edge density → 65-dim FPE-encoded HV. Predicates: `IMAGE_BRIGHT`, `IMAGE_DARK`, `IMAGE_COLOR`, `IMAGE_DETAILED`, etc. |
+| **Audio perception** | `adapters/audio_adapter.py` | `AudioAdapter`: MFCC (13) + energy bands (4) + ZCR + spectral features → 23-dim FPE-encoded HV. Predicates: `AUDIO_LOUD`, `AUDIO_TONAL`, `AUDIO_NOISY`, etc. |
+
+Both adapters are wired into `NSCKSubstrate.process()` and `process_multimodal()`.
+
+Quick example — using `NSCKSubstrate`:
+
+```python
+import sys
+sys.path.insert(0, 'nsck')
+import numpy as np
+from python.core.substrate import NSCKSubstrate
+
+substrate = NSCKSubstrate()
+
+# Text
+result = substrate.process("fire detected", "alarm")
+print(result.chosen_action, result.predicates)
+
+# 2-D image (H×W×C numpy array)
+img = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+result = substrate.process(img, "vision")
+print(result.modalities_processed)   # ['image']
+print(result.predicates)             # {'IMAGE_COLOR', 'IMAGE_DETAILED', ...}
+
+# Audio waveform (1-D float array)
+t = np.linspace(0, 1.0, 16000)
+audio = np.sin(2 * np.pi * 440 * t)
+result = substrate.process_multimodal({"audio": audio, "text": "beep"}, "sensor")
+print(result.modalities_processed)   # ['audio', 'text']
+
+# Custom modality
+substrate.register_encoder("thermal", my_thermal_encoder)
+```
+
+---
+
 ## V10 Capabilities
 
 V10 adds the following intelligence extensions on top of the V9 substrate:
@@ -250,10 +293,29 @@ print(result)  # {'action': 'move_right', 'confidence': 0.72, ...}
 | `integration/` | `explanation.py` | `ExplanationGenerator`, `Explanation` | 433 | V1 |
 | `multimodal/` | `multimodal_processor.py` | `MultimodalProcessor`, `ConcurrentMultimodalProcessor` ⚑ | 788 | V1/V6 |
 | `multimodal/` | `image_generator.py` | `ImageGenerator`, `VisualFeatures` | 575 | V1 |
+| `adapters/` | `dict_state_adapter.py` | `DictStateAdapter` | ~80 | V9 |
+| `adapters/` | `text_adapter.py` | `TextAdapter` | ~50 | V9 |
+| `adapters/` | `numeric_adapter.py` | `NumericAdapter` | ~80 | V9 |
+| `adapters/` | `numeric_sequence_adapter.py` | `NumericSequenceAdapter` (FPE + statistical predicates) | ~80 | V11 |
+| `adapters/` | `snn_adapter.py` | `SNNAdapter` | ~100 | V9 |
+| `adapters/` | `multimodal_fuser.py` | `MultimodalFuser` (VSA bundle) | ~100 | V9 |
+| `adapters/` | `stream_processor.py` | `StreamProcessor`, `StreamVerifier` | ~250 | V9 |
+| `adapters/` | `image_adapter.py` ⚑ | `ImageAdapter` (spatial-grid + colour histogram + Sobel FPE, 65 dims) | ~230 | V12 |
+| `adapters/` | `audio_adapter.py` ⚑ | `AudioAdapter` (MFCC + spectral FPE, 23 dims) | ~210 | V12 |
+| (core) | `substrate.py` ⚑ | `NSCKSubstrate`, `SubstrateResult` — clean public API for all modalities | ~384 | V11 |
+| `perception/` | `stream_encoder.py` ⚑ | `TimeSeriesEncoder` (FPE), `StreamBuffer` | ~200 | V11 |
+| `vsa/` | `vsa_embedding_bridge.py` ⚑ | `EmbeddingVSABridge` (dense ↔ binary HV) | ~200 | V10 |
+| `vsa/` | `fhrr.py` ⚑ | `FHRRVector`, `FHRRMemory` (complex phasor VSA) | ~300 | V10 |
+| `vsa/` | `rust_concurrent_shim.py` ⚑ | `SemanticMemoryConcurrent`, `EpisodicMemoryConcurrent`, `CognitiveWorkerPool` | ~200 | V10 |
+| `language/` | `ngram_nlu.py` ⚑ | `NgramNLU` (Naive Bayes intent + entity, 33K sent/s) | ~250 | V10 |
+| `reasoning/` | `attention_gwt_bridge.py` ⚑ | `MultiHeadAttentionGWT`, `GWTAttentionBridge` | ~200 | V10 |
+| `learning/` | `rule_neural_scorer.py` ⚑ | `RuleNeuralScorer`, `RuleFeaturizer` | ~200 | V10 |
+| `cognitive/` | `safety_verifier.py` ⚑ | `SafetyRuleVerifier`, `SafetyGateVerifier`, `SafetyProperty` | ~200 | V10 |
+| `api/` | `nsck_api.py` ⚑ | `NSCKApiServer` (FastAPI / stdlib HTTP REST) | ~250 | V10 |
 
-> **⚑** = New or substantially extended in V3–V7.
+> **⚑** = New or substantially extended in V3–V12.
 
-**Total: 53 source modules, 79 Python files, ~27,000 LOC**
+**Total: ~75 source modules, ~90 Python files, ~28,000 LOC**
 
 ### Rust Accelerator (`rust_vsa/`) — hypervec_rs.so (4.3 MB)
 
@@ -314,11 +376,11 @@ similarity ×500:  28.1×  |  bundle ×50: 75.9×  |  negate ×50: 63.8×
 
 # All tests (Python-only, no Rust .so)
 cd nsck && python -m pytest tests/ -q
-# Result: 807 passed, 150 skipped, 3 xfailed
+# Result: 1,199 passed, 150 skipped, 3 xfailed
 
 # All tests (with Rust .so built and in nsck/)
 cd nsck && python -m pytest tests/ -q
-# Result: 951 passed, 5 skipped, 4 xfailed
+# Result: 1,248+ passed, 5 skipped, 3 xfailed
 
 # Unit tests only
 python -m pytest tests/unit/ -q

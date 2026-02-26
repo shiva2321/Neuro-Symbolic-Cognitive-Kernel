@@ -979,3 +979,95 @@ report = verifier.verify_rule(my_rule)
 ```
 
 Default critical properties: `no_runaway` (fire_count < 10 000) and `no_code_injection` (action not in FORBIDDEN_ACTIONS).
+
+---
+
+## 16. V12 — Image & Audio Perception Adapters + NSCKSubstrate
+
+V12 adds two new modality adapters for native image and audio perception, and formalises the `NSCKSubstrate` as the recommended developer-facing API.
+
+### 16.1 New Modules
+
+| Module | Path | Role |
+|---|---|---|
+| `ImageAdapter` | `adapters/image_adapter.py` | Classical CV features → 65-dim FPE HV; predicates `IMAGE_*` |
+| `AudioAdapter` | `adapters/audio_adapter.py` | DSP features (MFCC + spectral) → 23-dim FPE HV; predicates `AUDIO_*` |
+| `NSCKSubstrate` | `substrate.py` | Clean public API wrapping `CognitiveEngine`; auto-routes all input types |
+| `TimeSeriesEncoder` | `perception/stream_encoder.py` | FPE encoding of numeric sequences (added V11) |
+
+### 16.2 ImageAdapter Feature Pipeline
+
+```
+np.ndarray (2D/3D)
+  │
+  ├─ Spatial 4×4 grid: mean + std per cell  (32 dims)
+  ├─ Colour histograms: 8 bins × 3 channels  (24 dims)
+  ├─ Sobel edge density                        (1 dim)
+  ├─ Global mean, std, channel count           (3 dims)
+  ├─ 2×2 quadrant means                        (4 dims)
+  └─ Aspect ratio                              (1 dim)
+        │ 65-dim feature vector
+        ▼
+  FPE quantisation (256 bins per dim) + role-binding + VSA bundle
+        │
+        ▼
+  situation_hv  +  active_predicates {IMAGE_BRIGHT, IMAGE_DARK, ...}
+```
+
+### 16.3 AudioAdapter Feature Pipeline
+
+```
+np.ndarray (1-D float waveform)
+  │
+  ├─ 13 MFCC coefficients (mel filterbank → log → DCT)
+  ├─ 4 normalised energy bands
+  ├─ Zero-crossing rate
+  ├─ Spectral centroid + rolloff
+  ├─ RMS energy + peak amplitude + log-length
+        │ 23-dim feature vector
+        ▼
+  FPE quantisation (256 bins per dim) + role-binding + VSA bundle
+        │
+        ▼
+  situation_hv  +  active_predicates {AUDIO_LOUD, AUDIO_TONAL, ...}
+```
+
+### 16.4 NSCKSubstrate API
+
+`NSCKSubstrate` is the recommended entry point for third-party developers. It wraps `CognitiveEngine` with:
+- Automatic input-type routing (str → text, 2D ndarray → ImageAdapter, list → NumericSequenceAdapter, …)
+- `register_encoder(modality, fn)` for custom modalities
+- `process()`, `process_multimodal()`, `learn()`, `sleep()`, `remember()`
+- `SubstrateResult` dataclass: `chosen_action`, `confidence`, `explanation`, `predicates`, `trace`, `modalities_processed`, `generalization_triggered`
+
+```python
+from python.core.substrate import NSCKSubstrate
+import numpy as np
+
+substrate = NSCKSubstrate()
+substrate.register_task("demo")
+
+# Text
+result = substrate.process("fire detected", "demo")
+
+# Image
+img = np.zeros((64, 64, 3), dtype=np.uint8)
+result = substrate.process(img, "demo")
+assert "IMAGE_DARK" in result.predicates
+
+# Audio
+audio = np.sin(2 * np.pi * 440 * np.linspace(0, 1, 16000))
+result = substrate.process_multimodal({"audio": audio, "text": "beep"}, "demo")
+
+# Custom modality
+substrate.register_encoder("thermal", lambda data, tag: my_encoder(data, tag))
+```
+
+### 16.5 Honest Limitations
+
+| Limitation | Workaround |
+|---|---|
+| No rotation-invariant image perception | Pair `ImageAdapter` with `EmbeddingVSABridge` + pretrained CNN |
+| No speaker/phoneme recognition | Pair `AudioAdapter` with `EmbeddingVSABridge` + wav2vec2 |
+| No gradient-based learning in VSA core | Use FHRR + JAX/numpy for numerical gradients |
+| NLU is keyword-match + n-gram classification | Pair with LLM adapter for open-domain NLU |
