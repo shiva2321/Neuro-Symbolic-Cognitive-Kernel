@@ -4,7 +4,7 @@ UniversalHVEncoder — adaptive, signal-agnostic hypervector encoding.
 Encodes any TypedSignal (or raw numpy array) into a similarity-preserving
 HyperVector using:
   - Hebbian projector weights (learned from experience)
-  - FPE (Fractional Power Encoding) quantization
+  - FPE (Fractional Power Encoding) quantisation
   - Feature importance tracking
 """
 from __future__ import annotations
