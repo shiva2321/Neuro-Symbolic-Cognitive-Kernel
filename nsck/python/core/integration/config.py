@@ -110,6 +110,10 @@ class NSCKConfig:
     enable_active_inference: bool = False
     active_inference_weight: float = 0.2
 
+    # === V9 Feature Flags — substrate transformation ===
+    # Automatically transfer rules from existing tasks to newly registered tasks
+    enable_auto_transfer: bool = True
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""

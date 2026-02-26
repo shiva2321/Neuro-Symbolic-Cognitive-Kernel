@@ -4,6 +4,8 @@ NSCK is a **glass-box cognitive architecture** that combines Vector Symbolic Arc
 
 > Everything is inspectable. Every action traces back to specific rules, causal links, and episodic memories — no gradient tensors, no hidden layers.
 
+**Current release: V10** — adds FHRR phasor VSA, dense-embedding bridge, Rust concurrent memory, n-gram NLU, attention-GWT arbitration, neural rule scoring, formal safety verification, and a REST API.  1 248 tests, ≥ 87 % pass rate on all benchmarks.
+
 ---
 
 ## Table of Contents
@@ -163,7 +165,32 @@ sequenceDiagram
 
 ---
 
-## Module Overview
+## V10 Capabilities
+
+V10 adds the following intelligence extensions on top of the V9 substrate:
+
+| Capability | Module | Description |
+|---|---|---|
+| **FHRR phasor VSA** | `vsa/fhrr.py` | Complex-valued VSA with exact binding inverse and gradient-compatible similarity |
+| **Dense embedding bridge** | `vsa/vsa_embedding_bridge.py` | Project sentence-transformer (or any dense) embeddings to/from binary HyperVectors |
+| **Rust concurrent memory** | `vsa/rust_concurrent_shim.py` | Rayon-parallel semantic/episodic memory; Python fallback always available |
+| **N-gram NLU** | `language/ngram_nlu.py` | Naive Bayes intent classifier + entity extractor, no external NLP library required |
+| **Attention-GWT bridge** | `reasoning/attention_gwt_bridge.py` | Multi-head attention re-weights coalition saliences before GWT arbitration |
+| **Neural rule scorer** | `learning/rule_neural_scorer.py` | Online perceptron re-ranks applicable rules; updated each learn() cycle |
+| **Safety verifier** | `cognitive/safety_verifier.py` | Declarative safety properties gate decisions; critical violations always block |
+| **REST API** | `api/nsck_api.py` | FastAPI / stdlib HTTP JSON API: `/decide`, `/learn`, `/sleep`, `/status` |
+
+Quick example — using the REST API:
+
+```python
+from api.nsck_api import NSCKApiServer
+
+server = NSCKApiServer()
+result = server.handle_decide({"position_x": 2, "position_y": 3}, "maze")
+print(result)  # {'action': 'move_right', 'confidence': 0.72, ...}
+```
+
+---
 
 | Directory | Module | Key class(es) | LOC | Version |
 |---|---|---|---|---|
@@ -374,3 +401,5 @@ See [`examples/custom_module.py`](examples/custom_module.py) for a complete exam
 | [docs/TESTING.md](docs/TESTING.md) | All test files: what they test, how, and why |
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Decision loop and data-flow walkthroughs |
 | [docs/NSCK_ROADMAP_AND_PLAN.md](docs/NSCK_ROADMAP_AND_PLAN.md) | Full implementation roadmap: gaps, phases, research refs, success criteria |
+| [docs/NSCK_V9_SUBSTRATE.md](docs/NSCK_V9_SUBSTRATE.md) | V9 modality-agnostic substrate full specification |
+| [docs/NSCK_V10_EXTENSIONS.md](docs/NSCK_V10_EXTENSIONS.md) | V10 intelligence extensions: FHRR, embedding bridge, neural scoring, safety |

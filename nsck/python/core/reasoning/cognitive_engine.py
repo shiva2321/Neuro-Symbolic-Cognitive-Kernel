@@ -23,7 +23,7 @@ import numpy as np
 import json
 import os
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Tuple, Set
+from typing import Dict, List, Optional, Any, Tuple, Set, Union
 
 import python.core.vsa.hypervec_shim as hypervec_rs
 
@@ -57,6 +57,12 @@ try:
     _HOMEOSTASIS_AVAILABLE = True
 except Exception:
     _HOMEOSTASIS_AVAILABLE = False
+
+# V9: PerceptPacket + adapter imports
+from python.core.types.percept_packet import PerceptPacket
+from python.core.types.modality_adapter import ModalityAdapter
+from python.core.adapters.dict_state_adapter import DictStateAdapter
+from python.core.adapters.multimodal_fuser import MultimodalFuser
 
 logger = logging.getLogger("nsck.cognitive_engine")
 
@@ -129,6 +135,7 @@ class CognitiveEngine:
         self.causal_graphs: Dict[str, CausalGraph] = {}
         self.causal_reasoners: Dict[str, CausalReasoner] = {}
         self.task_brains: Dict[str, TaskBrain] = {}
+        self.adapters: Dict[str, ModalityAdapter] = {}  # V9: modality adapters per task
 
         # --- Core cognitive modules ---
         self.rule_learner = RuleLearner(
@@ -209,8 +216,16 @@ class CognitiveEngine:
             "safety_vetoes": 0,
             "gwt_broadcasts": 0,
             "sleep_cycles": 0,
+            # V9 substrate stats
+            "prototypes_built": 0,
+            "transitive_inferences": 0,
+            "auto_abstractions": 0,
+            "auto_transfers": 0,
         }
         self.current_state = CognitiveState(task_tag="unknown")
+
+        # V10: Optional neural rule scorer
+        self.rule_scorer = None  # type: Optional[Any]
         self.msg_broadcaster = None
 
         # --- V3: Homeostasis ---
@@ -294,6 +309,7 @@ class CognitiveEngine:
         task_tag: str,
         verifier: Optional[GroundingVerifier] = None,
         causal_graph: Optional[CausalGraph] = None,
+        adapter: Optional[ModalityAdapter] = None,
     ):
         """Register a new task domain with optional verifier and causal graph.
 
@@ -305,6 +321,9 @@ class CognitiveEngine:
             Extracts symbolic predicates from raw state dicts.
         causal_graph : CausalGraph, optional
             Bootstrap causal knowledge for this domain.
+        adapter : ModalityAdapter, optional
+            V9: Modality adapter for this task.  If not provided, a
+            :class:`DictStateAdapter` is auto-created from *verifier*.
         """
         if verifier:
             self.verifiers[task_tag] = verifier
@@ -318,7 +337,19 @@ class CognitiveEngine:
             self.task_brains[task_tag] = TaskBrain(task_tag)
         except Exception:
             pass
+
+        # V9: Register adapter — auto-create DictStateAdapter if none provided
+        if adapter is not None:
+            self.adapters[task_tag] = adapter
+        else:
+            _verifier = verifier or self.verifiers.get(task_tag, GroundingVerifier())
+            self.adapters[task_tag] = DictStateAdapter(_verifier, self.episodic_memory)
+
         logger.info("Registered task '%s'", task_tag)
+
+        # V9: Auto-transfer — try to transfer rules from existing tasks to this new one
+        if self.config.enable_auto_transfer:
+            self._auto_transfer_to_task(task_tag)
 
     # ------------------------------------------------------------------
     # Core cognitive loop
@@ -429,7 +460,7 @@ class CognitiveEngine:
 
     def decide(
         self,
-        state: Dict[str, Any],
+        state: Union[Dict[str, Any], PerceptPacket],
         task_tag: str,
         metacognition_result: Optional[Dict] = None,
         external_coalition: Optional[Any] = None, # [Phase 2] Added generic external input
@@ -439,8 +470,11 @@ class CognitiveEngine:
 
         Parameters
         ----------
-        state : dict
-            Raw state from the environment or data source.
+        state : dict or PerceptPacket
+            Raw state from the environment or data source, or a pre-built
+            :class:`PerceptPacket` from any modality adapter (V9).
+            Passing a dict is fully backward-compatible — it is auto-wrapped
+            via the task's registered :class:`DictStateAdapter`.
         task_tag : str
             Which registered task this state belongs to.
         metacognition_result : dict, optional
@@ -453,14 +487,35 @@ class CognitiveEngine:
         """
         self.stats["decisions"] += 1
 
-        # 1. Symbol grounding
-        verifier = self.verifiers.get(task_tag, GroundingVerifier())
-        active_preds = verifier.get_active_predicates(state, context=task_tag)
+        # V9: Convert raw dict → PerceptPacket (backward-compatible auto-wrap)
+        if isinstance(state, PerceptPacket):
+            percept = state
+            # raw_state_dict used for legacy internal references (explanation, safety, etc.)
+            raw_state_dict: Dict[str, Any] = percept.raw_state or {}
+        else:
+            # Legacy dict path — use registered adapter or create inline
+            raw_state_dict = state if isinstance(state, dict) else {}
+            _adapter = self.adapters.get(task_tag)
+            if _adapter is not None:
+                percept = _adapter.encode(raw_state_dict, task_tag)
+            else:
+                # Fallback: inline grounding (original decide() lines 457-463)
+                verifier = self.verifiers.get(task_tag, GroundingVerifier())
+                _active_preds = verifier.get_active_predicates(raw_state_dict, context=task_tag)
+                _situation_hv = self.episodic_memory.create_situation_hv(
+                    raw_state_dict, task_tag, _active_preds
+                )
+                percept = PerceptPacket.make(
+                    modality="dict",
+                    situation_hv=_situation_hv,
+                    active_predicates=frozenset(_active_preds),
+                    raw_state=raw_state_dict,
+                    adapter_name="inline",
+                )
 
-        # 2. Situation hypervector
-        situation_hv = self.episodic_memory.create_situation_hv(
-            state, task_tag, active_preds
-        )
+        # Extract grounded symbols and situation HV from packet
+        active_preds = list(percept.active_predicates)
+        situation_hv = percept.situation_hv
 
         # 3. Curiosity / exploration check
         confidence = (
@@ -490,7 +545,7 @@ class CognitiveEngine:
             coalitions.append(external_coalition)
 
         # Math routing (V8) — detect math queries and add high-confidence coalition
-        _math_text = state.get("math_query") or (state.get("text", "") if isinstance(state.get("text"), str) else "")
+        _math_text = raw_state_dict.get("math_query") or (raw_state_dict.get("text", "") if isinstance(raw_state_dict.get("text"), str) else "")
         if _math_text and self.universal_input.is_mathematical(_math_text):
             _math_result = self._solve_math(_math_text)
             if _math_result is not None:
@@ -505,7 +560,15 @@ class CognitiveEngine:
         # B. Rule-based proposal
         applicable = self.rule_learner.get_applicable_rules(active_preds, task_tag)
         if applicable:
-            rule, score = applicable[0]
+            # V10: re-rank with neural scorer if available
+            if self.rule_scorer is not None and len(applicable) > 1:
+                rules_only = [r for r, _ in applicable]
+                scored = self.rule_scorer.rank_rules(rules_only)
+                rule = scored[0]
+                # Find original score using identity comparison (Rule is not hashable)
+                score = next((s for r, s in applicable if r is rule), applicable[0][1])
+            else:
+                rule, score = applicable[0]
             coalitions.append(Coalition(
                 source="RULES",
                 content=rule.consequence,
@@ -516,7 +579,7 @@ class CognitiveEngine:
 
         # C. Exploration proposal
         if explore_decision.should_explore:
-            explore_act = self._get_exploration_action(state, task_tag)
+            explore_act = self._get_exploration_action(raw_state_dict, task_tag)
             salience = 0.6 + (0.2 if "stagnant" in explore_decision.reason else 0.0)
             coalitions.append(Coalition(
                 source="EXPLORATION",
@@ -527,7 +590,7 @@ class CognitiveEngine:
             ))
         
         # C2. Q-LEARNING proposal (reward-based policy)
-        state_key = self._get_state_key(state, task_tag)
+        state_key = self._get_state_key(raw_state_dict, task_tag)
         available_actions = self.get_allowed_actions(task_tag)  # Use actual task actions
         q_action = self._get_best_action_from_q(state_key, available_actions)
         if q_action:
@@ -569,7 +632,7 @@ class CognitiveEngine:
                 winner_coalition = s1_winner
                 if winner_coalition:
                     winner_coalition = self._safety_check(
-                        winner_coalition, coalitions, state, task_tag
+                        winner_coalition, coalitions, raw_state_dict, task_tag
                     )
                 # Skip to action determination
                 goto_action_determination = True
@@ -615,7 +678,7 @@ class CognitiveEngine:
             # 5b. [Gap 5] Safety gate veto — check winning action before committing
             if winner_coalition:
                 winner_coalition = self._safety_check(
-                    winner_coalition, coalitions, state, task_tag
+                    winner_coalition, coalitions, raw_state_dict, task_tag
                 )
 
         # 6. Determine final action
@@ -644,14 +707,14 @@ class CognitiveEngine:
             )
             self.self_model.update_confidence(task_tag, confidence)
         else:
-            action = self._default_action(state, task_tag)
+            action = self._default_action(raw_state_dict, task_tag)
             winner_name = "DEFAULT"
             trace["mode"] = "default"
             trace["winner"] = "DEFAULT"
 
         # 7. Generate explanation
         trace["confidence"] = confidence
-        explanation = self.explainer.explain_action(action, state, task_tag, trace)
+        explanation = self.explainer.explain_action(action, raw_state_dict, task_tag, trace)
 
         # 8. Update curiosity
         self.curiosity.record_visit(situation_hv, task_tag)
@@ -684,11 +747,157 @@ class CognitiveEngine:
         )
         
         # Track state-action for Q-learning updates
-        state_key = self._get_state_key(state, task_tag)
+        state_key = self._get_state_key(raw_state_dict, task_tag)
         self.last_state_action = (state_key, action)
         self.state_visits[state_key] = self.state_visits.get(state_key, 0) + 1
         
         return self.current_state
+
+    # ------------------------------------------------------------------
+    # V9: Multimodal convenience method
+    # ------------------------------------------------------------------
+
+    def decide_multimodal(
+        self,
+        inputs: List[Any],
+        task_tag: str,
+        metacognition_result: Optional[Dict] = None,
+        fast_mode: bool = False,
+    ) -> CognitiveState:
+        """Decide from multiple simultaneous modality inputs (V9).
+
+        Each element in *inputs* is encoded via the task's registered adapter,
+        then all resulting :class:`PerceptPacket` objects are fused into a
+        single multimodal packet before the normal GWT decision loop.
+
+        Parameters
+        ----------
+        inputs : list
+            Raw inputs from different modalities (dict, str, ndarray, etc.).
+        task_tag : str
+            Registered task domain identifier.
+        metacognition_result : dict, optional
+            External metacognition input.
+        fast_mode : bool
+            Skip memory/planner coalitions for low-latency path.
+
+        Returns
+        -------
+        CognitiveState
+        """
+        adapter = self.adapters.get(task_tag)
+        packets = []
+        for raw in inputs:
+            if isinstance(raw, PerceptPacket):
+                packets.append(raw)
+            elif adapter is not None:
+                packets.append(adapter.encode(raw, task_tag))
+            else:
+                # Fallback: inline dict encoding
+                if not isinstance(raw, dict):
+                    raw = {"value": raw}
+                verifier = self.verifiers.get(task_tag, GroundingVerifier())
+                preds = verifier.get_active_predicates(raw, context=task_tag)
+                hv = self.episodic_memory.create_situation_hv(raw, task_tag, preds)
+                packets.append(PerceptPacket.make(
+                    modality="dict", situation_hv=hv,
+                    active_predicates=frozenset(preds), raw_state=raw,
+                    adapter_name="inline",
+                ))
+
+        fused = MultimodalFuser().fuse(packets)
+        return self.decide(
+            fused, task_tag,
+            metacognition_result=metacognition_result,
+            fast_mode=fast_mode,
+        )
+
+    # ------------------------------------------------------------------
+    # V9: Auto-transfer helper
+    # ------------------------------------------------------------------
+
+    def _auto_transfer_to_task(self, new_task_tag: str) -> None:
+        """Transfer rules from all known tasks to *new_task_tag* (V9).
+
+        Called automatically at the end of ``register_task()`` when
+        ``config.enable_auto_transfer`` is True.
+        """
+        transferred = 0
+        for source_task, rules in self.rule_learner.learned_rules.items():
+            if source_task == new_task_tag or not rules:
+                continue
+            # Collect concept HVs for both tasks
+            hvs_source = self._collect_concept_hvs_for_task(source_task)
+            hvs_target = self._collect_concept_hvs_for_task(new_task_tag)
+            if not hvs_source or not hvs_target:
+                continue
+            # Auto-discover structural mappings
+            try:
+                mappings = self.analogy.auto_discover_abstractions(
+                    source_task, new_task_tag, hvs_source, hvs_target
+                )
+            except Exception:
+                mappings = []
+            if not mappings:
+                continue
+            # Transfer each learned rule
+            for rule in rules:
+                try:
+                    new_cond, new_action = self.analogy.transfer_rule(
+                        set(rule.condition), rule.consequence,
+                        source_task, new_task_tag,
+                    )
+                    if new_cond:
+                        self.rule_learner.add_transferred_rule(
+                            new_task_tag, frozenset(new_cond), new_action,
+                            source_task=source_task,
+                            source_confidence=rule.confidence,
+                        )
+                        transferred += 1
+                except Exception:
+                    pass
+        if transferred:
+            self.stats["auto_transfers"] += transferred
+            logger.info(
+                "[TRANSFER] Auto-transferred %d rules to '%s'", transferred, new_task_tag
+            )
+
+    def _collect_concept_hvs_for_task(
+        self, task_tag: str
+    ) -> Dict[str, hypervec_rs.HyperVector]:
+        """Gather concept HVs associated with *task_tag* (V9).
+
+        Collects from:
+        - Learned rule conditions (predicate name → deterministic HV)
+        - Causal graph node names
+        - Semantic memory concepts whose name starts with ``task_tag``
+
+        Returns
+        -------
+        dict mapping concept name → HyperVector
+        """
+        hvs: Dict[str, hypervec_rs.HyperVector] = {}
+
+        # 1. Rule condition predicates
+        for rule in self.rule_learner.learned_rules.get(task_tag, []):
+            for pred in rule.condition:
+                if pred not in hvs:
+                    hvs[pred] = self.get_concept_hv(pred)
+
+        # 2. Causal graph nodes
+        graph = self.causal_graphs.get(task_tag)
+        if graph:
+            for link in graph.all_links:
+                for name in (link.cause, link.effect):
+                    if name not in hvs:
+                        hvs[name] = self.get_concept_hv(name)
+
+        # 3. Semantic memory concepts labelled with task prefix
+        for concept in self.semantic_memory.concept_hvs:
+            if concept.startswith(task_tag) or f"_{task_tag}" in concept:
+                hvs[concept] = self.semantic_memory.concept_hvs[concept]
+
+        return hvs
 
     def record_outcome(
         self,
@@ -1143,6 +1352,11 @@ class CognitiveEngine:
     # Helpers
     # ------------------------------------------------------------------
 
+    def enable_neural_rule_scoring(self):
+        """Instantiate RuleNeuralScorer and attach to engine."""
+        from python.core.learning.rule_neural_scorer import RuleNeuralScorer
+        self.rule_scorer = RuleNeuralScorer()
+
     def get_allowed_actions(self, task_tag: str) -> List[str]:
         """Return symbolic action names for a task.
 
@@ -1415,6 +1629,46 @@ class CognitiveEngine:
             if graph and graph.all_links:
                 self.planner.learn_operators_from_graph(graph, context=task)
 
+        # V9: Step 4a — Prototype building across all consolidated tasks
+        try:
+            prototypes = self.semantic_memory.build_prototypes(min_members=2)
+            if prototypes:
+                self.stats["prototypes_built"] += len(prototypes)
+                logger.info("[SLEEP] Built %d concept prototypes", len(prototypes))
+        except Exception as _exc:
+            logger.debug("[SLEEP] Prototype building skipped: %s", _exc)
+
+        # V9: Step 4b — Transitive inference
+        try:
+            n_is_a = self.semantic_memory.infer_transitive("is_a", max_hops=3)
+            n_causes = self.semantic_memory.infer_transitive("causes", max_hops=2)
+            n_trans = n_is_a + n_causes
+            if n_trans:
+                self.stats["transitive_inferences"] += n_trans
+                logger.info("[SLEEP] Transitive inference: %d new edges", n_trans)
+        except Exception as _exc:
+            logger.debug("[SLEEP] Transitive inference skipped: %s", _exc)
+
+        # V9: Step 4c — Cross-task auto-abstraction discovery
+        if len(tasks) >= 2:
+            for i, ta in enumerate(tasks):
+                for tb in tasks[i + 1:]:
+                    hvs_a = self._collect_concept_hvs_for_task(ta)
+                    hvs_b = self._collect_concept_hvs_for_task(tb)
+                    if hvs_a and hvs_b:
+                        try:
+                            mappings = self.analogy.auto_discover_abstractions(
+                                ta, tb, hvs_a, hvs_b
+                            )
+                            if mappings:
+                                self.stats["auto_abstractions"] += len(mappings)
+                                logger.info(
+                                    "[SLEEP] Auto-abstractions %s↔%s: %d",
+                                    ta, tb, len(mappings),
+                                )
+                        except Exception:
+                            pass
+
         self.stats["sleep_cycles"] += 1
         logger.info("[SLEEP] Consolidation complete (%d tasks)", len(tasks))
 
@@ -1433,6 +1687,35 @@ class CognitiveEngine:
         if self.config.enable_stigmergy:
             if hasattr(self.semantic_memory, 'evaporate_stigmergy'):
                 self.semantic_memory.evaporate_stigmergy()
+
+        # V9: Step 5 — Drift detection and rule pruning
+        self._detect_rule_drift(tasks)
+        if self.homeostasis is not None:
+            try:
+                pruned = self.homeostasis.prune_unused_rules(
+                    self.rule_learner, max_idle_episodes=200
+                )
+                if pruned:
+                    logger.info("[SLEEP] Pruned %d unused rules", pruned)
+            except Exception:
+                pass
+
+    def _detect_rule_drift(self, tasks: List[str]) -> None:
+        """Mark rules as drifting when recent confidence drops below 50% of older confidence (V9)."""
+        for task in tasks:
+            for rule in self.rule_learner.learned_rules.get(task, []):
+                history = getattr(rule, "confidence_history", [])
+                if len(history) < 4:
+                    continue
+                mid = len(history) // 2
+                older_avg = sum(history[:mid]) / mid
+                recent_avg = sum(history[mid:]) / (len(history) - mid)
+                if older_avg > 0 and recent_avg < 0.5 * older_avg:
+                    rule.source = f"drifting:{rule.source}"
+                    logger.info(
+                        "[SLEEP] Rule drift detected: %s→%s in '%s'",
+                        set(rule.condition), rule.consequence, task,
+                    )
 
     def _consolidate_semantic(self, task_tag: str):
         """Extract repeating patterns from episodes into semantic memory.

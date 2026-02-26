@@ -7,6 +7,7 @@ with tenure-based stability for bootstrap/tenured/new rules.
 
 Integration: Implements WorkspaceModule interface for substrate architecture.
 """
+import logging
 import time
 import math
 import numpy as np
@@ -17,6 +18,8 @@ import python.core.vsa.hypervec_shim as hypervec_rs
 from python.core.integration.persistence import BrainStore, Episode, Rule
 from python.core.perception.grounding_verifier import GroundingVerifier
 from python.core.reasoning.global_workspace import WorkspaceModule, Coalition
+
+logger = logging.getLogger("nsck.rule_learner")
 
 
 @dataclass
@@ -203,6 +206,12 @@ class RuleLearner(WorkspaceModule):
         # Track success (positive reward = success)
         if reward > 0 or outcome == "success":
             cand.successes += 1
+
+        # V9: Periodically append confidence snapshot to existing learned rules
+        if cand.support % 10 == 0:
+            existing_rule = self._find_existing_rule(pred_set, action, task_tag)
+            if existing_rule is not None:
+                existing_rule.confidence_history.append(existing_rule.confidence)
         
         # 5. Approximate matching: also credit overlapping patterns
         if self.use_approximate_matching:
@@ -479,6 +488,11 @@ class RuleLearner(WorkspaceModule):
         
         # Sort by score descending
         matches.sort(key=lambda x: x[1], reverse=True)
+        # V9: update fire tracking for matched rules
+        _now = time.time()
+        for rule, _ in matches:
+            rule.fire_count += 1
+            rule.last_fired = _now
         return matches
     
     def load_from_store(self, task_tag: Optional[str] = None):
@@ -492,7 +506,60 @@ class RuleLearner(WorkspaceModule):
             if rule.source == "learned":
                 self.learned_rules[rule.task_tag].append(rule)
         
-        print(f"[LOAD] Loaded {len(rules)} learned rules")    
+        print(f"[LOAD] Loaded {len(rules)} learned rules")
+
+    # V9: Cross-domain transfer
+    def add_transferred_rule(
+        self,
+        task_tag: str,
+        condition: FrozenSet[str],
+        consequence: str,
+        source_task: str,
+        source_confidence: float,
+    ) -> None:
+        """Inject a rule transferred from *source_task* into *task_tag* (V9).
+
+        Only adds the rule if an equivalent condition+consequence pair does
+        not already exist for *task_tag*.
+
+        Parameters
+        ----------
+        task_tag : str
+            Target task to inject the rule into.
+        condition : frozenset of str
+            Predicate set forming the rule condition (already translated to
+            target domain vocabulary by AnalogyEngine.transfer_rule).
+        consequence : str
+            Action consequence.
+        source_task : str
+            Origin domain (stored in rule.source for traceability).
+        source_confidence : float
+            Confidence of the original rule, used as a starting confidence.
+        """
+        # Avoid duplicates
+        if self._find_existing_rule(condition, consequence, task_tag):
+            return
+
+        rule = Rule(
+            id=None,
+            condition=condition,
+            consequence=consequence,
+            priority=1,
+            source=f"transferred:{source_task}",
+            task_tag=task_tag,
+            scope=self._determine_scope(condition),
+            support_count=0,
+            success_rate=0.0,
+            confidence=max(0.3, source_confidence * 0.8),  # slight discount
+            created_at=time.time(),
+        )
+        self.learned_rules[task_tag].append(rule)
+        if self.store:
+            self.store.save_rule(rule)
+        logger.info(
+            "[TRANSFER] Injected rule %s→%s into '%s' from '%s'",
+            set(condition), consequence, task_tag, source_task,
+        )    
     # ========================================================================
     # WorkspaceModule Interface Implementation
     # ========================================================================

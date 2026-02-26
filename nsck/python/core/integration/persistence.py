@@ -10,7 +10,7 @@ import json
 import shutil
 import zipfile
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass, asdict, field
 from pathlib import Path
 
 
@@ -72,6 +72,10 @@ class Rule:
     success_rate: float = 0.0
     confidence: float = 1.0  # Confidence level [0.0, 1.0] - graduates as support increases
     created_at: float = 0.0
+    # V9: Lifelong stability tracking
+    confidence_history: List[float] = field(default_factory=list)
+    last_fired: float = 0.0   # Unix timestamp of last application
+    fire_count: int = 0        # Total number of times this rule fired
 
 
 @dataclass

@@ -124,8 +124,6 @@ Exercise increases mitochondrial density. Regular activity strengthens mitochond
         print("TEST COMPLETE: Semantic folding is operational")
         print("="*70 + "\n")
         
-        return True
-        
     finally:
         # Cleanup
         os.unlink(temp_path)
@@ -189,7 +187,7 @@ Domestication causes behavioral changes. Dogs show friendly behavior.
         else:
             print("\n❌ FAIL: Pattern extraction not working")
         
-        return explicit_found
+        assert explicit_found
         
     finally:
         os.unlink(temp_path)
