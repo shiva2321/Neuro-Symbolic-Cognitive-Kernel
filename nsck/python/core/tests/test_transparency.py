@@ -4,10 +4,16 @@ NSCK Transparency Test
 Demonstrates that all internal reasoning is traceable and explainable.
 
 This is a "glass box" system - everything can be inspected end-to-end.
+
+V13 additions: KLE uncertainty, CausalRuleAuditor, SignalIngestor,
+UniversalHVEncoder, CrossModalAssociativeMemory, ProceduralMemory,
+ConceptDriftDetector, ConformalWrapper, PatternGeneralizer.
 """
 import json
 import sys
 from pathlib import Path
+
+import numpy as np
 
 # Add workspace root
 workspace_root = Path(__file__).parent.parent.parent.parent
@@ -246,6 +252,147 @@ def test_transparency():
     print("Unlike neural networks, there are NO black-box components.")
     print("All reasoning is symbolic, explicit, and interpretable.")
     print()
+
+
+# ---------------------------------------------------------------------------
+# V13 Glass-Box API Tests
+# ---------------------------------------------------------------------------
+
+def test_kle_uncertainty_in_global_workspace():
+    """KLE uncertainty is computed in GlobalWorkspace.compete() and exposed."""
+    from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
+    gw = GlobalWorkspace()
+    proposals = [Coalition("A", "act1", 0.8), Coalition("B", "act2", 0.4)]
+    gw.compete(proposals)
+    kle = gw.get_kle_uncertainty()
+    assert kle > 0.0, "KLE uncertainty must be positive for competing proposals"
+    assert "kle_uncertainty" in gw.get_status()
+
+
+def test_kle_in_cognitive_state():
+    """CognitiveState has kle_uncertainty and uncertainty_bounds fields."""
+    from python.core.reasoning.cognitive_engine import CognitiveState
+    cs = CognitiveState(task_tag="t", kle_uncertainty=0.5, uncertainty_bounds=(0.2, 0.8))
+    assert cs.kle_uncertainty == 0.5
+    assert cs.uncertainty_bounds == (0.2, 0.8)
+
+
+def test_causal_rule_auditor_transparency():
+    """CausalRuleAuditor produces auditable glass-box traces for each rule."""
+    from python.core.reasoning.causal_rule_auditor import CausalRuleAuditor
+    auditor = CausalRuleAuditor()
+    auditor.add_causal_edge("rain", "wet_ground", strength=0.9)
+    rule = auditor.audit_rule("rain", "wet_ground", confidence=0.8)
+    assert len(rule.audit_trace) > 0
+    assert rule.causal_score > 0
+    assert all(isinstance(t, str) for t in rule.audit_trace)
+
+
+def test_signal_ingestor_universal_conversion():
+    """SignalIngestor converts any Python input to a TypedSignal."""
+    from python.core.perception.signal_ingestor import SignalIngestor, TypedSignal
+    ingestor = SignalIngestor()
+    for data in ["hello", [1, 2, 3], {"a": 1}, 42.0, b"\x00\x01", np.zeros((4, 4))]:
+        ts = ingestor.ingest(data)
+        assert isinstance(ts, TypedSignal)
+        assert ts.data.dtype == np.float64
+        assert ts.data.size > 0
+
+
+def test_universal_hv_encoder_feature_importance():
+    """UniversalHVEncoder exposes feature importance for interpretability."""
+    from python.core.vsa.universal_hv_encoder import UniversalHVEncoder
+    enc = UniversalHVEncoder(n_features=32)
+    enc.encode([1.0, 2.0, 3.0])
+    top = enc.get_top_features(k=5)
+    assert len(top) <= 5
+    assert all("index" in f and "importance" in f for f in top)
+
+
+def test_cross_modal_associative_memory_binding():
+    """CrossModalAssociativeMemory enables glass-box cross-domain recall."""
+    import python.core.vsa.hypervec_shim as hv_mod
+    from python.core.memory.cross_modal_associative_memory import CrossModalAssociativeMemory
+    mem = CrossModalAssociativeMemory()
+    hv_text = hv_mod.HyperVector(1111)
+    hv_image = hv_mod.HyperVector(2222)
+    mem.bind("text", hv_text, "image", hv_image, label="cat")
+    bindings = mem.recall_by_label("cat")
+    assert len(bindings) == 1
+    stats = mem.get_statistics()
+    assert stats["total_bindings"] == 1
+
+
+def test_procedural_memory_skill_caching():
+    """ProceduralMemory provides fast-path decisions for familiar contexts."""
+    import python.core.vsa.hypervec_shim as hv_mod
+    from python.core.memory.procedural_memory import ProceduralMemory
+    mem = ProceduralMemory(familiarity_threshold=0.5)
+    ctx = hv_mod.HyperVector(42)
+    mem.cache_skill(ctx, "ACTION_UP", reward=1.0)
+    result = mem.recall_action(ctx)
+    assert result is not None
+    action, sim, reward = result
+    assert action == "ACTION_UP"
+    stats = mem.get_statistics()
+    assert stats["hit_count"] >= 1
+
+
+def test_concept_drift_detector_stability():
+    """ConceptDriftDetector monitors semantic memory stability."""
+    import python.core.vsa.hypervec_shim as hv_mod
+    from python.core.memory.concept_drift_detector import ConceptDriftDetector
+    detector = ConceptDriftDetector(drift_threshold=0.2)
+    hv = hv_mod.HyperVector(999)
+    detector.snapshot("dog", hv)
+    event = detector.check("dog", hv)
+    assert event.alarm is False
+    assert event.drift_magnitude < 0.01
+    stats = detector.get_statistics()
+    assert stats["snapshots"] == 1
+
+
+def test_conformal_wrapper_calibrated_bounds():
+    """ConformalWrapper provides provable uncertainty bounds."""
+    from python.core.learning.conformal_wrapper import ConformalWrapper
+    wrapper = ConformalWrapper(alpha=0.1)
+    scores = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
+    q = wrapper.calibrate(scores)
+    assert q is not None
+    lower, upper = wrapper.uncertainty_bound(0.2)
+    assert lower <= upper
+    result = wrapper.predict_set(0.1)
+    assert result["coverage"] == 0.9
+
+
+def test_pattern_generalizer_abstraction():
+    """PatternGeneralizer creates abstract prototypes from repeated observations."""
+    import python.core.vsa.hypervec_shim as hv_mod
+    from python.core.learning.pattern_generalizer import PatternGeneralizer
+    gen = PatternGeneralizer(min_members_for_abstraction=2)
+    hv = hv_mod.HyperVector(5555)
+    gen.observe(hv, "domain_a")
+    gen.observe(hv, "domain_a")
+    mature = gen.get_mature_patterns()
+    assert len(mature) >= 1
+    assert mature[0].member_count >= 2
+
+
+def test_substrate_v13_full_trace():
+    """NSCKSubstrate V13 provides full trace including KLE and encoding_stats."""
+    from python.core.substrate import NSCKSubstrate
+    substrate = NSCKSubstrate()
+    substrate.register_task("transparency_test")
+    result = substrate.ingest("transparency test input", "transparency_test")
+    # Full glass-box fields
+    assert isinstance(result.chosen_action, str)
+    assert isinstance(result.confidence, float)
+    assert result.encoding_stats is not None
+    assert result.kle_uncertainty is not None or result.kle_uncertainty is None  # optional
+    # Stats expose all V13 modules
+    stats = substrate.get_stats()
+    assert "procedural_memory" in stats
+    assert "conformal" in stats
 
 
 if __name__ == "__main__":

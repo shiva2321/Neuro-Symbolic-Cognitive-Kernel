@@ -100,6 +100,9 @@ class CognitiveState:
     system_used: Optional[str] = None
     system_1_confidence: Optional[float] = None
     homeostasis_actions: Optional[List[str]] = None
+    # V13 KLE uncertainty (glass-box API)
+    kle_uncertainty: Optional[float] = None       # KL-divergence-like uncertainty estimate [0,∞)
+    uncertainty_bounds: Optional[tuple] = None    # (lower, upper) conformal prediction bounds
 
 
 # ---------------------------------------------------------------------------

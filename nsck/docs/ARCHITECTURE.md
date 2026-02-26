@@ -1071,3 +1071,80 @@ substrate.register_encoder("thermal", lambda data, tag: my_encoder(data, tag))
 | No speaker/phoneme recognition | Pair `AudioAdapter` with `EmbeddingVSABridge` + wav2vec2 |
 | No gradient-based learning in VSA core | Use FHRR + JAX/numpy for numerical gradients |
 | NLU is keyword-match + n-gram classification | Pair with LLM adapter for open-domain NLU |
+
+---
+
+## §17 — V13 Universal Cognitive Substrate Architecture (February 2026)
+
+### 17.1 New Module Graph
+
+```
+NSCKSubstrate V13
+├── SignalIngestor ─────────────── Universal TypedSignal conversion (any Python input)
+├── UniversalHVEncoder ─────────── Adaptive Hebbian FPE encoding; feature importance
+├── CrossModalAssociativeMemory ── Modality-agnostic binding (HV XOR trick)
+├── ProceduralMemory ────────────── Skill cache; fast-path decisions
+├── ConceptDriftDetector ────────── Semantic memory stability monitoring
+├── ConformalWrapper ─────────────── Calibrated prediction sets (split conformal)
+├── CausalRuleAuditor ────────────── ILP rules × causal graph; per-rule causal_score
+├── VideoAdapter + TemporalStreamEncoder ── Frame sequences with temporal decay
+└── PatternGeneralizer + CrossDomainTransferPipeline ── Abstraction + transfer
+```
+
+### 17.2 V13 Decision Cycle
+
+```
+Input
+  │
+  ▼
+SignalIngestor.ingest()           ← universal TypedSignal
+  │
+  ▼
+UniversalHVEncoder.encode()       ← Hebbian-weighted FPE → HV
+  │
+  ├─ ProceduralMemory.recall_action()  ← fast-path if familiar (→ SubstrateResult)
+  │
+  ▼
+CognitiveEngine.decide()          ← full deliberation
+  │ GlobalWorkspace.compete()
+  │   └─ KLE uncertainty computed  ← Shannon entropy of activations
+  │
+  ▼
+ConformalWrapper.predict_set()    ← calibrated uncertainty bounds
+  │
+  ▼
+SubstrateResult
+  ├── chosen_action, confidence, explanation
+  ├── kle_uncertainty               ← V13 glass-box
+  ├── uncertainty_bounds            ← V13 conformal
+  ├── encoding_stats                ← V13 encoding trace
+  └── procedural_hit                ← V13 fast-path flag
+```
+
+### 17.3 CausalRuleAuditor Bridge
+
+```
+ILP Rule: condition → consequence (confidence)
+  │
+  ├─ CausalGraph.edges lookup (direct + indirect path)
+  │
+  ▼
+AuditedRule
+  ├── causal_score    [0,1]
+  ├── combined_score  = (1-w)×conf + w×causal
+  └── audit_trace     List[str]  ← glass-box
+```
+
+### 17.4 File Locations
+
+| Module | File |
+|--------|------|
+| `CausalRuleAuditor` | `python/core/reasoning/causal_rule_auditor.py` |
+| `SignalIngestor` | `python/core/perception/signal_ingestor.py` |
+| `UniversalHVEncoder` | `python/core/vsa/universal_hv_encoder.py` |
+| `CrossModalAssociativeMemory` | `python/core/memory/cross_modal_associative_memory.py` |
+| `ProceduralMemory` | `python/core/memory/procedural_memory.py` |
+| `ConceptDriftDetector` | `python/core/memory/concept_drift_detector.py` |
+| `VideoAdapter` + `TemporalStreamEncoder` | `python/core/adapters/video_adapter.py` |
+| `ConformalWrapper` | `python/core/learning/conformal_wrapper.py` |
+| `PatternGeneralizer` + `CrossDomainTransferPipeline` | `python/core/learning/pattern_generalizer.py` |

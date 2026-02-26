@@ -14,6 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Tuple, Optional, List
 from dataclasses import dataclass, field
 import logging
+import math
 import time
 
 # Configure logging
@@ -79,6 +80,10 @@ class GlobalWorkspace:
         self.rehearsal_log: List[RehearsalEvent] = []  # For dashboard telemetry
         self._rehearsal_log_max: int = 50
 
+        # --- V13: KLE uncertainty (glass-box API) ---
+        self._kle_uncertainty: float = 0.0       # KL-divergence-like competition entropy
+        self._last_activations: List[float] = [] # For KLE computation
+
     def register_module(self, name: str, module: WorkspaceModule):
         self.modules[name] = module
         logger.info(f"[GWT] Registered module: {name}")
@@ -109,7 +114,14 @@ class GlobalWorkspace:
         # 3. Check threshold
         if _effective_activation(winner) < self.attention_threshold:
             return None
-            
+
+        # V13: Compute KLE uncertainty — entropy of normalised activations
+        activations = [_effective_activation(c) for c in proposals]
+        self._last_activations = activations
+        total = sum(max(a, 1e-9) for a in activations)
+        probs = [max(a, 1e-9) / total for a in activations]
+        self._kle_uncertainty = -sum(p * math.log(p) for p in probs if p > 0)
+
         # 3. Broadcast
         self.current_winner = winner.source
         self.workspace_content = winner.content
@@ -305,7 +317,12 @@ class GlobalWorkspace:
             "history_len": len(self.history),
             "danger_vectors": len(self._danger_vectors),
             "rehearsal_vetoes": len(self.rehearsal_log),
+            "kle_uncertainty": self._kle_uncertainty,   # V13 glass-box API
         }
+
+    def get_kle_uncertainty(self) -> float:
+        """Return the KLE (competition entropy) uncertainty from the last compete() call."""
+        return self._kle_uncertainty
 
     def get_recent_vetoes(self, n: int = 5) -> List[dict]:
         """Return recent rehearsal veto events for dashboard."""
