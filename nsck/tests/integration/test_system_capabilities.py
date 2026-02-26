@@ -1034,32 +1034,38 @@ class TestKnownLimitations:
         # For real NLU, sim should be > 0.7. In NSCK it will be ~0.5 (random).
         assert sim > 0.7, f"System should understand dog≈puppy, but sim={sim}"
 
-    @pytest.mark.xfail(reason="NSCK has no pixel-level perception", strict=True)
-    def test_no_pixel_level_perception(self):
-        """LIMITATION: The system cannot process raw images.
+    @pytest.mark.xfail(
+        reason=(
+            "NSCK uses classical CV features (spatial grid, colour histogram, "
+            "Sobel edges) not deep-learning features; HOG-style features lack "
+            "the rotation invariance of a CNN, so 90-degree rotations produce "
+            "different HVs.  Pair ImageAdapter with EmbeddingVSABridge + a "
+            "CNN for full rotation invariance."
+        ),
+        strict=True,
+    )
+    def test_no_rotation_invariant_perception(self):
+        """LIMITATION: Classical CV features are not rotation-invariant.
 
-        There is no CNN, no vision transformer, no image feature extractor
-        in the core VSA pipeline. The ICM has a tiny feature net for 10x10
-        grids but that's not real vision.
+        ImageAdapter now processes raw images using spatial-grid statistics,
+        colour histograms, and Sobel edge density (no neural networks).
+        Similar images get similar HVs, but 90-degree rotations produce
+        substantially different feature vectors and therefore different HVs.
+        True rotation invariance requires a CNN paired via EmbeddingVSABridge.
         """
-        import python.core.vsa.hypervec_shim as hypervec_rs
+        from python.core.adapters.image_adapter import ImageAdapter
 
-        # A real vision system would create meaningful, distinct HVs from
-        # visually similar images. NSCK can't do this from raw pixels.
-        # Feeding raw pixels into HyperVector constructor just hashes the seed.
-        img_cat = np.random.randint(0, 255, (224, 224, 3), dtype=np.uint8)
+        rng = np.random.default_rng(42)
+        img_cat = rng.integers(0, 255, (224, 224, 3), dtype=np.uint8)
         img_cat_rotated = np.rot90(img_cat)
 
-        # System has no way to create HVs from images that capture visual content
-        import hashlib
-        hv1_seed = int(hashlib.blake2b(img_cat.tobytes(), digest_size=4).hexdigest(), 16)
-        hv2_seed = int(hashlib.blake2b(img_cat_rotated.tobytes(), digest_size=4).hexdigest(), 16)
-        hv1 = hypervec_rs.HyperVector(hv1_seed)
-        hv2 = hypervec_rs.HyperVector(hv2_seed)
+        adapter = ImageAdapter()
+        pkt1 = adapter.encode(img_cat, "test")
+        pkt2 = adapter.encode(img_cat_rotated, "test")
 
-        sim = hv1.similarity(hv2)
-        # Real vision: rotated cat should still be recognized as cat (sim > 0.7)
-        assert sim > 0.7, f"System should recognize rotated image, but sim={sim}"
+        sim = pkt1.situation_hv.similarity(pkt2.situation_hv)
+        # Deep-learning vision: rotated image sim > 0.7; classical CV cannot guarantee this
+        assert sim > 0.7, f"Classical CV features not rotation-invariant: sim={sim}"
 
     def test_no_real_continual_learning_from_raw_data(self):
         """LIMITATION: The system learns symbolic rules, not from raw data streams.
