@@ -1014,6 +1014,35 @@ class UniversalInput:
             self._role_hvs[full_key] = hv.HyperVector(_stable_seed(full_key))
         return self._role_hvs[full_key]
 
+    def encode_numeric_sequence(
+        self,
+        values: "List[float]",
+        channel: str = "values",
+        value_range: "Tuple[float, float]" = (-10.0, 10.0),
+    ) -> "hv.HyperVector":
+        """Encode a list of floats as a HyperVector using TimeSeriesEncoder (V11).
+
+        Parameters
+        ----------
+        values : list[float]
+            The numeric sequence to encode.
+        channel : str
+            Channel name (used for feature predicate labelling).
+        value_range : tuple
+            (min, max) expected value range for normalisation.
+
+        Returns
+        -------
+        HyperVector representing the encoded sequence.
+        """
+        try:
+            from python.core.perception.stream_encoder import TimeSeriesEncoder
+            enc = TimeSeriesEncoder(value_range=value_range)
+            return enc.encode_sequence(list(values))
+        except Exception:
+            # Fallback: use existing ground_sequence
+            return self.ground_sequence(list(values), "numeric", float(value_range[0]), float(value_range[1]))
+
     def is_mathematical(self, text: str) -> bool:
         """Returns True if text appears to be a math query."""
         import re

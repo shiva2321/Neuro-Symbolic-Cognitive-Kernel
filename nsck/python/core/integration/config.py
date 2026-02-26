@@ -114,6 +114,12 @@ class NSCKConfig:
     # Automatically transfer rules from existing tasks to newly registered tasks
     enable_auto_transfer: bool = True
 
+    # === V11 Feature Flags ===
+    generalization_interval: int = 100
+    enable_continuous_generalization: bool = True
+    enable_ngram_nlu: bool = True
+    enable_cross_modal_learning: bool = False
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -163,6 +169,10 @@ class NSCKConfig:
             enable_hierarchical_srl=True,
             enable_multi_agent=True,
             enable_active_inference=True,
+            # V11
+            enable_continuous_generalization=True,
+            enable_ngram_nlu=True,
+            enable_cross_modal_learning=True,
         )
 
     @classmethod

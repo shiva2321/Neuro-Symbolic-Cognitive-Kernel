@@ -173,6 +173,26 @@ class CognitiveEngine:
         self.universal_input = UniversalInput()
         self.language = LanguageModule(semantic_memory=self.semantic_memory, use_vsa=True) # [Phase 2] Default VSA
         self.dialogue = DialogueManager(self, self.language, config=self.config)
+
+        # V11: NgramNLU integration
+        self.ngram_nlu = None
+        if self.config.enable_ngram_nlu:
+            try:
+                from python.core.language.ngram_nlu import NgramNLUAdapter
+                self.ngram_nlu = NgramNLUAdapter(config=self.config)
+                logger.info("NgramNLU initialized")
+            except Exception as _exc:
+                logger.warning("NgramNLU init failed: %s", _exc)
+
+        # V11: Cross-modal correlation learning
+        self.cross_modal = None  # type: Optional[Any]
+        if self.config.enable_cross_modal_learning:
+            try:
+                from python.core.learning.cross_modal import CrossModalCorrelationLearner
+                self.cross_modal = CrossModalCorrelationLearner()
+                logger.info("CrossModalCorrelationLearner initialized")
+            except Exception as _exc:
+                logger.warning("CrossModal init failed: %s", _exc)
         
         # --- Perception (SNN) [Phase 2] ---
         # Initialize the "Eyes" of the system
@@ -227,6 +247,9 @@ class CognitiveEngine:
         # V10: Optional neural rule scorer
         self.rule_scorer = None  # type: Optional[Any]
         self.msg_broadcaster = None
+
+        # V11: Decision counter for continuous generalization
+        self._decision_counter: int = 0
 
         # --- V3: Homeostasis ---
         self.homeostasis = None
@@ -487,6 +510,17 @@ class CognitiveEngine:
         """
         self.stats["decisions"] += 1
 
+        # V11: Route numeric sequences (list/ndarray of numbers) via NumericSequenceAdapter
+        import numpy as np
+        if isinstance(state, (list, np.ndarray)) and not isinstance(state, str):
+            try:
+                if len(state) > 0 and isinstance(state[0], (int, float, np.floating, np.integer)):
+                    from python.core.adapters.numeric_sequence_adapter import NumericSequenceAdapter
+                    _ns_adapter = NumericSequenceAdapter()
+                    state = _ns_adapter.encode(state, task_tag)
+            except (TypeError, IndexError, Exception):
+                state = {"value": state}
+
         # V9: Convert raw dict → PerceptPacket (backward-compatible auto-wrap)
         if isinstance(state, PerceptPacket):
             percept = state
@@ -516,6 +550,19 @@ class CognitiveEngine:
         # Extract grounded symbols and situation HV from packet
         active_preds = list(percept.active_predicates)
         situation_hv = percept.situation_hv
+
+        # V11: NgramNLU enrichment for text inputs
+        if self.ngram_nlu is not None:
+            _text_input = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else ""
+            if isinstance(_text_input, str) and _text_input.strip():
+                try:
+                    _nlu_result = self.ngram_nlu.process(_text_input)
+                    _intent = _nlu_result.get("intent", {})
+                    _intent_label = _intent.get("label", "") if isinstance(_intent, dict) else str(_intent)
+                    if _intent_label:
+                        active_preds = list(active_preds) + [f"INTENT_{_intent_label.upper()}"]
+                except Exception:
+                    pass
 
         # 3. Curiosity / exploration check
         confidence = (
@@ -750,8 +797,34 @@ class CognitiveEngine:
         state_key = self._get_state_key(raw_state_dict, task_tag)
         self.last_state_action = (state_key, action)
         self.state_visits[state_key] = self.state_visits.get(state_key, 0) + 1
-        
+
+        # V11: Continuous generalization
+        self._decision_counter += 1
+        if (self.config.enable_continuous_generalization
+                and self._decision_counter % self.config.generalization_interval == 0):
+            self._incremental_generalize()
+
         return self.current_state
+
+    # ------------------------------------------------------------------
+    # V11: Continuous generalization
+    # ------------------------------------------------------------------
+
+    def _incremental_generalize(self) -> None:
+        """Incremental generalization step wired into the decide() loop (V11)."""
+        try:
+            self.semantic_memory.build_prototypes(min_members=3)
+        except Exception:
+            pass
+        try:
+            self.semantic_memory.infer_transitive(max_hops=1)
+        except Exception:
+            pass
+        if hasattr(self, 'cross_domain') and self.cross_domain:
+            try:
+                self.cross_domain.auto_discover_abstractions()
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # V9: Multimodal convenience method

@@ -14,6 +14,9 @@ import python.core.vsa.hypervec_shim as hypervec_rs
 from python.core.integration.persistence import BrainStore, Episode
 import random
 
+# V11: Global epoch-based LSH rebuild interval
+REBUILD_INTERVAL: int = 500
+
 # --- Configurable sketch extractors per task ---
 _SKETCH_EXTRACTORS: Dict[str, Any] = {}  # task_tag -> callable(state, task_tag) -> dict
 
@@ -166,11 +169,14 @@ class EpisodicMemory:
         self.lsh_seeds = list(range(42, 42 + self.lsh_num_tables))  # One seed per table
         # task -> table_idx -> {lsh_hash -> [episode_ids]}
         self.lsh_index: Dict[str, List[Dict[int, List[int]]]] = {}
+        # V11: Global epoch counter for periodic LSH rebuilds
+        self._lsh_epoch_counter: int = 0
     
     def reset(self):
         """Clear all episodic memories and re-initialize."""
         self.recent = {}
         self.lsh_index = {}
+        self._lsh_epoch_counter = 0
         if self.store:
             # We don't delete the DB here, KnowledgeIntegration will handle file deletion,
             # but we should ensure the store's in-memory state is cleared if any.
@@ -238,7 +244,13 @@ class EpisodicMemory:
         if deque_was_full and self._lsh_inserts_since_rebuild.get(task, 0) >= rebuild_interval:
             self._rebuild_lsh(task)
             self._lsh_inserts_since_rebuild[task] = 0
-        
+
+        # V11: Global epoch-based rebuild — every REBUILD_INTERVAL stores across all tasks
+        self._lsh_epoch_counter += 1
+        if self._lsh_epoch_counter % REBUILD_INTERVAL == 0:
+            for t in list(self.recent.keys()):
+                self._rebuild_lsh(t)
+
         # Check if consolidation needed
         if len(self.recent[task]) >= self.consolidation_threshold:
             self._consolidate(task)
@@ -416,6 +428,15 @@ class EpisodicMemory:
         """Get most recent episodes."""
         recent = self.recent.get(task_tag, deque())
         return list(recent)[-n:]
+
+    def retrieve(
+        self,
+        query_hv: hypervec_rs.HyperVector,
+        task_tag: str,
+        top_k: int = 5,
+    ) -> List[LiveEpisode]:
+        """Alias for recall_similar (V11 public API)."""
+        return self.recall_similar(query_hv, task_tag, k=top_k)
 
     def retrieve_salient(self, task_tag: str, limit: int = 100) -> List[LiveEpisode]:
         """Retrieve high-impact episodes (high absolute reward or novelty)."""
