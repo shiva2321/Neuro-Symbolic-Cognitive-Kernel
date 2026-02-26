@@ -24,6 +24,16 @@ class TimeSeriesEncoder:
     """
 
     N_BINS = 1024
+    # Fraction of the value range used as the trend sensitivity: a slope smaller
+    # than (range / TREND_SENSITIVITY) is considered flat (not rising/falling).
+    TREND_SENSITIVITY: float = 1000.0
+    # Fraction of the value range used as the stability threshold: std smaller
+    # than (range / STABILITY_DIVISOR) is considered a stable signal.
+    STABILITY_DIVISOR: float = 100.0
+    # Fraction of values more than 2σ from the mean to trigger ANOMALY predicate.
+    ANOMALY_THRESHOLD: float = 0.2
+    # Minimum normalised autocorrelation peak to declare a signal PERIODIC.
+    PERIODICITY_THRESHOLD: float = 0.7
 
     def __init__(
         self,
@@ -151,15 +161,15 @@ class TimeSeriesEncoder:
         anomaly = features.get("anomaly_score", 0.0)
         periodicity = features.get("periodicity_score", 0.0)
 
-        trend_threshold = (self._v_max - self._v_min) / 1000.0
-        small_std = (self._v_max - self._v_min) / 100.0
+        trend_threshold = (self._v_max - self._v_min) / self.TREND_SENSITIVITY
+        small_std = (self._v_max - self._v_min) / self.STABILITY_DIVISOR
 
         if trend > trend_threshold:
             preds.add(f"RISING_{ch}")
         elif trend < -trend_threshold:
             preds.add(f"FALLING_{ch}")
 
-        if anomaly > 0.2:  # > 20% anomalous
+        if anomaly > self.ANOMALY_THRESHOLD:
             preds.add(f"ANOMALY_{ch}")
 
         if mean > mid:
@@ -170,7 +180,7 @@ class TimeSeriesEncoder:
         if std < small_std:
             preds.add(f"STABLE_{ch}")
 
-        if periodicity > 0.7:
+        if periodicity > self.PERIODICITY_THRESHOLD:
             preds.add(f"PERIODIC_{ch}")
 
         return preds

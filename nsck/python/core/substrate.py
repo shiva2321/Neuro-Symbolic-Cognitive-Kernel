@@ -14,6 +14,11 @@ import numpy as np
 from python.core.integration.config import NSCKConfig
 
 
+def _stable_seed(obj: object) -> int:
+    """Convert any object to a stable 32-bit seed for HyperVector construction."""
+    return hash(str(obj)) % (2 ** 32)
+
+
 @dataclass
 class SubstrateResult:
     """Result of processing an input through the NSCK substrate."""
@@ -262,7 +267,7 @@ class NSCKSubstrate:
                     return NumericSequenceAdapter(channel_name=modality).encode(vals, task_tag)
                 except Exception:
                     state = {"values": list(data)}
-                    shv = hv_mod.HyperVector(hash(str(state)) % (2**32))
+                    shv = hv_mod.HyperVector(_stable_seed(state))
                     return PerceptPacket.make(
                         modality="numeric",
                         situation_hv=shv,
@@ -273,7 +278,7 @@ class NSCKSubstrate:
                 adapter = self._engine.adapters.get(task_tag)
                 if adapter:
                     return adapter.encode(data, task_tag)
-                shv = hv_mod.HyperVector(hash(str(sorted(data.items()))) % (2**32))
+                shv = hv_mod.HyperVector(_stable_seed(sorted(data.items())))
                 return PerceptPacket.make(
                     modality="dict",
                     situation_hv=shv,
@@ -281,7 +286,7 @@ class NSCKSubstrate:
                     raw_state=data,
                 )
             else:
-                shv = hv_mod.HyperVector(hash(str(data)) % (2**32))
+                shv = hv_mod.HyperVector(_stable_seed(data))
                 return PerceptPacket.make(
                     modality=modality,
                     situation_hv=shv,
@@ -331,7 +336,7 @@ class NSCKSubstrate:
                 query_state, task_tag or "unknown", []
             )
         else:
-            query_hv = hv_mod.HyperVector(hash(str(query)) % (2**32))
+            query_hv = hv_mod.HyperVector(_stable_seed(query))
 
         tasks = [task_tag] if task_tag else self._registered_tasks
         results = []
