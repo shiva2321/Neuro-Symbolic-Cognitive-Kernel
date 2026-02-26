@@ -18,6 +18,12 @@ if _root not in sys.path:
 
 INTENT_LABELS = ["question", "command", "statement", "greeting", "farewell"]
 
+# Prefixes that strongly indicate question intent (used in extract_intent heuristics)
+_QUESTION_STARTERS = (
+    "what", "who", "where", "when", "why", "how",
+    "is ", "are ", "do ", "does ", "can ", "will ",
+)
+
 # Simple English noun list for entity extraction
 _NOUN_WORDS = {
     "cat", "dog", "car", "house", "computer", "phone", "book", "water", "food",
@@ -121,7 +127,7 @@ class NgramNLU:
             return "greeting"
         if any(lower.startswith(w) for w in ("bye", "goodbye", "farewell", "see you", "later")):
             return "farewell"
-        if lower.endswith("?") or lower.startswith(("what", "who", "where", "when", "why", "how", "is ", "are ", "do ", "does ", "can ", "will ")):
+        if lower.endswith("?") or lower.startswith(_QUESTION_STARTERS):
             return "question"
         if any(lower.startswith(w) for w in ("please", "do ", "stop", "start", "go", "run", "make", "give", "tell", "show", "open", "close", "set ")):
             return "command"

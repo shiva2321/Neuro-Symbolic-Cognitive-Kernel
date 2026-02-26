@@ -130,6 +130,12 @@ class TestEmbeddingVSABridge:
         b2 = EmbeddingVSABridge(dim_in=32, hv_dim=10240, seed=99)
         np.testing.assert_array_equal(b1._proj, b2._proj)
 
+    def test_different_seeds_produce_different_projections(self):
+        from python.core.vsa.vsa_embedding_bridge import EmbeddingVSABridge
+        b1 = EmbeddingVSABridge(dim_in=32, hv_dim=10240, seed=1)
+        b2 = EmbeddingVSABridge(dim_in=32, hv_dim=10240, seed=2)
+        assert not np.array_equal(b1._proj, b2._proj)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 2. rust_concurrent_shim

@@ -17,7 +17,22 @@ _FORBIDDEN_ACTIONS = ["__import__", "exec", "eval", "os.system", "subprocess"]
 
 
 class SafetyProperty:
-    """A named safety property expressed as a Python expression formula."""
+    """A named safety property expressed as a Python expression formula.
+
+    The formula is evaluated in a restricted namespace.  The following
+    variables are available inside the formula string:
+
+    - ``confidence`` (float): rule confidence in [0, 1]
+    - ``support`` (int): number of observed supporting examples
+    - ``conditions`` (set): set of symbolic preconditions
+    - ``action`` (str): rule consequence / action string
+    - ``fire_count`` (int): number of times the rule has fired
+    - ``FORBIDDEN_ACTIONS`` (list): list of banned action strings
+    - ``len`` (builtin): the built-in ``len`` function
+
+    All other builtins are restricted (``__builtins__`` is ``{}``) to
+    prevent code injection via crafted formula strings.
+    """
 
     def __init__(self, name: str, formula: str, severity: str = "critical"):
         self.name = name

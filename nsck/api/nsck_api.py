@@ -137,8 +137,15 @@ class NSCKApiServer:
 
     # ── Server runner ─────────────────────────────────────────────────────────
 
-    def run(self, host: str = "0.0.0.0", port: int = 8000):
-        """Run the API server."""
+    def run(self, host: str = "127.0.0.1", port: int = 8000):
+        """Run the API server.
+
+        Args:
+            host: Bind address. Defaults to ``127.0.0.1`` (localhost only).
+                  Use ``"0.0.0.0"`` only in trusted network environments, as it
+                  exposes the API to all network interfaces.
+            port: TCP port to listen on.
+        """
         app = self.create_app()
         if app is not None:
             try:

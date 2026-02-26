@@ -17,9 +17,12 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 
+_EPSILON = 1e-9  # Numerical stability constant for divisions and softmax
+
+
 def _softmax(x: np.ndarray) -> np.ndarray:
     e = np.exp(x - np.max(x))
-    return e / (e.sum() + 1e-9)
+    return e / (e.sum() + _EPSILON)
 
 
 class AttentionHead:
@@ -48,7 +51,7 @@ class AttentionHead:
         scale = self.key_dim ** 0.5
         for k in keys:
             kp = self._project(k, self._Wk)
-            scores.append(float(np.dot(q, kp)) / (scale + 1e-9))
+            scores.append(float(np.dot(q, kp)) / (scale + _EPSILON))
         return _softmax(np.array(scores, dtype=np.float32))
 
     def attend(

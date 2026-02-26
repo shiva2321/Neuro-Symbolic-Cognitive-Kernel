@@ -121,10 +121,14 @@ class RuleNeuralScorer:
         scores = self.batch_score(rules)
         return [r for _, r in sorted(zip(scores, rules), key=lambda x: x[0], reverse=True)]
 
+    @staticmethod
+    def _ensure_npz_extension(path: str) -> str:
+        """Append '.npz' to *path* if not already present."""
+        return path if path.endswith(".npz") else path + ".npz"
+
     def save(self, path: str):
         """Save weights as numpy .npz file. Appends '.npz' if not already present."""
-        if not path.endswith(".npz"):
-            path = path + ".npz"
+        path = self._ensure_npz_extension(path)
         np.savez(
             path,
             W1=self._W1, b1=self._b1,
@@ -133,8 +137,7 @@ class RuleNeuralScorer:
 
     def load(self, path: str):
         """Load weights from numpy .npz file. Appends '.npz' if not already present."""
-        if not path.endswith(".npz"):
-            path = path + ".npz"
+        path = self._ensure_npz_extension(path)
         data = np.load(path)
         self._W1 = data["W1"]
         self._b1 = data["b1"]

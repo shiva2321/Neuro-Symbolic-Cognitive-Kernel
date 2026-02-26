@@ -17,6 +17,8 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 _GOLDEN_RATIO = (1.0 + math.sqrt(5.0)) / 2.0
+# Public alias — part of the deterministic scalar encoding contract
+GOLDEN_RATIO = _GOLDEN_RATIO
 
 
 class FHRRVector:
