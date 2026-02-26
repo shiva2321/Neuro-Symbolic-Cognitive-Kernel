@@ -425,4 +425,33 @@ __all__ = [
     "parallel_bundle",
     "run_semantic_search_async",
     "get_rust_help",
+    "get_backend_info",
 ]
+
+
+def get_backend_info() -> dict:
+    """Return information about the active VSA backend.
+
+    Returns
+    -------
+    dict with keys:
+        vsa_backend : "Rust" or "Python"
+        snn_backend : "Rust" or "Python"
+        hypervec_rs_available : bool
+        snn_rs_available : bool
+        version : str
+    """
+    snn_rust_available = False
+    try:
+        import snn_rs  # type: ignore[import]
+        snn_rust_available = True
+    except ImportError:
+        pass
+
+    return {
+        "vsa_backend": "Rust" if _USE_RUST else "Python",
+        "snn_backend": "Rust" if snn_rust_available else "Python",
+        "hypervec_rs_available": _USE_RUST,
+        "snn_rs_available": snn_rust_available,
+        "version": "V11",
+    }
