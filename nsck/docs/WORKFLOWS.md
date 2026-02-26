@@ -596,3 +596,86 @@ sequenceDiagram
     NSCKApiServer->>CognitiveEngine: sleep()
     NSCKApiServer-->>Client: {status: "sleep_complete"}
 ```
+
+---
+
+## §10 — V13 Universal Substrate Workflows (February 2026)
+
+### 10.1 V13 Ingest / Feedback API
+
+```python
+substrate = NSCKSubstrate()
+substrate.register_task("my_task")
+
+# Ingest — with procedural fast-path
+result = substrate.ingest(input_data, "my_task")
+# result.procedural_hit = True if ProceduralMemory served the action
+
+# Feedback — update skills, Hebbian weights, conformal calibration
+substrate.feedback(result.chosen_action, reward=1.0, task_tag="my_task",
+                   state=input_data)
+```
+
+### 10.2 SignalIngestor → UniversalHVEncoder Pipeline
+
+```
+Any Python input
+    → SignalIngestor.ingest()     → TypedSignal (float64 array + metadata)
+    → UniversalHVEncoder.encode() → HyperVector (Hebbian-weighted FPE)
+    → ProceduralMemory.recall()   → fast action (if familiar)
+    → full CognitiveEngine cycle  → SubstrateResult with encoding_stats
+```
+
+### 10.3 KLE Uncertainty Workflow
+
+```python
+from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
+gw = GlobalWorkspace()
+winner = gw.compete(proposals)
+kle = gw.get_kle_uncertainty()   # entropy of proposal activations
+# Low KLE → confident decision; High KLE → uncertain, explore
+```
+
+### 10.4 Causal Rule Audit Workflow
+
+```python
+from python.core.reasoning.causal_rule_auditor import CausalRuleAuditor
+auditor = CausalRuleAuditor(causal_weight=0.4)
+auditor.add_causal_edge("rain", "wet_ground", strength=0.9)
+rule = auditor.audit_rule("rain", "wet_ground", confidence=0.8)
+# rule.audit_trace: human-readable scoring explanation
+# rule.causal_score: [0,1] how causally grounded
+# rule.combined_score: 0.6×conf + 0.4×causal
+```
+
+### 10.5 Conformal Uncertainty Bounds Workflow
+
+```python
+from python.core.learning.conformal_wrapper import ConformalWrapper
+wrapper = ConformalWrapper(alpha=0.1)
+wrapper.calibrate(nonconformity_scores)   # fit on calibration set
+lower, upper = wrapper.uncertainty_bound(1.0 - confidence)
+result = wrapper.predict_set(score)       # {included, coverage=0.9}
+```
+
+### 10.6 Cross-Domain Transfer Workflow
+
+```python
+from python.core.learning.pattern_generalizer import CrossDomainTransferPipeline
+pipeline = CrossDomainTransferPipeline()
+pipeline.register(hv_vision, "vision")
+pipeline.register(hv_language, "language")
+transfers = pipeline.transfer(query_hv, "vision", "language")
+# transfers: [{source_pattern, target_pattern, transfer_score, ...}]
+```
+
+### 10.7 VideoAdapter Temporal Workflow
+
+```python
+from python.core.adapters.video_adapter import VideoAdapter
+adapter = VideoAdapter(decay=0.85)
+frames = [frame1, frame2, frame3, ...]   # list of numpy arrays
+pkt = adapter.encode(frames, "task")
+# pkt.raw_state["motion_score"]: temporal variation
+# pkt.active_predicates: VIDEO_HIGH_MOTION / VIDEO_LOW_MOTION
+```

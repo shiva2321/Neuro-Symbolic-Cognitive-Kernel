@@ -296,3 +296,63 @@ This is a **glass box system** where every decision can be explained end-to-end.
 **Last Updated:** February 19, 2026  
 **Test Coverage:** All transparency features verified  
 **Status:** ✅ Production-ready glass box system
+
+---
+
+## V13 Glass-Box Additions (February 2026)
+
+The following V13 modules extend the glass-box API with explicit uncertainty quantification and auditability:
+
+### 11. KLE Uncertainty in GlobalWorkspace
+```python
+from python.core.reasoning.global_workspace import GlobalWorkspace, Coalition
+gw = GlobalWorkspace()
+gw.compete([Coalition("A", "act", 0.8), Coalition("B", "act2", 0.4)])
+kle = gw.get_kle_uncertainty()   # entropy of competition activations
+status = gw.get_status()         # includes "kle_uncertainty" key
+```
+- `kle_uncertainty` is the Shannon entropy of coalition activation probabilities
+- Higher entropy = more uncertainty (more equally competing proposals)
+- Fully inspectable via `get_status()["kle_uncertainty"]`
+
+### 12. CognitiveState Uncertainty Fields
+```python
+from python.core.reasoning.cognitive_engine import CognitiveState
+cs = CognitiveState(task_tag="t")
+cs.kle_uncertainty   # float or None — competition entropy
+cs.uncertainty_bounds  # (lower, upper) conformal bounds or None
+```
+
+### 13. CausalRuleAuditor per-rule causal_score
+```python
+from python.core.reasoning.causal_rule_auditor import CausalRuleAuditor
+auditor = CausalRuleAuditor()
+auditor.add_causal_edge("rain", "wet", strength=0.9)
+rule = auditor.audit_rule("rain", "wet", confidence=0.8)
+rule.causal_score    # float [0,1] — how causally grounded the rule is
+rule.audit_trace     # List[str] — glass-box explanation
+rule.combined_score  # weighted combination
+```
+
+### 14. ConformalWrapper calibrated prediction sets
+```python
+from python.core.learning.conformal_wrapper import ConformalWrapper
+wrapper = ConformalWrapper(alpha=0.1)
+wrapper.calibrate([0.1, 0.2, 0.3, 0.4, 0.5])
+lower, upper = wrapper.uncertainty_bound(0.2)
+result = wrapper.predict_set(0.15)   # {included, q_hat, coverage=0.9}
+```
+
+### 15. SubstrateResult V13 fields (NSCKSubstrate)
+```python
+result = substrate.ingest("input", "task")
+result.kle_uncertainty    # float or None
+result.uncertainty_bounds # (lower, upper) or None
+result.encoding_stats     # {"source_type": ..., "stats": ..., ...}
+result.procedural_hit     # bool — True if served from ProceduralMemory
+```
+
+---
+
+**Last Updated:** February 2026  
+**V13 glass-box features:** KLE uncertainty, causal audit traces, conformal bounds, encoding stats

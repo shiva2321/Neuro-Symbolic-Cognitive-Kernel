@@ -675,3 +675,32 @@ The system is best thought of as the **cognitive operating system layer** undern
 - [V8 Changelog](nsck/docs/V8_CHANGELOG.md) — everything added in V8
 - [Roadmap](nsck/docs/NSCK_ROADMAP_AND_PLAN.md) — full feature completion status
 - [Formulas](nsck/docs/FORMULAS.md) — VSA algebra, ΔP causality, FPE numerics, information theory
+
+---
+
+# V13 Update — Universal Cognitive Substrate (February 2026)
+
+## New in V13
+
+V13 adds 9 new modules completing the Universal Cognitive Substrate:
+
+| Module | File | Description |
+|--------|------|-------------|
+| `CausalRuleAuditor` | `reasoning/causal_rule_auditor.py` | ILP rules × causal graph; per-rule `causal_score` + `audit_trace` |
+| `SignalIngestor` | `perception/signal_ingestor.py` | Universal TypedSignal conversion for any Python input |
+| `UniversalHVEncoder` | `vsa/universal_hv_encoder.py` | Hebbian-weighted FPE encoding; feature importance |
+| `CrossModalAssociativeMemory` | `memory/cross_modal_associative_memory.py` | VSA XOR binding across modalities |
+| `ProceduralMemory` | `memory/procedural_memory.py` | Skill cache; fast-path decisions for familiar contexts |
+| `ConceptDriftDetector` | `memory/concept_drift_detector.py` | Semantic memory stability monitoring |
+| `VideoAdapter + TemporalStreamEncoder` | `adapters/video_adapter.py` | Frame sequence encoding with temporal decay |
+| `ConformalWrapper` | `learning/conformal_wrapper.py` | Provable uncertainty bounds (split conformal prediction) |
+| `PatternGeneralizer + CrossDomainTransferPipeline` | `learning/pattern_generalizer.py` | Abstraction and cross-domain transfer |
+
+**Updates:**
+- `GlobalWorkspace.compete()` now computes KLE (Shannon entropy) uncertainty
+- `CognitiveState` gains `kle_uncertainty` and `uncertainty_bounds` fields
+- `NSCKSubstrate` updated to V13 with `ingest()` / `feedback()` clean API
+- All V13 modules exposed in `get_stats()` output
+
+**Tests:** 85 new tests in `nsck/tests/unit/test_v13_universal_substrate.py`
++ 12 new tests added to `nsck/python/core/tests/test_transparency.py`

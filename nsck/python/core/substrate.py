@@ -1,7 +1,16 @@
 """
-NSCKSubstrate — The public substrate API for NSCK (V11).
+NSCKSubstrate — The public substrate API for NSCK (V13).
 ========================================================
 Stable interface for third-party developers to build on top of NSCK.
+
+V13 additions:
+- SignalIngestor + UniversalHVEncoder wired into ingest pipeline
+- CrossModalAssociativeMemory for modality-agnostic binding
+- ProceduralMemory for skill caching and fast-path decisions
+- ConceptDriftDetector for semantic memory monitoring
+- ConformalWrapper for calibrated uncertainty bounds
+- KLE uncertainty exposed in SubstrateResult
+- ingest() / feedback() clean API
 """
 from __future__ import annotations
 
@@ -21,7 +30,7 @@ def _stable_seed(obj: object) -> int:
 
 @dataclass
 class SubstrateResult:
-    """Result of processing an input through the NSCK substrate."""
+    """Result of processing an input through the NSCK substrate (V13)."""
     chosen_action: str
     confidence: float
     explanation: str
@@ -29,41 +38,39 @@ class SubstrateResult:
     trace: Dict[str, Any]
     modalities_processed: List[str]
     generalization_triggered: bool
+    # V13 fields
+    kle_uncertainty: Optional[float] = None
+    uncertainty_bounds: Optional[tuple] = None
+    encoding_stats: Optional[Dict[str, Any]] = None
+    procedural_hit: bool = False
 
 
 class NSCKSubstrate:
     """
-    The public substrate API for NSCK.
+    The public substrate API for NSCK (V13).
 
     Wraps CognitiveEngine with:
-    1. A clean, stable public API
+    1. A clean, stable public API (ingest/feedback)
     2. A plugin/encoder registration system
     3. The PerceptPacket protocol for any input type
-    4. Built-in cross-modal learning
-    5. Explicit support for all input types
+    4. Built-in cross-modal learning via CrossModalAssociativeMemory
+    5. Skill caching via ProceduralMemory
+    6. Semantic drift monitoring via ConceptDriftDetector
+    7. Calibrated uncertainty via ConformalWrapper
+    8. UniversalHVEncoder for signal-agnostic encoding
+    9. KLE uncertainty in every result
 
     Example usage::
 
         substrate = NSCKSubstrate()
         substrate.register_task("my_task")
 
-        # Text input
+        # V13 clean ingest API
+        result = substrate.ingest("The sky is blue", "my_task")
+        substrate.feedback(result.chosen_action, reward=1.0, task_tag="my_task")
+
+        # Legacy API still works
         result = substrate.process("The sky is blue", "my_task")
-
-        # Numeric sequence
-        result = substrate.process([1.2, 1.4, 1.7, 2.1, 2.8], "my_task")
-
-        # Multiple modalities simultaneously
-        result = substrate.process_multimodal({
-            "text": "fire detected",
-            "sensor": [0.9, 1.1, 0.95, 1.3],
-        }, "my_task")
-
-        # Learn from outcome
-        substrate.learn(state, action, reward=1.0, task_tag="my_task")
-
-        # Register custom encoder
-        substrate.register_encoder("thermal", my_encoder)
     """
 
     def __init__(self, config: Optional[NSCKConfig] = None) -> None:
@@ -74,6 +81,21 @@ class NSCKSubstrate:
         # Custom encoder registry: modality_name → encoder_fn(data, task_tag) → PerceptPacket
         self._custom_encoders: Dict[str, Callable] = {}
         self._registered_tasks: List[str] = []
+
+        # V13 modules
+        from python.core.perception.signal_ingestor import SignalIngestor
+        from python.core.vsa.universal_hv_encoder import UniversalHVEncoder
+        from python.core.memory.cross_modal_associative_memory import CrossModalAssociativeMemory
+        from python.core.memory.procedural_memory import ProceduralMemory
+        from python.core.memory.concept_drift_detector import ConceptDriftDetector
+        from python.core.learning.conformal_wrapper import ConformalWrapper
+        self.signal_ingestor = SignalIngestor()
+        self.universal_encoder = UniversalHVEncoder()
+        self.cross_modal_memory = CrossModalAssociativeMemory()
+        self.procedural_memory = ProceduralMemory()
+        self.drift_detector = ConceptDriftDetector()
+        self.conformal = ConformalWrapper(alpha=0.1)
+        self._last_ingest_hv = None  # For procedural memory lookup
 
     def register_task(self, task_tag: str) -> None:
         """Register a new task/domain."""
@@ -155,6 +177,26 @@ class NSCKSubstrate:
             except Exception:
                 explanation_text = str(cog_state.explanation)
 
+        # V13: compute encoding stats + conformal uncertainty
+        enc_stats = None
+        kle = None
+        ubounds = None
+        try:
+            ts = self.signal_ingestor.ingest(input_data)
+            enc_result = self.universal_encoder.encode_with_stats(ts)
+            enc_stats = {k: v for k, v in enc_result.items() if k != "hv"}
+            self._last_ingest_hv = enc_result["hv"]
+        except Exception:
+            pass
+        if self.conformal.is_calibrated():
+            score = 1.0 - cog_state.confidence
+            ubounds = self.conformal.uncertainty_bound(score)
+        # KLE from global workspace
+        try:
+            kle = self._engine.global_workspace.get_kle_uncertainty()
+        except Exception:
+            pass
+
         return SubstrateResult(
             chosen_action=cog_state.chosen_action,
             confidence=cog_state.confidence,
@@ -163,6 +205,9 @@ class NSCKSubstrate:
             trace=cog_state.trace or {},
             modalities_processed=modalities,
             generalization_triggered=generalization_triggered,
+            kle_uncertainty=kle,
+            uncertainty_bounds=ubounds,
+            encoding_stats=enc_stats,
         )
 
     def process_multimodal(
@@ -384,6 +429,83 @@ class NSCKSubstrate:
             }
         return {"concept": concept, "known": False}
 
+    # ------------------------------------------------------------------
+    # V13 clean ingest / feedback API
+    # ------------------------------------------------------------------
+
+    def ingest(
+        self,
+        input_data: Any,
+        task_tag: str,
+        available_actions: Optional[List[str]] = None,
+    ) -> SubstrateResult:
+        """
+        V13 clean ingest API — alias for process() with procedural fast-path.
+
+        Checks ProceduralMemory first; if a cached skill matches the encoded
+        context, returns a fast result without full deliberation.
+        """
+        if task_tag not in self._registered_tasks:
+            self.register_task(task_tag)
+
+        # Try procedural fast-path
+        try:
+            ts = self.signal_ingestor.ingest(input_data)
+            context_hv = self.universal_encoder.encode(ts)
+            cached = self.procedural_memory.recall_action(context_hv)
+            if cached is not None:
+                action, sim, reward = cached
+                return SubstrateResult(
+                    chosen_action=action,
+                    confidence=float(sim),
+                    explanation=f"Procedural cache hit (similarity={sim:.3f})",
+                    predicates=set(),
+                    trace={"procedural_cache": True, "similarity": sim},
+                    modalities_processed=[ts.source_type],
+                    generalization_triggered=False,
+                    kle_uncertainty=0.0,
+                    procedural_hit=True,
+                )
+        except Exception:
+            pass
+
+        return self.process(input_data, task_tag, available_actions)
+
+    def feedback(
+        self,
+        action: str,
+        reward: float,
+        task_tag: str,
+        state: Optional[Any] = None,
+        outcome: str = "neutral",
+    ) -> None:
+        """
+        V13 feedback API — record an outcome and update procedural memory.
+
+        Combines learn() with Hebbian weight update and skill caching.
+        """
+        if state is not None:
+            self.learn(state, action, reward, task_tag, outcome)
+        # Update Hebbian weights in universal encoder
+        if state is not None:
+            try:
+                self.universal_encoder.hebbian_update(state, reward)
+            except Exception:
+                pass
+        # Cache skill in procedural memory if reward is positive
+        if self._last_ingest_hv is not None and reward > 0:
+            try:
+                self.procedural_memory.cache_skill(
+                    self._last_ingest_hv, action, reward
+                )
+            except Exception:
+                pass
+        # Update conformal calibration
+        try:
+            self.conformal.calibrate([1.0 - reward], labels=[reward >= 0])
+        except Exception:
+            pass
+
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive system statistics."""
         stats = dict(self._engine.stats)
@@ -391,4 +513,9 @@ class NSCKSubstrate:
         stats["decision_counter"] = self._engine._decision_counter
         if self._engine.cross_modal is not None:
             stats["cross_modal"] = self._engine.cross_modal.get_statistics()
+        # V13 stats
+        stats["procedural_memory"] = self.procedural_memory.get_statistics()
+        stats["cross_modal_memory"] = self.cross_modal_memory.get_statistics()
+        stats["drift_detector"] = self.drift_detector.get_statistics()
+        stats["conformal"] = self.conformal.get_statistics()
         return stats

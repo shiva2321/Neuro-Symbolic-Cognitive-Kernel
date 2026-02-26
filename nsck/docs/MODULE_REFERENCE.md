@@ -2256,3 +2256,152 @@ SubstrateResult  # frozen dataclass
 | `str` data | Text path |
 | `list` / `ndarray` data | `NumericSequenceAdapter` |
 | `dict` data | `DictStateAdapter` |
+
+---
+
+## §18 — V13 Universal Cognitive Substrate Modules (February 2026)
+
+### 18.1 CausalRuleAuditor
+**File:** `python/core/reasoning/causal_rule_auditor.py`
+
+Bridges symbolic ILP rules with causal graph structure.
+
+| Class | Method | Signature | Returns |
+|-------|--------|-----------|---------|
+| `CausalRuleAuditor` | `__init__` | `(causal_weight=0.4)` | — |
+| | `add_causal_edge` | `(cause, effect, strength=1.0)` | — |
+| | `audit_rule` | `(condition, consequence, confidence) → AuditedRule` | `AuditedRule` |
+| | `audit_rules` | `(rules: List[Tuple[str,str,float]]) → List[AuditedRule]` | `List[AuditedRule]` |
+| | `top_rules` | `(n=5) → List[AuditedRule]` | `List[AuditedRule]` |
+| | `get_audit_history` | `() → List[AuditedRule]` | `List[AuditedRule]` |
+
+**AuditedRule fields:** `condition`, `consequence`, `original_confidence`, `causal_score`, `audit_trace`, `combined_score`
+
+### 18.2 SignalIngestor
+**File:** `python/core/perception/signal_ingestor.py`
+
+Converts any Python object to a normalized `TypedSignal` (float64 numpy array with metadata).
+
+| Class | Method | Signature | Returns |
+|-------|--------|-----------|---------|
+| `SignalIngestor` | `ingest` | `(data: Any, label?: str) → TypedSignal` | `TypedSignal` |
+
+**TypedSignal fields:** `data` (float64 ndarray), `source_type` (str), `original_shape` (tuple), `stats` (dict: mean/std/min/max/l2_norm), `metadata` (dict)
+
+### 18.3 UniversalHVEncoder
+**File:** `python/core/vsa/universal_hv_encoder.py`
+
+Adaptive, signal-agnostic HyperVector encoding with Hebbian weights and feature importance.
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `encode` | `(signal: Any, label?: str) → HyperVector` | `HyperVector` |
+| `encode_with_stats` | `(signal: Any, label?: str) → dict` | `{hv, source_type, n_dims, stats, top_features}` |
+| `hebbian_update` | `(signal: Any, reward: float)` | — |
+| `get_top_features` | `(k=10) → List[dict]` | `[{index, importance}]` |
+| `reset_weights` | `()` | — |
+
+### 18.4 CrossModalAssociativeMemory
+**File:** `python/core/memory/cross_modal_associative_memory.py`
+
+Modality-agnostic binding and cross-domain recall using VSA XOR association.
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `bind` | `(modality_a, hv_a, modality_b, hv_b, strength=1.0, label?)` | `ModalityBinding` |
+| `recall` | `(query_hv, from_modality, to_modality, top_k=3)` | `List[(hv, sim, label)]` |
+| `recall_by_label` | `(label: str)` | `List[ModalityBinding]` |
+| `get_statistics` | `()` | `{total_bindings, modality_pairs}` |
+
+### 18.5 ProceduralMemory
+**File:** `python/core/memory/procedural_memory.py`
+
+Skill caching for fast-path decisions in familiar contexts.
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `cache_skill` | `(context_hv, action, reward, label?)` | `Skill` |
+| `recall_action` | `(query_hv) → Optional[Tuple[str, float, float]]` | `(action, similarity, reward)` or `None` |
+| `get_statistics` | `()` | `{total_skills, hit_count, miss_count, hit_rate}` |
+
+### 18.6 ConceptDriftDetector
+**File:** `python/core/memory/concept_drift_detector.py`
+
+Monitors semantic memory stability by tracking HV changes over time.
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `snapshot` | `(concept: str, hv: HyperVector)` | — |
+| `check` | `(concept: str, hv: HyperVector) → DriftEvent` | `DriftEvent` |
+| `update_snapshot` | `(concept: str, hv: HyperVector)` | — |
+| `get_drift_report` | `() → List[DriftEvent]` | `List[DriftEvent]` |
+| `get_alarmed_concepts` | `() → List[str]` | `List[str]` |
+| `get_statistics` | `()` | `{snapshots, total_checks, total_alarms, alarmed_concepts}` |
+
+**DriftEvent fields:** `concept`, `similarity_to_reference`, `drift_magnitude`, `timestamp`, `alarm`
+
+### 18.7 VideoAdapter / TemporalStreamEncoder
+**File:** `python/core/adapters/video_adapter.py`
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `VideoAdapter` | `encode(frames, task_tag) → PerceptPacket` | Encodes frame list via temporal HV accumulation |
+| `TemporalStreamEncoder` | `step(hv) → HyperVector` | Update temporal state with new HV |
+| | `reset()` | Reset temporal state |
+| | `.current_state` | Current accumulated HV |
+| | `.steps` | Number of frames processed |
+
+### 18.8 ConformalWrapper
+**File:** `python/core/learning/conformal_wrapper.py`
+
+Split conformal prediction for calibrated uncertainty bounds with coverage guarantees.
+
+| Method | Signature | Returns |
+|--------|-----------|---------|
+| `calibrate` | `(scores, labels?)` | `q_hat: float` |
+| `predict_set` | `(score, candidates?)` | `{included, q_hat, coverage, uncertain}` |
+| `uncertainty_bound` | `(score) → Tuple[float, float]` | `(lower, upper)` |
+| `is_calibrated` | `()` | `bool` |
+| `get_statistics` | `()` | `{alpha, q_hat, n_calibration, target_coverage}` |
+
+### 18.9 PatternGeneralizer / CrossDomainTransferPipeline
+**File:** `python/core/learning/pattern_generalizer.py`
+
+| Class | Method | Description |
+|-------|--------|-------------|
+| `PatternGeneralizer` | `observe(hv, domain, description?) → (Pattern, is_new)` | Greedy clustering |
+| | `get_mature_patterns() → List[Pattern]` | Patterns above `min_members` |
+| | `match(query_hv, domain?, top_k) → List[(Pattern, sim)]` | Find similar patterns |
+| | `get_statistics()` | `{total_patterns, mature_patterns, domains}` |
+| `CrossDomainTransferPipeline` | `register(hv, domain, description?) → Pattern` | Register observation |
+| | `transfer(query_hv, source_domain, target_domain, top_k)` | Transfer matching patterns |
+| | `get_transfer_log()` | All transfer events |
+
+### 18.10 NSCKSubstrate V13 additions
+
+**New fields in SubstrateResult:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kle_uncertainty` | `Optional[float]` | Competition entropy from GlobalWorkspace |
+| `uncertainty_bounds` | `Optional[tuple]` | `(lower, upper)` conformal bounds |
+| `encoding_stats` | `Optional[dict]` | UniversalHVEncoder encoding statistics |
+| `procedural_hit` | `bool` | `True` if ProceduralMemory served this result |
+
+**New NSCKSubstrate methods:**
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| `ingest` | `(input_data, task_tag, available_actions?) → SubstrateResult` | Clean V13 API with procedural fast-path |
+| `feedback` | `(action, reward, task_tag, state?, outcome?)` | Record outcome; updates Hebbian weights + procedural cache + conformal |
+
+**New NSCKSubstrate attributes (V13):**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `signal_ingestor` | `SignalIngestor` | Universal input normalization |
+| `universal_encoder` | `UniversalHVEncoder` | Adaptive HV encoding |
+| `cross_modal_memory` | `CrossModalAssociativeMemory` | Cross-domain binding |
+| `procedural_memory` | `ProceduralMemory` | Skill cache |
+| `drift_detector` | `ConceptDriftDetector` | Semantic stability monitor |
+| `conformal` | `ConformalWrapper` | Calibrated uncertainty |
