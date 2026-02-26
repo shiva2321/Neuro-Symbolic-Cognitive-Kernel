@@ -102,17 +102,19 @@ python examples/01_cognitive_engine_basic.py
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "nsck"))
 
-from python.core.reasoning.cognitive_engine import CognitiveEngine
-from python.core.integration.config import NSCKConfig
+from python.core.substrate import NSCKSubstrate
 
-engine = CognitiveEngine(NSCKConfig())
-engine.register_task(task_tag="navigation")
+sub = NSCKSubstrate()
+sub.register_task("navigation")
 
-result = engine.decide(
-    observation={"position": [1, 2], "goal": [5, 5]},
-    task_tag="navigation",
-)
-print(result.action, result.explanation)
+result = sub.process("move towards the goal", task_tag="navigation")
+print(result.chosen_action, result.confidence, result.explanation)
+
+# Learn from feedback
+sub.feedback(result.chosen_action, reward=1.0, task_tag="navigation")
+
+# Consolidate offline
+sub.sleep("navigation")
 ```
 
 ---
