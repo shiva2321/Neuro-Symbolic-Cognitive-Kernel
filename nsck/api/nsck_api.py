@@ -2,6 +2,27 @@
 NSCK REST API
 =============
 FastAPI wrapper (optional) with stdlib http.server fallback for NSCK.
+
+Exposes the ``CognitiveEngine`` as a JSON-over-HTTP service.  All endpoints
+work with or without FastAPI/uvicorn installed:
+
+Endpoints:
+- ``POST /decide``  — run one cognitive cycle; body: ``{state, task_tag}``.
+- ``POST /learn``   — record a learning update; body: ``{state, action, reward, task_tag}``.
+- ``POST /sleep``   — trigger offline consolidation; body: ``{task_tag?}``.
+- ``GET  /status``  — return system health and task inventory.
+
+Usage::
+
+    server = NSCKApiServer()
+    server.run(host="127.0.0.1", port=8000)
+
+Or embed in an existing FastAPI app::
+
+    app = server.create_app()  # returns None if FastAPI is absent
+
+Error handling: ``handle_decide`` catches engine exceptions and returns a JSON
+error response instead of raising, so the HTTP server always responds.
 """
 from __future__ import annotations
 
@@ -35,7 +56,11 @@ class NSCKApiServer:
         # Ensure task is registered
         if task_tag not in [tb for tb in self.engine.task_brains]:
             self.engine.register_task(task_tag)
-        result = self.engine.decide(state, task_tag)
+        try:
+            result = self.engine.decide(state, task_tag)
+        except Exception as exc:
+            logger.error("handle_decide error: %s", exc, exc_info=True)
+            return {"error": str(exc), "action": "explore", "confidence": 0.0}
         explanation_text = ""
         active_predicates: list = []
         confidence = getattr(result, "confidence", 0.5)

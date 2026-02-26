@@ -565,9 +565,8 @@ class CognitiveEngine:
                 rules_only = [r for r, _ in applicable]
                 scored = self.rule_scorer.rank_rules(rules_only)
                 rule = scored[0]
-                # Use the score from the same rule that was selected after neural ranking
-                original_scores = {r: s for r, s in applicable}
-                score = original_scores.get(rule, applicable[0][1])
+                # Find original score using identity comparison (Rule is not hashable)
+                score = next((s for r, s in applicable if r is rule), applicable[0][1])
             else:
                 rule, score = applicable[0]
             coalitions.append(Coalition(

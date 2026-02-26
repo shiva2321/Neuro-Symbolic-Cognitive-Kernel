@@ -886,3 +886,96 @@ After the existing consolidation steps, `sleep()` now automatically runs:
 - `MemoryHomeostasis.prune_unused_rules()` — wired into `sleep()`
 
 See `docs/NSCK_V9_SUBSTRATE.md` for the full V9 specification.
+
+---
+
+## 15. V10 — Intelligence Extensions
+
+V10 adds eight new modules that extend the cognitive substrate with richer VSA operations, neural rule scoring, probabilistic NLU, attention-guided GWT competition, and a formal safety layer.
+
+### 15.1 New Module Table
+
+| Module | Path | Role |
+|---|---|---|
+| `EmbeddingVSABridge` | `vsa/vsa_embedding_bridge.py` | Project dense embeddings (e.g. sentence-transformers) to/from binary HyperVectors |
+| `RustConcurrentShim` | `vsa/rust_concurrent_shim.py` | Expose Rust concurrent memory classes with Python fallbacks |
+| `FHRRVector` / `FHRRMemory` | `vsa/fhrr.py` | Complex-phasor VSA for differentiable, invertible operations |
+| `NgramNLU` | `language/ngram_nlu.py` | Naive Bayes n-gram intent classifier + entity extractor |
+| `MultiHeadAttentionGWT` | `reasoning/attention_gwt_bridge.py` | Multi-head attention re-weighting of GWT coalition saliences |
+| `RuleNeuralScorer` | `learning/rule_neural_scorer.py` | Online perceptron re-ranking of symbolic rules before GWT |
+| `SafetyRuleVerifier` / `SafetyGateVerifier` | `cognitive/safety_verifier.py` | Declarative safety properties; gates decisions before execution |
+| `NSCKApiServer` | `api/nsck_api.py` | FastAPI / stdlib HTTP REST wrapper around `CognitiveEngine` |
+
+### 15.2 V10 Decision Loop
+
+The full decision loop with V10 components:
+
+```
+CognitiveEngine.decide(state, task_tag)
+  │
+  ├─ PerceptPacket (V9 adapter)
+  │     └─ EmbeddingVSABridge (optional text→HV enrichment)
+  │
+  ├─ Coalition building
+  │     ├─ MATH coalition (MathReasoner)
+  │     ├─ RULES coalition
+  │     │     └─ RuleNeuralScorer.rank_rules()   ← V10
+  │     ├─ EXPLORATION coalition (CuriosityModule)
+  │     ├─ Q-LEARNING coalition
+  │     ├─ PLAN coalition (STRIPSPlanner)
+  │     └─ MEMORY coalition (SemanticMemory)
+  │
+  ├─ GWT competition
+  │     └─ MultiHeadAttentionGWT.rerank()        ← V10 (optional)
+  │
+  ├─ Safety gate
+  │     └─ SafetyGateVerifier.gate_decision()    ← V10
+  │
+  └─ CognitiveState (action, confidence, explanation)
+```
+
+### 15.3 FHRR + Embedding Bridge Workflow
+
+```
+Text / embedding → EmbeddingVSABridge.embed_to_hv()
+                          ↓ binary HyperVector
+                   VSA binding / bundling / similarity
+
+or:
+
+FHRRVector.encode_symbol("dog").bind(FHRRVector.encode_symbol("mammal"))
+                          ↓ complex phasor
+                   FHRRMemory.store("dog_is_mammal", result)
+                   FHRRMemory.retrieve("dog_is_mammal")  → similarity query
+```
+
+### 15.4 Rust Concurrent Memory
+
+`rust_concurrent_shim.py` transparently selects the backend at import time:
+
+```
+hypervec_rs.SemanticMemoryConcurrent  ← Rust (parallel rayon ops)
+        OR
+SemanticMemoryConcurrent (Python)     ← pure-Python fallback
+```
+
+Call `get_status()` to inspect which backend is active:
+
+```python
+from python.core.vsa.rust_concurrent_shim import get_status
+print(get_status())
+# {'use_rust': True, 'available_classes': [...]}
+```
+
+### 15.5 Safety Verification
+
+```python
+from python.core.cognitive.safety_verifier import SafetyRuleVerifier, SafetyProperty
+
+verifier = SafetyRuleVerifier()
+verifier.add_property(SafetyProperty("max_complexity", "len(conditions) < 20"))
+report = verifier.verify_rule(my_rule)
+# {'safe': True/False, 'violations': [...], 'score': 0.0-1.0}
+```
+
+Default critical properties: `no_runaway` (fire_count < 10 000) and `no_code_injection` (action not in FORBIDDEN_ACTIONS).

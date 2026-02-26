@@ -52,8 +52,6 @@ def test_rule_learner_interface():
     
     print("✅ RuleLearner implements WorkspaceModule interface correctly!")
     print(f"✅ Telemetry: {telemetry}")
-    
-    return True
 
 if __name__ == "__main__":
     test_rule_learner_interface()

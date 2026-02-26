@@ -1960,3 +1960,185 @@ Wraps `SNNPerceptionModule.perceive()` with the same lazy-STDP scheduling as `pe
 | `benchmark_transfer(engine, src, tgt, gen, ...)` | `{zero_shot_rate, few_shot_rate, delta}` | Zero-shot and few-shot transfer rates |
 | `benchmark_lifelong(engine, tasks, gens, ...)` | `{peak_rates, final_rates, forgetting_ratio}` | Peak success + catastrophic forgetting measurement |
 | `benchmark_efficiency(engine, task, gen, n)` | `{avg_ms, p95_ms, max_ms}` | Decision latency statistics |
+
+---
+
+## V10 — Intelligence Extension Modules
+
+### `vsa/vsa_embedding_bridge.py` — `EmbeddingVSABridge`
+
+```python
+EmbeddingVSABridge(dim_in=768, hv_dim=10240, seed=42)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `embed_to_hv` | `(embedding: np.ndarray) → HyperVector` | `HyperVector` | Project dense vector to binary HV space via random projection |
+| `hv_to_embed` | `(hv: HyperVector) → np.ndarray` | `np.ndarray` | Pseudo-inverse projection from HV bits back to embedding space |
+| `batch_embed_to_hv` | `(embeddings: List[np.ndarray]) → List[HyperVector]` | `List[HyperVector]` | Batch conversion |
+| `similarity_in_embed_space` | `(hv1, hv2) → float` | `float` | Cosine similarity measured in embedding space |
+| `encode_text` | `(text: str) → HyperVector` | `HyperVector` | Text→HV via sentence-transformers or n-gram fallback |
+| `try_load_sentence_transformer` | `(model_name: str) → bool` | `bool` | Attempt to load sentence-transformers model |
+
+---
+
+### `vsa/fhrr.py` — `FHRRVector`, `FHRRMemory`
+
+```python
+FHRRVector(dim=1024, seed=None)
+FHRRMemory(dim=1024)
+```
+
+**FHRRVector:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `bind` | `(other) → FHRRVector` | `FHRRVector` | Element-wise complex multiplication |
+| `unbind` | `(other) → FHRRVector` | `FHRRVector` | Conjugate multiplication (inverse of bind) |
+| `bundle` | `(others: List[FHRRVector]) → FHRRVector` | `FHRRVector` | Sum phasors then renormalise |
+| `similarity` | `(other) → float` | `float` | Cosine similarity of magnitude vectors |
+| `gradient_similarity` | `(other) → float` | `float` | Differentiable similarity via real/imag parts |
+| `encode_scalar` | `(x: float) → FHRRVector` | `FHRRVector` | Golden-ratio deterministic scalar encoding |
+| `encode_symbol` | `(name: str, dim=1024) → FHRRVector` | `FHRRVector` | Hash-based deterministic symbol encoding |
+| `to_gradient_input` | `() → np.ndarray` | `np.ndarray` | `[real, imag]` float array for gradient frameworks |
+| `from_gradient_output` | `(arr, dim) → FHRRVector` | `FHRRVector` | Reconstruct from `[real, imag]` float array |
+
+**FHRRMemory:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `store` | `(key: str, vector: FHRRVector)` | — | Bind key→vector and bundle into composite memory |
+| `retrieve` | `(key: str) → FHRRVector` | `FHRRVector` | Unbind key from composite memory trace |
+| `cleanup` | `(query, codebook) → (name, sim)` | `Tuple[str, float]` | Find nearest match in codebook |
+
+---
+
+### `vsa/rust_concurrent_shim.py` — Concurrent Memory Shim
+
+Exports (Rust if available, Python fallback otherwise):
+
+| Name | Type | Description |
+|---|---|---|
+| `SemanticMemoryConcurrent` | class | Concept store with `add_concept`, `get_concept`, `parallel_semantic_search`, `concept_count` |
+| `EpisodicMemoryConcurrent` | class | Episode buffer with `add_episode`, `get_recent_episodes`, `search_by_task`, `size` |
+| `Episode` | dataclass | `timestamp, task_tag, situation_hv, action, outcome, reward, impact_score` |
+| `HyperVectorRegistry` | class | Named HV registry: `register(name, hv)`, `get(name)` |
+| `PersistentStorage` | class | On-disk HV persistence: `store_hypervector`, `load_hypervector` |
+| `parallel_bundle` | function | `(hvs: list) → HV` — bundle list of HVs |
+| `batch_parallel_similarity_search` | function | `(query, hvs, k=5) → List[(idx, sim)]` |
+| `batch_similarity_matrix` | function | `(hvs: list) → List[List[float]]` |
+| `get_status` | function | `() → {use_rust: bool, available_classes: list}` |
+
+---
+
+### `language/ngram_nlu.py` — `NgramNLU`
+
+```python
+NgramNLU(n=2)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `train` | `(sentences, labels)` | — | Train Naive Bayes on labeled sentences |
+| `classify` | `(text: str) → List[(label, prob)]` | `List[Tuple[str,float]]` | Ranked intent labels with probabilities |
+| `extract_intent` | `(text: str) → Tuple[str, float]` | `(label, confidence)` | Top intent and confidence |
+| `extract_entities` | `(text: str) → List[(entity, type)]` | `List[Tuple[str,str]]` | Named entities with type heuristic |
+
+Default intent labels: `question`, `command`, `statement`, `greeting`, `farewell`.
+Module constant `INTENT_LABELS` lists all defaults.
+
+---
+
+### `reasoning/attention_gwt_bridge.py` — `MultiHeadAttentionGWT`, `GWTAttentionBridge`
+
+```python
+MultiHeadAttentionGWT(n_heads=4, key_dim=64)
+GWTAttentionBridge(n_heads=4, key_dim=64)
+```
+
+**MultiHeadAttentionGWT:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `compute_attention` | `(query_vec, coalitions) → Dict[str, float]` | `{source: weight}` | Compute per-coalition attention weights |
+
+**GWTAttentionBridge:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `rerank` | `(coalitions: List[Coalition], situation_hv) → List[Coalition]` | `List[Coalition]` | Adjust `base_salience` by attention weight; returns re-ranked coalitions |
+
+---
+
+### `learning/rule_neural_scorer.py` — `RuleNeuralScorer`, `RuleFeaturizer`
+
+```python
+RuleNeuralScorer(n_features=6, hidden=16)
+RuleFeaturizer()
+```
+
+**RuleFeaturizer:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `featurize` | `(rule) → np.ndarray` | `ndarray(6,)` | Extract `[confidence, support, fire_ratio, complexity, trend, has_task]` |
+
+**RuleNeuralScorer:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `score` | `(rule) → float` | `float [0,1]` | Forward-pass score for one rule |
+| `rank_rules` | `(rules: List) → List` | `List` | Rules sorted by score descending |
+| `batch_score` | `(rules: List) → List[float]` | `List[float]` | Scores for all rules |
+| `update` | `(rule, reward, lr=0.01)` | — | Online MSE gradient update |
+| `save` | `(path: str)` | — | Save weights to `.npz` file |
+| `load` | `(path: str)` | — | Load weights from `.npz` file |
+
+---
+
+### `cognitive/safety_verifier.py` — `SafetyRuleVerifier`, `SafetyGateVerifier`, `SafetyProperty`
+
+```python
+SafetyProperty(name, formula, severity="critical")
+SafetyRuleVerifier()
+SafetyGateVerifier(config=None)
+```
+
+**SafetyProperty:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `check` | `(rule) → (bool, str)` | `Tuple[bool, str]` | Evaluate formula in restricted namespace |
+
+Available formula variables: `confidence`, `support`, `conditions`, `action`, `fire_count`, `FORBIDDEN_ACTIONS`, `len`.
+
+**SafetyRuleVerifier:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `add_property` | `(prop: SafetyProperty)` | — | Register additional safety property |
+| `verify_rule` | `(rule) → dict` | `{safe, violations, score, critical_violations}` | Check all properties against rule |
+| `verify_ruleset` | `(rules: List) → dict` | `{total_rules, safe_rules, unsafe_rules, total_violations, results}` | Verify a list of rules |
+
+**SafetyGateVerifier:**
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `gate_decision` | `(action, confidence, active_rules) → (bool, str)` | `Tuple[bool, str]` | Allow or block decision based on safety + confidence |
+
+---
+
+### `api/nsck_api.py` — `NSCKApiServer`
+
+```python
+NSCKApiServer(config=None)
+```
+
+| Method | Signature | Returns | Description |
+|---|---|---|---|
+| `handle_decide` | `(state: dict, task_tag: str) → dict` | `{action, confidence, explanation, active_predicates}` or `{error, ...}` | One cognitive cycle |
+| `handle_learn` | `(state, action, reward, task_tag, outcome) → dict` | `{status}` | Record learning update |
+| `handle_sleep` | `(task_tag?) → dict` | `{status}` | Trigger offline consolidation |
+| `handle_status` | `() → dict` | `{status, tasks, decisions, config}` | System health |
+| `create_app` | `() → FastAPI or None` | FastAPI app or None | Build FastAPI app if available |
+| `run` | `(host="127.0.0.1", port=8000)` | — | Start HTTP server (FastAPI+uvicorn or stdlib fallback) |

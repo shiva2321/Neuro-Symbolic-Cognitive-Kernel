@@ -2,6 +2,21 @@
 Ngram NLU
 =========
 Probabilistic NLU layer using n-gram language models with Naive Bayes classification.
+
+Provides lightweight intent detection and entity extraction without any external
+NLP library dependency.  Integrates with ``CognitiveEngine`` as a pre-processor:
+
+- ``NgramNLU.classify(text)`` returns a ranked list of ``(label, probability)``
+  pairs using Laplace-smoothed Naive Bayes over unigram + n-gram features.
+- ``NgramNLU.extract_intent(text)`` returns the top intent label and confidence.
+- ``NgramNLU.extract_entities(text)`` returns a list of ``(entity, type)`` pairs
+  identified via a curated noun vocabulary and capitalisation heuristics.
+- The default intent labels are: ``question``, ``command``, ``statement``,
+  ``greeting``, ``farewell``.  Custom labels can be trained via ``train()``.
+
+This module requires no third-party packages and is always available.  It
+complements the ``UniversalInput`` and ``LanguageModule`` layers by providing
+a statistical prior over user intent that can be fused with symbolic reasoning.
 """
 from __future__ import annotations
 

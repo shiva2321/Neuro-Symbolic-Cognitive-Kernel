@@ -2,6 +2,26 @@
 Rule Neural Scorer
 ==================
 Lightweight perceptron for neural re-ranking of symbolic rules.
+
+Provides a small two-layer neural network (``RuleNeuralScorer``) that assigns a
+continuous quality score to symbolic rules produced by ``RuleLearner``.  This
+score is used by ``CognitiveEngine`` to re-rank applicable rules before feeding
+them into the Global Workspace competition.
+
+Architecture:
+- ``RuleFeaturizer`` extracts 6 hand-crafted features from a ``Rule`` object:
+  confidence, normalised support, fire-rate, condition complexity, recent
+  confidence trend, and task-specificity flag.
+- ``RuleNeuralScorer`` is a single-hidden-layer perceptron (6 → 16 → 1) with
+  sigmoid activations trained via online MSE gradient updates.
+- ``rank_rules(rules)`` returns rules sorted by score descending.
+- ``update(rule, reward)`` performs one online gradient step using the observed
+  reward as the target signal.
+- Weights can be saved/loaded with ``save(path)`` / ``load(path)`` (numpy .npz).
+
+Integration: ``CognitiveEngine`` calls ``rank_rules`` when ``rule_scorer`` is set
+and more than one applicable rule is found, then uses the top-ranked rule for the
+GWT coalition proposal.
 """
 from __future__ import annotations
 

@@ -2,6 +2,19 @@
 VSA Embedding Bridge
 ====================
 Bridges dense embedding vectors to/from VSA HyperVectors via random projection.
+
+Integrates with the broader NSCK system as follows:
+
+- ``EmbeddingVSABridge.embed_to_hv(embedding)`` converts a dense vector (e.g.
+  from sentence-transformers) into a binary ``HyperVector`` suitable for VSA
+  binding, bundling, and similarity search in the cognitive engine.
+- ``EmbeddingVSABridge.hv_to_embed(hv)`` performs a pseudo-inverse projection
+  back to embedding space for interpretability and cross-modal comparisons.
+- ``encode_text(text)`` provides a zero-dependency text→HV path (character
+  n-gram fallback) and optionally uses sentence-transformers when available.
+- Used by ``CognitiveEngine`` to encode text percepts into HyperVectors when a
+  richer embedding model is available, supplementing the standard ``hypervec_shim``
+  hash-based encoding.
 """
 from __future__ import annotations
 

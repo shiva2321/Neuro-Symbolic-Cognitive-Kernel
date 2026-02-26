@@ -1,7 +1,30 @@
 """
 Safety Rule Formal Verifier
 ============================
-Formal safety properties and verification for NSCK rules.
+Formal safety properties and verification for NSCK rules and decisions.
+
+Provides a declarative, expression-based safety layer that checks symbolic
+rules and actions before they influence behaviour:
+
+- ``SafetyProperty`` encodes a named safety invariant as a Python expression
+  string evaluated in a restricted namespace (no arbitrary builtins).
+- ``SafetyRuleVerifier`` checks all registered properties against a ``Rule``
+  object and returns a detailed violation report.
+- ``SafetyGateVerifier`` wraps ``SafetyRuleVerifier`` and adds a ``gate_decision``
+  method used by ``CognitiveEngine`` to block actions that violate critical
+  properties (e.g. code injection, runaway fire counts, low confidence).
+
+Default safety properties:
+- ``min_confidence`` (warning): rule confidence must exceed 0.3.
+- ``min_support`` (warning): rule must have ≥ 2 supporting examples.
+- ``no_runaway`` (critical): fire count must be < 10 000.
+- ``no_code_injection`` (critical): action string must not be in ``FORBIDDEN_ACTIONS``.
+
+Custom properties can be added via ``SafetyRuleVerifier.add_property()``.
+
+Integration: ``CognitiveEngine`` instantiates ``SafetyGateVerifier`` and calls
+``gate_decision`` after coalition selection to veto unsafe actions before they
+are broadcast to the environment.
 """
 from __future__ import annotations
 
@@ -134,10 +157,6 @@ class SafetyGateVerifier:
     def __init__(self, config=None):
         self._config = config
         self._verifier = SafetyRuleVerifier()
-        # Add default properties
-        for prop in SafetyRuleVerifier.DEFAULT_PROPERTIES:
-            if prop not in self._verifier._properties:
-                pass  # already added in __init__
 
     def gate_decision(
         self,

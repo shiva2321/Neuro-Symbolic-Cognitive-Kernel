@@ -2,6 +2,24 @@
 Attention ↔ GWT Bridge
 =======================
 Multi-head attention scoring for Global Workspace Theory coalition competition.
+
+Implements a transformer-inspired attention mechanism to re-weight competing
+coalitions in the Global Workspace.  Integrates with ``CognitiveEngine`` as an
+optional salience re-scorer:
+
+- ``AttentionHead.score(query, keys)`` computes softmax attention scores of a
+  query feature vector against a list of key vectors.
+- ``MultiHeadAttentionGWT.compute_attention(query_vec, coalitions)`` maps each
+  coalition to a feature vector, runs all attention heads in parallel, averages
+  the resulting scores, and returns a ``{coalition_source: attention_weight}``
+  dict.
+- ``GWTAttentionBridge.rerank(coalitions, situation_hv)`` is the main entry
+  point called by the cognitive engine: it adjusts ``Coalition.base_salience``
+  values by multiplying with the computed attention weights, allowing the GWT
+  arbitration to be guided by learned or structural feature alignment.
+
+All weights are randomly initialised and not persisted between sessions; the
+module is designed for structural routing, not gradient training.
 """
 from __future__ import annotations
 

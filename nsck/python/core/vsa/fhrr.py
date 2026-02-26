@@ -2,6 +2,23 @@
 FHRR: Fourier Holographic Reduced Representations
 ===================================================
 Complex-valued VSA vectors for differentiable operations.
+
+FHRR is an alternative to binary HyperVectors that represents each dimension as
+a unit-magnitude complex number (phasor).  Key properties:
+
+- **Binding** = element-wise complex multiplication (exact inverse via conjugate).
+- **Bundling** = element-wise sum of phasors, then re-normalise to unit circle.
+- **Similarity** = cosine of magnitude vectors; ``gradient_similarity`` uses the
+  real/imag decomposition for gradient-friendly computation.
+- **Scalar encoding** via golden-ratio–based phase offsets gives quasi-orthogonal
+  vectors for distinct scalar values.
+
+Integration points:
+- ``FHRRVector`` and ``FHRRMemory`` are standalone and do not depend on the Rust
+  backend.  They can be used alongside or instead of ``HyperVector`` for tasks
+  that require differentiable or invertible VSA operations.
+- ``CognitiveEngine`` can use FHRR for plan-step encoding when gradient-based
+  optimisation of symbolic sequences is needed.
 """
 from __future__ import annotations
 

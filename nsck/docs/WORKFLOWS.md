@@ -507,3 +507,92 @@ graph LR
     Sensor --> SP --> Ready -- yes --> Features --> SV --> Packet --> Decide
     Ready -- no --> SP
 ```
+
+---
+
+## 9. V10 — Extended Decision Loop
+
+### 9.1 Neural Rule Scoring
+
+When `CognitiveEngine.rule_scorer` is set to a `RuleNeuralScorer` instance,
+applicable rules are re-ranked by neural score before GWT coalition building:
+
+```mermaid
+graph TD
+    AR["rule_learner.get_applicable_rules(active_preds)"]
+    Check{"len > 1\nand rule_scorer?"}
+    NRS["RuleNeuralScorer.rank_rules(rules)"]
+    Top["rule = ranked[0]\nscore = original score by identity"]
+    Direct["rule, score = applicable[0]"]
+    Coal["Coalition(source=RULES, content=rule.consequence, salience=score)"]
+
+    AR --> Check
+    Check -- yes --> NRS --> Top --> Coal
+    Check -- no --> Direct --> Coal
+```
+
+Online feedback: after a decide-learn cycle, `rule_scorer.update(rule, reward)` is
+called to update the perceptron weights toward the observed reward signal.
+
+### 9.2 Safety Verification Gate
+
+After GWT selects a winning coalition, `SafetyGateVerifier.gate_decision()` is
+consulted before the action is returned:
+
+```mermaid
+graph TD
+    Winner["Winning coalition action"]
+    SV["SafetyGateVerifier.gate_decision(action, confidence, active_rules)"]
+    Pass{"allowed?"}
+    Return["Return action in CognitiveState"]
+    Block["Override with 'explore'\nlog safety violation"]
+
+    Winner --> SV --> Pass
+    Pass -- yes --> Return
+    Pass -- no --> Block
+```
+
+Critical property violations (code injection, runaway fire count) always block.
+Warning-severity violations are logged but do not block execution.
+
+### 9.3 FHRR + Embedding Bridge Workflow
+
+```mermaid
+graph LR
+    Text["Raw text / external embedding"]
+    EBridge["EmbeddingVSABridge\n.embed_to_hv()"]
+    BinHV["Binary HyperVector\n(standard NSCK VSA)"]
+    FBridge["FHRRVector.encode_symbol()\nor .encode_scalar()"]
+    Phasor["Complex-phasor FHRR vector"]
+    Mem["FHRRMemory.store() / retrieve()"]
+
+    Text --> EBridge --> BinHV
+    Text --> FBridge --> Phasor --> Mem
+```
+
+- Use `EmbeddingVSABridge` when integrating pre-trained sentence embeddings.
+- Use `FHRRVector` when differentiable or exactly invertible VSA operations are
+  required (e.g. gradient-based plan optimisation, exact key–value recall).
+
+### 9.4 REST API Workflow
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant NSCKApiServer
+    participant CognitiveEngine
+
+    Client->>NSCKApiServer: POST /decide {state, task_tag}
+    NSCKApiServer->>CognitiveEngine: register_task (if new)
+    NSCKApiServer->>CognitiveEngine: decide(state, task_tag)
+    CognitiveEngine-->>NSCKApiServer: CognitiveState
+    NSCKApiServer-->>Client: {action, confidence, explanation, active_predicates}
+
+    Client->>NSCKApiServer: POST /learn {state, action, reward, task_tag}
+    NSCKApiServer->>CognitiveEngine: learn(state, action, reward, task_tag)
+    NSCKApiServer-->>Client: {status: "ok"}
+
+    Client->>NSCKApiServer: POST /sleep {}
+    NSCKApiServer->>CognitiveEngine: sleep()
+    NSCKApiServer-->>Client: {status: "sleep_complete"}
+```

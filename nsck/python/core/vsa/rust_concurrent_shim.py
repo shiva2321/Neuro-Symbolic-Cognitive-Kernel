@@ -2,6 +2,25 @@
 Rust Concurrent Memory Shim
 ============================
 Exposes Rust concurrent memory classes with Python fallbacks.
+
+When the compiled ``hypervec_rs`` Rust extension provides concurrent memory
+classes (``SemanticMemoryConcurrent``, ``EpisodicMemoryConcurrent``, etc.),
+this shim re-exports them directly.  When the Rust extension is absent, pure-
+Python drop-in replacements are provided so the rest of the codebase is
+unaffected.
+
+Exported names (Rust or Python fallback):
+- ``SemanticMemoryConcurrent`` — concept store with parallel similarity search.
+- ``EpisodicMemoryConcurrent`` — episode buffer with task-tag querying.
+- ``Episode`` — lightweight episode dataclass.
+- ``CognitiveWorkerPool`` — Rust-only parallel worker pool (raises on Python).
+- ``HyperVectorRegistry`` — named HV registry.
+- ``PersistentStorage`` — optional on-disk HV persistence.
+- ``parallel_bundle`` — bundle a list of HVs in parallel (sequential fallback).
+- ``batch_parallel_similarity_search`` — k-NN search fallback.
+- ``batch_similarity_matrix`` — pairwise similarity matrix.
+
+Use ``get_status()`` to inspect which backend is active at runtime.
 """
 from __future__ import annotations
 
