@@ -1,206 +1,471 @@
-# NSCK — Neural-Symbolic Cognitive Kernel
+# NSCK — Neuro-Symbolic Cognitive Kernel
 
-NSCK is a **glass-box cognitive architecture** that combines Vector Symbolic Architecture (VSA) with symbolic reasoning, spiking neural networks, and Global Workspace Theory. It is a domain-agnostic reasoning engine: register your domain predicates and actions, then call `decide()` to get an action plus a human-readable explanation of why.
+> A glass-box cognitive architecture combining Vector Symbolic Architecture (VSA),
+> symbolic reasoning, spiking neural networks, and Global Workspace Theory.
 
-> Everything is inspectable. Every action traces back to specific rules, causal links, and episodic memories — no gradient tensors, no hidden layers.
+NSCK is a domain-agnostic reasoning engine. Register your domain predicates and
+actions, call `ingest()` or `decide()`, and receive an action together with a
+human-readable explanation of *why* it was chosen. Every decision traces back to
+specific rules, causal links, and episodic memories — no gradient tensors, no
+hidden layers.
 
-**Current release: V12** — adds `ImageAdapter` (spatial-grid + colour histogram + Sobel FPE, 65 dims) and `AudioAdapter` (MFCC + spectral FPE, 23 dims), both wired into `NSCKSubstrate` for inherent image and audio perception.  1,199 tests, ≥ 87 % pass rate on all benchmarks.
+**Current release: V13** — 1,437 tests collected, 1,424 passed (2 stochastic
+failures, 7 skipped, 4 xfailed with Rust backend).
 
 ---
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
-- [Architecture](#architecture)
-- [Module Overview](#module-overview)
-- [Building the Rust Accelerator](#building-the-rust-accelerator)
-- [Running Tests](#running-tests)
-- [Usage Examples](#usage-examples)
-- [Documentation](#documentation)
+1. [Installation](#installation)
+2. [Architecture](#architecture)
+3. [Decision Loop](#decision-loop)
+4. [Module Reference](#module-reference)
+5. [NSCKSubstrate API](#nscksubstrate-api)
+6. [Configuration](#configuration)
+7. [Performance Benchmarks](#performance-benchmarks)
+8. [Rust Backend](#rust-backend)
+9. [Testing](#testing)
+10. [V13 Features](#v13-features)
+11. [Further Documentation](#further-documentation)
 
 ---
 
-## Quick Start
+## Installation
 
 ```bash
 # From the repository root
 pip install -r requirements.txt
 
-# Optional: build Rust VSA accelerator (~10x faster HV operations)
-cd nsck/rust_vsa && pip install -e . && cd ../..
+# Optional: build Rust VSA accelerator (~6–76× faster HV operations)
+cd nsck/rust_vsa && cargo build --release && \
+  cp target/release/libhypervec_rs.so ../hypervec_rs.so && cd ../..
 
-# Run the test suite
-cd nsck
-pytest tests/ python/core/tests/ -q
+# Optional: build Rust SNN accelerator
+cd nsck/rust_snn && cargo build --release && \
+  cp target/release/libsnn_rs.so ../snn_rs.so && cd ../..
+
+# Verify
+cd nsck && python -m pytest tests/ -q
 ```
 
-```python
-import sys
-sys.path.insert(0, 'nsck')   # or the absolute path to the nsck/ directory
-
-from python.core.reasoning.cognitive_engine import CognitiveEngine
-
-engine = CognitiveEngine()
-
-# 1. Register a task domain
-engine.register_task(
-    task_tag="navigation",
-    predicates={
-        "obstacle_ahead": lambda s: s.get("obstacle_ahead", False),
-        "goal_visible":   lambda s: s.get("goal_visible", False),
-    },
-    actions=["move_forward", "turn_left", "turn_right", "wait"],
-)
-
-# 2. Decision loop
-state = {"obstacle_ahead": True, "goal_visible": False, "energy": 0.9}
-result = engine.decide(state, ["move_forward", "turn_left", "turn_right", "wait"], "navigation")
-
-print(result.chosen_action)   # e.g. "turn_left"
-print(result.confidence)      # e.g. 0.72
-print(result.explanation)     # human-readable trace
-
-# 3. Provide feedback so the engine learns
-engine.record_outcome(reward=1.0, task_tag="navigation")
-```
+The Python shims (`vsa/hypervec_shim.py`, `perception/snn_shim.py`)
+automatically detect the `.so` files at import time and fall back to the
+pure-Python/NumPy implementation when they are absent.
 
 ---
 
 ## Architecture
 
-NSCK is organized into 8 subsystems, all orchestrated by `CognitiveEngine`:
+NSCK is organized into **7 layers** (Layer 0 – Layer 6). The public entry point
+is `NSCKSubstrate` (`python/core/substrate.py`), which delegates to
+`CognitiveEngine` (`python/core/reasoning/cognitive_engine.py`).
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Layer 6 · Executive                                            │
+│  Metacognition · SelfModel · TheoryOfMind · SafetyVerifier      │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 5 · Language                                             │
+│  Parser · ConstructionGrammar · NgramNLU · FluentNLG · Dialogue │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 4 · Learning                                             │
+│  Hebbian · Q-learning · RuleInduction · ActiveInference         │
+│  Curiosity · ConformalWrapper · PatternGeneralizer               │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 3 · Reasoning                                            │
+│  Causal · Rules · Planning · Analogy · Spatial · Math           │
+│  Counterfactual · AttentionGWT · BeliefRevision                 │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 2 · Memory                                               │
+│  Semantic · Episodic · Procedural · CrossModal                  │
+│  ConceptDriftDetector · Homeostasis · StagedRecall              │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 1 · Perception                                           │
+│  10 adapters · SignalIngestor · UniversalHVEncoder · SNN        │
+├─────────────────────────────────────────────────────────────────┤
+│  Layer 0 · Substrate                                            │
+│  VSA Engine (10,240-bit HVs) · GWT Workspace · Dual Process     │
+└─────────────────────────────────────────────────────────────────┘
+```
 
 ```mermaid
 graph TB
-    IN["Input (text / state dict / image)"]
+    IN["Input (text / dict / image / audio / video)"]
 
-    subgraph L1["1 · VSA Foundation"]
+    subgraph L0["Layer 0 · Substrate"]
         HV["HyperVector Engine<br/>10,240-bit binary vectors<br/>hypervec_py.py + rust_vsa/"]
+        FHRR["FHRR Phasor VSA<br/>Complex-valued binding"]
         CM["CleanupMemory<br/>LRU denoising"]
     end
 
-    subgraph L2["2 · Memory"]
-        Epi["EpisodicMemory<br/>Hot (deque) + Warm (SQLite)<br/>LSH k-NN"]
-        Sem["SemanticMemory<br/>NetworkX DiGraph + HV index<br/>Spreading activation"]
+    subgraph L1["Layer 1 · Perception"]
+        SI["SignalIngestor<br/>Raw signal pre-processing"]
+        UHE["UniversalHVEncoder<br/>Multi-modal → HV + stats"]
+        SNN["LIF Spiking Neurons + STDP"]
+        Br["VSA-SNN Bridge<br/>Rate/Temporal coding"]
+        AD["10 Adapters<br/>text · image · audio · video<br/>numeric · dict · SNN · stream"]
     end
 
-    subgraph L3["3 · Reasoning"]
-        GWT["GlobalWorkspace<br/>Coalition competition<br/>Mental rehearsal veto"]
+    subgraph L2["Layer 2 · Memory"]
+        Sem["SemanticMemory<br/>NetworkX graph + HV index"]
+        Epi["EpisodicMemory<br/>Hot (deque) + Warm (SQLite)"]
+        Proc["ProceduralMemory<br/>Skill cache for fast-path"]
+        XM["CrossModalAssociativeMemory<br/>Bind entities across modalities"]
+    end
+
+    subgraph L3["Layer 3 · Reasoning"]
+        GWT["GlobalWorkspace<br/>Coalition competition<br/>KLE uncertainty"]
         Caus["CausalGraph + CausalDiscovery<br/>ΔP statistics"]
         RL["RuleLearner<br/>Frequency-based ILP"]
         Plan["STRIPSPlanner<br/>A* search"]
         Ana["AnalogyEngine<br/>Structural alignment"]
+        Sp["SpatialReasoner · MathReasoner"]
     end
 
-    subgraph L4["4 · Perception"]
-        SNN["LIF Spiking Neurons + STDP"]
-        Br["VSA-SNN Bridge<br/>Rate/Temporal coding"]
-        Gr["GroundingVerifier<br/>predicate ↔ HV binding"]
-        MM["MultimodalProcessor<br/>HOG · color · LBP · edges"]
-    end
-
-    subgraph L5["5 · Learning"]
-        Hebb["HebbianMatrix + VSAHebbianLearner<br/>Oja's rule"]
+    subgraph L4["Layer 4 · Learning"]
+        Hebb["HebbianMatrix<br/>Oja's rule"]
         Cur["CuriosityModule<br/>Novelty + learning progress"]
+        AI["ActiveInferenceLearner<br/>Free-energy adjustment"]
+        CF["ConformalWrapper<br/>Calibrated uncertainty bounds"]
+        PG["PatternGeneralizer"]
     end
 
-    subgraph L6["6 · Cognitive"]
-        Emo["EmotionSystem<br/>Plutchik 8 + Circumplex"]
-        Meta["SafetyGate + MetacognitiveEngine"]
+    subgraph L5["Layer 5 · Language"]
+        NLU["NgramNLU<br/>Naive Bayes intent + entity"]
+        CG["ConstructionGrammar<br/>71 constructions"]
+        NLG["FluentNLG + NLGEngine"]
+        DM["DialogueManager"]
+        TKL["TextKnowledgeLearner<br/>SVO → SemanticMemory"]
+    end
+
+    subgraph L6["Layer 6 · Executive"]
+        Meta["MetacognitiveEngine + SafetyGate"]
         Self["SelfModel<br/>Calibrated confidence"]
         ToM["TheoryOfMind<br/>Belief modelling"]
+        SV["SafetyVerifier<br/>Declarative safety properties"]
+        Emo["EmotionSystem<br/>Plutchik 8 + Circumplex"]
     end
 
-    subgraph L7["7 · Language"]
-        TKL["TextKnowledgeLearner<br/>SVO → SemanticMemory"]
-        LM["LanguageModule + LinguaCortex<br/>Text → HV"]
-        DM["DialogueManager"]
-        UI["UniversalInput<br/>Text / dict / image"]
-    end
+    SUB["NSCKSubstrate (substrate.py)"]
+    CE["CognitiveEngine"]
 
-    subgraph L8["8 · Integration"]
-        BS["BrainStore (SQLite)<br/>Concepts · Episodes · Rules"]
-        BF["BrainFusion<br/>Multi-task sharing"]
-        EG["ExplanationGenerator"]
-    end
-
-    CE["CognitiveEngine (cognitive_engine.py)"]
-
-    IN --> CE
-    CE --> HV & CM
-    CE --> Epi & Sem
-    CE --> GWT --> RL & Caus & Plan & Ana
-    CE --> SNN --> Br --> Gr
-    CE --> MM
-    CE --> Hebb & Cur
-    CE --> Emo & Meta & Self & ToM
-    CE --> TKL & LM & DM & UI
-    CE --> BS & BF & EG
-```
-
-### Decision Loop (one `decide()` call)
-
-```mermaid
-sequenceDiagram
-    participant App
-    participant CE as CognitiveEngine
-    participant UI as UniversalInput
-    participant SM as SemanticMemory
-    participant EM as EpisodicMemory
-    participant GWT as GlobalWorkspace
-    participant EG as ExplanationGenerator
-
-    App->>CE: decide(state, actions, task_tag)
-    CE->>UI: encode state → situation_hv
-    CE->>SM: spread_activation(active_predicates)
-    CE->>EM: recall(situation_hv, k=5)
-    CE->>CE: build coalitions (rule / causal / memory / planner)
-    CE->>GWT: compete(coalitions)
-    GWT-->>CE: winning coalition + action
-    CE->>CE: safety veto check
-    CE->>EG: explain_action(action, trace)
-    EG-->>CE: Explanation object
-    CE-->>App: CognitiveState{action, confidence, explanation}
+    IN --> SUB --> CE
+    CE --> HV & FHRR & CM
+    CE --> SI --> UHE --> AD
+    CE --> SNN --> Br
+    CE --> Sem & Epi & Proc & XM
+    CE --> GWT --> Caus & RL & Plan & Ana & Sp
+    CE --> Hebb & Cur & AI & CF & PG
+    CE --> NLU & CG & NLG & DM & TKL
+    CE --> Meta & Self & ToM & SV & Emo
 ```
 
 ---
 
-## V12 Capabilities — Image & Audio Perception
+## Decision Loop
 
-V12 adds native image and audio perception to the modality-agnostic substrate.
+Each call to `CognitiveEngine.decide()` executes a 10-step pipeline:
 
-| Capability | Module | Description |
-|---|---|---|
-| **Image perception** | `adapters/image_adapter.py` | `ImageAdapter`: spatial-grid stats + colour histograms + Sobel edge density → 65-dim FPE-encoded HV. Predicates: `IMAGE_BRIGHT`, `IMAGE_DARK`, `IMAGE_COLOR`, `IMAGE_DETAILED`, etc. |
-| **Audio perception** | `adapters/audio_adapter.py` | `AudioAdapter`: MFCC (13) + energy bands (4) + ZCR + spectral features → 23-dim FPE-encoded HV. Predicates: `AUDIO_LOUD`, `AUDIO_TONAL`, `AUDIO_NOISY`, etc. |
+```mermaid
+sequenceDiagram
+    participant App
+    participant SUB as NSCKSubstrate
+    participant CE as CognitiveEngine
+    participant GV as GroundingVerifier
+    participant CUR as CuriosityModule
+    participant GWT as GlobalWorkspace
+    participant AI as ActiveInference
+    participant SG as SafetyGate
+    participant EG as ExplanationGenerator
 
-Both adapters are wired into `NSCKSubstrate.process()` and `process_multimodal()`.
+    App->>SUB: ingest(input_data, task_tag)
+    SUB->>CE: decide(state, actions, task_tag)
 
-Quick example — using `NSCKSubstrate`:
+    Note over CE: 1. Input normalisation<br/>(dict / PerceptPacket → adapter)
+    CE->>GV: get_active_predicates(state, task_tag)
+    Note over CE: 2. Grounding<br/>(extract active predicates)
+
+    CE->>CUR: should_explore(situation_hv, task_tag)
+    Note over CE: 3. Curiosity check
+
+    Note over CE: 4. Coalition building (7 sources)<br/>EXTERNAL · MATH · RULES ·<br/>EXPLORATION · Q_LEARNING ·<br/>MEMORY · PLANNER
+
+    CE->>AI: free_energy(content, situation_hv)
+    Note over CE: 5. Active inference<br/>(free-energy adjustment)
+
+    CE->>GWT: compete(coalitions)
+    GWT-->>CE: winner + action
+    Note over CE: 6. GWT competition + broadcast
+
+    CE->>SG: check(winner, state, task_tag)
+    Note over CE: 7. Safety gate
+
+    Note over CE: 8. Action determination
+
+    CE->>EG: explain_action(action, state, task_tag, trace)
+    EG-->>CE: Explanation
+    Note over CE: 9. Explanation generation
+
+    Note over CE: 10. State recording<br/>(curiosity · generalization · episode)
+
+    CE-->>SUB: CognitiveState
+    SUB-->>App: SubstrateResult
+```
+
+### Step Details
+
+| # | Step | Key call | Description |
+|---|------|----------|-------------|
+| 1 | **Input normalisation** | adapter dispatch | Converts raw input (dict, string, ndarray, `PerceptPacket`) to the internal representation via the matching adapter |
+| 2 | **Grounding** | `GroundingVerifier.get_active_predicates()` | Extracts the set of symbolic predicates that are true in the current state |
+| 3 | **Curiosity check** | `CuriosityModule.should_explore()` | Decides exploration vs. exploitation based on novelty and learning progress |
+| 4 | **Coalition building** | 7 proposal sources | Builds competing proposals: `EXTERNAL` (meta/SNN), `MATH` (math query detection), `RULES` (applicable rules + neural scorer), `EXPLORATION`, `Q_LEARNING`, `MEMORY` (case-based episodic recall), `PLANNER` (STRIPS A* planning) |
+| 5 | **Active inference** | `ActiveInferenceLearner.free_energy()` | Adjusts coalition saliences by expected free energy |
+| 6 | **GWT competition** | `GlobalWorkspace.compete()` | Winner-take-all selection with KLE uncertainty; dual-process fast path if System 1 confidence ≥ threshold |
+| 7 | **Safety gate** | `SafetyGate` / `SafetyVerifier` | Veto check — critical violations always block the chosen action |
+| 8 | **Action determination** | — | Extracts the final action from the winning coalition |
+| 9 | **Explanation** | `ExplanationGenerator.explain_action()` | Produces a human-readable trace referencing rules, causal links, and memories |
+| 10 | **State recording** | curiosity, generalization, episode store | Records the experience; triggers `build_prototypes()`, `infer_transitive()`, and `auto_discover_abstractions()` on schedule |
+
+---
+
+## Module Reference
+
+All source modules live under `python/core/`. Paths below are relative to that
+directory.
+
+### `vsa/` — Vector Symbolic Architecture (7 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `hypervec_py.py` | `HyperVectorPy`, `CleanupMemory` | Pure-Python 10,240-bit binary HVs (XOR bind, majority bundle, permute, negate) |
+| `hypervec_shim.py` | `HyperVector` | Backend selector: Rust → Python fallback |
+| `universal_hv_encoder.py` | `UniversalHVEncoder` | Multi-modal encoding with per-encode statistics (V13) |
+| `resonator.py` | `ResonatorNetwork` | Resonator-based factorization of bundled HVs |
+| `fhrr.py` | `FHRRVector`, `FHRRMemory` | Complex-valued phasor VSA with exact binding inverse |
+| `vsa_embedding_bridge.py` | `EmbeddingVSABridge` | Dense embedding ↔ binary HV projection |
+| `rust_concurrent_shim.py` | `SemanticMemoryConcurrent`, `EpisodicMemoryConcurrent`, `CognitiveWorkerPool` | Rayon-parallel memory; Python fallback |
+
+### `perception/` — Perception (8 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `signal_ingestor.py` | `SignalIngestor` | Pre-processing raw signals before encoding (V13) |
+| `snn_perception.py` | `SNNPerceptionModule`, `LIFNeuronLayer` | Spiking neural network perception layer |
+| `snn_shim.py` | — | Rust ↔ Python SNN backend selector |
+| `snn_integration.py` | — | SNN integration utilities |
+| `vsa_snn_bridge.py` | `RateCoder`, `TemporalCoder` | Bridge between VSA and SNN representations |
+| `grounding_verifier.py` | `GroundingVerifier` | Predicate ↔ HV binding verification |
+| `symbol_grounding.py` | `SymbolGrounding` | Symbol grounding from sensory input |
+| `stream_encoder.py` | `TimeSeriesEncoder`, `StreamBuffer` | FPE-based time series encoding |
+
+### `memory/` — Memory Systems (7 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `semantic_memory.py` | `SemanticMemory` | NetworkX DiGraph + HV index, spreading activation, NSW ANN, prototypes, transitive inference |
+| `episodic_memory.py` | `EpisodicMemory`, `LiveEpisode` | Hot (deque) + warm (SQLite), LSH k-NN recall |
+| `procedural_memory.py` | `ProceduralMemory` | Skill cache for fast-path decisions (V13) |
+| `cross_modal_associative_memory.py` | `CrossModalAssociativeMemory` | Bind entities across modalities (V13) |
+| `homeostasis.py` | `MemoryHomeostasis` | Memory capacity regulation |
+| `staged_recall.py` | `StagedRecall` | Multi-stage memory recall pipeline |
+| `concept_drift_detector.py` | `ConceptDriftDetector` | Monitor semantic stability over time (V13) |
+
+### `reasoning/` — Reasoning (14 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `cognitive_engine.py` | `CognitiveEngine`, `CognitiveState`, `Proposal` | Central orchestrator; implements the 10-step `decide()` loop |
+| `global_workspace.py` | `GlobalWorkspace`, `Coalition` | GWT coalition competition with KLE uncertainty |
+| `causal_reasoning.py` | `CausalDiscovery`, `CausalGraph`, `CausalReasoner` | ΔP causal statistics |
+| `causal_interface.py` | `CausalInterface` | Abstract causal reasoning interface |
+| `causal_service_impl.py` | `CausalServiceImpl` | Causal service implementation |
+| `causal_rule_auditor.py` | `CausalRuleAuditor` | Audit causal rules for consistency (V13) |
+| `rule_learner.py` | `RuleLearner`, `RuleCandidate` | Frequency-based inductive logic programming |
+| `planner.py` | `STRIPSPlanner`, `PlanStep` | A* STRIPS planning |
+| `analogy.py` | `AnalogyEngine`, `Analogy`, `blend()` | Structural alignment and conceptual blending |
+| `belief_revision.py` | `BeliefMetadata`, `BeliefScorer` | AGM-style belief revision |
+| `context_engine.py` | `ContextEngine` | Context tracking and management |
+| `math_reasoning.py` | `MathReasoner`, `FPECodebook`, `LinearSolver` | Symbolic math reasoning |
+| `spatial_reasoning.py` | `SpatialReasoner`, `PositionCodebook` | FPE bit-flip encoding, 8 spatial relations |
+| `attention_gwt_bridge.py` | `MultiHeadAttentionGWT`, `GWTAttentionBridge` | Multi-head attention for coalition re-weighting |
+
+### `learning/` — Learning (10 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `hebbian.py` | `HebbianMatrix`, `VSAHebbianLearner` | Oja's rule Hebbian learning |
+| `curiosity.py` | `CuriosityModule`, `ExplorationDecision` | Novelty + learning progress exploration |
+| `active_inference.py` | `ActiveInferenceLearner` | Free-energy minimisation (MIN_TEMP=0.1, MAX_TEMP=5.0) |
+| `conformal_wrapper.py` | `ConformalWrapper` | Calibrated uncertainty bounds (V13) |
+| `pattern_generalizer.py` | `PatternGeneralizer` | Generalise patterns from examples (V13) |
+| `rule_neural_scorer.py` | `RuleNeuralScorer`, `RuleFeaturizer` | Online perceptron rule ranking |
+| `cross_domain.py` | `TransferEngine`, `SchemaExtractor`, `RuleLifter` | Cross-domain transfer learning |
+| `cross_modal.py` | — | Cross-modal learning utilities |
+| `meta_learning.py` | — | Meta-learning strategies |
+| `continual_learning.py` | — | Continual / lifelong learning |
+
+### `language/` — Language (20 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `parser.py` | `Parser` | Syntactic parsing |
+| `language_module.py` | `LanguageModule` | Core language processing module |
+| `lingua_cortex.py` | `LinguaCortex` | Text → HV encoding |
+| `universal_input.py` | `UniversalInput` | Text / dict / image / audio unified input |
+| `text_knowledge_learner.py` | `TextKnowledgeLearner` | SVO extraction → SemanticMemory |
+| `construction_grammar.py` | `ConstructionMatcher` | 71 constructions (negation, temporal, conditional) |
+| `frame_semantics.py` | `FrameLibrary`, `Frame` | FrameNet-style frame semantics |
+| `coreference.py` | `EntityRegister`, `EntityMention` | Coreference resolution |
+| `ngram_nlu.py` | `NgramNLU` | Naive Bayes intent classifier + entity extractor |
+| `pos_tagger.py` | `BrillPosTagger` | 300+ lexicon, 8 suffix rules |
+| `pragmatics.py` | `PragmaticEngine` | 15 Horn scales, 7 speech acts, Gricean maxims |
+| `semantic_roles.py` | `SemanticRoleLabeler`, `SRLFrame` | Semantic role labelling |
+| `distributional_semantics.py` | `DistributionalCodebook` | Distributional word vectors with built-in corpus |
+| `nlg.py` | `StructuralRealizer`, `DiscoursePlanner`, `NLGEngine` | Template-based NLG |
+| `fluent_nlg.py` | `FluentResponseComposer`, `NSCKResponseEngine` | Fluent natural language generation |
+| `dialogue_manager.py` | `DialogueManager` | Multi-turn dialogue with state tracking |
+| `hf_corpus_loader.py` | `HFCorpusLoader` | HuggingFace FineWeb loader (offline fallback) |
+| `vsa_language_module.py` | — | VSA-based language operations |
+| `compositional_semantics_backup.py` | — | Compositional semantics (backup) |
+| `control.py` | — | Language generation control |
+
+### `cognitive/` — Executive / Cognitive (5 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `metacognition.py` | `SafetyGate`, `MetacognitiveEngine` | Confidence monitoring + safety veto |
+| `self_model.py` | `SelfModel` | Calibrated self-confidence model |
+| `theory_of_mind.py` | `TheoryOfMind` | Agent belief modelling |
+| `emotion_system.py` | `EmotionSystem` | Plutchik 8 primary + Circumplex valence-arousal |
+| `safety_verifier.py` | `SafetyRuleVerifier`, `SafetyGateVerifier`, `SafetyProperty` | Declarative safety properties; critical violations always block |
+
+### `adapters/` — Modality Adapters (10 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `text_adapter.py` | `TextAdapter` | Text input → HV |
+| `image_adapter.py` | `ImageAdapter` | Spatial-grid + colour histogram + Sobel FPE (65 dims) |
+| `audio_adapter.py` | `AudioAdapter` | MFCC + spectral FPE (23 dims) |
+| `video_adapter.py` | `VideoAdapter` | Video frame processing (V13) |
+| `numeric_adapter.py` | `NumericAdapter` | Scalar numeric → HV |
+| `numeric_sequence_adapter.py` | `NumericSequenceAdapter` | FPE + statistical predicates |
+| `dict_state_adapter.py` | `DictStateAdapter` | Dict state → HV |
+| `snn_adapter.py` | `SNNAdapter` | SNN spike-train input |
+| `multimodal_fuser.py` | `MultimodalFuser` | VSA bundle fusion of modalities |
+| `stream_processor.py` | `StreamProcessor`, `StreamVerifier` | Streaming input processing |
+
+### `integration/` — Integration (5 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `config.py` | `NSCKConfig` | 30+ feature flags, 4 factory presets |
+| `persistence.py` | `BrainStore`, `Episode`, `Rule` | SQLite persistence layer |
+| `brain_fusion.py` | `BrainFusion`, `TaskBrain`, `FusedBrain` | Multi-task knowledge sharing |
+| `explanation.py` | `ExplanationGenerator`, `Explanation` | Human-readable decision explanations |
+| `knowledge_integration.py` | — | Knowledge integration utilities |
+
+### `types/` — Type Definitions (2 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `percept_packet.py` | `PerceptPacket` | Unified V9 percept format |
+| `modality_adapter.py` | `ModalityAdapter` | Abstract adapter interface |
+
+### `multimodal/` — Multimodal Processing (2 modules)
+
+| Module | Key classes | Description |
+|--------|------------|-------------|
+| `multimodal_processor.py` | `MultimodalProcessor`, `ConcurrentMultimodalProcessor` | Feature extraction: HOG, colour, LBP, edges |
+| `image_generator.py` | `ImageGenerator`, `VisualFeatures` | Image feature generation |
+
+### Other
+
+| Path | Description |
+|------|-------------|
+| `substrate.py` | `NSCKSubstrate`, `SubstrateResult` — the main public API |
+| `api/nsck_api.py` | FastAPI / stdlib HTTP REST API: `/decide`, `/learn`, `/sleep`, `/status` |
+
+---
+
+## NSCKSubstrate API
+
+`NSCKSubstrate` (`python/core/substrate.py`) is the primary public interface.
+
+### Constructor
 
 ```python
-import sys
+from python.core.substrate import NSCKSubstrate
+from python.core.integration.config import NSCKConfig
+
+substrate = NSCKSubstrate(config: Optional[NSCKConfig] = None)
+```
+
+Initialises `CognitiveEngine` and all V13 modules: `SignalIngestor`,
+`UniversalHVEncoder`, `CrossModalAssociativeMemory`, `ProceduralMemory`,
+`ConceptDriftDetector`, and `ConformalWrapper`.
+
+### Methods
+
+| Method | Signature | Description |
+|--------|-----------|-------------|
+| **`ingest`** | `ingest(input_data: Any, task_tag: str, available_actions: Optional[List[str]] = None) → SubstrateResult` | V13 clean entry point. Checks procedural cache first for fast-path skill retrieval, then falls through to full `process()` pipeline. |
+| **`process`** | `process(input_data: Any, task_tag: str, available_actions: Optional[List[str]] = None) → SubstrateResult` | Main processing: detects modality, encodes via adapter, runs `CognitiveEngine.decide()`. |
+| **`process_multimodal`** | `process_multimodal(inputs: Dict[str, Any], task_tag: str, available_actions: Optional[List[str]] = None) → SubstrateResult` | Process multiple modalities simultaneously (e.g. `{"text": "hello", "image": np_array}`). |
+| **`feedback`** | `feedback(action: str, reward: float, task_tag: str, state: Optional[Any] = None, outcome: str = "neutral") → None` | V13 feedback API — triggers learning cycle + procedural skill caching. |
+| **`learn`** | `learn(state, action, reward, task_tag, outcome)` | Learn from a `(state, action, reward)` tuple. |
+| **`sleep`** | `sleep(task_tag: str) → Dict` | Trigger offline memory consolidation. |
+| **`remember`** | `remember(query, task_tag: str, top_k: int) → List[Dict]` | Recall similar experiences from episodic memory. |
+| **`register_task`** | `register_task(task_tag: str)` | Register a new task domain. |
+| **`register_encoder`** | `register_encoder(modality_name: str, encoder_fn)` | Register a custom modality encoder. |
+| **`get_knowledge`** | `get_knowledge(concept: str) → Dict` | Query the semantic knowledge graph. |
+| **`get_stats`** | `get_stats() → Dict[str, Any]` | System-wide statistics. |
+
+### SubstrateResult
+
+```python
+@dataclass
+class SubstrateResult:
+    chosen_action: str                            # Selected action
+    confidence: float                             # Decision confidence [0, 1]
+    explanation: str                              # Human-readable trace
+    predicates: Set[str]                          # Active predicates
+    trace: Dict[str, Any]                         # Full decision trace
+    modalities_processed: List[str]               # e.g. ["text", "image"]
+    generalization_triggered: bool                # Whether generalisation ran
+    # V13 fields
+    kle_uncertainty: Optional[float] = None       # KLE uncertainty from GWT
+    uncertainty_bounds: Optional[tuple] = None    # Conformal prediction bounds
+    encoding_stats: Optional[Dict[str, Any]] = None  # UniversalHVEncoder stats
+    procedural_hit: bool = False                  # True if skill cache was used
+```
+
+### Quick Usage
+
+```python
+import sys, numpy as np
 sys.path.insert(0, 'nsck')
-import numpy as np
 from python.core.substrate import NSCKSubstrate
 
 substrate = NSCKSubstrate()
 
 # Text
-result = substrate.process("fire detected", "alarm")
-print(result.chosen_action, result.predicates)
+result = substrate.ingest("fire detected", "alarm")
+print(result.chosen_action, result.confidence, result.procedural_hit)
 
-# 2-D image (H×W×C numpy array)
+# Image (H×W×C numpy array)
 img = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
 result = substrate.process(img, "vision")
 print(result.modalities_processed)   # ['image']
 print(result.predicates)             # {'IMAGE_COLOR', 'IMAGE_DETAILED', ...}
 
-# Audio waveform (1-D float array)
+# Multimodal
 t = np.linspace(0, 1.0, 16000)
 audio = np.sin(2 * np.pi * 440 * t)
 result = substrate.process_multimodal({"audio": audio, "text": "beep"}, "sensor")
-print(result.modalities_processed)   # ['audio', 'text']
+
+# Feedback loop (V13)
+substrate.feedback(action="alert", reward=1.0, task_tag="alarm")
 
 # Custom modality
 substrate.register_encoder("thermal", my_thermal_encoder)
@@ -208,179 +473,162 @@ substrate.register_encoder("thermal", my_thermal_encoder)
 
 ---
 
-## V10 Capabilities
+## Configuration
 
-V10 adds the following intelligence extensions on top of the V9 substrate:
+`NSCKConfig` (`python/core/integration/config.py`) is a dataclass with ~40
+fields and 30+ feature flags.
 
-| Capability | Module | Description |
-|---|---|---|
-| **FHRR phasor VSA** | `vsa/fhrr.py` | Complex-valued VSA with exact binding inverse and gradient-compatible similarity |
-| **Dense embedding bridge** | `vsa/vsa_embedding_bridge.py` | Project sentence-transformer (or any dense) embeddings to/from binary HyperVectors |
-| **Rust concurrent memory** | `vsa/rust_concurrent_shim.py` | Rayon-parallel semantic/episodic memory; Python fallback always available |
-| **N-gram NLU** | `language/ngram_nlu.py` | Naive Bayes intent classifier + entity extractor, no external NLP library required |
-| **Attention-GWT bridge** | `reasoning/attention_gwt_bridge.py` | Multi-head attention re-weights coalition saliences before GWT arbitration |
-| **Neural rule scorer** | `learning/rule_neural_scorer.py` | Online perceptron re-ranks applicable rules; updated each learn() cycle |
-| **Safety verifier** | `cognitive/safety_verifier.py` | Declarative safety properties gate decisions; critical violations always block |
-| **REST API** | `api/nsck_api.py` | FastAPI / stdlib HTTP JSON API: `/decide`, `/learn`, `/sleep`, `/status` |
+### Core Fields
 
-Quick example — using the REST API:
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `device` | `str` | `"cpu"` | `"cpu"` or `"cuda"` |
+| `learning_rate` | `float` | `1e-3` | SNN / Hebbian learning rate |
+| `beta` | `float` | `0.5` | LIF neuron membrane decay |
+| `sleep_epochs` | `int` | `5` | Offline consolidation epochs |
+| `episode_capacity` | `int` | `10000` | Episodic memory capacity |
+| `memory_capacity` | `int` | `2500` | Recent-memory capacity |
+| `min_rule_support` | `int` | `5` | Minimum observations before a rule fires |
+| `min_rule_confidence` | `float` | `0.7` | Minimum confidence for rule application |
+| `confidence_threshold` | `float` | `0.6` | VSA entropy rescue threshold |
+| `novelty_threshold` | `float` | `0.5` | Curiosity exploration threshold |
+
+### Feature Flags (selected)
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `enable_construction_grammar` | `False` | Activate 71 construction patterns |
+| `enable_frame_semantics` | `False` | FrameNet-style frame extraction |
+| `enable_coreference` | `False` | Coreference resolution |
+| `enable_dual_process` | `False` | System 1/2 fast-path |
+| `system1_confidence_threshold` | `0.75` | Threshold for System 1 shortcut |
+| `enable_spatial_reasoning` | `False` | FPE spatial relations |
+| `enable_pragmatics` | `False` | Gricean pragmatics engine |
+| `enable_fluent_dialogue` | `True` | FluentNLG integration |
+| `enable_active_inference` | `False` | Free-energy belief adjustment |
+| `enable_ngram_nlu` | `True` | N-gram NLU intent classifier |
+| `enable_continuous_generalization` | `True` | Periodic prototype/transitive updates |
+| `enable_cross_modal_learning` | `False` | Cross-modal association learning |
+
+### Factory Presets
 
 ```python
-from api.nsck_api import NSCKApiServer
+from python.core.integration.config import NSCKConfig
 
-server = NSCKApiServer()
-result = server.handle_decide({"position_x": 2, "position_y": 3}, "maze")
-print(result)  # {'action': 'move_right', 'confidence': 0.72, ...}
+# All V3+ flags off — original V1 behaviour
+cfg = NSCKConfig.minimal()
+
+# All research flags on (except enable_full_rust_snn, enable_hf_corpus)
+cfg = NSCKConfig.research()
+
+# Production: stable flags only (dual-process, HNSW, homeostasis, fluent NLG)
+cfg = NSCKConfig.production()
+
+# From environment variables (NSCK_DEVICE, NSCK_LR, NSCK_MODEL_PATH, NSCK_DB_PATH)
+cfg = NSCKConfig.from_env()
 ```
 
 ---
 
-| Directory | Module | Key class(es) | LOC | Version |
-|---|---|---|---|---|
-| `vsa/` | `hypervec_py.py` | `HyperVectorPy` (+ `negate()`), `CleanupMemory` | 361 | V1/V6 |
-| `vsa/` | `hypervec_shim.py` | Backend selector (Rust → Python) | 320 | V1 |
-| `vsa/` | `resonator.py` | `ResonatorNetwork` | ~120 | V1 |
-| `reasoning/` | `cognitive_engine.py` | `CognitiveEngine`, `CognitiveState`, `Proposal` | 1,402 | V1 |
-| `reasoning/` | `global_workspace.py` | `GlobalWorkspace`, `Coalition` | 312 | V1 |
-| `reasoning/` | `causal_reasoning.py` | `CausalDiscovery`, `CausalGraph`, `CausalReasoner` | 1,233 | V1 |
-| `reasoning/` | `rule_learner.py` | `RuleLearner`, `RuleCandidate` | 644 | V1 |
-| `reasoning/` | `planner.py` | `STRIPSPlanner`, `PlanStep` | 296 | V1 |
-| `reasoning/` | `analogy.py` | `AnalogyEngine`, `Analogy`, `blend()` | 609 | V1 |
-| `reasoning/` | `belief_revision.py` ⚑ | `BeliefMetadata`, `BeliefScorer` | 42 | V3 |
-| `reasoning/` | `context_engine.py` | `ContextEngine` | 440 | V1 |
-| `reasoning/` | `math_reasoning.py` | `MathReasoner`, `FPECodebook`, `LinearSolver` | ~390 | V1 |
-| `reasoning/` | `spatial_reasoning.py` ⚑ | `SpatialReasoner`, `PositionCodebook` (FPE bit-flip, 8 relations) | ~200 | V5 |
-| `reasoning/` | `temporal_reasoning.py` ⚑ | `TemporalReasoner` (before/after/during) | ~150 | V4 |
-| `reasoning/` | `abductive_reasoning.py` ⚑ | `AbductiveReasoner` (best-explanation) | ~200 | V4 |
-| `reasoning/` | `predictive_processor.py` ⚑ | `PredictiveProcessor` (PRIOR_UNCERTAINTY=0.5) | ~180 | V4 |
-| `memory/` | `episodic_memory.py` | `EpisodicMemory`, `LiveEpisode` | 501 | V1 |
-| `memory/` | `semantic_memory.py` | `SemanticMemory` (NSW ANN, `infer_transitive`, `build_prototypes`) ⚑ | ~800 | V1/V4/V6 |
-| `memory/` | `homeostasis.py` ⚑ | `MemoryHomeostasis` | 134 | V3 |
-| `memory/` | `staged_recall.py` | `StagedRecall` | 134 | V1 |
-| `cognitive/` | `emotion_system.py` | `EmotionSystem` | 420 | V1 |
-| `cognitive/` | `metacognition.py` | `SafetyGate`, `MetacognitiveEngine` | 504 | V1 |
-| `cognitive/` | `self_model.py` | `SelfModel` | 255 | V1 |
-| `cognitive/` | `theory_of_mind.py` | `TheoryOfMind` | 312 | V1 |
-| `perception/` | `snn_perception.py` | `SNNPerceptionModule`, `LIFNeuronLayer` | 874 | V1 |
-| `perception/` | `vsa_snn_bridge.py` | `RateCoder`, `TemporalCoder` | 461 | V1 |
-| `perception/` | `grounding_verifier.py` | `GroundingVerifier` | 585 | V1 |
-| `perception/` | `symbol_grounding.py` | `SymbolGrounding` | 200 | V1 |
-| `learning/` | `hebbian.py` | `HebbianMatrix`, `VSAHebbianLearner` | 506 | V1 |
-| `learning/` | `curiosity.py` | `CuriosityModule`, `ExplorationDecision` | 336 | V1 |
-| `learning/` | `cross_domain.py` | `TransferEngine`, `SchemaExtractor`, `RuleLifter` | ~430 | V2 |
-| `learning/` | `schema_induction.py` ⚑ | `SchemaInducer` (slot-filling patterns) | ~150 | V4 |
-| `learning/` | `pmi_learner.py` ⚑ | `PMILearner` (PMI co-occurrence) | ~100 | V4 |
-| `learning/` | `predictive_coding.py` ⚑ | `PredictiveCodingModule` | ~100 | V4 |
-| `learning/` | `active_inference.py` ⚑ | `ActiveInferenceLearner` (MIN_TEMP=0.1, MAX_TEMP=5.0) | ~120 | V4 |
-| `language/` | `text_knowledge_learner.py` | `TextKnowledgeLearner` (_STOP_CONCEPTS, DistribPreTrain) ⚑ | 1,074 | V1/V7 |
-| `language/` | `construction_grammar.py` ⚑ | `ConstructionMatcher` (71 constructions, V4 negation/temporal/conditional) | ~350 | V3/V4 |
-| `language/` | `frame_semantics.py` ⚑ | `FrameLibrary`, `Frame` | 81 | V3 |
-| `language/` | `coreference.py` ⚑ | `EntityRegister`, `EntityMention` | 76 | V3 |
-| `language/` | `distributional_semantics.py` ⚑ | `DistributionalCodebook` (BUILTIN_CORPUS pre-train) | ~200 | V3/V7 |
-| `language/` | `language_module.py` | `LanguageModule` | 526 | V1 |
-| `language/` | `lingua_cortex.py` | `LinguaCortex` | 260 | V1 |
-| `language/` | `dialogue_manager.py` | `DialogueManager` (FluentNLG wired) ⚑ | 506 | V1/V7 |
-| `language/` | `universal_input.py` | `UniversalInput` | 947 | V1 |
-| `language/` | `semantic_roles.py` | `SemanticRoleLabeler`, `SRLFrame` | ~380 | V2 |
-| `language/` | `nlg.py` | `StructuralRealizer`, `DiscoursePlanner`, `NLGEngine` | ~430 | V2 |
-| `language/` | `fluent_nlg.py` ⚑ | `FluentResponseComposer`, `NSCKResponseEngine`, `RelationVerbalizer` | ~350 | V6 |
-| `language/` | `pos_tagger.py` ⚑ | `BrillPosTagger` (300+ lexicon, 8 suffix rules) | ~180 | V6 |
-| `language/` | `pragmatics.py` ⚑ | `PragmaticEngine` (15 Horn scales, 7 speech acts, Gricean maxims) | ~200 | V5 |
-| `language/` | `hf_corpus_loader.py` ⚑ | `HFCorpusLoader` (HuggingFace FineWeb, offline fallback) | ~120 | V7 |
-| `integration/` | `config.py` | `NSCKConfig` (25 feature flags, 3 presets) ⚑ | ~100 | V1/V7 |
-| `integration/` | `persistence.py` | `BrainStore`, `Episode`, `Rule` | 852 | V1 |
-| `integration/` | `brain_fusion.py` | `BrainFusion`, `TaskBrain`, `FusedBrain` | 481 | V1 |
-| `integration/` | `explanation.py` | `ExplanationGenerator`, `Explanation` | 433 | V1 |
-| `multimodal/` | `multimodal_processor.py` | `MultimodalProcessor`, `ConcurrentMultimodalProcessor` ⚑ | 788 | V1/V6 |
-| `multimodal/` | `image_generator.py` | `ImageGenerator`, `VisualFeatures` | 575 | V1 |
-| `adapters/` | `dict_state_adapter.py` | `DictStateAdapter` | ~80 | V9 |
-| `adapters/` | `text_adapter.py` | `TextAdapter` | ~50 | V9 |
-| `adapters/` | `numeric_adapter.py` | `NumericAdapter` | ~80 | V9 |
-| `adapters/` | `numeric_sequence_adapter.py` | `NumericSequenceAdapter` (FPE + statistical predicates) | ~80 | V11 |
-| `adapters/` | `snn_adapter.py` | `SNNAdapter` | ~100 | V9 |
-| `adapters/` | `multimodal_fuser.py` | `MultimodalFuser` (VSA bundle) | ~100 | V9 |
-| `adapters/` | `stream_processor.py` | `StreamProcessor`, `StreamVerifier` | ~250 | V9 |
-| `adapters/` | `image_adapter.py` ⚑ | `ImageAdapter` (spatial-grid + colour histogram + Sobel FPE, 65 dims) | ~230 | V12 |
-| `adapters/` | `audio_adapter.py` ⚑ | `AudioAdapter` (MFCC + spectral FPE, 23 dims) | ~210 | V12 |
-| (core) | `substrate.py` ⚑ | `NSCKSubstrate`, `SubstrateResult` — clean public API for all modalities | ~384 | V11 |
-| `perception/` | `stream_encoder.py` ⚑ | `TimeSeriesEncoder` (FPE), `StreamBuffer` | ~200 | V11 |
-| `vsa/` | `vsa_embedding_bridge.py` ⚑ | `EmbeddingVSABridge` (dense ↔ binary HV) | ~200 | V10 |
-| `vsa/` | `fhrr.py` ⚑ | `FHRRVector`, `FHRRMemory` (complex phasor VSA) | ~300 | V10 |
-| `vsa/` | `rust_concurrent_shim.py` ⚑ | `SemanticMemoryConcurrent`, `EpisodicMemoryConcurrent`, `CognitiveWorkerPool` | ~200 | V10 |
-| `language/` | `ngram_nlu.py` ⚑ | `NgramNLU` (Naive Bayes intent + entity, 33K sent/s) | ~250 | V10 |
-| `reasoning/` | `attention_gwt_bridge.py` ⚑ | `MultiHeadAttentionGWT`, `GWTAttentionBridge` | ~200 | V10 |
-| `learning/` | `rule_neural_scorer.py` ⚑ | `RuleNeuralScorer`, `RuleFeaturizer` | ~200 | V10 |
-| `cognitive/` | `safety_verifier.py` ⚑ | `SafetyRuleVerifier`, `SafetyGateVerifier`, `SafetyProperty` | ~200 | V10 |
-| `api/` | `nsck_api.py` ⚑ | `NSCKApiServer` (FastAPI / stdlib HTTP REST) | ~250 | V10 |
+## Performance Benchmarks
 
-> **⚑** = New or substantially extended in V3–V12.
+All benchmarks measured on 10,240-bit HyperVectors.
 
-**Total: ~75 source modules, ~90 Python files, ~28,000 LOC**
+### VSA Operations — Rust vs. Python
 
-### Rust Accelerator (`rust_vsa/`) — hypervec_rs.so (4.3 MB)
+| Operation | Rust (ops/s) | Python (ops/s) | Speedup |
+|-----------|-------------|----------------|---------|
+| **Bind (XOR)** | 3,896,091 | 703,077 | ~5.5× |
+| **Similarity** | 3,993,108 | 135,365 | ~29.5× |
+| **Bundle** | 1,454,417 | 17,129 | ~84.9× |
 
-| Source file | What it accelerates | Verified speedup |
-|---|---|---|
-| `src/lib.rs` | `HyperVector` (XOR · bundle · permute · `negate()` · similarity) | 6–76× |
-| `src/concurrent.rs` | `HyperVectorRegistry` — thread-safe bulk storage | high |
-| `src/semantic.rs` | `SemanticMemoryConcurrent` — parallel spreading activation | high |
-| `src/episodic.rs` | `EpisodicMemoryConcurrent` — parallel k-NN with RwLock | high |
-| `src/worker_pool.rs` | `CognitiveWorkerPool` — Rayon thread pool | — |
-| `src/persistence.rs` | `PersistentStorage` — async SQLite | — |
+### System-Level Benchmarks
 
-**Measured speedups (Feb 2026, 500 ops, 10240-bit HVs):**
+| Metric | Value |
+|--------|-------|
+| Memory query (1K entries) | 0.45 ms |
+| Decision latency p50 | 0.14 ms |
+| Decision latency p99 | 0.23 ms |
+| NLU throughput | 143,624 sentences/s |
+| Causal ΔP computation | 1,509,044 ops/s |
+| SNN LIF step | 0.026 ms |
+
+### Batch Speedups (500 ops, 10,240-bit HVs)
+
 ```
-similarity ×500:  Rust=0.137ms  Python=3.851ms  → 28.1×
-xor ×500:         Rust=0.117ms  Python=0.713ms  →  6.1×
-bundle ×50:       Rust=0.038ms  Python=2.874ms  → 75.9×
-negate ×50:       Rust=0.038ms  Python=2.401ms  → 63.8×
+Operation        Rust        Python      Speedup
+─────────────    ─────────   ─────────   ───────
+similarity ×500  0.137 ms    3.851 ms    28.1×
+xor ×500         0.117 ms    0.713 ms     6.1×
+bundle ×50       0.038 ms    2.874 ms    75.9×
+negate ×50       0.038 ms    2.401 ms    63.8×
 ```
-
-### Rust SNN Accelerator (`rust_snn/`) — snn_rs.so (1.1 MB)
-
-| Source file | What it accelerates |
-|---|---|
-| `src/lib.rs` | `LIFLayer.step()`, `SnnCore.simulate()`, `StdpEngine.apply()` — Rayon parallelised |
-| `src/hebbian.rs` | `HebbianMatrix.update()` — Oja's rule outer-product |
-| `src/concept.rs` | `ConceptMapper.recognize()` — Jaccard per concept |
 
 ---
 
-## Building the Rust Accelerator
+## Rust Backend
+
+NSCK ships two optional Rust extensions built with PyO3 and Rayon for
+data-parallel acceleration. When the `.so` files are present in the `nsck/`
+directory, the Python shims transparently delegate to Rust.
+
+### `hypervec_rs.so` (4.3 MB) — VSA Accelerator
+
+Built from `rust_vsa/`.
+
+| Exported symbol | Description |
+|----------------|-------------|
+| `HyperVector` | XOR bind, majority bundle, permute, negate, Hamming similarity |
+| `HyperVectorRegistry` | Thread-safe (RwLock) bulk HV storage |
+| `SemanticMemoryConcurrent` | Rayon-parallel spreading activation |
+| `EpisodicMemoryConcurrent` | Rayon-parallel k-NN with RwLock |
+| `CognitiveWorkerPool` | Rayon thread pool for batch cognitive tasks |
+| `PersistentStorage` | Async SQLite persistence |
+| `parallel_bundle` | Batch-parallel majority-rule bundle |
+| `batch_parallel_similarity_search` | Batch similarity search across registry |
+| `batch_similarity_matrix` | Pairwise similarity matrix computation |
+| `weber_fechner_compress` | Psychophysical compression of similarity scores |
+
+### `snn_rs.so` (1.1 MB) — SNN Accelerator
+
+Built from `rust_snn/`.
+
+| Exported symbol | Description |
+|----------------|-------------|
+| `SnnCore` | Full SNN simulation loop |
+| `LIFLayer` | Leaky Integrate-and-Fire neuron layer (Rayon-parallel `step()`) |
+| `HebbianMatrix` | Oja's rule outer-product update |
+| `StdpEngine` | Spike-Timing-Dependent Plasticity |
+| `ConceptMapper` | Jaccard-based concept recognition |
+| `RateCoder` | Spike rate ↔ scalar encoding |
+
+### Building
 
 ```bash
-# VSA accelerator (hypervec_rs.so — 4.3 MB)
+# VSA accelerator
 cd nsck/rust_vsa
 cargo build --release
 cp target/release/libhypervec_rs.so ../hypervec_rs.so
 
-# SNN accelerator (snn_rs.so — 1.1 MB)
+# SNN accelerator
 cd nsck/rust_snn
 cargo build --release
 cp target/release/libsnn_rs.so ../snn_rs.so
 ```
 
-The Python shims (`hypervec_shim.py`, `snn_shim.py`) automatically detect and use the Rust extension if the `.so` files exist in `nsck/`, falling back to the pure-Python/NumPy implementation otherwise.
-
-**Verified speedups (Feb 2026):**
-```
-similarity ×500:  28.1×  |  bundle ×50: 75.9×  |  negate ×50: 63.8×
-```
-
 ---
 
-## Running Tests
+## Testing
+
+### Running the Test Suite
 
 ```bash
-# From the repository root
+cd nsck
 
-# All tests (Python-only, no Rust .so)
-cd nsck && python -m pytest tests/ -q
-# Result: 1,199 passed, 150 skipped, 3 xfailed
+# Full suite
+python -m pytest tests/ -q
 
-# All tests (with Rust .so built and in nsck/)
-cd nsck && python -m pytest tests/ -q
-# Result: 1,248+ passed, 5 skipped, 3 xfailed
+# Expected (with Rust): 1437 collected, 1424 passed, 2 failed, 7 skipped, 4 xfailed
 
 # Unit tests only
 python -m pytest tests/unit/ -q
@@ -388,80 +636,74 @@ python -m pytest tests/unit/ -q
 # Integration tests
 python -m pytest tests/integration/ -q
 
-# V6/V7 feature tests
-python -m pytest tests/unit/test_v6_features.py tests/unit/test_v7_features.py -q
+# Specific version features
+python -m pytest tests/unit/test_v13_features.py -q
 
-# With verbose output
+# Verbose output
 python -m pytest tests/ -v
 ```
 
----
+### What to Expect
 
-## Usage Examples
+- **1,424 passing** tests covering all subsystems
+- **2 stochastic failures** — non-deterministic tests that occasionally fail due to random seeding
+- **7 skipped** — tests requiring optional dependencies or specific hardware
+- **4 xfailed** — expected failures when Rust extensions are present (edge-case differences)
 
-### Text Learning and Querying
+### Test Organisation
 
-```python
-from python.core.integration.config import NSCKConfig
-from python.core.language.text_knowledge_learner import TextKnowledgeLearner
-from python.core.memory.semantic_memory import SemanticMemory
-from python.core.reasoning.causal_reasoning import CausalGraph
-from python.core.language.fluent_nlg import NSCKResponseEngine
-
-cfg = NSCKConfig.research()   # enable all features
-sem = SemanticMemory(config=cfg)
-cg  = CausalGraph()
-tkl = TextKnowledgeLearner(semantic_memory=sem, causal_graph=cg, config=cfg)
-nlg = NSCKResponseEngine()
-
-tkl.learn_from_text("Water is a molecule made of hydrogen and oxygen. Rain causes flooding.")
-
-# Fluent NL response
-resp = nlg.describe("Rain", sem, max_relations=5)
-print(resp)
-# → "To explain Rain: Rain leads to flooding."
-```
-
-### Spreading Activation
-
-```python
-activated = sem.spread_activation(["Brain", "Learning"], steps=2, decay=0.7)
-for concept, score in sorted(activated.items(), key=lambda x: -x[1])[:5]:
-    print(f"  {concept}: {score:.4f}")
-```
-
-### Episodic Memory
-
-```python
-from python.core.memory.episodic_memory import EpisodicMemory, LiveEpisode
-import python.core.vsa.hypervec_shim as hvs
-
-mem = EpisodicMemory()
-hv = hvs.HyperVector(42)
-ep = LiveEpisode(
-    timestamp=1.0, task_tag="demo",
-    situation_hv=hv, state={"x": 1},
-    action="move", outcome="success", reward=1.0
-)
-mem.store(ep)
-recalled = mem.recall(hv, k=3)
-```
-
-### Custom Module (SDK)
-
-See [`examples/custom_module.py`](examples/custom_module.py) for a complete example of adding a custom reasoning module to the Global Workspace.
+Tests are in `tests/` with `unit/` and `integration/` subdirectories. The
+`conftest.py` at the package root provides shared fixtures. The `pytest.ini` at
+the repository root configures markers and test paths.
 
 ---
 
-## Documentation
+## V13 Features
+
+V13 adds nine new modules and several enhancements to the substrate:
+
+| Feature | Module | Description |
+|---------|--------|-------------|
+| **SignalIngestor** | `perception/signal_ingestor.py` | Pre-processes raw signals (normalisation, windowing, resampling) before encoding |
+| **UniversalHVEncoder** | `vsa/universal_hv_encoder.py` | Unified multi-modal encoding pipeline with per-encode statistics (`encoding_stats` in `SubstrateResult`) |
+| **CrossModalAssociativeMemory** | `memory/cross_modal_associative_memory.py` | Binds entities across modalities (e.g. a visual object and its spoken name) |
+| **ProceduralMemory** | `memory/procedural_memory.py` | Skill cache for fast-path decisions — `ingest()` checks this before the full pipeline |
+| **ConceptDriftDetector** | `memory/concept_drift_detector.py` | Monitors semantic stability over time; flags drifting concepts for re-learning |
+| **ConformalWrapper** | `learning/conformal_wrapper.py` | Calibrated uncertainty bounds (`uncertainty_bounds` in `SubstrateResult`) via conformal prediction |
+| **PatternGeneralizer** | `learning/pattern_generalizer.py` | Generalises observed patterns into abstract rules |
+| **CausalRuleAuditor** | `reasoning/causal_rule_auditor.py` | Audits causal rules for internal consistency and spurious correlations |
+| **VideoAdapter** | `adapters/video_adapter.py` | Processes video as temporal sequences of `ImageAdapter` frames |
+
+### V13 API Additions
+
+- **`ingest(input_data, task_tag)`** — New clean entry point that checks
+  `ProceduralMemory` for cached skills before falling through to `process()`.
+  Returns `SubstrateResult` with `procedural_hit=True` on cache hit.
+
+- **`feedback(action, reward, task_tag)`** — Closes the learning loop: updates
+  Q-values, Hebbian weights, and rule statistics. Caches high-reward
+  state→action mappings in `ProceduralMemory`.
+
+- **`SubstrateResult.kle_uncertainty`** — KLE uncertainty estimate from the
+  `GlobalWorkspace` competition.
+
+- **`SubstrateResult.uncertainty_bounds`** — Conformal prediction interval from
+  `ConformalWrapper`.
+
+- **`SubstrateResult.encoding_stats`** — Encoding metadata from
+  `UniversalHVEncoder` (dimensionality, sparsity, adapter used).
+
+---
+
+## Further Documentation
 
 | Document | Contents |
-|---|---|
+|----------|----------|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full system architecture with Mermaid diagrams per subsystem |
 | [docs/FORMULAS.md](docs/FORMULAS.md) | Theory, math foundations, proofs, and design goals |
 | [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Every file, class, method, and parameter |
 | [docs/TESTING.md](docs/TESTING.md) | All test files: what they test, how, and why |
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Decision loop and data-flow walkthroughs |
-| [docs/NSCK_ROADMAP_AND_PLAN.md](docs/NSCK_ROADMAP_AND_PLAN.md) | Full implementation roadmap: gaps, phases, research refs, success criteria |
-| [docs/NSCK_V9_SUBSTRATE.md](docs/NSCK_V9_SUBSTRATE.md) | V9 modality-agnostic substrate full specification |
-| [docs/NSCK_V10_EXTENSIONS.md](docs/NSCK_V10_EXTENSIONS.md) | V10 intelligence extensions: FHRR, embedding bridge, neural scoring, safety |
+| [docs/NSCK_ROADMAP_AND_PLAN.md](docs/NSCK_ROADMAP_AND_PLAN.md) | Implementation roadmap with research references |
+| [docs/NSCK_V9_SUBSTRATE.md](docs/NSCK_V9_SUBSTRATE.md) | V9 modality-agnostic substrate specification |
+| [docs/NSCK_V10_EXTENSIONS.md](docs/NSCK_V10_EXTENSIONS.md) | V10 extensions: FHRR, embedding bridge, neural scoring, safety |
