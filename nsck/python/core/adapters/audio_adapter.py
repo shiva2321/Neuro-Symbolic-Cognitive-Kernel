@@ -64,7 +64,7 @@ def _features_to_hv(feature_vec: np.ndarray) -> hypervec_rs.HyperVector:
 
 def _extract_audio_features(audio: np.ndarray, sample_rate: int = 16000) -> np.ndarray:
     """
-    Extract a 26-dimensional feature vector from a 1-D audio waveform.
+    Extract a 23-dimensional feature vector from a 1-D audio waveform.
 
     Features:
       - 13 MFCC coefficients (mel filterbank → log → DCT)
@@ -80,7 +80,7 @@ def _extract_audio_features(audio: np.ndarray, sample_rate: int = 16000) -> np.n
     audio = np.asarray(audio, dtype=np.float64).ravel()
     n = len(audio)
     if n == 0:
-        return np.zeros(22)
+        return np.zeros(23)
 
     rms_energy = float(np.sqrt(np.mean(audio ** 2)))
     peak = float(np.max(np.abs(audio)))

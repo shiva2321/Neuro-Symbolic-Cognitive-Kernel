@@ -71,7 +71,7 @@ def _features_to_hv(feature_vec: np.ndarray) -> hypervec_rs.HyperVector:
 
 def _extract_image_features(img: np.ndarray) -> np.ndarray:
     """
-    Extract a 66-dimensional feature vector from an image using only numpy.
+    Extract a 65-dimensional feature vector from an image using only numpy.
 
     Features (all normalised to a comparable scale):
       - Spatial 4×4 grid: mean per cell (16 features)

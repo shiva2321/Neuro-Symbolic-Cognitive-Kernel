@@ -173,11 +173,11 @@ class TestAudioAdapter:
         pkt_noise = adapter.encode(noise, "test")
         pkt_tone = adapter.encode(self._sine(440, 0.5), "test")
 
-        # Tone should be more tonal than noise
-        noise_preds = pkt_noise.active_predicates
-        tone_preds = pkt_tone.active_predicates
-        # At least one predicate should differ
-        assert noise_preds != tone_preds or True  # structural assertion
+        # White noise has high ZCR → AUDIO_NOISY; pure tone has low ZCR → AUDIO_TONAL
+        # At minimum, the two signals should produce different predicate sets
+        assert pkt_noise.active_predicates != pkt_tone.active_predicates, (
+            "Noise and a pure tone should produce different predicates"
+        )
 
     def test_raw_state_keys(self):
         adapter = self._adapter()
