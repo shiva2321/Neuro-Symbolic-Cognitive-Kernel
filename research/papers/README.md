@@ -2,14 +2,14 @@
 
 This directory contains three research papers derived from the NSCK (Neuro-Symbolic Cognitive Kernel) project. Each paper is independent and can be submitted separately.
 
-**Current implementation status (V8, February 2026): 1,111 tests passing, 5 skipped, 4 xfailed — with Rust extensions active.**
+**Current implementation status (V13, February 2026): 1,424 tests passing, 7 skipped, 4 xfailed — with Rust extensions active. 94 core modules, 232 classes, ~36K LOC Python, ~4.3K LOC Rust.**
 
 ## Papers
 
 ### Paper 1 — Foundation Paper
 **"NSCK: A Unified Neuro-Symbolic Cognitive Kernel Using Binary Hypervector Representations"**
 - **File:** `paper1_foundation.md`
-- **Scope:** Full system architecture, design principles, all 8 layers, benchmarks
+- **Scope:** Full system architecture, design principles, all 7 layers, benchmarks, V9–V13 extensions
 - **Target Venues:** arXiv (immediate), NeurIPS Workshop on Neuro-Symbolic AI, AAAI Student Abstract
 - **Priority:** Submit first — this is the paper all future work cites
 
