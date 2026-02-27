@@ -9,7 +9,7 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V15** — 1,375+ tests. V14 baseline: 1,311 passed. Zero regressions.
+**Current release: V16** — 1,420+ tests. V15 baseline: 1,375 passed. Zero regressions.
 
 ---
 
@@ -24,10 +24,11 @@ hidden layers.
 7. [Performance Benchmarks](#performance-benchmarks)
 8. [Rust Backend](#rust-backend)
 9. [Testing](#testing)
-10. [V15 Features — Model Transplantation](#v15-features--model-transplantation)
-11. [V14 Features](#v14-features)
-12. [V13 Features](#v13-features)
-13. [Further Documentation](#further-documentation)
+10. [V16 Features — Security, EWC, Eval Suite & Seeding](#v16-features--security-ewc-eval-suite--seeding)
+11. [V15 Features — Model Transplantation](#v15-features--model-transplantation)
+12. [V14 Features](#v14-features)
+13. [V13 Features](#v13-features)
+14. [Further Documentation](#further-documentation)
 
 ---
 
@@ -659,6 +660,96 @@ the repository root configures markers and test paths.
 
 ---
 
+## V16 Features — Security, EWC, Eval Suite & Seeding
+
+V16 delivers four focused initiatives, all backward-compatible with V15.
+
+### Initiative 1: KnowledgePack Pickle Security (gzip+JSON)
+
+`KnowledgePack.save()` now writes **gzip-compressed JSON** (schema version 2)
+instead of pickle, eliminating arbitrary-code-execution risk from untrusted
+pack files.  Legacy V14/V15 gzip+pickle files still load with a
+`DeprecationWarning`.
+
+```python
+pack.save("biology.kp")             # gzip+JSON, schema_version=2
+pack = KnowledgePack.load("old.kp") # auto-detects format; warns if pickle
+```
+
+### Initiative 2: EWC Wiring into CognitiveEngine
+
+**Elastic Weight Consolidation (EWC)** is now an optional, feature-flagged
+component of `CognitiveEngine` that protects important task knowledge during
+multi-task lifelong learning.
+
+```python
+cfg = NSCKConfig()
+cfg.enable_ewc = True
+cfg.ewc_lambda = 100.0
+engine = CognitiveEngine(config=cfg, persistence_path=":memory:")
+engine.register_task("task_a")
+# ... train on task A ...
+engine.sleep()          # consolidates EWC importance weights
+engine.register_task("task_b")   # task A knowledge protected
+```
+
+`enable_ewc` defaults to `False` — zero impact on existing code.  The
+`NSCKConfig.research()` preset enables EWC automatically.
+
+### Initiative 3: NSCK Evaluation Suite (NSCK-ES)
+
+A reproducible composite benchmark covering five cognitive dimensions:
+
+| Task | Weight | Description |
+|------|--------|-------------|
+| T1 — Semantic QA | 0.30 | 100 QA pairs: direct, property, causal, multi-hop |
+| T2 — Generalization | 0.20 | 5 cross-domain structural transfer scenarios |
+| T3 — Lifelong Retention | 0.20 | Catastrophic-forgetting measurement |
+| T4 — Cross-Modal Recall | 0.15 | 10 anchor→concept spreading-activation pairs |
+| T5 — Causal Reasoning | 0.15 | 20 causal chains (2-hop, 3-hop, negative) |
+
+```python
+from eval.nsck_eval_suite import NSCKEvalSuite
+
+results = NSCKEvalSuite().run_all()
+print(f"NSCK-ES: {results['nsck_es']:.3f}")  # 1.000
+```
+
+See [docs/EVAL_SUITE.md](docs/EVAL_SUITE.md) for the full specification.
+
+### Initiative 4: BERT + ConceptNet Semantic Seeding
+
+Bootstrap NSCK's semantic memory with commonsense knowledge before task
+training.
+
+```python
+from python.core.seeding.conceptnet_loader import ConceptNetLoader
+from python.core.seeding.semantic_seeder import SemanticSeeder
+
+loader = ConceptNetLoader()
+pack = loader.load_from_csv("conceptnet_en.csv", min_weight=2.0)
+pack.save("data/knowledge_packs/cn_en.kp")
+
+seeder = SemanticSeeder()
+counts = seeder.seed_from_conceptnet_pack(substrate, "data/knowledge_packs/cn_en.kp")
+seeder.post_seed_enrich(substrate)  # transitive is_a closure
+```
+
+`BertSeeder` (requires `transformers`) absorbs BERT embeddings via the V15
+transplant pipeline.
+
+| New Module | Location | Description |
+|-----------|----------|-------------|
+| `ConceptNetLoader` | `seeding/conceptnet_loader.py` | Parse ConceptNet TSV; emit `KnowledgePack` |
+| `SemanticSeeder` | `seeding/semantic_seeder.py` | Inject pack into substrate; post-seed enrichment |
+| `BertSeeder` | `seeding/bert_seeder.py` | BERT-to-HV seeding via transplant pipeline |
+
+Use `NSCKConfig.seeded()` to enable seeding at substrate initialisation.
+
+See [docs/V16_CHANGELOG.md](docs/V16_CHANGELOG.md) for detailed API, schemas, and migration notes.
+
+---
+
 ## V15 Features — Model Transplantation
 
 V15 introduces the flagship **Model Transplantation Pipeline**: absorb learned
@@ -829,4 +920,6 @@ V13 adds nine new modules and several enhancements to the substrate:
 | [docs/V15_CHANGELOG.md](docs/V15_CHANGELOG.md) | V15 Model Transplantation Pipeline changelog |
 | [docs/TRANSPLANT_GUIDE.md](docs/TRANSPLANT_GUIDE.md) | V15 transplant quick-start, strategies, configuration |
 | [docs/TRANSPLANT_REPORT.md](docs/TRANSPLANT_REPORT.md) | V15 quality metrics and benchmark results |
+| [docs/V16_CHANGELOG.md](docs/V16_CHANGELOG.md) | V16 security, EWC, evaluation suite, semantic seeding |
+| [docs/EVAL_SUITE.md](docs/EVAL_SUITE.md) | NSCK-ES T1-T5 scoring specification and usage guide |
 | [docs/GOAL_TRACKER.md](docs/GOAL_TRACKER.md) | Living document: AGI vision vs implementation status |
