@@ -172,13 +172,14 @@ class STDPCalibrator:
         tokens: List[str],
         n_queries: int = 50,
         k: int = 10,
+        seed: int = 7,
     ) -> float:
         """Recall@k: fraction of true top-k neighbours found in HV top-k."""
         N = len(tokens)
         if N <= k:
             return 1.0
 
-        rng = np.random.default_rng(7)
+        rng = np.random.default_rng(seed)
         query_pos = rng.choice(N, size=min(n_queries, N), replace=False)
 
         E = embeddings[indices].astype(np.float32)

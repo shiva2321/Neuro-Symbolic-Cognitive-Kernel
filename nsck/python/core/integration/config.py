@@ -205,12 +205,38 @@ class NSCKConfig:
             perception_mode="pure",
         )
 
+    # === V15 Feature Flags — Model Transplantation ===
+    enable_transplant: bool = False
+    transplant_strategy: str = "svd_factored"  # "random", "learned", "svd_factored"
+    transplant_calibration_epochs: int = 10
+    transplant_validation_threshold: float = 0.80
+    transplant_svd_components: int = 128
+    transplant_fpe_bins: int = 256
+    transplant_batch_size: int = 512
+    transplant_sample_pairs: int = 10000
+    transplant_auto_live_encoding: bool = True
+
     @classmethod
     def rich(cls) -> "NSCKConfig":
         """Rich config: all research flags + bridge perception."""
         cfg = cls.research()
         cfg.perception_mode = "bridge"
         return cfg
+
+    @classmethod
+    def transplant(cls) -> "NSCKConfig":
+        """Transplant config: all transplant flags enabled."""
+        return cls(
+            enable_transplant=True,
+            transplant_strategy="svd_factored",
+            transplant_calibration_epochs=10,
+            transplant_validation_threshold=0.80,
+            transplant_svd_components=128,
+            transplant_fpe_bins=256,
+            transplant_batch_size=512,
+            transplant_sample_pairs=10000,
+            transplant_auto_live_encoding=True,
+        )
 
     @classmethod
     def for_scale(cls, n_concepts: int) -> "NSCKConfig":

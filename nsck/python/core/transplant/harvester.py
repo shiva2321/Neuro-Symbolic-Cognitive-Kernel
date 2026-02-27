@@ -203,8 +203,14 @@ class ModelHarvester:
             with torch.no_grad():
                 try:
                     model(dummy)
-                except Exception:  # noqa: BLE001
-                    pass  # output not needed; hook may have fired
+                except Exception as exc:  # noqa: BLE001
+                    import warnings  # noqa: PLC0415
+                    warnings.warn(
+                        f"Forward hook model call raised {type(exc).__name__}; "
+                        "hook may still have captured activations.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
         finally:
             handle.remove()
 

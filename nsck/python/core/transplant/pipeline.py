@@ -16,6 +16,10 @@ from python.core.transplant.validator import TransplantValidator, TransplantRepo
 
 _log = logging.getLogger(__name__)
 
+# Maximum number of tokens to consider for pairwise similarity-based relation
+# injection.  Caps the O(n²) cost of the relation-addition step.
+_RELATION_TOKEN_CAP = 500
+
 
 class TransplantPipeline:
     """End-to-end model transplantation pipeline.
@@ -177,8 +181,8 @@ class TransplantPipeline:
         # Add relations between highly similar concepts (similarity > 0.7)
         tokens = list(codebook.keys())
         n = len(tokens)
-        for i in range(min(n, 500)):          # cap to avoid O(n²) cost
-            for j in range(i + 1, min(n, 500)):
+        for i in range(min(n, _RELATION_TOKEN_CAP)):          # cap to avoid O(n²) cost
+            for j in range(i + 1, min(n, _RELATION_TOKEN_CAP)):
                 try:
                     sim = codebook[tokens[i]].similarity(codebook[tokens[j]])
                     if sim > 0.7:
@@ -211,8 +215,8 @@ class TransplantPipeline:
         # Add similarity relations (same threshold as integrate)
         tokens = list(codebook.keys())
         n = len(tokens)
-        for i in range(min(n, 500)):
-            for j in range(i + 1, min(n, 500)):
+        for i in range(min(n, _RELATION_TOKEN_CAP)):
+            for j in range(i + 1, min(n, _RELATION_TOKEN_CAP)):
                 try:
                     sim = codebook[tokens[i]].similarity(codebook[tokens[j]])
                     if sim > 0.7:

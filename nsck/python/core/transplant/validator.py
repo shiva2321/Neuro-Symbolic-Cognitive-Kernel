@@ -260,7 +260,11 @@ class TransplantValidator:
             dists = np.array(
                 [min(float(np.sum((Xs[i] - Xs[ci]) ** 2)) for ci in c_idx) for i in range(cap)]
             )
-            dists /= max(dists.sum(), 1e-12)
+            total = dists.sum()
+            if total < 1e-12:
+                dists = np.ones(cap, dtype=np.float64) / cap
+            else:
+                dists /= total
             c_idx.append(int(rng.choice(cap, p=dists)))
         centroids = Xs[c_idx]
 
