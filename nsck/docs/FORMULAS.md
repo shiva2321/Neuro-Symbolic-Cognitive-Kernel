@@ -1,7 +1,7 @@
-# NSCK V13 — Theory, Formulas, and Mathematical Foundations
+# NSCK V14 — Theory, Formulas, and Mathematical Foundations
 
 This document covers the complete mathematical and theoretical foundations of
-NSCK V13: every formula, derivation, and design rationale — extracted directly
+NSCK V14: every formula, derivation, and design rationale — extracted directly
 from the source code and the research ideas that motivated each component.
 
 ---
@@ -39,7 +39,9 @@ from the source code and the research ideas that motivated each component.
 29. [Cross-Modal Associative Binding (V13)](#29-cross-modal-associative-binding-v13)
 30. [Causal Rule Auditor (V13)](#30-causal-rule-auditor-v13)
 31. [Pattern Generalizer (V13)](#31-pattern-generalizer-v13)
-32. [References](#references)
+32. [Bridge Projection (V14)](#32-bridge-projection-v14)
+33. [Distillation Quality (V14)](#33-distillation-quality-v14)
+34. [References](#references)
 
 ---
 
@@ -1007,6 +1009,71 @@ abstract concept.
 ### Transfer score (analogy-based)
 
 $$\text{transfer}(A \to B) = \text{sim}(\mathbf{v}_{\text{source}}, \mathbf{p}_A) \cdot \text{sim}(\mathbf{v}_{\text{target}}, \mathbf{p}_B)$$
+
+---
+
+## 32. Bridge Projection (V14)
+
+*Source: `adapters/rich_text_adapter.py`, `vsa/vsa_embedding_bridge.py`*
+
+The Rich Perception adapters use a random projection matrix to convert
+dense real-valued embeddings into binary hypervectors.
+
+### Bridge projection
+
+Let $\mathbf{e} \in \mathbb{R}^{d_{\text{bridge}}}$ be the embedding produced
+by a bridge model (e.g. sentence-transformers with $d_{\text{bridge}} = 384$).
+Let $\mathbf{P} \in \mathbb{R}^{d \times d_{\text{bridge}}}$ be a fixed random
+Gaussian projection matrix ($d = 10{,}240$ bits).
+
+$$\mathbf{b} = \text{sign}\!\left(\mathbf{P}\,\mathbf{e}\right) \in \{0, 1\}^d$$
+
+where sign is taken in the $\{-1, +1\}$ bipolar convention and mapped to
+$\{0, 1\}$:
+
+$$b_i = \begin{cases} 1 & \text{if } (\mathbf{P}\,\mathbf{e})_i \geq 0 \\ 0 & \text{otherwise} \end{cases}$$
+
+This is a Johnson–Lindenstrauss–style random projection: the Hamming similarity
+of bridge HVs approximates the cosine similarity of the original embeddings
+(for large $d$).
+
+---
+
+## 33. Distillation Quality (V14)
+
+*Source: `learning/perception_distiller.py`*
+
+`PerceptionDistiller` tracks whether the internal (pure VSA) encoding
+of a percept converges to the bridge encoding. Let $\mathbf{h}_b$ be the
+bridge HV and $\mathbf{h}_p$ be the pure/internal HV for the same input.
+
+### Per-observation quality
+
+$$q_t = \text{sim}(\mathbf{h}_b^{(t)},\, \mathbf{h}_p^{(t)})$$
+
+When cosine similarity is available (bipolar vectors):
+
+$$q_t = \frac{\cos\!\bigl(\mathbf{h}_b^{(t)},\, \mathbf{h}_p^{(t)}\bigr) + 1}{2} \in [0,\, 1]$$
+
+When only Hamming similarity is available (binary vectors):
+
+$$q_t = 1 - \frac{d_H\!\bigl(\mathbf{h}_b^{(t)},\, \mathbf{h}_p^{(t)}\bigr)}{d} \in [0,\, 1]$$
+
+### Rolling average quality
+
+Let $W = 100$ (window size). The rolling average over the last $W$
+observations is:
+
+$$\bar{q} = \frac{1}{\min(t, W)} \sum_{i=\max(0,\, t-W)}^{t} q_i$$
+
+### Graduation criterion
+
+A modality is **graduated** (bridge dependency can be removed) when:
+
+$$\text{graduated} = \left[\bar{q} \geq \theta \right]$$
+
+where $\theta$ is `distillation_threshold` (default $\theta = 0.80$), and
+the rolling window contains at least 10 observations.
 
 ---
 

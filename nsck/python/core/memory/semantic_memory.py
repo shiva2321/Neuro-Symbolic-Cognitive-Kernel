@@ -524,6 +524,18 @@ class SemanticMemory:
         
         Returns activation levels for nodes.
         """
+        # Try Rust-accelerated path first
+        try:
+            from python.core.memory.semantic_memory_shim import spread_activation_fast
+            result = spread_activation_fast(
+                self.concept_graph, start_concepts, self.relation_weights,
+                self._stigmergy, steps, decay,
+            )
+            if result is not None:
+                return result
+        except Exception:
+            pass
+
         activation = {c: 1.0 for c in start_concepts if c in self.concept_graph}
         
         _MAX_FRONTIER = 200

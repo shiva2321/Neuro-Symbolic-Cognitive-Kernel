@@ -3,7 +3,7 @@ NSCK Configuration Module
 Centralized configuration for hyperparameters and settings.
 """
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, List
 import os
 
 
@@ -120,6 +120,16 @@ class NSCKConfig:
     enable_ngram_nlu: bool = True
     enable_cross_modal_learning: bool = False
 
+    # === V14 Feature Flags — Rich Perception ===
+    perception_mode: str = "pure"           # "pure" | "bridge" | "hybrid"
+    text_bridge_model: str = "all-MiniLM-L6-v2"
+    image_bridge_model: str = "mobilenet_v3_small"
+    audio_bridge_model: str = "whisper-tiny"
+    bridge_cache_embeddings: bool = True
+    bridge_dim: int = 384
+    distillation_threshold: float = 0.80
+    knowledge_packs: List[str] = field(default_factory=list)
+
     @classmethod
     def from_env(cls) -> "NSCKConfig":
         """Create config from environment variables with defaults."""
@@ -173,6 +183,7 @@ class NSCKConfig:
             enable_continuous_generalization=True,
             enable_ngram_nlu=True,
             enable_cross_modal_learning=True,
+            perception_mode="bridge",
         )
 
     @classmethod
@@ -191,7 +202,24 @@ class NSCKConfig:
             enable_transitive_inference=True,
             # V7: fluent dialogue on in production
             enable_fluent_dialogue=True,
+            perception_mode="pure",
         )
+
+    @classmethod
+    def rich(cls) -> "NSCKConfig":
+        """Rich config: all research flags + bridge perception."""
+        cfg = cls.research()
+        cfg.perception_mode = "bridge"
+        return cfg
+
+    @classmethod
+    def for_scale(cls, n_concepts: int) -> "NSCKConfig":
+        """Auto-tune config for a given concept scale."""
+        cfg = cls()
+        cfg.memory_capacity = max(2500, n_concepts * 2)
+        if n_concepts >= 10_000:
+            cfg.enable_hnsw_index = True
+        return cfg
 
 
 # Global default config (can be overridden)

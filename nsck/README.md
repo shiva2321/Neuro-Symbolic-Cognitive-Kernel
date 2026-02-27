@@ -9,8 +9,8 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V13** — 1,437 tests collected, 1,424 passed (2 stochastic
-failures, 7 skipped, 4 xfailed with Rust backend).
+**Current release: V14** — 1,311 tests passed, 152 skipped, 3 xfailed (pure-Python run).
+V13 baseline: 1,282 passed. Zero regressions.
 
 ---
 
@@ -25,8 +25,9 @@ failures, 7 skipped, 4 xfailed with Rust backend).
 7. [Performance Benchmarks](#performance-benchmarks)
 8. [Rust Backend](#rust-backend)
 9. [Testing](#testing)
-10. [V13 Features](#v13-features)
-11. [Further Documentation](#further-documentation)
+10. [V14 Features](#v14-features)
+11. [V13 Features](#v13-features)
+12. [Further Documentation](#further-documentation)
 
 ---
 
@@ -658,6 +659,89 @@ the repository root configures markers and test paths.
 
 ---
 
+## V14 Features
+
+V14 delivers six work packages, all backward-compatible with V13.
+
+| Feature | Module | Description |
+|---------|--------|-------------|
+| **RichTextAdapter** | `adapters/rich_text_adapter.py` | Optional sentence-transformer bridge (`all-MiniLM-L6-v2`); falls back to char-ngram |
+| **RichImageAdapter** | `adapters/rich_image_adapter.py` | Optional timm bridge (`mobilenet_v3_small`); falls back to `ImageAdapter` |
+| **RichAudioAdapter** | `adapters/rich_audio_adapter.py` | Optional Whisper bridge (`whisper-tiny`); falls back to `AudioAdapter` |
+| **PerceptionDistiller** | `learning/perception_distiller.py` | Tracks bridge vs internal encoding quality; signals when bridge can be retired |
+| **KnowledgePack** | `integration/knowledge_pack.py` | Serialisable domain knowledge bundles; inject without Python expertise |
+| **semantic_memory_shim** | `memory/semantic_memory_shim.py` | Wires spreading activation to Rust `SemanticMemoryConcurrent` when available |
+| **Scale benchmarks** | `eval/scale_benchmarks.py` | Validates latency at 100–5 000 concepts |
+| **Makefile** | `Makefile` | `make test`, `make build-rust`, `make bench`, `make clean` |
+
+### Quick Start — Rich Perception Mode
+
+When `sentence-transformers` is installed, text encoding uses a neural bridge:
+
+```python
+from python.core.integration.config import NSCKConfig
+from python.core.substrate import NSCKSubstrate
+
+cfg = NSCKConfig.rich()            # research() + perception_mode="bridge"
+sub = NSCKSubstrate(config=cfg)
+sub.register_task("qa")
+
+result = sub.ingest("The mitochondria is the powerhouse of the cell", "qa")
+print(result.chosen_action)
+print(result.explanation)
+```
+
+Without `sentence-transformers`, the adapter falls back to char-ngram encoding
+automatically — no code change required.
+
+### Knowledge Packs
+
+Domain experts can bundle concepts, relations, and causal links into a portable
+file and inject them without writing any inference code:
+
+```python
+from python.core.integration.knowledge_pack import KnowledgePack
+
+# Author a pack
+pack = KnowledgePack(name="biology")
+pack.add_concept("cell", {"type": "biological_unit"})
+pack.add_concept("mitochondria", {"type": "organelle"})
+pack.add_relation("mitochondria", "part_of", "cell")
+pack.add_causal_link("ATP_synthesis", "energy_availability", strength=0.95)
+pack.save("nsck/data/knowledge_packs/biology.gz")
+
+# Use via config (auto-loaded on init)
+cfg = NSCKConfig(knowledge_packs=["nsck/data/knowledge_packs/biology.gz"])
+sub = NSCKSubstrate(config=cfg)
+
+# Or inject manually
+pack = KnowledgePack.load("nsck/data/knowledge_packs/biology.gz")
+pack.inject_into(sub.engine)
+```
+
+### V14 Configuration Flags
+
+```python
+# Perception mode
+cfg = NSCKConfig(perception_mode="bridge")   # "pure" | "bridge" | "hybrid"
+cfg = NSCKConfig(text_bridge_model="all-MiniLM-L6-v2")
+cfg = NSCKConfig(image_bridge_model="mobilenet_v3_small")
+cfg = NSCKConfig(audio_bridge_model="whisper-tiny")
+cfg = NSCKConfig(bridge_dim=384)
+cfg = NSCKConfig(bridge_cache_embeddings=True)
+
+# Distillation
+cfg = NSCKConfig(distillation_threshold=0.80)
+
+# Knowledge packs
+cfg = NSCKConfig(knowledge_packs=["path/to/pack.gz"])
+
+# Scale auto-tuning
+cfg = NSCKConfig.for_scale(5000)   # sets memory_capacity and HNSW flag
+```
+
+---
+
 ## V13 Features
 
 V13 adds nine new modules and several enhancements to the substrate:
@@ -707,3 +791,6 @@ V13 adds nine new modules and several enhancements to the substrate:
 | [docs/NSCK_ROADMAP_AND_PLAN.md](docs/NSCK_ROADMAP_AND_PLAN.md) | Implementation roadmap with research references |
 | [docs/NSCK_V9_SUBSTRATE.md](docs/NSCK_V9_SUBSTRATE.md) | V9 modality-agnostic substrate specification |
 | [docs/NSCK_V10_EXTENSIONS.md](docs/NSCK_V10_EXTENSIONS.md) | V10 extensions: FHRR, embedding bridge, neural scoring, safety |
+| [docs/V14_CHANGELOG.md](docs/V14_CHANGELOG.md) | V14 work packages, new APIs, migration guide |
+| [docs/V14_REPORT.md](docs/V14_REPORT.md) | V14 implementation report: test results, benchmarks, assessment |
+| [docs/GOAL_TRACKER.md](docs/GOAL_TRACKER.md) | Living document: AGI vision vs implementation status |
