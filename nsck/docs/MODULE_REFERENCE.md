@@ -1,6 +1,6 @@
-# Module Reference — NSCK V13
+# Module Reference — NSCK V14
 
-Complete reference for every module in the NSCK codebase. 94 core modules, 232 classes across 12 subsystems. Every class and method listed here is taken directly from source code.
+Complete reference for every module in the NSCK codebase. 100 core modules, 238 classes across 12 subsystems. Every class and method listed here is taken directly from source code.
 
 > **Ground truth is always the source files** under `nsck/python/core/`, `nsck/api/`, and `nsck_ai_model/`.
 
@@ -329,6 +329,16 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `update_cache(key, value)` | Update recall cache. |
 | `query(query_hv, top_k, threshold)` | Multi-stage recall. |
 
+### `semantic_memory_shim.py` *(V14)*
+
+Auto-selects Rust or Python backend for spreading activation, using the same pattern as `hypervec_shim.py`.
+
+| Function | Description |
+|----------|-------------|
+| `spread_activation_fast(concept_graph, start_concepts, relation_weights, stigmergy, steps, decay)` | Attempt Rust-accelerated spreading activation. Returns `Dict[str, float]` on success, `None` if Rust unavailable or sync fails. |
+
+The caller (`SemanticMemory.spread_activation`) falls through to the Python path when `None` is returned. When `hypervec_rs.SemanticMemoryConcurrent` is importable, the shim syncs concept nodes from the NetworkX graph to the Rust DashMap backend before running activation.
+
 ---
 
 ## Reasoning
@@ -597,6 +607,18 @@ Bridge between SNN spike patterns and VSA hypervectors.
 
 **CrossDomainTransferPipeline** — `register()`, `transfer()`, `get_transfer_log()`.
 
+### `perception_distiller.py` *(V14)*
+
+**PerceptionDistiller** — Tracks convergence between bridge and internal HV encoding quality per modality. Enables a principled criterion for retiring optional neural bridge models.
+
+| Method | Description |
+|--------|-------------|
+| `observe(modality, bridge_hv, internal_hv)` | Record one quality observation; returns current similarity score. |
+| `is_graduated(modality)` | Return `True` when rolling avg ≥ `threshold` over last 100 observations. |
+| `get_report()` | Return per-modality dict with `observations`, `current_quality`, `avg`, `graduated`. |
+
+Constructor: `PerceptionDistiller(threshold=0.80)`. Threshold controlled by `NSCKConfig.distillation_threshold`.
+
 ### `cross_domain.py`
 
 **TransferEngine** — Cross-domain knowledge transfer.
@@ -835,6 +857,21 @@ Legacy backup of compositional semantics module.
 | `research()` | Research configuration with all features. |
 | `production()` | Production configuration. |
 | `from_env()` | Load from environment variables. |
+| `rich()` *(V14)* | `research()` + `perception_mode="bridge"`. Use when optional deep-learning deps are available. |
+| `for_scale(n_concepts)` *(V14)* | Auto-tunes `memory_capacity` and `enable_hnsw_index` for the expected concept count. |
+
+**V14 config fields:**
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `perception_mode` | `str` | `"pure"` | `"pure"` / `"bridge"` / `"hybrid"` — adapter selection |
+| `text_bridge_model` | `str` | `"all-MiniLM-L6-v2"` | Sentence-transformer model name |
+| `image_bridge_model` | `str` | `"mobilenet_v3_small"` | timm model name |
+| `audio_bridge_model` | `str` | `"whisper-tiny"` | Whisper model name |
+| `bridge_cache_embeddings` | `bool` | `True` | Cache bridge embeddings in memory |
+| `bridge_dim` | `int` | `384` | Input dimension for `EmbeddingVSABridge` |
+| `distillation_threshold` | `float` | `0.80` | `PerceptionDistiller` graduation threshold |
+| `knowledge_packs` | `List[str]` | `[]` | Paths to `.gz` packs loaded on substrate init |
 
 ### `brain_fusion.py`
 
@@ -888,6 +925,21 @@ Legacy backup of compositional semantics module.
 | `apply_knowledge_to_new_domain(source, target)` | Cross-domain application. |
 | `get_statistics()` | Integration statistics. |
 
+### `knowledge_pack.py` *(V14)*
+
+**KnowledgePack** — Portable, serialisable bundle of domain concepts, relations, and causal links. Stored as gzip-compressed pickle.
+
+| Method | Description |
+|--------|-------------|
+| `add_concept(name, properties, hv=None)` | Add a concept with optional pre-computed HV. |
+| `add_relation(src, rel, dst)` | Add a directed relation triple. |
+| `add_causal_link(cause, effect, strength=1.0)` | Add a causal association with strength ∈ [0, 1]. |
+| `save(path)` | Serialise to `path` (gzip pickle). |
+| `load(path)` | Class method — deserialise from `path`. |
+| `inject_into(engine)` | Inject into a `CognitiveEngine`'s `SemanticMemory`. Returns `{"concepts": N, "relations": N, "causal_links": N}`. |
+
+Constructor: `KnowledgePack(name="unnamed")`. Packs are loaded on substrate init when `NSCKConfig.knowledge_packs` contains their paths.
+
 ---
 
 ## Adapters
@@ -906,6 +958,16 @@ Legacy backup of compositional semantics module.
 | `video_adapter.py` | **VideoAdapter** (V13) | Temporal stream encoding. Also: `TemporalStreamEncoder`. |
 | `multimodal_fuser.py` | **MultimodalFuser** | Fuse multiple `PerceptPacket`s: `fuse()`. |
 | `stream_processor.py` | **StreamProcessor** | `ingest()`, `ready()`, `emit()`. **StreamVerifier**: `get_active_predicates()`. |
+
+**V14 Rich Adapters** — Gated behind `NSCKConfig.perception_mode`. All fall back silently to the pure VSA path when optional dependencies are absent.
+
+| File | Class | Bridge (optional dep) | Fallback |
+|------|-------|-----------------------|----------|
+| `rich_text_adapter.py` | **RichTextAdapter** *(V14)* | `sentence-transformers` (`all-MiniLM-L6-v2`) | Char-ngram `EmbeddingVSABridge` |
+| `rich_image_adapter.py` | **RichImageAdapter** *(V14)* | `timm` + `torch` (`mobilenet_v3_small`, `pretrained=False`) | Existing `ImageAdapter` |
+| `rich_audio_adapter.py` | **RichAudioAdapter** *(V14)* | `whisper` (`whisper-tiny`) | Existing `AudioAdapter` |
+
+All three accept `config: NSCKConfig` in their constructor and produce standard `PerceptPacket` output. The `adapter_trace` field includes `encoding_method` (`"sentence_transformer"` / `"char_ngram"` / `"hash"` / `"timm"` / `"classical_cv"` / `"whisper"` / `"classical_dsp"`) and `latency_ms`.
 
 ---
 
