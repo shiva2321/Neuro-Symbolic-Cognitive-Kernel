@@ -296,6 +296,20 @@ class ContinualLearner:
         # Normalized forgetting score
         return np.sqrt(total_diff / total_norm)
     
+    def get_protected_concepts(self, task_tag: str) -> List[str]:
+        """Return the top-10 most important concept names for a task."""
+        if task_tag not in self.tasks:
+            return []
+        task = self.tasks[task_tag]
+        if not task.importance_weights:
+            return []
+        sorted_items = sorted(
+            task.importance_weights.items(),
+            key=lambda x: float(np.sum(x[1])),
+            reverse=True,
+        )
+        return [name for name, _ in sorted_items[:10]]
+
     def get_statistics(self) -> Dict[str, Any]:
         """Get continual learning statistics."""
         active_tasks = sum(1 for t in self.tasks.values() if t.active)

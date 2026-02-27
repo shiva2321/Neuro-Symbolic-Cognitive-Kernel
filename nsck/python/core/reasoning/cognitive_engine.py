@@ -265,6 +265,22 @@ class CognitiveEngine:
         # --- Gap 1: Wire GWT broadcast subscribers ---
         self._register_gwt_subscribers()
 
+        # --- V16: EWC Wiring ---
+        self._continual_learner = None
+        self._ewc_importance_buffer: Dict[str, List] = {}
+        self._ewc_update_count: int = 0
+        self._last_ewc_loss: float = 0.0
+        if getattr(self.config, 'enable_ewc', False):
+            try:
+                from python.core.learning.continual_learning import ContinualLearner
+                self._continual_learner = ContinualLearner(
+                    ewc_lambda=getattr(self.config, 'ewc_lambda', 1000.0),
+                    task_capacity=100,
+                )
+                logger.info("ContinualLearner (EWC) initialized")
+            except Exception as _exc:
+                logger.warning("ContinualLearner init failed: %s", _exc)
+
     # ------------------------------------------------------------------
     # Initialisation helpers
     # ------------------------------------------------------------------
@@ -376,6 +392,12 @@ class CognitiveEngine:
         # V9: Auto-transfer — try to transfer rules from existing tasks to this new one
         if self.config.enable_auto_transfer:
             self._auto_transfer_to_task(task_tag)
+
+        # V16: Register task with EWC continual learner
+        if self._continual_learner is not None:
+            self._continual_learner.register_task(task_tag)
+            if task_tag not in self._ewc_importance_buffer:
+                self._ewc_importance_buffer[task_tag] = []
 
     # ------------------------------------------------------------------
     # Core cognitive loop
@@ -807,6 +829,17 @@ class CognitiveEngine:
                 and self._decision_counter % self.config.generalization_interval == 0):
             self._incremental_generalize()
 
+        # V16: EWC importance buffer update
+        if self._continual_learner is not None and self.current_state.situation_hv is not None:
+            _buf = self._ewc_importance_buffer.setdefault(task_tag, [])
+            _buf.append(self.current_state.situation_hv)
+            _window = getattr(self.config, 'ewc_importance_window', 100)
+            if len(_buf) > _window:
+                _buf.pop(0)
+            _protected = list(self._continual_learner.get_protected_concepts(task_tag))
+            trace["ewc_protected_concepts"] = _protected
+            trace["ewc_loss"] = self._last_ewc_loss
+
         return self.current_state
 
     # ------------------------------------------------------------------
@@ -1142,6 +1175,13 @@ class CognitiveEngine:
         if self.stats["episodes_recorded"] % 50 == 0:
             new_rules = self.rule_learner.induce_rules(task_tag)
             self.stats["rules_induced"] += len(new_rules)
+
+        # V16: EWC importance update
+        if self._continual_learner is not None:
+            self._ewc_update_count += 1
+            _interval = getattr(self.config, 'ewc_consolidate_interval', 500)
+            if self._ewc_update_count % _interval == 0:
+                self._compute_and_record_vsa_importance(task_tag)
 
         # 6. Causal discovery (requires next_state)
         if next_state:
@@ -1748,6 +1788,14 @@ class CognitiveEngine:
         self.stats["sleep_cycles"] += 1
         logger.info("[SLEEP] Consolidation complete (%d tasks)", len(tasks))
 
+        # V16: EWC consolidation
+        if self._continual_learner is not None:
+            _tasks = list(self._ewc_importance_buffer.keys())
+            for _t in _tasks:
+                self._compute_and_record_vsa_importance(_t)
+                self._continual_learner.consolidate_task(_t)
+            self.stats["tasks_consolidated"] = self.stats.get("tasks_consolidated", 0) + len(_tasks)
+
         # V3: Homeostasis regulation after consolidation
         if self.config.enable_homeostasis and self.homeostasis is not None:
             actions = self.homeostasis.regulate(self.semantic_memory)
@@ -1775,6 +1823,36 @@ class CognitiveEngine:
                     logger.info("[SLEEP] Pruned %d unused rules", pruned)
             except Exception:
                 pass
+
+    def _compute_and_record_vsa_importance(self, task_tag: str) -> None:
+        """Compute VSA-based Fisher importance for EWC from buffered situation HVs."""
+        if self._continual_learner is None:
+            return
+        buf = self._ewc_importance_buffer.get(task_tag, [])
+        if not buf:
+            return
+        concept_hvs = self.semantic_memory.concept_hvs
+        if not concept_hvs:
+            return
+        params: Dict[str, Any] = {}
+        gradients: Dict[str, Any] = {}
+        for concept_name, chv in concept_hvs.items():
+            sims = []
+            for shv in buf:
+                try:
+                    sims.append(float(shv.similarity(chv)))
+                except Exception:
+                    sims.append(0.0)
+            if sims:
+                avg_sim = float(np.mean(sims))
+            else:
+                avg_sim = 0.0
+            params[concept_name] = np.array([avg_sim])
+            gradients[concept_name] = np.array([avg_sim ** 2])
+        try:
+            self._continual_learner.compute_importance(task_tag, params, gradients)
+        except Exception as _exc:
+            logger.warning("EWC importance computation failed: %s", _exc)
 
     def _detect_rule_drift(self, tasks: List[str]) -> None:
         """Mark rules as drifting when recent confidence drops below 50% of older confidence (V9)."""
