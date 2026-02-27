@@ -10,7 +10,20 @@ from python.core.types.modality_adapter import ModalityAdapter
 
 
 class RichImageAdapter(ModalityAdapter):
-    """Image adapter with optional timm model bridge, falls back to ImageAdapter."""
+    """Image adapter with optional timm model bridge, falls back to ImageAdapter.
+
+    .. warning::
+        When a trained model is not available (the default), the timm model is
+        loaded with ``pretrained=False``, which means its weights are random.
+        Features extracted from a randomly-initialised model carry **no
+        semantic meaning** — they are structural noise equivalent to hashing.
+        The bridge path therefore only provides meaningful embeddings when a
+        pre-trained checkpoint has been loaded.  In all other cases the adapter
+        automatically falls back to the classical ``ImageAdapter`` (spatial-grid
+        + colour histogram + Sobel edges), which does carry usable signal.
+        Pass ``perception_mode="pure"`` (the default) to bypass the model path
+        entirely and always use the classical adapter.
+    """
 
     def __init__(self, config: Any = None) -> None:
         self._config = config
@@ -24,8 +37,10 @@ class RichImageAdapter(ModalityAdapter):
                 import timm  # type: ignore
                 import torch  # type: ignore
                 model_name = getattr(config, "image_bridge_model", "mobilenet_v3_small") if config else "mobilenet_v3_small"
-                # pretrained=False avoids network download; features are structural, not semantic.
-                # Use pretrained=True if a trained feature extractor is available.
+                # pretrained=False avoids a network download; however its weights are
+                # random and produce semantically meaningless features. See the class
+                # docstring for details.  Replace with pretrained=True once a suitable
+                # checkpoint is available.
                 self._timm_model = timm.create_model(model_name, pretrained=False, num_classes=0)
                 self._timm_model.eval()
                 from python.core.vsa.vsa_embedding_bridge import EmbeddingVSABridge

@@ -48,6 +48,9 @@ def test_rust_relation_weights():
     # mammal reachable via is_a (weight 0.9), cat via similar_to (weight 0.4)
     mammal_act = result.get("mammal", 0.0)
     cat_act = result.get("cat", 0.0)
+    # Verify both concepts actually received activation (not just comparing zeros)
+    assert mammal_act > 0.0, f"mammal should receive activation via is_a edge, got {mammal_act}"
+    assert cat_act > 0.0, f"cat should receive activation via similar_to edge, got {cat_act}"
     assert mammal_act > cat_act, f"is_a should carry more activation: mammal={mammal_act}, cat={cat_act}"
 
 

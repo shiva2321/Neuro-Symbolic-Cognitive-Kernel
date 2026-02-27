@@ -19,6 +19,7 @@ def _make_pack():
 
 def test_save_load_roundtrip():
     """Save and load produces equivalent pack."""
+    from python.core.integration.knowledge_pack import KnowledgePack
     pack = _make_pack()
     
     with tempfile.NamedTemporaryFile(suffix=".gz", delete=False) as f:
@@ -26,7 +27,7 @@ def test_save_load_roundtrip():
     
     try:
         pack.save(path)
-        loaded = _make_pack().__class__.load(path)
+        loaded = KnowledgePack.load(path)
         assert loaded.name == "test_pack"
         assert len(loaded._concepts) == 2
         assert len(loaded._relations) == 1

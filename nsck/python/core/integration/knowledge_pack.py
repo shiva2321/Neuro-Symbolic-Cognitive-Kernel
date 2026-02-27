@@ -7,7 +7,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 
 class KnowledgePack:
-    """Portable bundle of domain knowledge for injection into NSCK."""
+    """Portable bundle of domain knowledge for injection into NSCK.
+
+    .. warning:: Security — pickle deserialization
+        ``KnowledgePack.load()`` deserializes data using Python's ``pickle``
+        module wrapped in gzip.  Pickle can execute arbitrary code when
+        loading a maliciously crafted file.  **Only load knowledge pack files
+        from trusted sources.**  A future version will migrate to a versioned
+        JSON schema to eliminate this risk.
+    """
 
     def __init__(self, name: str = "unnamed") -> None:
         self.name = name

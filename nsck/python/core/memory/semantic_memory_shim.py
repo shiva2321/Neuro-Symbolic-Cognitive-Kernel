@@ -1,12 +1,19 @@
 """
 Shim for Rust-accelerated spreading activation.
 Auto-selects Rust or Python backend (same pattern as hypervec_shim.py).
+
+The shim caches which concepts have already been synced to the Rust
+DashMap, so repeated calls to ``spread_activation_fast()`` only push
+*new* nodes rather than re-syncing the entire graph each time.
 """
 from __future__ import annotations
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Set
 
 _USE_RUST = False
 _rust_instance: Optional[Any] = None
+# Track which concept names have already been synced to the Rust instance
+# to avoid redundant add_concept calls on repeated spread_activation calls.
+_synced_concepts: Set[str] = set()
 
 try:
     import hypervec_rs as _ext
@@ -41,31 +48,32 @@ def spread_activation_fast(
     """
     Try Rust-accelerated spreading activation.
     
-    Syncs the NetworkX graph to Rust's DashMap, runs spreading activation,
-    returns result dict. Returns None if Rust not available or sync fails.
-    
-    The caller should fall through to Python if this returns None.
+    Syncs *new* concepts from the NetworkX graph to Rust's DashMap (already-
+    synced concepts are skipped via an in-process cache), then runs the
+    spreading activation loop in Python against the synced concept set.
+    Returns None if Rust is not available or sync fails; the caller should
+    fall through to the pure-Python implementation in that case.
     """
     rust = _get_rust_instance()
     if rust is None:
         return None
     
     try:
-        # Sync concepts from graph to Rust's DashMap for concurrent access.
-        # Note: Rust's SemanticMemoryConcurrent provides thread-safe DashMap storage;
-        # the activation loop itself runs in Python using the synced concept set.
-        # When Rust exposes a native spread_activation RPC, this block can delegate fully.
+        # Sync only concepts that haven't been pushed to Rust yet.
+        # This avoids paying the full sync cost on every spread_activation call.
         import python.core.vsa.hypervec_shim as hv_mod
         sync_errors = 0
-        for node in concept_graph.nodes():
+        new_nodes = [n for n in concept_graph.nodes() if str(n) not in _synced_concepts]
+        for node in new_nodes:
             try:
                 hv = hv_mod.HyperVector(hash(node) % (2**32))
                 rust.add_concept(str(node), hv)
+                _synced_concepts.add(str(node))
             except Exception:
                 sync_errors += 1
-        # If more than half of concepts failed to sync, bail out to Python path
-        n_nodes = concept_graph.number_of_nodes()
-        if n_nodes > 0 and sync_errors > n_nodes // 2:
+        # If more than half of new nodes failed to sync, bail out to Python path
+        n_new = len(new_nodes)
+        if n_new > 0 and sync_errors > n_new // 2:
             return None
         
         # Spreading activation loop (Python, using synced Rust concept set)

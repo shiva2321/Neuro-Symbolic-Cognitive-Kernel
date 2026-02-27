@@ -25,17 +25,30 @@ class PerceptionDistiller:
     def observe(self, modality: str, bridge_hv, internal_hv) -> float:
         """
         Compare bridge vs internal HV quality; track rolling average.
-        Returns current similarity score.
+        Returns current similarity score (in [0, 1]).
         """
         self._ensure_modality(modality)
         try:
             if hasattr(bridge_hv, "cosine_similarity"):
                 # cosine_similarity returns [-1, 1]; normalize to [0, 1]
-                sim = bridge_hv.cosine_similarity(internal_hv)
-                sim = float(np.clip((sim + 1.0) / 2.0, 0.0, 1.0))
+                raw_sim = bridge_hv.cosine_similarity(internal_hv)
+                if not (-1.0 - 1e-6 <= float(raw_sim) <= 1.0 + 1e-6):
+                    import logging
+                    logging.getLogger("nsck.distiller").warning(
+                        "cosine_similarity returned out-of-range value %.4f for modality '%s'; "
+                        "clipping to [-1, 1].", raw_sim, modality
+                    )
+                sim = float(np.clip((raw_sim + 1.0) / 2.0, 0.0, 1.0))
             elif hasattr(bridge_hv, "similarity"):
                 # similarity() returns [0, 1] (Hamming-based); use directly
-                sim = float(np.clip(bridge_hv.similarity(internal_hv), 0.0, 1.0))
+                raw_sim = bridge_hv.similarity(internal_hv)
+                if not (0.0 - 1e-6 <= float(raw_sim) <= 1.0 + 1e-6):
+                    import logging
+                    logging.getLogger("nsck.distiller").warning(
+                        "similarity() returned out-of-range value %.4f for modality '%s'; "
+                        "clipping to [0, 1].", raw_sim, modality
+                    )
+                sim = float(np.clip(raw_sim, 0.0, 1.0))
             else:
                 sim = 0.5
         except Exception:
