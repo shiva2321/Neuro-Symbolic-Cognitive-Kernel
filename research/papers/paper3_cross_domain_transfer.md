@@ -348,7 +348,9 @@ We document the following limitations honestly:
 6. **Categorical analysis of transfer conditions.** Formalise the relationship between VSA structural alignment and category-theoretic functors. The functoriality score (Section 3.6) is a first step; a full categorical treatment would characterise when domain transfer preserves compositional structure (natural transformations) and when it does not, potentially yielding necessary and sufficient conditions for successful transfer.
 7. ~~**Hierarchical resonator decoding for transfer.**~~ ✅ **Done (V8)** — `HierarchicalResonatorNetwork` now provides 2-level (L1 sentence-role + L2 clause-role) factorization, enabling structural alignment at multiple levels of abstraction. The `factorize_hierarchical(hv, depth=2)` method returns a `{"L1": …, "L2": …}` dict that can be used as the alignment substrate for cross-domain transfer.
 
-**Current test suite (V8, February 2026): 1,111 passed, 5 skipped, 4 xfailed.**
+V13 adds PatternGeneralizer (learning/pattern_generalizer.py) for automatic abstraction-level estimation: level = min(1, count / (min_members · 4)). CrossModalAssociativeMemory (memory/cross_modal_associative_memory.py) enables cross-modal entity binding via XOR, allowing transfer across perception modalities. The full test suite now includes 1,437 collected tests.
+
+**Current test suite (V13, February 2026): 1,424 passed, 7 skipped, 4 xfailed.**
 
 ---
 
