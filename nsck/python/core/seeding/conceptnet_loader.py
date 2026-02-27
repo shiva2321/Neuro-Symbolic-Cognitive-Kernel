@@ -79,29 +79,19 @@ class ConceptNetLoader:
         degree: Dict[str, int] = defaultdict(int)
         rows: List[tuple] = []
 
-        if from_string:
-            lines = io.StringIO(path_or_text)
-            reader = csv.reader(lines, delimiter="\t")
-        else:
-            f = open(path_or_text, "r", encoding="utf-8", newline="")
-            reader = csv.reader(f, delimiter="\t")
-
-        try:
-            for row in reader:
+        def _iter_rows(reader_obj: Any) -> None:
+            for row in reader_obj:
                 if len(row) < 5:
                     continue
                 _uri, rel_uri, subj_uri, obj_uri, meta = row[:5]
-                # Extract relation name from URI: /r/IsA → IsA
                 rel_parts = rel_uri.split("/")
                 rel_name = rel_parts[-1] if rel_parts else ""
                 if rel_name not in allowed_rels:
                     continue
-                # English filter
                 subj = _en_concept(subj_uri)
                 obj = _en_concept(obj_uri)
                 if subj is None or obj is None:
                     continue
-                # Weight filter
                 try:
                     meta_dict = json.loads(meta)
                     weight = float(meta_dict.get("weight", 1.0))
@@ -112,9 +102,12 @@ class ConceptNetLoader:
                 rows.append((rel_name, subj, obj, weight))
                 degree[subj] += 1
                 degree[obj] += 1
-        finally:
-            if not from_string:
-                f.close()
+
+        if from_string:
+            _iter_rows(csv.reader(io.StringIO(path_or_text), delimiter="\t"))
+        else:
+            with open(path_or_text, "r", encoding="utf-8", newline="") as f:
+                _iter_rows(csv.reader(f, delimiter="\t"))
 
         # Select top max_concepts by degree
         top_concepts: set = set()
