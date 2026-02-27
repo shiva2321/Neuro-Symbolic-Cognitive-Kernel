@@ -9,8 +9,7 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V14** — 1,311 tests passed, 152 skipped, 3 xfailed (pure-Python run).
-V13 baseline: 1,282 passed. Zero regressions.
+**Current release: V15** — 1,375+ tests. V14 baseline: 1,311 passed. Zero regressions.
 
 ---
 
@@ -25,9 +24,10 @@ V13 baseline: 1,282 passed. Zero regressions.
 7. [Performance Benchmarks](#performance-benchmarks)
 8. [Rust Backend](#rust-backend)
 9. [Testing](#testing)
-10. [V14 Features](#v14-features)
-11. [V13 Features](#v13-features)
-12. [Further Documentation](#further-documentation)
+10. [V15 Features — Model Transplantation](#v15-features--model-transplantation)
+11. [V14 Features](#v14-features)
+12. [V13 Features](#v13-features)
+13. [Further Documentation](#further-documentation)
 
 ---
 
@@ -659,6 +659,39 @@ the repository root configures markers and test paths.
 
 ---
 
+## V15 Features — Model Transplantation
+
+V15 introduces the flagship **Model Transplantation Pipeline**: absorb learned
+knowledge from any pretrained neural network into NSCK's native HV space.
+
+```python
+from python.core.substrate import NSCKSubstrate
+from python.core.integration.config import NSCKConfig
+
+config = NSCKConfig.transplant()
+substrate = NSCKSubstrate(config)
+
+# Transplant any PyTorch model
+report = substrate.transplant(model=bert, domain_name="language")
+print(f"Spearman ρ: {report.spearman_rho:.3f}, Recall@10: {report.recall_at_10:.3f}")
+```
+
+| Work Package | Module | Description |
+|-------------|--------|-------------|
+| **Harvester** | `transplant/harvester.py` | Extracts embeddings from transformer LM, vision, encoder-decoder, generic models |
+| **RandomProjector** | `transplant/projector.py` | JL random projection (highest continuous ρ) |
+| **LearnedProjector** | `transplant/projector.py` | Gradient-descent cosine-preservation |
+| **SVDFactoredProjector** | `transplant/projector.py` | SVD+FPE (default; cluster-level preservation) |
+| **STDPCalibrator** | `transplant/calibrator.py` | SNN+STDP refinement via `PythonSnnCore` |
+| **TransplantValidator** | `transplant/validator.py` | Spearman ρ, Recall@k, ARI quality metrics |
+| **TransplantPipeline** | `transplant/pipeline.py` | End-to-end: Harvest → Project → Calibrate → Validate → Integrate → Save |
+| **Config** | `integration/config.py` | 9 new fields + `NSCKConfig.transplant()` preset |
+| **Substrate** | `substrate.py` | `transplant()` method + `_transplant_projectors` for live encoding |
+
+See [docs/TRANSPLANT_GUIDE.md](docs/TRANSPLANT_GUIDE.md) for the full guide.
+
+---
+
 ## V14 Features
 
 V14 delivers six work packages, all backward-compatible with V13.
@@ -793,4 +826,7 @@ V13 adds nine new modules and several enhancements to the substrate:
 | [docs/NSCK_V10_EXTENSIONS.md](docs/NSCK_V10_EXTENSIONS.md) | V10 extensions: FHRR, embedding bridge, neural scoring, safety |
 | [docs/V14_CHANGELOG.md](docs/V14_CHANGELOG.md) | V14 work packages, new APIs, migration guide |
 | [docs/V14_REPORT.md](docs/V14_REPORT.md) | V14 implementation report: test results, benchmarks, assessment |
+| [docs/V15_CHANGELOG.md](docs/V15_CHANGELOG.md) | V15 Model Transplantation Pipeline changelog |
+| [docs/TRANSPLANT_GUIDE.md](docs/TRANSPLANT_GUIDE.md) | V15 transplant quick-start, strategies, configuration |
+| [docs/TRANSPLANT_REPORT.md](docs/TRANSPLANT_REPORT.md) | V15 quality metrics and benchmark results |
 | [docs/GOAL_TRACKER.md](docs/GOAL_TRACKER.md) | Living document: AGI vision vs implementation status |

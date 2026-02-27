@@ -214,4 +214,21 @@ that NSCK does not yet have:
 
 ---
 
-*Document version: V14, February 2026. Update this table whenever a new version ships.*
+*Document version: V15, February 2026. Update this table whenever a new version ships.*
+
+---
+
+## V15 Update — Model Transplantation
+
+**Transplantation** bridges the gap between pretrained neural network knowledge
+and NSCK's glass-box hypervector reasoning. After transplantation, NSCK "knows"
+what the source model knows, but in native HV form — fully traceable.
+
+**Capability impact**: Developer Extensibility (✅ enhanced), Knowledge Transfer (✅ enhanced).
+
+```python
+config = NSCKConfig.transplant()
+substrate = NSCKSubstrate(config)
+report = substrate.transplant(model=bert, domain_name="nlp")
+# report.passed → True if quality thresholds met
+```

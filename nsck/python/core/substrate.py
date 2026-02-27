@@ -107,6 +107,9 @@ class NSCKSubstrate:
         if packs:
             self._load_knowledge_packs(packs)
 
+        # V15: Transplant projector registry for live encoding
+        self._transplant_projectors: Dict[str, Any] = {}
+
     def _init_rich_adapters(self) -> None:
         """Initialize rich perception adapters based on perception_mode."""
         mode = getattr(self.config, "perception_mode", "pure")
@@ -589,4 +592,78 @@ class NSCKSubstrate:
         stats["cross_modal_memory"] = self.cross_modal_memory.get_statistics()
         stats["drift_detector"] = self.drift_detector.get_statistics()
         stats["conformal"] = self.conformal.get_statistics()
+        # V15 stats
+        stats["transplant_domains"] = list(self._transplant_projectors.keys())
         return stats
+
+    # ------------------------------------------------------------------
+    # V15 Model Transplantation API
+    # ------------------------------------------------------------------
+
+    def transplant(
+        self,
+        model: Any,
+        domain_name: str = "default",
+        strategy: Optional[str] = None,
+        calibration_epochs: Optional[int] = None,
+        save_pack: Optional[str] = None,
+    ) -> Any:
+        """Transplant knowledge from *model* into NSCK's HV space.
+
+        Requires ``NSCKConfig.enable_transplant=True``.
+
+        Parameters
+        ----------
+        model:
+            Pretrained neural network (e.g. BERT, GPT, ViT).  Any PyTorch
+            module or duck-typed object with ``named_parameters()``.
+        domain_name:
+            Label for the transplanted knowledge domain.
+        strategy:
+            Projection strategy: ``"random"``, ``"learned"``, or
+            ``"svd_factored"`` (default from config).
+        calibration_epochs:
+            STDP calibration epochs.  ``None`` reads from config.  ``0``
+            disables calibration.
+        save_pack:
+            Optional path to save a ``KnowledgePack`` file.
+
+        Returns
+        -------
+        TransplantReport
+            Quality metrics and pass/fail status.
+
+        Raises
+        ------
+        RuntimeError
+            If ``enable_transplant`` is False.
+        """
+        if not getattr(self.config, "enable_transplant", False):
+            raise RuntimeError(
+                "Transplant is disabled. Set NSCKConfig.enable_transplant=True."
+            )
+
+        from python.core.transplant.pipeline import TransplantPipeline  # noqa: PLC0415
+
+        eff_strategy = strategy or getattr(
+            self.config, "transplant_strategy", "svd_factored"
+        )
+        eff_epochs = calibration_epochs if calibration_epochs is not None else int(
+            getattr(self.config, "transplant_calibration_epochs", 10)
+        )
+
+        pipeline = TransplantPipeline(config=self.config)
+        report = pipeline.run(
+            model=model,
+            domain_name=domain_name,
+            strategy=eff_strategy,
+            calibration_epochs=eff_epochs,
+            save_pack_path=save_pack,
+            cognitive_engine=self._engine,
+        )
+
+        # Store projector for live encoding
+        if domain_name in pipeline._projectors:
+            self._transplant_projectors[domain_name] = pipeline._projectors[domain_name]
+
+        return report
