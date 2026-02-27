@@ -97,6 +97,56 @@ class NSCKSubstrate:
         self.conformal = ConformalWrapper(alpha=0.1)
         self._last_ingest_hv = None  # For procedural memory lookup
 
+        # V14: Rich perception adapters
+        self._rich_adapters: Dict[str, Any] = {}
+        self.distiller = None
+        self._init_rich_adapters()
+
+        # V14: Load knowledge packs
+        packs = getattr(self.config, "knowledge_packs", [])
+        if packs:
+            self._load_knowledge_packs(packs)
+
+    def _init_rich_adapters(self) -> None:
+        """Initialize rich perception adapters based on perception_mode."""
+        mode = getattr(self.config, "perception_mode", "pure")
+        if mode not in ("bridge", "hybrid"):
+            return
+        try:
+            from python.core.adapters.rich_text_adapter import RichTextAdapter
+            self._rich_adapters["text"] = RichTextAdapter(self.config)
+        except Exception:
+            pass
+        try:
+            from python.core.adapters.rich_image_adapter import RichImageAdapter
+            self._rich_adapters["image"] = RichImageAdapter(self.config)
+        except Exception:
+            pass
+        try:
+            from python.core.adapters.rich_audio_adapter import RichAudioAdapter
+            self._rich_adapters["audio"] = RichAudioAdapter(self.config)
+        except Exception:
+            pass
+        if mode == "hybrid":
+            try:
+                from python.core.learning.perception_distiller import PerceptionDistiller
+                self.distiller = PerceptionDistiller(
+                    threshold=getattr(self.config, "distillation_threshold", 0.80)
+                )
+            except Exception:
+                pass
+
+    def _load_knowledge_packs(self, pack_paths) -> None:
+        """Load and inject knowledge packs into semantic memory."""
+        for path in pack_paths:
+            try:
+                from python.core.integration.knowledge_pack import KnowledgePack
+                pack = KnowledgePack.load(path)
+                pack.inject_into(self._engine)
+            except Exception as e:
+                import logging
+                logging.getLogger("nsck.substrate").warning("Failed to load knowledge pack %s: %s", path, e)
+
     def register_task(self, task_tag: str) -> None:
         """Register a new task/domain."""
         if task_tag not in self._registered_tasks:
@@ -290,6 +340,23 @@ class NSCKSubstrate:
         """Encode a single modality input into a PerceptPacket."""
         from python.core.types.percept_packet import PerceptPacket
         import python.core.vsa.hypervec_shim as hv_mod
+
+        # V14: Rich perception routing
+        mode = getattr(self.config, "perception_mode", "pure")
+        if mode in ("bridge", "hybrid") and self._rich_adapters:
+            detected_modality = modality
+            if isinstance(data, str):
+                detected_modality = "text"
+            elif isinstance(data, np.ndarray) and data.ndim >= 2:
+                detected_modality = "image"
+            elif modality == "audio":
+                detected_modality = "audio"
+            rich_adapter = self._rich_adapters.get(detected_modality)
+            if rich_adapter is not None:
+                try:
+                    return rich_adapter.encode(data, task_tag)
+                except Exception:
+                    pass
 
         try:
             if isinstance(data, str):
