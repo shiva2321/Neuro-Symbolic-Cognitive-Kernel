@@ -538,20 +538,20 @@ All benchmarks measured on 10,240-bit HyperVectors.
 
 | Operation | Rust (ops/s) | Python (ops/s) | Speedup |
 |-----------|-------------|----------------|---------|
-| **Bind (XOR)** | 3,896,091 | 703,077 | ~5.5× |
-| **Similarity** | 3,993,108 | 135,365 | ~29.5× |
-| **Bundle** | 1,454,417 | 17,129 | ~84.9× |
+| **Bind (XOR)** | 4,109,142 | 803,079 | ~5.1× |
+| **Similarity** | 3,793,104 | 124,658 | ~30.4× |
+| **Bundle** | 1,354,342 | 20,685 | ~65.5× |
 
 ### System-Level Benchmarks
 
 | Metric | Value |
 |--------|-------|
-| Memory query (1K entries) | 0.45 ms |
-| Decision latency p50 | 0.14 ms |
-| Decision latency p99 | 0.23 ms |
-| NLU throughput | 143,624 sentences/s |
-| Causal ΔP computation | 1,509,044 ops/s |
-| SNN LIF step | 0.026 ms |
+| Memory query (1K entries) | 0.56 ms |
+| Decision latency p50 | 0.13 ms |
+| Decision latency p99 | 0.20 ms |
+| NLU throughput | 151,019 sentences/s |
+| Causal ΔP computation | 2,070,973 ops/s |
+| SNN LIF step | 0.017 ms |
 
 ### Batch Speedups (500 ops, 10,240-bit HVs)
 

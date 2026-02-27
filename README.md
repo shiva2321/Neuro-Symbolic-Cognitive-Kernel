@@ -2,7 +2,7 @@
 
 **V13 · February 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
 
-94 modules · 232 classes · ~37K LOC Python · ~8K LOC Rust · 1 437 tests (1 424 pass with Rust)
+94 modules · 232 classes · ~37K LOC Python · ~4K LOC Rust · 1 437 tests (1 424 pass with Rust)
 
 ---
 
@@ -63,13 +63,13 @@ achieve and where it falls short.
 
 | Area | Highlights |
 |------|-----------|
-| **VSA** | 10 240-bit binary HVs; bind, bundle, permute, similarity. FHRR complex-phasor mode. Rust backend: ~3.9 M ops/s bind, ~4 M ops/s similarity, ~1.5 M ops/s bundle (5–85× over Python). |
+| **VSA** | 10 240-bit binary HVs; bind, bundle, permute, similarity. FHRR complex-phasor mode. Rust backend: ~4.1 M ops/s bind, ~3.8 M ops/s similarity, ~1.4 M ops/s bundle (5–65× over Python). |
 | **SNN** | LIF neurons, STDP learning, rate & temporal coding. Rust backend (`snn_rs`). |
 | **GWT** | Coalition competition, broadcast, mental rehearsal with danger veto, KLE uncertainty (V13). |
 | **Dual Process** | System 1 (fast pattern match) / System 2 (deliberate search). |
 | **Memory** | Semantic (knowledge graph + HNSW), Episodic (Rust-backed, 10 K capacity), Procedural (V13 skill cache), Cross-Modal Associative (V13). |
 | **Reasoning** | Causal (ΔP, MI confounder detection), rules (learning + neural scoring), planning (BFS), analogy (functoriality), spatial, math, belief revision, counterfactuals. |
-| **Language** | Left-corner parser, construction grammar, frame semantics, coreference, distributional semantics, pragmatics, NgramNLU (143 K sent/s), FluentNLG, dialogue manager. |
+| **Language** | Left-corner parser, construction grammar, frame semantics, coreference, distributional semantics, pragmatics, NgramNLU (151 K sent/s), FluentNLG, dialogue manager. |
 | **Perception** | 10 modality adapters (text, dict, numeric, numeric sequence, SNN, multimodal, stream, image, audio, video), SignalIngestor (V13), UniversalHVEncoder (V13). |
 | **Learning** | Hebbian, Q-learning, rule induction, active inference (free energy), curiosity (surprise-driven), cross-domain transfer, continual learning, conformal prediction (V13), pattern generalisation (V13). |
 | **Cognitive** | Metacognition, self-model, theory of mind, emotion system, safety verifier. |
@@ -123,14 +123,14 @@ sub.sleep("navigation")
 
 | Benchmark | Throughput | Latency |
 |-----------|-----------|---------|
-| VSA bind | 3 896 091 ops/s | 0.26 μs/op |
-| VSA similarity | 3 993 108 ops/s | 0.25 μs/op |
-| VSA bundle | 1 454 417 ops/s | 0.69 μs/op |
-| Memory query (1 K concepts) | — | 0.45 ms |
-| Decision loop | — | p50 = 0.14 ms, p99 = 0.23 ms |
-| NLU (NgramNLU) | 143 624 sent/s | — |
-| Causal ΔP | 1 509 044 ops/s | — |
-| SNN LIF step | — | 0.026 ms |
+| VSA bind | 4 109 142 ops/s | 0.24 μs/op |
+| VSA similarity | 3 793 104 ops/s | 0.26 μs/op |
+| VSA bundle | 1 354 342 ops/s | 0.74 μs/op |
+| Memory query (1 K concepts) | — | 0.56 ms |
+| Decision loop | — | p50 = 0.13 ms, p99 = 0.20 ms |
+| NLU (NgramNLU) | 151 019 sent/s | — |
+| Causal ΔP | 2 070 973 ops/s | — |
+| SNN LIF step | — | 0.017 ms |
 
 ---
 
