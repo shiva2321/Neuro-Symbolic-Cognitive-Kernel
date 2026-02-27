@@ -181,6 +181,9 @@ class SemanticMemory:
         "associated_with": 0.45,
         "depends_on": 0.5,
         "capable_of": 0.6,
+        "used_for": 0.5,
+        "has_part": 0.4,
+        "at_location": 0.4,
     }
     
     def __init__(self, relation_weights: Optional[Dict[str, float]] = None, use_rust: bool = True,
@@ -762,41 +765,93 @@ class SemanticMemory:
         return prototypes
 
     def save(self, filepath: str):
-        """Save semantic memory to disk via pickle."""
-        print(f"[SEMANTIC] Saving memory to {filepath}...")
+        """Save semantic memory to gzip+JSON (safe, no pickle)."""
+        import base64
+        import gzip
+        import json
+        import numpy as np
+        concepts_data = {}
+        for name, d in self.concept_graph.nodes(data=True):
+            concepts_data[name] = {
+                "properties": {k: (v if isinstance(v, (str, int, float, bool, type(None))) else str(v))
+                               for k, v in d.items()},
+            }
+        hvs_data = {}
+        for name, hv in self.concept_hvs.items():
+            try:
+                bits = np.asarray(hv.bits, dtype=np.int8)
+                hvs_data[name] = base64.b64encode(bits.tobytes()).decode("ascii")
+            except Exception:
+                pass
         data = {
-            "concept_graph": self.concept_graph,
-            "concept_hvs": self.concept_hvs,
-            "relation_weights": self.relation_weights
+            "schema_version": 2,
+            "concepts": concepts_data,
+            "concept_hvs": hvs_data,
+            "relation_weights": self.relation_weights,
+            "edges": [(u, v, d) for u, v, d in self.concept_graph.edges(data=True)],
         }
-        with open(filepath, "wb") as f:
-            pickle.dump(data, f)
-        print(f"[SEMANTIC] Saved {len(self.concept_hvs)} concepts.")
+        with gzip.open(filepath, "wt", encoding="utf-8") as f:
+            json.dump(data, f)
+        print(f"[SEMANTIC] Saved {len(self.concept_hvs)} concepts to {filepath} (JSON).")
 
     def load(self, filepath: str):
-        """Load semantic memory from disk."""
+        """Load semantic memory from gzip+JSON or legacy gzip+pickle."""
+        import base64
+        import gzip
+        import json
+        import numpy as np
+        import warnings
         if not os.path.exists(filepath):
             print(f"[SEMANTIC] No memory file found at {filepath}")
             return
-            
-        print(f"[SEMANTIC] Loading memory from {filepath}...")
+        # Try JSON first
         try:
-            with open(filepath, "rb") as f:
+            with gzip.open(filepath, "rt", encoding="utf-8") as f:
+                data = json.load(f)
+            for name, cd in data.get("concepts", {}).items():
+                props = cd.get("properties", {})
+                if name not in self.concept_hvs:
+                    self.add_concept(name, props)
+                else:
+                    self.concept_graph.nodes[name].update(props)
+            for name, b64 in data.get("concept_hvs", {}).items():
+                try:
+                    bits = np.frombuffer(base64.b64decode(b64), dtype=np.int8)
+                    import python.core.vsa.hypervec_shim as hv_mod
+                    self.concept_hvs[name] = hv_mod.HyperVector.from_bits(bits)
+                except Exception:
+                    pass
+            self.relation_weights = data.get("relation_weights", self.DEFAULT_RELATION_WEIGHTS)
+            for u, v, d in data.get("edges", []):
+                if not self.concept_graph.has_edge(u, v):
+                    self.concept_graph.add_edge(u, v, **d)
+            print(f"[SEMANTIC] Loaded {len(self.concept_hvs)} concepts from {filepath} (JSON).")
+            return
+        except (json.JSONDecodeError, UnicodeDecodeError, KeyError):
+            pass
+        # Fallback: legacy pickle
+        warnings.warn(
+            f"Loading SemanticMemory from pickle ({filepath}). "
+            "Re-save with save() to upgrade to JSON.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        try:
+            with gzip.open(filepath, "rb") as f:
                 data = pickle.load(f)
-            
             self.concept_graph = data.get("concept_graph", nx.DiGraph())
             self.concept_hvs = data.get("concept_hvs", {})
             self.relation_weights = data.get("relation_weights", self.DEFAULT_RELATION_WEIGHTS)
-            
+            for u, v, d in data.get("edges", []):
+                if not self.concept_graph.has_edge(u, v):
+                    self.concept_graph.add_edge(u, v, **d)
             # Sync with Rust backend if active
             if self._rust_backend:
-                print(f"[SEMANTIC] Syncing {len(self.concept_hvs)} concepts to Rust backend...")
                 for name, hv in self.concept_hvs.items():
                     try:
                         self._rust_backend.add_concept(name, hv)
                     except Exception as e:
                         print(f"[WARNING] Rust sync failed for {name}: {e}")
-                        
             print(f"[SEMANTIC] Loaded {len(self.concept_hvs)} concepts.")
         except Exception as e:
             print(f"[SEMANTIC] Failed to load memory: {e}")

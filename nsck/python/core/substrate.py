@@ -110,6 +110,10 @@ class NSCKSubstrate:
         # V15: Transplant projector registry for live encoding
         self._transplant_projectors: Dict[str, Any] = {}
 
+        # V16: Auto-seed if enabled
+        if getattr(self.config, 'enable_seeding', False):
+            self._auto_seed()
+
     def _init_rich_adapters(self) -> None:
         """Initialize rich perception adapters based on perception_mode."""
         mode = getattr(self.config, "perception_mode", "pure")
@@ -159,6 +163,36 @@ class NSCKSubstrate:
         if task_tag not in self._registered_tasks:
             self._engine.register_task(task_tag)
             self._registered_tasks.append(task_tag)
+
+    @property
+    def engine(self):
+        """Expose the underlying CognitiveEngine."""
+        return self._engine
+
+    def _auto_seed(self) -> None:
+        """Auto-seed substrate from configured knowledge packs and/or BERT."""
+        import logging
+        _log = logging.getLogger("nsck.substrate")
+        try:
+            from python.core.seeding.semantic_seeder import SemanticSeeder
+            seeder = SemanticSeeder()
+            pack_path = getattr(self.config, 'seed_conceptnet_pack', '')
+            if pack_path:
+                import os
+                if os.path.exists(pack_path):
+                    seeder.seed_from_conceptnet_pack(self, pack_path)
+                else:
+                    _log.warning("_auto_seed: conceptnet pack not found: %s", pack_path)
+            if getattr(self.config, 'seed_bert_on_init', False):
+                model_name = getattr(self.config, 'seed_bert_model_name', 'bert-base-uncased')
+                try:
+                    seeder.seed_from_bert(self, model_name=model_name)
+                except RuntimeError as exc:
+                    _log.warning("_auto_seed: BERT seeding skipped (transformers not installed): %s", exc)
+            seeder.post_seed_enrich(self)
+        except Exception as exc:
+            _log.warning("_auto_seed failed: %s", exc)
+
 
     def process(
         self,

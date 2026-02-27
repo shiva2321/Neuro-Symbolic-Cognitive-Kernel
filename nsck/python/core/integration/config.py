@@ -184,6 +184,8 @@ class NSCKConfig:
             enable_ngram_nlu=True,
             enable_cross_modal_learning=True,
             perception_mode="bridge",
+            # V16
+            enable_ewc=True,
         )
 
     @classmethod
@@ -205,6 +207,18 @@ class NSCKConfig:
             perception_mode="pure",
         )
 
+    # === V16 Feature Flags — EWC Wiring ===
+    enable_ewc: bool = False
+    ewc_lambda: float = 1000.0
+    ewc_consolidate_interval: int = 500
+    ewc_importance_window: int = 100
+
+    # === V16 Feature Flags — Semantic Seeding ===
+    enable_seeding: bool = False
+    seed_conceptnet_pack: str = ""
+    seed_bert_on_init: bool = False
+    seed_bert_model_name: str = "bert-base-uncased"
+
     # === V15 Feature Flags — Model Transplantation ===
     enable_transplant: bool = False
     transplant_strategy: str = "svd_factored"  # "random", "learned", "svd_factored"
@@ -222,6 +236,14 @@ class NSCKConfig:
         cfg = cls.research()
         cfg.perception_mode = "bridge"
         return cfg
+
+    @classmethod
+    def seeded(cls) -> "NSCKConfig":
+        """Seeded config: ConceptNet + auto-seeding enabled."""
+        return cls(
+            enable_seeding=True,
+            seed_conceptnet_pack="nsck/data/knowledge_packs/conceptnet_en_50k.kp",
+        )
 
     @classmethod
     def transplant(cls) -> "NSCKConfig":
