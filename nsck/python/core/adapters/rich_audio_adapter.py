@@ -23,8 +23,13 @@ class RichAudioAdapter(ModalityAdapter):
             try:
                 import whisper  # type: ignore
                 model_name = getattr(config, "audio_bridge_model", "whisper-tiny") if config else "whisper-tiny"
-                # Map "whisper-tiny" → "tiny" for whisper.load_model
-                wm_name = model_name.replace("whisper-", "")
+                # Normalize model name: "whisper-tiny" → "tiny", "tiny" → "tiny"
+                _whisper_name_map = {
+                    "whisper-tiny": "tiny", "whisper-base": "base",
+                    "whisper-small": "small", "whisper-medium": "medium",
+                    "whisper-large": "large",
+                }
+                wm_name = _whisper_name_map.get(model_name, model_name)
                 self._whisper_model = whisper.load_model(wm_name)
                 from python.core.vsa.vsa_embedding_bridge import EmbeddingVSABridge
                 self._bridge = EmbeddingVSABridge(dim_in=512)

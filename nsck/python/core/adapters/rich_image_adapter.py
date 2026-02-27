@@ -24,6 +24,8 @@ class RichImageAdapter(ModalityAdapter):
                 import timm  # type: ignore
                 import torch  # type: ignore
                 model_name = getattr(config, "image_bridge_model", "mobilenet_v3_small") if config else "mobilenet_v3_small"
+                # pretrained=False avoids network download; features are structural, not semantic.
+                # Use pretrained=True if a trained feature extractor is available.
                 self._timm_model = timm.create_model(model_name, pretrained=False, num_classes=0)
                 self._timm_model.eval()
                 from python.core.vsa.vsa_embedding_bridge import EmbeddingVSABridge

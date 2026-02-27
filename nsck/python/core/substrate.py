@@ -138,14 +138,18 @@ class NSCKSubstrate:
 
     def _load_knowledge_packs(self, pack_paths) -> None:
         """Load and inject knowledge packs into semantic memory."""
+        import logging
+        _log = logging.getLogger("nsck.substrate")
         for path in pack_paths:
             try:
                 from python.core.integration.knowledge_pack import KnowledgePack
                 pack = KnowledgePack.load(path)
-                pack.inject_into(self._engine)
+                counts = pack.inject_into(self._engine)
+                _log.debug("Loaded knowledge pack '%s' from %s: %s", pack.name, path, counts)
+            except FileNotFoundError:
+                _log.warning("Knowledge pack not found: %s", path)
             except Exception as e:
-                import logging
-                logging.getLogger("nsck.substrate").warning("Failed to load knowledge pack %s: %s", path, e)
+                _log.warning("Failed to load knowledge pack '%s': %s (%s)", path, e, type(e).__name__)
 
     def register_task(self, task_tag: str) -> None:
         """Register a new task/domain."""

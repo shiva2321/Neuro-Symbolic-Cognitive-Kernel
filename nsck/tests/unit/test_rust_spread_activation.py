@@ -12,9 +12,6 @@ except ImportError:
 
 def _build_semantic_memory_with_graph():
     """Build a SemanticMemory with a small test graph."""
-    import sys
-    import os
-    sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../../..'))
     from python.core.memory.semantic_memory import SemanticMemory
     mem = SemanticMemory(use_rust=False)
     mem.add_concept("animal", {"type": "category"})

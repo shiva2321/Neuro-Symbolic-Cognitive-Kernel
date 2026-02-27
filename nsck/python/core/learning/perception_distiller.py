@@ -30,13 +30,14 @@ class PerceptionDistiller:
         self._ensure_modality(modality)
         try:
             if hasattr(bridge_hv, "cosine_similarity"):
+                # cosine_similarity returns [-1, 1]; normalize to [0, 1]
                 sim = bridge_hv.cosine_similarity(internal_hv)
+                sim = float(np.clip((sim + 1.0) / 2.0, 0.0, 1.0))
             elif hasattr(bridge_hv, "similarity"):
-                sim = float(bridge_hv.similarity(internal_hv))
+                # similarity() returns [0, 1] (Hamming-based); use directly
+                sim = float(np.clip(bridge_hv.similarity(internal_hv), 0.0, 1.0))
             else:
                 sim = 0.5
-            # Normalize to [0, 1]
-            sim = float(np.clip((sim + 1.0) / 2.0, 0.0, 1.0))
         except Exception:
             sim = 0.0
         

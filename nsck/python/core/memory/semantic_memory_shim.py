@@ -51,18 +51,24 @@ def spread_activation_fast(
         return None
     
     try:
-        # Sync concepts from graph to Rust backend
+        # Sync concepts from graph to Rust's DashMap for concurrent access.
+        # Note: Rust's SemanticMemoryConcurrent provides thread-safe DashMap storage;
+        # the activation loop itself runs in Python using the synced concept set.
+        # When Rust exposes a native spread_activation RPC, this block can delegate fully.
         import python.core.vsa.hypervec_shim as hv_mod
+        sync_errors = 0
         for node in concept_graph.nodes():
             try:
                 hv = hv_mod.HyperVector(hash(node) % (2**32))
                 rust.add_concept(str(node), hv)
             except Exception:
-                pass
+                sync_errors += 1
+        # If more than half of concepts failed to sync, bail out to Python path
+        n_nodes = concept_graph.number_of_nodes()
+        if n_nodes > 0 and sync_errors > n_nodes // 2:
+            return None
         
-        # Spreading activation in Python using Rust storage (DashMap)
-        # Since Rust's SemanticMemoryConcurrent doesn't expose spread_activation directly,
-        # we run the activation loop but using Rust for concept lookup
+        # Spreading activation loop (Python, using synced Rust concept set)
         activation: Dict[str, float] = {c: 1.0 for c in start_concepts if c in concept_graph}
         _MAX_FRONTIER = 200
         _stigmergy_boost = bool(stigmergy)
