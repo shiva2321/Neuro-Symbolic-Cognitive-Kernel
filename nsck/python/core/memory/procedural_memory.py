@@ -68,7 +68,7 @@ class ProceduralMemory:
         """Compute LSH bucket key for a HyperVector. Returns None on error."""
         try:
             bits = np.asarray(hv.bits, dtype=np.float32)
-            return _compute_lsh(bits, self.lsh_bits)
+            return _compute_lsh(bits, self._lsh_bits)
         except Exception:
             return None
 

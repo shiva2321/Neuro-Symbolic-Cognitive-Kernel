@@ -581,7 +581,8 @@ class SemanticMemory:
             hv = self.concept_hvs.get(name)
             if hv is not None:
                 self._hot_cache[name] = (hv, score)
-        # LRU eviction: remove oldest entries when over limit
+        # LRU eviction: remove oldest inserted entries when over limit
+        # (insertion-order based; dict preserves insertion order since Python 3.7)
         while len(self._hot_cache) > self._HOT_CACHE_SIZE:
             oldest = next(iter(self._hot_cache))
             del self._hot_cache[oldest]

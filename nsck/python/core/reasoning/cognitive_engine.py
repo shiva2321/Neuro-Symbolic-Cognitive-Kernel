@@ -1680,7 +1680,7 @@ class CognitiveEngine:
                     )
                     if not plan_safe:
                         # Plan is potentially unsafe — reduce salience by 50%
-                        plan_salience = 0.375
+                        plan_salience *= 0.5
                         logger.warning("[PLANNER] Imagination detected unsafe plan; salience halved")
                 except Exception:
                     pass

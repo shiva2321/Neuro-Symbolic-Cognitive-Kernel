@@ -817,7 +817,9 @@ class SNNPerceptionModule:
             try:
                 bits = np.asarray(concept_hv.bits, dtype=np.float32)
                 if len(bits) != self.hv_dimension:
-                    # Resize via random projection
+                    # Resize via random projection (Gaussian, std=0.1 keeps magnitudes small
+                    # before thresholding). Occurs when SemanticMemory was built with a
+                    # different HV dimension than the SNN perception module.
                     proj = np.random.randn(self.hv_dimension, len(bits)).astype(np.float32) * 0.1
                     bits = (proj @ bits > 0).astype(np.float32)
                 self.concept_mapper.register(concept_name, bits)
