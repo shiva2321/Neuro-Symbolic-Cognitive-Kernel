@@ -923,3 +923,22 @@ V13 adds nine new modules and several enhancements to the substrate:
 | [docs/V16_CHANGELOG.md](docs/V16_CHANGELOG.md) | V16 security, EWC, evaluation suite, semantic seeding |
 | [docs/EVAL_SUITE.md](docs/EVAL_SUITE.md) | NSCK-ES T1-T5 scoring specification and usage guide |
 | [docs/GOAL_TRACKER.md](docs/GOAL_TRACKER.md) | Living document: AGI vision vs implementation status |
+
+---
+
+## V4 Architecture Additions (February 2026)
+
+NSCK V4 implements 8 architectural pillars:
+
+| Pillar | Component | Change |
+|--------|-----------|--------|
+| 1 | ProceduralMemory | Auto-populated from learn(); threshold 0.85→0.72; LSH bucket index |
+| 2 | SemanticMemory | HNSW default-on; 256-entry LRU hot cache |
+| 3 | Language NLU | VSANLUEngine (7-class VSA prototypes) as primary path |
+| 4 | WorldModel | N-step imagine_rollout() with danger-vector safety abort |
+| 5 | Rust VSA | bundle_hvs (majority vote), lsh_bucket, spreading_activation_step |
+| 6 | SNN Perception | register_concepts_from_memory() grounds SNN to SemanticMemory |
+| 7 | Bootstrap | KnowledgeSeeder + navigation.yaml + scheduling.yaml domain kits |
+| 8 | EWC Rules | gwt_win_count + ewc_importance fields; EWC-aware pruning |
+
+**Test count**: 1,507 passing (1,457 before V4, +50 new V4 tests, 0 regressions)

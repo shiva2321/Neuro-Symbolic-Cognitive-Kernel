@@ -1152,3 +1152,60 @@ Data classes: `TrainingConfig`, `TrainingMetrics`.
 | `anchor_count` | Number of distinct anchors. |
 
 **CrossModalEnrichmentReport** (dataclass): `anchors_created`, `links_added`, `clusters_detected`, `steps`.
+
+---
+
+## V4 New and Updated Modules
+
+### VSANLUEngine (`python/core/language/vsa_nlu.py`)
+
+**Purpose**: VSA-based intent classifier and entity extractor. Primary NLU engine as of V4.
+
+**Methods**:
+- `classify(text: str) -> Tuple[str, float]`: Returns (intent, confidence) using HV similarity to prototypes
+- `extract_entities(text: str) -> List[Tuple[str, str]]`: Returns (entity, type) via capitalization + concept lookup
+- `encode_sentence(text: str) -> HyperVector`: Encode whole sentence as HV for downstream use
+- `process(text: str) -> Dict`: NgramNLU-compatible output dict
+
+**Intent classes**: question, command, statement, greeting, farewell, exclamation, negation
+
+**Dependencies**: DistributionalCodebook (auto-built from BUILTIN_CORPUS)
+
+---
+
+### KnowledgeSeeder (`python/core/bootstrap/knowledge_seeder.py`)
+
+**Purpose**: Bootstrap a domain from a declarative YAML spec.
+
+**Methods**:
+- `seed_from_yaml(yaml_path: str, engine: CognitiveEngine) -> int`: Returns number of rules seeded
+
+**YAML format**: See `python/core/bootstrap/domain_kits/navigation.yaml` for spec.
+
+**Injection targets**:
+1. `engine.semantic_memory.add_concept()` — semantic concepts
+2. `engine.rule_learner.learned_rules[domain]` — causal rules
+3. `engine.causal_graphs[domain].add_causes()` — causal graph edges
+4. `engine.procedural_memory.cache_skill()` — high-confidence rules cached as skills
+
+---
+
+### ProceduralMemory (V4 Updates) (`python/core/memory/procedural_memory.py`)
+
+**V4 changes**:
+- Familiarity threshold: **0.72** (was 0.85)
+- New `_lsh_buckets: Dict[int, List[int]]` — 16-bit LSH bucket index
+- `_compute_lsh(bits, n_bits, seed)` — LSH key computation
+- `recall_action()` — checks LSH bucket first (O(1)), falls back to full scan if empty
+- Auto-populated by `CognitiveEngine.learn()` on positive rewards
+
+---
+
+### SemanticMemory (V4 Updates) (`python/core/memory/semantic_memory.py`)
+
+**V4 changes**:
+- `_hnsw_enabled: bool = True` (was False; now default-on)
+- `_hot_cache: Dict[str, (HyperVector, float)]` — 256-entry LRU hot cache
+- `_HOT_CACHE_SIZE: int = 256` — configurable via `config.semantic_hot_cache_size`
+- `_update_hot_cache(activations)` — populates hot cache from top activated concepts
+- `spread_activation()` — now calls `_update_hot_cache()` on completion

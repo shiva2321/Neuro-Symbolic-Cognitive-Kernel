@@ -252,3 +252,31 @@ attribution to specific co-occurrence events is not feasible.
 **Last Updated:** February 2026  
 **Test Coverage:** All transparency features verified  
 **Status:** ✅ Production-ready glass-box system
+
+---
+
+## V4 Transparency Additions
+
+### New Glass-Box Mechanisms
+
+**EWC Rule Importance** (`ewc_importance` field on `Rule`):
+Every rule now carries its `gwt_win_count` (number of times it won the GWT competition) and derived `ewc_importance = min(1.0, gwt_win_count / 20.0)`. These fields are inspectable at runtime:
+```python
+for rule in engine.rule_learner.learned_rules.get("my_task", []):
+    print(f"Rule: {rule.condition} → {rule.consequence}, EWC importance: {rule.ewc_importance:.2f}")
+```
+
+**ProceduralMemory Statistics**:
+```python
+stats = engine.procedural_memory.get_statistics()
+# Returns: total_skills, hit_count, miss_count, hit_rate, lsh_buckets
+```
+
+**Imagine Rollout Traces**:
+`imagine_rollout()` returns `(total_reward, is_safe)` for any action sequence. This makes plan safety checking fully auditable:
+```python
+reward, safe = engine.imagine_rollout(situation_hv, plan_actions, task_tag)
+```
+
+**Domain Bootstrap Audit**:
+`seed_domain()` returns the count of rules seeded, and all seeded rules have `source="bootstrap"` in the Rule dataclass, making them distinguishable from learned rules.
