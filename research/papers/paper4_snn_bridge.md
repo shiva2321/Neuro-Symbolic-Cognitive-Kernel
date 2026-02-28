@@ -496,6 +496,10 @@ The experiments do not compare against standard classification methods (k-NN, SV
 
 The NSCK codebase was developed iteratively with AI coding-agent assistance and has not undergone a formal peer review process or rigorous test-driven development. While unit tests exist for individual components, integration-level and adversarial tests are limited. The results reported here should be treated as engineering benchmarks of a research prototype rather than as reproducibility-certified scientific claims.
 
+### Implementation Note (V4 Fix)
+
+The `SNNPerceptionModule._apply_stdp()` fallback method previously contained an O(snn_size × input_dim) nested Python loop — equivalent to 16,384 Python iterations per timestep at the default 256×64 configuration. While this path is only reached when both Rust `SnnCore` and `PythonSnnCore` are unavailable (i.e., essentially never in production), it has been replaced with the same vectorized outer-product implementation used by `PythonSnnCore` and `PythonStdpEngine`. The Rust-accelerated results reported in this paper are unaffected.
+
 ---
 
 ## 7. Related Work

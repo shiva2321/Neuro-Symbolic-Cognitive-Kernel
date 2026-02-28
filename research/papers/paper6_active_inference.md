@@ -119,13 +119,15 @@ Source: `python/core/learning/curiosity.py`, L262–310.
 
 The world model stores $s_t \to (a, s_{t+1})$ mappings in a dictionary keyed by HV fingerprint:
 
-$$\text{key}(s) = \text{hash}(\text{bits}(s)) \bmod 2^{31}$$
+$$\text{key}(s) = \text{MD5}(\text{bits}(s)[0:32]) \bmod 2^{31}$$
 
 Prediction error for action $a$ at state $s$:
 
 $$\text{PE}(a, s) = 1 - \text{sim}(s_{\text{predicted}}, s_{\text{actual}}) \in [0, 1]$$
 
 where similarity is normalised Hamming similarity of 10,240-bit binary HVs. Source: `python/core/learning/active_inference.py`.
+
+> **V4 Fix:** The world model key function previously hashed only the first 8–16 bytes of the HV bit array, leading to potential key collisions between distinct states. The key now uses a 32-byte MD5 fingerprint, substantially reducing collision probability.
 
 ### 3.3 Mental Rehearsal
 
@@ -268,6 +270,8 @@ This signal can gate metacognitive actions: high $H_{\text{KLE}}$ triggers delib
 2. **No continuous free energy minimisation.** NSCK computes $F(a)$ as a lookup, not via variational inference. True FEP requires iterative optimisation of $q(s)$ under constraints.
 
 3. **Binary free energy.** Surprise = 0.5 if unseen, 0 if seen — no gradient, no annealing. This is a discrete approximation.
+
+   **3a. Degenerate epistemic value in default configuration.** Without a `CuriosityModule`, `epistemic_value()` previously returned a hardcoded constant 0.1 for all actions, making `free_energy() ≈ 0.5 − 0.1 = 0.4` for all unvisited states. With `active_inference_weight = 0.2` in `CognitiveEngine`, this caused every coalition to receive an identical `+0.02` salience bonus — providing no differentiation between actions. **Fixed:** `epistemic_value()` now uses world-model familiarity as a proxy (0.3 for unseen transitions, 0.1 for seen), improving salience differentiation to `±0.04` without requiring a full CuriosityModule. The paper's measured results (Exp 6.1 mean F = −0.510) used a configured CuriosityModule and remain valid.
 
 4. **Mental rehearsal vetoes all proposals in Exp 6.5.** The mock world model was designed to always return danger, so this is expected. Real deployments need a danger vector registry populated from actual harmful outcomes.
 

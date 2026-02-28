@@ -542,8 +542,11 @@ class SemanticMemory:
             )
             if result is not None:
                 return result
-        except Exception:
-            pass
+        except Exception as _e:
+            logger.warning(
+                "spread_activation: Rust fast-path failed (%s); using Python fallback. "
+                "To suppress: ensure hypervec_rs.so is built correctly.", _e
+            )
 
         activation = {c: 1.0 for c in start_concepts if c in self.concept_graph}
         

@@ -67,8 +67,8 @@ class TestFreeEnergy:
 
     def test_free_energy_unknown_action(self, learner, hv1):
         fe = learner.free_energy("unknown", hv1)
-        # prediction_error=0.5, epistemic_value=0.1 → 0.4
-        assert fe == pytest.approx(0.5 - 0.1, abs=0.1)
+        # prediction_error=0.5, epistemic_value=0.3 (unseen transition proxy) → 0.2
+        assert fe == pytest.approx(0.5 - 0.3, abs=0.1)
 
 
 class TestShouldVeto:

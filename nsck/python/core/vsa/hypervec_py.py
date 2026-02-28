@@ -51,6 +51,30 @@ class HyperVectorPy:
         bundle_bits = np.bitwise_or(same, np.bitwise_and(diff, rand_mask))
         return HyperVectorPy.from_bits(bundle_bits)
 
+    def bundle_n_way(self, others: list) -> 'HyperVectorPy':
+        """N-way majority-vote bundle over self + others.
+
+        Counts how many vectors have bit=1 at each position and applies
+        majority rule. This is mathematically correct for N vectors: each
+        position independently picks the majority bit value. For 2 vectors
+        the result falls back to pairwise bundle (tie-breaking via random mask).
+
+        Unlike sequential pairwise bundling (``bundle`` called repeatedly),
+        this method does not re-weight the running accumulator, so the result
+        does not drift as N grows.
+        """
+        all_vecs = [self] + list(others)
+        n = len(all_vecs)
+        if n == 2:
+            return self.bundle(all_vecs[1])
+        stacked = np.stack([np.asarray(v.bits, dtype=np.int8) for v in all_vecs])
+        counts = stacked.sum(axis=0)
+        majority = (counts > n / 2).astype(np.int8)
+        result = HyperVectorPy.__new__(HyperVectorPy)
+        result.bits = majority
+        result.dimension = self.dimension if hasattr(self, 'dimension') else DIMENSION
+        return result
+
     def similarity(self, other):
         """
         Hamming-based similarity (legacy, kept for compatibility).
@@ -392,10 +416,13 @@ def bundle_with_cleanup(vectors: List[HyperVectorPy], cleanup_mem: Optional[Clea
     """
     if not vectors:
         return HyperVector.zero()
-    
-    result = vectors[0]
-    for v in vectors[1:]:
-        result = result.bundle(v)
+
+    if len(vectors) > 2:
+        result = vectors[0].bundle_n_way(vectors[1:])
+    else:
+        result = vectors[0]
+        for v in vectors[1:]:
+            result = result.bundle(v)
     
     if cleanup_mem is not None:
         result = cleanup_mem.cleanup_or_keep(result, threshold)
