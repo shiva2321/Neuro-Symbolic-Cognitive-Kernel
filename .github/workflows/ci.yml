@@ -47,12 +47,12 @@ jobs:
       - name: Build hypervec_rs (VSA Rust backend)
         run: |
           cd nsck/rust_vsa
-          maturin develop --release
+          maturin develop --release -i $(which python)
 
       - name: Build snn_rs (SNN Rust backend)
         run: |
           cd nsck/rust_snn
-          maturin develop --release
+          maturin develop --release -i $(which python)
 
       - name: Verify Rust backends
         working-directory: nsck
