@@ -4,7 +4,7 @@
 Bachelor of Computer Science, University of Prince Edward Island  
 Charlottetown, PE, Canada
 
-**Series:** Neuro-Symbolic Cognitive Kernel (NSCK) Technical Report, Paper 4 of N  
+**Series:** Neuro-Symbolic Cognitive Kernel (NSCK) Technical Report, Paper 4 of 8  
 **Status:** Working Implementation — benchmarks from actual experiment runs  
 *Developed iteratively with AI coding-agent assistance.*
 
