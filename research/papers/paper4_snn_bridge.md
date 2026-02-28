@@ -75,7 +75,7 @@ VSAs (Plate, 1995; Kanerva, 2009) represent concepts as high-dimensional random 
 - **Bundling** (majority vote): $\mathbf{z} = \text{majority}(\mathbf{x}_1, \ldots, \mathbf{x}_n)$ — encodes set membership; $\mathbf{z}$ is similar to all operands.
 - **Similarity** (Hamming / cosine): $\text{sim}(\mathbf{x}, \mathbf{y}) = 1 - \frac{d_H(\mathbf{x}, \mathbf{y})}{D}$ — measures conceptual proximity.
 
-At $D = 10{,}240$, the probability that two random vectors are accidentally similar is astronomically small ($\approx 10^{-308}$), giving VSAs their noise robustness and compositional expressiveness. The NSCK implementation uses 10,240-bit binary vectors with XOR binding and majority-vote bundling (Source: `vsa/hypervec_shim.py`, line 58–60).
+At $D = 10{,}240$, the probability that two independently sampled random binary vectors share Hamming similarity $\geq 0.55$ (differing in $\leq 45\%$ of bits) is approximated via the binomial CDF as $P \approx \Phi\!\left(\tfrac{0.45D - 0.5D}{\sqrt{0.25D}}\right) = \Phi(-10.24) \approx 10^{-24}$ (Kanerva, 2009); at the stricter thresholds used in VSA cleanup memories the probability drops further, making accidental collisions negligible. This quasi-orthogonality gives VSAs their noise robustness and compositional expressiveness. The NSCK implementation uses 10,240-bit binary vectors with XOR binding and majority-vote bundling (Source: `vsa/hypervec_shim.py`, line 58–60).
 
 ### 2.4 Weber–Fechner Law
 
@@ -146,9 +146,9 @@ The bidirectional nature of the bridge is important: just as spike trains are *e
 
 ### 3.2 LIF Neuron Layer
 
-The `LIFNeuronLayer` class (Source: `perception/snn_perception.py`, line 143) implements a vectorised array of LIF neurons. The discrete-time update rule at step $k$ with time step $\Delta t$ is:
+The `LIFNeuronLayer` class (Source: `perception/snn_perception.py`, line 143) implements a vectorized array of LIF neurons. The discrete-time update rule at step $k$ with time step $\Delta t$ is:
 
-$$V^{(k+1)} = V^{(k)} + \frac{\Delta t}{\tau_m}\left[-(V^{(k)} - V_{\text{rest}}) + I^{(k)}\right]$$
+$$V^{(k+1)} = V^{(k)} + \frac{\Delta t}{\tau_m}\left[-(V^{(k)} - V_{\text{rest}}) + I_{\text{inj}}^{(k)}\right]$$
 
 $$\text{spike}^{(k)} = \mathbf{1}\left[V^{(k+1)} \geq V_{\text{thresh}}\right]$$
 
@@ -281,7 +281,7 @@ Experiment results were written to `research/results/paper4_results.json`.
 | Number of patterns | 10 |
 | Training epochs | 10 |
 
-The fact that 11 concepts were registered for 10 patterns indicates that one pattern produced a sufficiently different activation set during one epoch to trigger a secondary concept registration. This is a known side-effect of the greedy Jaccard threshold strategy and is discussed further in Section 5.
+The fact that 11 concepts were registered for 10 training patterns indicates that one pattern produced a sufficiently different activation set during one epoch to trigger a secondary concept registration. This is a known side-effect of the greedy Jaccard threshold strategy. An adaptive threshold (e.g., tuned via cross-validation or calibrated on a held-out set) would reduce over-registration and is flagged as future work (see Section 6.6).
 
 ---
 
