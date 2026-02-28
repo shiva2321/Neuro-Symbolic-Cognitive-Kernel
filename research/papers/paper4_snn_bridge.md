@@ -605,4 +605,4 @@ Weber, E. H. (1834). *De Pulsu, Resorptione, Auditu et Tactu: Annotationes Anato
 
 ---
 
-*Paper 4 of the NSCK Technical Report Series. Developed iteratively with AI coding-agent assistance. All benchmark results reported from actual experiment runs (`research/experiments/paper4_snn_benchmarks.py`). Results written to `research/results/paper4_results.json`.*
+*Paper 4 of the NSCK Technical Report Series. All benchmark results reported from actual experiment runs (`research/experiments/paper4_snn_benchmarks.py`). Results written to `research/results/paper4_results.json`.*

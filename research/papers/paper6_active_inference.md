@@ -127,8 +127,6 @@ $$\text{PE}(a, s) = 1 - \text{sim}(s_{\text{predicted}}, s_{\text{actual}}) \in 
 
 where similarity is normalised Hamming similarity of 10,240-bit binary HVs. Source: `python/core/learning/active_inference.py`.
 
-> **V4 Fix:** The world model key function previously hashed only the first 8–16 bytes of the HV bit array, leading to potential key collisions between distinct states. The key now uses a 32-byte MD5 fingerprint, substantially reducing collision probability.
-
 ### 3.3 Mental Rehearsal
 
 Before broadcasting, `compete_with_rehearsal()` imagines the consequence of each candidate action:
