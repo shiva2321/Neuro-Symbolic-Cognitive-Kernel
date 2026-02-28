@@ -556,7 +556,10 @@ class DialogueManager:
         mem = self._sem_mem()
         n_concepts = 0
         if mem is not None:
-            n_concepts = mem.concept_graph.number_of_nodes()
+            try:
+                n_concepts = mem.concept_graph.number_of_nodes()
+            except AttributeError:
+                n_concepts = len(mem.concept_graph.nodes())
 
         parts = ["Hello! I am NSCK — a neuro-symbolic cognitive kernel."]
         if n_concepts > 0:

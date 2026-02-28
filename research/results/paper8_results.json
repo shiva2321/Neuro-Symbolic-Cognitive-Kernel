@@ -1,0 +1,288 @@
+{
+  "backend": {
+    "rust_vsa": true
+  },
+  "exp_8_1": {
+    "safety_verification": {
+      "true_positive_rate": 1.0,
+      "false_positive_rate": 0.0,
+      "true_negative_rate": 1.0,
+      "mean_safety_score": 1.0,
+      "n_safe_rules": 10,
+      "n_violating_rules": 10
+    }
+  },
+  "exp_8_2": {
+    "emotion_dynamics": [
+      {
+        "step": 0,
+        "reward": 0.8,
+        "valence": 0.2,
+        "arousal": 0.09,
+        "current_emotion": "anticipation"
+      },
+      {
+        "step": 1,
+        "reward": -0.5,
+        "valence": -0.01,
+        "arousal": 0.153,
+        "current_emotion": "neutral"
+      },
+      {
+        "step": 2,
+        "reward": 0.0,
+        "valence": -0.0095,
+        "arousal": 0.1971,
+        "current_emotion": "neutral"
+      },
+      {
+        "step": 3,
+        "reward": 0.3,
+        "valence": 0.191,
+        "arousal": 0.228,
+        "current_emotion": "neutral"
+      },
+      {
+        "step": 4,
+        "reward": -0.7,
+        "valence": -0.0186,
+        "arousal": 0.2496,
+        "current_emotion": "neutral"
+      }
+    ]
+  },
+  "exp_8_3": {
+    "emotion_vsa_encoding": {
+      "emotions": [
+        "joy",
+        "sadness",
+        "anger",
+        "fear",
+        "trust",
+        "disgust",
+        "surprise",
+        "anticipation"
+      ],
+      "similarity_matrix": [
+        [
+          1.0,
+          0.498046875,
+          0.50625,
+          0.499609375,
+          0.49921875000000004,
+          0.48544921875,
+          0.48710937499999996,
+          0.49404296875
+        ],
+        [
+          0.498046875,
+          1.0,
+          0.5025390625,
+          0.4984375,
+          0.4994140625,
+          0.50283203125,
+          0.5048828125,
+          0.50068359375
+        ],
+        [
+          0.50625,
+          0.5025390625,
+          1.0,
+          0.49042968750000004,
+          0.49882812499999996,
+          0.50224609375,
+          0.5005859375,
+          0.49990234375
+        ],
+        [
+          0.499609375,
+          0.4984375,
+          0.49042968750000004,
+          1.0,
+          0.4947265625,
+          0.50224609375,
+          0.49492187499999996,
+          0.49814453125
+        ],
+        [
+          0.49921875000000004,
+          0.4994140625,
+          0.49882812499999996,
+          0.4947265625,
+          1.0,
+          0.50244140625,
+          0.4986328125,
+          0.49404296875
+        ],
+        [
+          0.48544921875,
+          0.50283203125,
+          0.50224609375,
+          0.50224609375,
+          0.50244140625,
+          1.0,
+          0.50146484375,
+          0.49589843749999996
+        ],
+        [
+          0.48710937499999996,
+          0.5048828125,
+          0.5005859375,
+          0.49492187499999996,
+          0.4986328125,
+          0.50146484375,
+          1.0,
+          0.50322265625
+        ],
+        [
+          0.49404296875,
+          0.50068359375,
+          0.49990234375,
+          0.49814453125,
+          0.49404296875,
+          0.49589843749999996,
+          0.50322265625,
+          1.0
+        ]
+      ]
+    }
+  },
+  "exp_8_4": {
+    "text_emotion_recognition": {
+      "overall_accuracy": 1.0,
+      "per_emotion_accuracy": {
+        "joy": 1.0,
+        "sadness": 1.0,
+        "anger": 1.0,
+        "fear": 1.0,
+        "trust": 1.0,
+        "disgust": 1.0,
+        "surprise": 1.0,
+        "anticipation": 1.0
+      },
+      "n_sentences": 16
+    }
+  },
+  "exp_8_5": {
+    "theory_of_mind_sally_anne": {
+      "sally_belief": "basket",
+      "reality": "box",
+      "belief_correct": true,
+      "false_belief_detected": true,
+      "false_belief_keys": [
+        "ball_location"
+      ]
+    }
+  },
+  "exp_8_6": {
+    "theory_of_mind_multi_agent": {
+      "alice": {
+        "belief_accuracy": 1.0,
+        "n_false_beliefs": 0,
+        "false_belief_keys": []
+      },
+      "bob": {
+        "belief_accuracy": 0.5,
+        "n_false_beliefs": 1,
+        "false_belief_keys": [
+          "object_a"
+        ]
+      },
+      "charlie": {
+        "belief_accuracy": 0.5,
+        "n_false_beliefs": 1,
+        "false_belief_keys": [
+          "object_b"
+        ]
+      }
+    }
+  },
+  "exp_8_7": {
+    "safety_gate_integration": [
+      {
+        "confidence": 0.1,
+        "gate_allowed_rate": 0.0
+      },
+      {
+        "confidence": 0.3,
+        "gate_allowed_rate": 1.0
+      },
+      {
+        "confidence": 0.5,
+        "gate_allowed_rate": 1.0
+      },
+      {
+        "confidence": 0.7,
+        "gate_allowed_rate": 1.0
+      },
+      {
+        "confidence": 0.9,
+        "gate_allowed_rate": 1.0
+      }
+    ]
+  },
+  "exp_8_8": {
+    "audit_trail": [
+      {
+        "decision_id": 0,
+        "input_text": "I am happy!",
+        "perceived_emotion": "joy",
+        "proposed_action": "greet",
+        "confidence": 0.85,
+        "safety_check_passed": true,
+        "gate_allowed": true,
+        "gate_reason": "OK",
+        "valence": 0.0,
+        "arousal": 0.06
+      },
+      {
+        "decision_id": 1,
+        "input_text": "I am scared!",
+        "perceived_emotion": "fear",
+        "proposed_action": "flee",
+        "confidence": 0.7,
+        "safety_check_passed": true,
+        "gate_allowed": true,
+        "gate_reason": "OK",
+        "valence": 0.0,
+        "arousal": 0.102
+      },
+      {
+        "decision_id": 2,
+        "input_text": "I trust you",
+        "perceived_emotion": "trust",
+        "proposed_action": "cooperate",
+        "confidence": 0.9,
+        "safety_check_passed": true,
+        "gate_allowed": true,
+        "gate_reason": "OK",
+        "valence": 0.0,
+        "arousal": 0.131
+      },
+      {
+        "decision_id": 3,
+        "input_text": "This is disgusting",
+        "perceived_emotion": "disgust",
+        "proposed_action": "avoid",
+        "confidence": 0.6,
+        "safety_check_passed": true,
+        "gate_allowed": true,
+        "gate_reason": "OK",
+        "valence": 0.0,
+        "arousal": 0.152
+      },
+      {
+        "decision_id": 4,
+        "input_text": "I am so excited!",
+        "perceived_emotion": "anticipation",
+        "proposed_action": "explore",
+        "confidence": 0.75,
+        "safety_check_passed": true,
+        "gate_allowed": true,
+        "gate_reason": "OK",
+        "valence": 0.0,
+        "arousal": 0.166
+      }
+    ]
+  }
+}

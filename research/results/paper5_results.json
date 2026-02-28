@@ -1,0 +1,93 @@
+{
+  "backend": {
+    "rust_vsa": true
+  },
+  "exp_5_1": {
+    "projector_comparison": [
+      {
+        "vocab_size": 100,
+        "dim": 32,
+        "projector": "RandomProjector",
+        "spearman_rho": 0.9959640478561914,
+        "recall_at_10": 0.9290000000000007,
+        "recall_at_50": 0.9722,
+        "ari": 0.20888290378461088,
+        "passed": true
+      },
+      {
+        "vocab_size": 500,
+        "dim": 32,
+        "projector": "RandomProjector",
+        "spearman_rho": 0.9952264769059076,
+        "recall_at_10": 0.9100000000000001,
+        "recall_at_50": 0.9390000000000001,
+        "ari": 0.17560895801758564,
+        "passed": true
+      }
+    ]
+  },
+  "exp_5_2": {
+    "cluster_preservation": {
+      "n_clusters": 5,
+      "per_cluster": 20,
+      "intra_cluster_sim_mean": 0.9191407696759258,
+      "inter_cluster_sim_mean": 0.47929470486111114,
+      "separation": 0.4398460648148147
+    }
+  },
+  "exp_5_3": {
+    "bit_flip_robustness": [
+      {
+        "flip_rate_pct": 0,
+        "recall_at_10": 0.04
+      },
+      {
+        "flip_rate_pct": 5,
+        "recall_at_10": 0.04
+      },
+      {
+        "flip_rate_pct": 10,
+        "recall_at_10": 0.04
+      },
+      {
+        "flip_rate_pct": 20,
+        "recall_at_10": 0.04
+      },
+      {
+        "flip_rate_pct": 30,
+        "recall_at_10": 0.04
+      }
+    ]
+  },
+  "exp_5_4": {
+    "projection_determinism": {
+      "same_seed_identical": true,
+      "diff_seed_different": true,
+      "determinism_ok": true
+    }
+  },
+  "exp_5_5": {
+    "embedding_bridge_round_trip": {
+      "mean_round_trip_similarity": 1.0,
+      "std_similarity": 0.0,
+      "n_samples": 50,
+      "note": "Same embedding re-encoded should produce identical HV (deterministic)"
+    }
+  },
+  "exp_5_6": {
+    "projection_timing": [
+      {
+        "vocab_size": 100,
+        "projection_time_ms": 175.34672400006457
+      },
+      {
+        "vocab_size": 500,
+        "projection_time_ms": 704.5433760001742
+      },
+      {
+        "vocab_size": 1000,
+        "projection_time_ms": 1368.9349310000125
+      }
+    ]
+  }
+}

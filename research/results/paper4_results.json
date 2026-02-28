@@ -1,0 +1,107 @@
+{
+  "backend": {
+    "rust_vsa": true,
+    "rust_snn": true
+  },
+  "exp_4_1": {
+    "accuracy": 1.0,
+    "avg_latency_ms": 1.8505366999761463,
+    "n_concepts_learned": 10,
+    "n_patterns": 10,
+    "n_epochs": 10
+  },
+  "exp_4_2": {
+    "noise_robustness": [
+      {
+        "noise_level": 0.0,
+        "accuracy": 0.9
+      },
+      {
+        "noise_level": 0.1,
+        "accuracy": 0.9
+      },
+      {
+        "noise_level": 0.2,
+        "accuracy": 0.9
+      },
+      {
+        "noise_level": 0.3,
+        "accuracy": 0.9
+      },
+      {
+        "noise_level": 0.5,
+        "accuracy": 0.9
+      }
+    ]
+  },
+  "exp_4_3": {
+    "stdp_weight_evolution": [
+      {
+        "step": 0,
+        "weight_norm": 642.3146583071922
+      },
+      {
+        "step": 50,
+        "weight_norm": 16.0
+      },
+      {
+        "step": 100,
+        "weight_norm": 16.0
+      },
+      {
+        "step": 200,
+        "weight_norm": 16.0
+      },
+      {
+        "step": 500,
+        "weight_norm": 16.0
+      }
+    ]
+  },
+  "exp_4_4": {
+    "snn_scaling": [
+      {
+        "snn_size": 64,
+        "avg_latency_ms": 0.85638434999737
+      },
+      {
+        "snn_size": 128,
+        "avg_latency_ms": 1.208209810004064
+      },
+      {
+        "snn_size": 256,
+        "avg_latency_ms": 1.846078850005597
+      }
+    ]
+  },
+  "exp_4_5": {
+    "rate_vs_temporal": [
+      {
+        "encoding_mode": "rate",
+        "accuracy": 0.875
+      },
+      {
+        "encoding_mode": "temporal",
+        "accuracy": 0.875
+      }
+    ]
+  },
+  "exp_4_6": {
+    "spike_statistics": {
+      "mean_spike_count": 637.62,
+      "std_spike_count": 45.27047161229934,
+      "mean_active_neurons": 109.45,
+      "mean_processing_time_ms": 2.092979029998787,
+      "n_samples": 100
+    }
+  },
+  "exp_4_7": {
+    "backend_comparison": {
+      "backend": "Rust",
+      "avg_latency_ms": 2.1369169500098906,
+      "n_calls": 100,
+      "speedup_vs_python": null,
+      "note": "Only Rust backend available in this run"
+    }
+  }
+}
