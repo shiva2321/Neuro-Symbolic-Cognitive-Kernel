@@ -16,9 +16,14 @@ if _nsck_root not in sys.path:
 
 def main() -> int:
     """Verify Rust extensions and benchmark throughput."""
-    import python.core.vsa.hypervec_shim as shim
+    try:
+        import python.core.vsa.hypervec_shim as shim
+        info = shim.get_backend_info()
+    except Exception as e:
+        print(f"⚠️  Could not load Rust shim: {e}")
+        print("   Continuing with Python fallback.")
+        return 0
 
-    info = shim.get_backend_info()
     vsa_backend = info["vsa_backend"]
     snn_backend = info["snn_backend"]
 

@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "nsck-demo"
 version = "0.2.0"
@@ -5,6 +9,19 @@ description = "Neural-Symbolic Cognitive Kernel: VSA + GWT cognitive architectur
 requires-python = ">=3.11"
 license = {text = "MIT"}
 readme = "README.md"
+authors = [
+    {name = "shiva2321", email = "shiva2321@users.noreply.github.com"},
+]
+keywords = ["neuro-symbolic", "cognitive-architecture", "hyperdimensional-computing", "vsa", "spiking-neural-network"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 
 dependencies = [
     "torch>=2.0.0",
@@ -14,12 +31,26 @@ dependencies = [
     "pydantic>=2.0.0",
     "rustworkx>=0.14.0",
     "rich>=13.0.0",
+    "pyyaml>=6.0",
 ]
 
 [project.optional-dependencies]
 snn = ["snntorch>=0.9.0"]
 test = ["pytest>=7.0.0", "pytest-benchmark>=4.0.0"]
 viz = ["flask>=2.3.0", "flask-socketio>=5.3.0"]
+
+[project.urls]
+Homepage = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel"
+Source = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel"
+Issues = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel/issues"
+
+[tool.hatch.build.targets.wheel]
+# Source package lives in python/; shipped as top-level `python` module.
+# Note: rename python/ → nsck/ to fix the shadowing before the first public release.
+packages = ["python"]
+
+[tool.hatch.build.targets.sdist]
+include = ["python/", "README.md", "LICENSE"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

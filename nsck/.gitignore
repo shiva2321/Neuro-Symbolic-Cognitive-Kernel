@@ -2,3 +2,10 @@ python/data_mnist/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Rust extension build artifacts
+*.so
+*.pyd
+*.cpython-*.so
+*.cpython-*.pyd
+target/
