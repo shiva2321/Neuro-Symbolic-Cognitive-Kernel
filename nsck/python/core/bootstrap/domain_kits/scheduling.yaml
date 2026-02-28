@@ -1,0 +1,60 @@
+domain: scheduling
+version: "1.0"
+description: "Task scheduling bootstrap kit"
+actions: [SCHEDULE_EARLY, SCHEDULE_LATE, RESCHEDULE, CANCEL, CONFIRM]
+causal_rules:
+  - condition: [DEADLINE_NEAR, TASK_PENDING]
+    action: SCHEDULE_EARLY
+    outcome: success
+    confidence: 0.90
+    support: 18
+  - condition: [RESOURCE_UNAVAILABLE]
+    action: RESCHEDULE
+    outcome: success
+    confidence: 0.85
+    support: 12
+  - condition: [TASK_COMPLETE]
+    action: CONFIRM
+    outcome: success
+    confidence: 0.95
+    support: 25
+  - condition: [CONFLICT_DETECTED]
+    action: RESCHEDULE
+    outcome: success
+    confidence: 0.80
+    support: 10
+  - condition: [LOW_PRIORITY, OVERLOADED]
+    action: CANCEL
+    outcome: neutral
+    confidence: 0.70
+    support: 8
+  - condition: [SLACK_TIME]
+    action: SCHEDULE_LATE
+    outcome: success
+    confidence: 0.75
+    support: 10
+semantic_concepts:
+  - name: TASK
+    properties: {type: unit_of_work, schedulable: true}
+  - name: DEADLINE
+    properties: {type: temporal_constraint, hard: true}
+  - name: RESOURCE
+    properties: {type: capacity, finite: true}
+  - name: PRIORITY
+    properties: {type: ordering, comparable: true}
+causal_graph:
+  - cause: DEADLINE_NEAR
+    effect: URGENCY
+    strength: 0.90
+  - cause: URGENCY
+    effect: SCHEDULE_EARLY
+    strength: 0.85
+  - cause: RESOURCE_UNAVAILABLE
+    effect: RESCHEDULE
+    strength: 0.85
+  - cause: CONFLICT_DETECTED
+    effect: RESCHEDULE
+    strength: 0.80
+  - cause: TASK_COMPLETE
+    effect: CONFIRM
+    strength: 0.95

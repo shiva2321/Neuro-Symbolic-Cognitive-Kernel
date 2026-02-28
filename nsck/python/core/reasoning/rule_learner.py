@@ -411,10 +411,10 @@ class RuleLearner(WorkspaceModule):
         
         rules = filtered_rules
         
-        # Sort by success rate * log(support) to balance confidence and volume
+        # Sort by success rate * log(support), protecting EWC-important rules (V4)
         import math
         rules.sort(
-            key=lambda r: r.success_rate * math.log1p(r.support_count),
+            key=lambda r: r.success_rate * math.log1p(r.support_count) * (1.0 + getattr(r, 'ewc_importance', 0.0)),
             reverse=True
         )
         

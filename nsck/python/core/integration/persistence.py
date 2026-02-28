@@ -76,6 +76,9 @@ class Rule:
     confidence_history: List[float] = field(default_factory=list)
     last_fired: float = 0.0   # Unix timestamp of last application
     fire_count: int = 0        # Total number of times this rule fired
+    # V4: EWC importance tracking
+    gwt_win_count: int = 0
+    ewc_importance: float = 0.0
 
 
 @dataclass
