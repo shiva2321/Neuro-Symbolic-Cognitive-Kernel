@@ -174,16 +174,25 @@ Run the V17 capability benchmark:
 python nsck/eval/vsa_capability_benchmark.py
 ```
 
-Throughput on a modern CPU:
+Verified throughput — x86-64 Linux, rustc 1.93.1 / Python 3.12, February 2026
+(Rust backend active; Python-only numbers are identical since enrichers are pure Python):
 
 | Benchmark | Throughput |
 |-----------|-----------|
-| CausalEnricher.enrich | > 1,000,000 ops/s |
-| CausalEnricher.enrich_chain (4-hop) | > 270,000 ops/s |
-| PerceptualEnricher.enrich | > 1,100,000 ops/s |
-| SemanticEnricher.enrich_concept | > 1,500,000 ops/s |
-| GlassBoxTracer (full decision) | > 160,000 decisions/s |
-| CrossModalEnricher.link_modalities | > 990,000 ops/s |
+| CausalEnricher.enrich | ~1,060,000 ops/s |
+| CausalEnricher.enrich_chain (4-hop) | ~276,000 ops/s |
+| PerceptualEnricher.enrich | ~1,150,000 ops/s |
+| SemanticEnricher.enrich_concept | ~1,500,000 ops/s |
+| GlassBoxTracer (full decision) | ~168,000 decisions/s |
+| CrossModalEnricher.link_modalities | ~1,000,000 ops/s |
+
+Underlying VSA operations (Rust active):
+
+| VSA Operation | Rust | Speedup vs Python |
+|---------------|------|-------------------|
+| bind (XOR) | ~2,600,000 ops/s | **3×** |
+| similarity (cosine) | ~2,700,000 ops/s | **22×** |
+| bundle | ~1,000,000 ops/s | **50×** |
 
 Run pytest-benchmark tests:
 

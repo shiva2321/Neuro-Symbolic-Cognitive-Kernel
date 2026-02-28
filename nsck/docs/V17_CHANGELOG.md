@@ -121,8 +121,10 @@ cfg = NSCKConfig.v17()   # enables all enrichment + glass-box
 
 ### Test Count
 
-- V16 baseline: 1,422 passed, 63 skipped, 3 xfailed
-- V17 total: **1,478 passed**, 63 skipped, 3 xfailed
+- V16 baseline: 1,422 passed, 63 skipped, 3 xfailed (Python only)
+- V17 total (Python only): **1,465 passed**, 63 skipped, 3 xfailed
+- V17 total (Rust active): **1,521 passed**, 5 skipped, 3 xfailed  
+  + 86 Rust-specific tests: **1,607 total** pass with Rust extensions loaded
 
 ### Migration Guide
 

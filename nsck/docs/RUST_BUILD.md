@@ -13,27 +13,33 @@ significant speedups for VSA and SNN operations.
 | Rust | 1.75 | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
 | maturin | 1.4 | `pip install maturin` |
 | Python | 3.9 | system / conda / pyenv |
-
-Optional:
-- **CUDA toolkit** (for GPU SNN): install via NVIDIA or conda-forge.
+| unzip | any | `apt install unzip` (Linux) |
 
 ---
 
-## Quick Build
+## Quick Build (Verified — February 2026)
 
 ```bash
 # From repo root
-cd nsck/rust/hypervec_rs
-maturin develop --release
+pip install maturin
 
-cd ../snn_rs
-maturin develop --release
+# 1. Build hypervec_rs (VSA + concurrent memory)
+cd nsck/rust_vsa
+maturin build --release
+unzip -o target/wheels/hypervec_rs-*.whl "hypervec_rs/hypervec_rs*" -d /tmp/hv
+cp /tmp/hv/hypervec_rs/*.so ../hypervec_rs.so
+
+# 2. Build snn_rs (Spiking Neural Network)
+cd ../rust_snn
+maturin build --release
+unzip -o target/wheels/snn_rs-*.whl "snn_rs/snn_rs*" -d /tmp/snn
+cp /tmp/snn/snn_rs/*.so ../snn_rs.so
 ```
 
 After a successful build the `.so` files appear in:
 ```
-nsck/python/core/vsa/hypervec_rs.so
-nsck/python/core/training/snn_rs.so
+nsck/hypervec_rs.so   ← VSA engine + concurrent memory (gitignored)
+nsck/snn_rs.so        ← Spiking Neural Network layer (gitignored)
 ```
 
 NSCK auto-detects the Rust extensions at import time via the shim
@@ -68,33 +74,55 @@ pip install "maturin>=1.4"
 ### 3. Build `hypervec_rs`
 
 ```bash
-cd nsck/rust/hypervec_rs
-maturin develop --release
+cd nsck/rust_vsa
+maturin build --release
+```
+
+Extract the `.so` from the built wheel:
+```bash
+unzip -o target/wheels/hypervec_rs-*.whl "hypervec_rs/hypervec_rs*" -d /tmp/hv
+cp /tmp/hv/hypervec_rs/*.so ../hypervec_rs.so
 ```
 
 `hypervec_rs` provides:
-- `HyperVector` — VSA vector with XOR bind, bundle, cosine similarity
+- `HyperVector` — 10 240-bit VSA vector (XOR bind, bundle, cosine similarity)
 - `HyperVectorRegistry` — fast nearest-neighbour lookup
-- Parallel batch operations (Rayon)
+- `SemanticMemoryConcurrent` / `EpisodicMemoryConcurrent` — thread-safe Rust memory
+- `CognitiveWorkerPool` — Rayon parallel task execution
+- `PersistentStorage` — SQLite-backed HV persistence (via rusqlite)
+- `AsyncCognitiveRuntime` — Tokio async runtime for concurrent decisions
 
 ### 4. Build `snn_rs`
 
 ```bash
-cd ../snn_rs
-maturin develop --release
+cd nsck/rust_snn
+maturin build --release
+unzip -o target/wheels/snn_rs-*.whl "snn_rs/snn_rs*" -d /tmp/snn
+cp /tmp/snn/snn_rs/*.so ../snn_rs.so
 ```
 
 `snn_rs` provides:
-- `LIFNeuronLayer` — Leaky Integrate-and-Fire layer
-- `STDPLearner` — spike-timing-dependent plasticity
+- `LIFLayer` / `SnnCore` — Leaky Integrate-and-Fire neuron layer
+- `StdpEngine` — spike-timing-dependent plasticity
+- `HebbianMatrix` — Hebbian weight matrix
 - `ConceptMapper` — SNN → HV concept mapping
+- `RateCoder` — rate-coded spike encoder
 
 ### 5. Verify
 
 ```python
-from python.core.vsa.hypervec_shim import HyperVec
-import python.core.vsa.hypervec_shim as shim
-print(shim._BACKEND)   # should print "rust" if build succeeded
+import sys
+sys.path.insert(0, 'nsck')      # run from repo root
+
+import hypervec_rs
+print("hypervec_rs classes:", [c for c in dir(hypervec_rs) if not c.startswith('_')])
+
+import snn_rs
+print("snn_rs classes:", [c for c in dir(snn_rs) if not c.startswith('_')])
+
+# Confirm shim uses Rust
+from nsck.python.core.vsa import hypervec_shim as shim
+# prints: >> [VSA] Using Rust Accelerator (hypervec_rs) [10-100x Performance]
 ```
 
 ---
@@ -105,28 +133,76 @@ print(shim._BACKEND)   # should print "rust" if build succeeded
 - name: Install Rust
   uses: dtolnay/rust-toolchain@stable
 
-- name: Build Rust extensions
+- name: Install maturin
+  run: pip install maturin
+
+- name: Build hypervec_rs
   run: |
-    pip install maturin
-    cd nsck/rust/hypervec_rs && maturin develop --release
-    cd ../snn_rs && maturin develop --release
+    cd nsck/rust_vsa
+    maturin build --release
+    unzip -o target/wheels/hypervec_rs-*.whl "hypervec_rs/hypervec_rs*" -d /tmp/hv
+    cp /tmp/hv/hypervec_rs/*.so ../hypervec_rs.so
+
+- name: Build snn_rs
+  run: |
+    cd nsck/rust_snn
+    maturin build --release
+    unzip -o target/wheels/snn_rs-*.whl "snn_rs/snn_rs*" -d /tmp/snn
+    cp /tmp/snn/snn_rs/*.so ../snn_rs.so
+
+- name: Run tests with Rust
+  run: python -m pytest nsck/tests/ --tb=short -q
 ```
 
 ---
 
 ## Performance Impact
 
+Verified on x86-64 Linux (rustc 1.93.1, Python 3.12, February 2026):
+
 | Operation | Python fallback | Rust extension | Speedup |
 |-----------|----------------|----------------|---------|
-| VSA bind (XOR) | ~800 K ops/s | ~4.1 M ops/s | **5×** |
-| VSA similarity | ~125 K ops/s | ~3.8 M ops/s | **30×** |
-| VSA bundle | ~21 K ops/s | ~1.4 M ops/s | **65×** |
+| VSA bind (XOR) | ~800 K ops/s | **~2.6 M ops/s** | **3×** |
+| VSA similarity | ~125 K ops/s | **~2.7 M ops/s** | **22×** |
+| VSA bundle | ~21 K ops/s | **~1.0 M ops/s** | **50×** |
 | Memory query (1K) | ~15 ms | ~0.6 ms | **25×** |
 
 > **Note**: V17 enrichment modules (`CausalEnricher`, `PerceptualEnricher`,
 > `SemanticEnricher`, `GlassBoxTracer`, `CrossModalEnricher`) are pure Python
-> and do not require Rust. They achieve > 1 M ops/s on a modern CPU without
-> Rust.
+> and do not require Rust. They achieve > 1 M ops/s with or without Rust,
+> but VSA operations inside them accelerate when Rust is active.
+
+---
+
+## Running Tests with Rust
+
+```bash
+# Run the full test suite (Rust active)
+python -m pytest nsck/tests/ --tb=short -q
+
+# Run only Rust-specific tests
+python -m pytest nsck/tests/unit/rust/ nsck/tests/unit/vsa/test_hypervec_parity.py -v
+
+# Run V17 benchmarks
+python nsck/eval/vsa_capability_benchmark.py
+python -m pytest nsck/tests/benchmarks/test_v17_benchmarks.py -v --benchmark-disable
+```
+
+Expected results with Rust active (February 2026):
+- **1 607 tests** pass (1521 main + 86 Rust-specific)
+- 2 stochastic image/audio similarity tests may flap (known, non-blocking)
+- 3 xfailed (known VSA/NLU limitations)
+
+---
+
+## Cargo Check (without Python linking)
+
+`cargo test` fails due to PyO3 linking requirements. Use instead:
+
+```bash
+cd nsck/rust_vsa && cargo check --lib
+cd nsck/rust_snn && cargo check --lib
+```
 
 ---
 
@@ -135,10 +211,12 @@ print(shim._BACKEND)   # should print "rust" if build succeeded
 | Problem | Solution |
 |---------|----------|
 | `maturin: command not found` | `pip install maturin` |
-| `linker 'cc' not found` | Install build tools: `apt install build-essential` |
-| `CUDA not found` | Install CUDA toolkit or disable GPU features |
-| `.so not found at runtime` | Re-run `maturin develop --release` in the correct directory |
-| Python fallback active unexpectedly | Check `shim._BACKEND` == `"python"` — rebuild Rust |
+| `linker 'cc' not found` | `apt install build-essential` |
+| `unzip: command not found` | `apt install unzip` |
+| `.so not found at runtime` | Re-run build steps; copy `.so` to `nsck/` |
+| Python fallback active unexpectedly | Ensure `nsck/hypervec_rs.so` exists; check `sys.path` includes `nsck/` |
+| `cargo test` fails with PyO3 link error | Expected — use `cargo check --lib` instead |
+| Build takes long on first run | Rust compiles all deps from scratch; subsequent builds are incremental |
 
 ---
 
@@ -146,7 +224,8 @@ print(shim._BACKEND)   # should print "rust" if build succeeded
 
 - `nsck/docs/RUST_API_REFERENCE.md` — full Rust extension API reference
 - `nsck/docs/ARCHITECTURE.md` — system architecture overview
+- `nsck/docs/V17_REPORT.md` — V17 enrichment layer and capability benchmarks
 
 ---
 
-*Updated for NSCK V17, April 2026.*
+*Updated for NSCK V17, February 2026. Verified on rustc 1.93.1 / Python 3.12 / x86-64 Linux.*

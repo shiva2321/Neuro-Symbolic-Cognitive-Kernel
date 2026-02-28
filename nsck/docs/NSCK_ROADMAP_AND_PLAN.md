@@ -31,6 +31,10 @@ directions. Every entry below has been verified against the codebase.
 | **V11** | Continuous Learning | LSH rebuilding, continuous generalisation, NumericSequenceAdapter + TimeSeriesEncoder, cross-modal learning, extended NSCKSubstrate API | 1 177 |
 | **V12** | Image + Audio | ImageAdapter (65-dim spatial/colour/Sobel FPE), AudioAdapter (23-dim MFCC/spectral FPE), both wired into NSCKSubstrate | 1 199 |
 | **V13** | Uncertainty + Procedural Memory | SignalIngestor, UniversalHVEncoder, CrossModalAssociativeMemory, ProceduralMemory, ConceptDriftDetector, ConformalWrapper, PatternGeneralizer, CausalRuleAuditor, VideoAdapter, KLE uncertainty in GlobalWorkspace, NSCKSubstrate V13 ingest/feedback API | 1 437 (1 424 with Rust) |
+| **V14** | Rich Perception + KnowledgePack | RichTextAdapter, RichImageAdapter, RichAudioAdapter, PerceptionDistiller, KnowledgePack, scale benchmarks | 1 311 |
+| **V15** | Model Transplantation | TransplantPipeline, ModelHarvester, SVDFactoredProjector, STDPCalibrator, TransplantValidator | 1 375 |
+| **V16** | Security + Lifelong + Eval + Seeding | KnowledgePack gzip+JSON (no pickle), EWC, NSCK-ES evaluation suite, ConceptNetLoader/SemanticSeeder/BertSeeder | 1 420 |
+| **V17** | Enrichment Layer + Glass-Box | CausalEnricher, PerceptualEnricher, SemanticEnricher, GlassBoxTracer, CrossModalEnricher, 10 new config flags, vsa_capability_benchmark | 1 465 (1 607 with Rust) |
 
 ---
 
@@ -256,12 +260,12 @@ additional multi-modal capabilities:
 
 | Metric | Value |
 |--------|-------|
-| Core modules | 94 |
-| Classes | 232 |
-| Python LOC | ~36 000 |
+| Core modules | 99 |
+| Classes | 242 |
+| Python LOC | ~37 500 |
 | Rust LOC | ~4 300 |
-| Total tests | 1 437 |
-| Rust speed-up | 5–65× over pure Python |
+| Total tests | 1 465 (Python) / 1 607 (with Rust) |
+| Rust speed-up | 3–50× over pure Python (V17 verified) |
 
 The architecture is fully self-contained: no external neural-network weights
 are required at runtime. All learning happens inside the HV space via
@@ -355,7 +359,7 @@ version is tagged.*
 - New modules: 5
 - New config flags: 10
 - New tests: 56
-- All tests pass: 1,478 total (V17 baseline)
+- All tests pass: 1,465 (Python) / 1,521 (Rust active) / **1,607** (Rust + Rust-specific tests)
 - Zero breaking changes from V16
 
 ### Design Principles
