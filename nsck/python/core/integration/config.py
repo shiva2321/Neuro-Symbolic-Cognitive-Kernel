@@ -269,6 +269,12 @@ class NSCKConfig:
             cfg.enable_hnsw_index = True
         return cfg
 
+    # === V18 Feature Flags — Semantic HV Bootstrap ===
+    enable_semantic_bootstrap: bool = False
+    semantic_bootstrap_strategy: str = "auto"   # "auto", "bridge", "corpus", "prebuilt"
+    semantic_bootstrap_model: str = "all-MiniLM-L6-v2"
+    semantic_codebook_path: str = ""  # path to pre-built .pkl codebook
+
     # === V17 Feature Flags — Enrichment & Glass-Box Tracing ===
     enable_causal_enrichment: bool = False
     enable_perceptual_enrichment: bool = False
@@ -290,6 +296,18 @@ class NSCKConfig:
         cfg.enable_semantic_enrichment = True
         cfg.enable_glass_box_tracer = True
         cfg.enable_crossmodal_enrichment = True
+        return cfg
+
+    @classmethod
+    def semantic(cls) -> "NSCKConfig":
+        """Semantic config: full research flags + semantic HV bootstrap enabled."""
+        cfg = cls.research()
+        cfg.enable_distributional_semantics = True
+        cfg.enable_hf_corpus = False  # offline by default
+        cfg.enable_semantic_bootstrap = True
+        cfg.semantic_bootstrap_strategy = "auto"
+        cfg.semantic_bootstrap_model = "all-MiniLM-L6-v2"
+        cfg.semantic_codebook_path = ""
         return cfg
 
     # === V4 Architecture Flags — Procedural Memory ===

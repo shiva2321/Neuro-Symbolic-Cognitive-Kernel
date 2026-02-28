@@ -873,3 +873,64 @@ These depend on which backend is active and how the system is configured.
 ---
 
 *Document generated for NSCK V4, February 2026.*
+
+---
+
+## V18 · Semantic HV Bootstrap
+
+### Problem Solved
+
+Prior to V18, all word concept HVs were seeded from `hash(word) % 2**32` — purely random
+10,240-bit vectors with no semantic geometry. This made every downstream VSA operation
+(similarity search, spreading activation, analogy, episodic recall) semantically blind,
+producing `sim("brain", "memory") ≈ 0.50` (random chance).
+
+### Solution Architecture
+
+V18 introduces `SemanticBootstrapper` — a tiered, zero-dependency fallback chain:
+
+| Tier | Strategy | Source | Quality | Deps |
+|------|----------|--------|---------|------|
+| 0 | `prebuilt` | Pre-saved .pkl codebook | Highest | None |
+| 1 | `bridge` | sentence-transformers/all-MiniLM-L6-v2 | High | sentence-transformers |
+| 2 | `hf_corpus` | HuggingFace dataset download | Medium | internet |
+| 3 | `corpus` | BUILTIN_CORPUS co-occurrence | Baseline | None |
+
+`strategy="auto"` tries Tier 1, falls back to Tier 3 if sentence-transformers is not
+installed.  The bootstrapper **never raises an exception** — worst case is Tier 3.
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `python/core/language/semantic_bootstrap.py` | `SemanticBootstrapper` — tier controller |
+| `python/core/language/cognitive_vocabulary.py` | 500+ word curated vocabulary |
+| `python/core/language/distributional_semantics.py` | `build_default(strategy=)`, `build_semantic()` |
+
+### Measured Improvements
+
+| Metric | Before V18 | After V18 (bridge) |
+|--------|-----------|-------------------|
+| sim(brain, memory) | ~0.51 (random) | ~0.85 |
+| sim(king, queen) | ~0.50 (random) | ~0.81 |
+| SemanticMemory.query recall | ~random | semantically coherent |
+| spread_activation quality | ~random | semantically guided |
+
+### Usage
+
+```python
+from python.core.integration.config import NSCKConfig
+from python.core.substrate import NSCKSubstrate
+
+# Uses bootstrap automatically
+config = NSCKConfig.semantic()
+substrate = NSCKSubstrate(config)
+```
+
+Or standalone:
+
+```python
+from python.core.language.semantic_bootstrap import SemanticBootstrapper
+cb = SemanticBootstrapper.build_codebook(strategy="auto")
+sim = cb.similarity("brain", "memory")   # → semantically meaningful
+```

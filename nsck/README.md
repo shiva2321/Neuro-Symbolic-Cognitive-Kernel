@@ -724,6 +724,54 @@ See [docs/V4_CHANGELOG.md](docs/V4_CHANGELOG.md) and [docs/V4_RELEASE_REPORT.md]
 
 ---
 
+## V18 Features — Semantic HV Bootstrap
+
+V18 eliminates the root cause of semantically meaningless hypervectors by introducing
+`SemanticBootstrapper` — a tiered, zero-dependency fallback chain that builds a
+semantically meaningful `DistributionalCodebook`.
+
+### The Problem
+
+Prior to V18, all word concept HVs were seeded from `hash(word) % 2**32`, producing
+random 10,240-bit vectors with no semantic geometry:
+`sim("brain", "memory") ≈ 0.50` (random chance).
+
+### The Solution
+
+`SemanticBootstrapper.build_codebook(strategy="auto")` tries four tiers in order:
+
+| Tier | Strategy | Source | Deps |
+|------|----------|--------|------|
+| 0 | `prebuilt` | Pre-saved `.pkl` codebook | None |
+| 1 | `bridge` | sentence-transformers embeddings | sentence-transformers |
+| 2 | `hf_corpus` | HuggingFace dataset download | internet |
+| 3 | `corpus` | BUILTIN_CORPUS co-occurrence | None (always works) |
+
+### New Files
+
+- `python/core/language/semantic_bootstrap.py` — `SemanticBootstrapper`
+- `python/core/language/cognitive_vocabulary.py` — 500+ word curated vocabulary
+
+### Usage
+
+```python
+from python.core.integration.config import NSCKConfig
+from python.core.substrate import NSCKSubstrate
+
+config = NSCKConfig.semantic()  # enables bootstrap automatically
+substrate = NSCKSubstrate(config)
+```
+
+Or standalone:
+
+```python
+from python.core.language.semantic_bootstrap import SemanticBootstrapper
+cb = SemanticBootstrapper.build_codebook(strategy="auto")
+sim = cb.similarity("brain", "memory")   # → semantically meaningful
+```
+
+---
+
 ## V16 Features — Security, EWC, Eval Suite & Seeding
 
 V16 delivers four focused initiatives, all backward-compatible with V15.

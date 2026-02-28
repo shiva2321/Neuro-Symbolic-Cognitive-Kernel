@@ -266,7 +266,12 @@ class DistributionalCodebook:
             return 0.0
 
     @classmethod
-    def build_default(cls, window_size: int = 3, enable_hf_corpus: bool = False) -> "DistributionalCodebook":
+    def build_default(
+        cls,
+        window_size: int = 3,
+        enable_hf_corpus: bool = False,
+        strategy: str = "auto",
+    ) -> "DistributionalCodebook":
         """Build a codebook pre-trained on the built-in corpus (and optionally HuggingFace data).
 
         Parameters
@@ -275,7 +280,19 @@ class DistributionalCodebook:
         enable_hf_corpus: when True, attempt to download a slice of
                           ``fka/awesome-chatgpt-prompts`` to augment the
                           built-in sentences.  Falls back silently.
+        strategy        : ``"auto"`` | ``"bridge"`` | ``"corpus"`` | ``"prebuilt"``.
+                          When not ``"corpus"``, SemanticBootstrapper is attempted
+                          first; falls back to corpus co-occurrence on failure.
         """
+        # V18: try SemanticBootstrapper when strategy is not explicitly "corpus"
+        if strategy != "corpus":
+            try:
+                from python.core.language.semantic_bootstrap import SemanticBootstrapper
+                return SemanticBootstrapper.build_codebook(strategy=strategy)
+            except Exception as exc:
+                logger.info("[DistribCodebook] SemanticBootstrapper failed (%s); "
+                            "falling back to corpus", exc)
+
         cb = cls(window_size=window_size, pretrain=False)
         if enable_hf_corpus:
             try:
@@ -294,6 +311,11 @@ class DistributionalCodebook:
             corpus = BUILTIN_CORPUS
         cb.build_from_corpus(corpus)
         return cb
+
+    @classmethod
+    def build_semantic(cls) -> "DistributionalCodebook":
+        """Convenient alias: build with ``strategy="bridge"`` (Tier 1 → Tier 3 fallback)."""
+        return cls.build_default(strategy="bridge")
 
     def encode_sentence(self, tokens: List[str]) -> HyperVector:
         """Encode a sentence as a HyperVector using sliding-window positional encoding.

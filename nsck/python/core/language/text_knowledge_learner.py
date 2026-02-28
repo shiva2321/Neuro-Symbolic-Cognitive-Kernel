@@ -181,9 +181,12 @@ class TextKnowledgeLearner:
                 try:
                     from python.core.language.distributional_semantics import DistributionalCodebook
                     use_hf = getattr(config, 'enable_hf_corpus', False)
+                    bootstrap_strategy = getattr(config, 'semantic_bootstrap_strategy', 'auto')
                     # build_default pre-trains on BUILTIN_CORPUS (+HF when enabled)
+                    # V18: strategy="auto" activates SemanticBootstrapper chain
                     self._distrib_codebook = DistributionalCodebook.build_default(
-                        enable_hf_corpus=use_hf
+                        strategy=bootstrap_strategy,
+                        enable_hf_corpus=use_hf,
                     )
                 except Exception as e:
                     print(f"[TextLearner] Distributional semantics unavailable: {e}")
@@ -351,8 +354,13 @@ class TextKnowledgeLearner:
         # Store concepts in semantic memory
         for concept in concepts:
             if concept not in self.semantic.concept_hvs:
-                # Create hypervector for concept
-                concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
+                # Use distributional HV when available — gives better semantic
+                # similarity than a raw hash (words in similar contexts cluster)
+                concept_hv = None
+                if self._distrib_codebook is not None:
+                    concept_hv = self._distrib_codebook.get_hv(concept.lower())
+                if concept_hv is None:
+                    concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))
                 
                 # Add to semantic memory
                 self.semantic.add_concept(
