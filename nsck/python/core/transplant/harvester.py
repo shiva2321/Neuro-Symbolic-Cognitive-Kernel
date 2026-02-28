@@ -117,7 +117,29 @@ class ModelHarvester:
         return self._build_result(emb, model, model_type)
 
     def _harvest_vision(self, model: Any) -> HarvestResult:
-        # Find the first conv-like or patch-embed layer
+        # Strategy 1: Try classifier head first (gives class-level embeddings)
+        for clf_attr in ("classifier", "fc", "head", "heads"):
+            clf = getattr(model, clf_attr, None)
+            if clf is None:
+                continue
+            # Walk into Sequential classifiers (e.g. MobileNetV2 classifier=[Dropout, Linear])
+            if hasattr(clf, '__iter__'):
+                for sub in clf:
+                    try:
+                        w = self._get_weight(sub)
+                        if w.ndim == 2 and w.shape[0] > 1:
+                            return self._build_result(w, model, "vision_classifier")
+                    except (AttributeError, Exception):
+                        continue
+            else:
+                try:
+                    w = self._get_weight(clf)
+                    if w.ndim == 2 and w.shape[0] > 1:
+                        return self._build_result(w, model, "vision_classifier")
+                except (AttributeError, Exception):
+                    pass
+
+        # Strategy 2: Find patch_embed or first conv layer (original approach)
         for attr in self._VISION_ATTRS:
             layer = getattr(model, attr, None)
             if layer is None:
@@ -130,8 +152,40 @@ class ModelHarvester:
                 w2d = w.reshape(w.shape[0], -1)
                 return self._build_result(w2d, model, "transformer_vision")
             except Exception:  # noqa: BLE001
-                continue
-        raise AttributeError("No usable vision layer found")
+                pass
+            # Walk into Sequential/ModuleList to find largest weight matrix
+            best_w = None
+            best_n = 0
+            for child in self._recursive_modules(layer):
+                try:
+                    w = self._get_weight(child)
+                    n = w.size
+                    if n > best_n:
+                        best_w = w
+                        best_n = n
+                except (AttributeError, Exception):
+                    continue
+            if best_w is not None:
+                w2d = best_w.reshape(best_w.shape[0], -1)
+                return self._build_result(w2d, model, "transformer_vision")
+
+        # Strategy 3: Fallback to named_params scan
+        return self._harvest_named_params(model, model_type="vision_fallback")
+
+    @staticmethod
+    def _recursive_modules(container: Any, depth: int = 0) -> list:
+        """Walk into Sequential/ModuleList and yield leaf modules."""
+        if depth > 5:  # prevent infinite recursion
+            return []
+        results = []
+        children = list(getattr(container, "children", lambda: [])())
+        if not children:
+            # Leaf module
+            results.append(container)
+        else:
+            for child in children:
+                results.extend(ModelHarvester._recursive_modules(child, depth + 1))
+        return results
 
     def _harvest_encoder_decoder(self, model: Any) -> HarvestResult:
         encoder = model.encoder

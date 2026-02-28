@@ -107,7 +107,8 @@ class DialogueManager:
                 if target != "something":
                     response += f" This relates to {target}."
         else:
-            response = "I didn't quite follow that — could you rephrase?"
+            # --- NLU intent fallback: use VSANLUEngine if available ---
+            response = self._nlu_intent_fallback(user_input, structured)
         
         # 5. Add response to context
         self.context_window.append(("agent", response))
@@ -326,14 +327,56 @@ class DialogueManager:
         r"(?:explain|describe|tell\s+me\s+about|how\s+does)\s+(.+?)[\?\.]?\s*$",
         re.IGNORECASE,
     )
+    _GREETING_PAT = re.compile(
+        r"^\s*(?:hello|hi|hey|greetings|good\s+(?:morning|afternoon|evening)|howdy)",
+        re.IGNORECASE,
+    )
+    _FAREWELL_PAT = re.compile(
+        r"^\s*(?:goodbye|bye|farewell|see\s+you|take\s+care|good\s*night)",
+        re.IGNORECASE,
+    )
+    _KNOWLEDGE_PAT = re.compile(
+        r"(?:what\s+do\s+you\s+know\s+about|tell\s+me\s+(?:something\s+)?(?:about|regarding))\s+(.+?)[\?\.]?\s*$",
+        re.IGNORECASE,
+    )
+    _RECALL_PAT = re.compile(
+        r"(?:can\s+you\s+remember|do\s+you\s+recall|what\s+(?:did\s+i|have\s+i)\s+(?:just\s+)?(?:say|ask|tell|mention))",
+        re.IGNORECASE,
+    )
+    _INTERESTING_PAT = re.compile(
+        r"(?:tell\s+me\s+something\s+interesting|share\s+(?:something|a\s+fact))",
+        re.IGNORECASE,
+    )
 
     def _try_causal_patterns(self, user_input: str) -> str:
         """
         Return a meaningful response if user_input matches a known causal /
-        factual query pattern.  Returns empty string if no match so the
-        calling code can fall through to normal VSA routing.
+        factual / conversational query pattern.  Returns empty string if no
+        match so the calling code can fall through to normal VSA routing.
         """
         txt = user_input.strip()
+
+        # --- Greeting ---
+        if self._GREETING_PAT.search(txt):
+            return self._handle_greeting(txt)
+
+        # --- Farewell ---
+        if self._FAREWELL_PAT.search(txt):
+            return self._handle_farewell()
+
+        # --- Recall / memory ---
+        if self._RECALL_PAT.search(txt):
+            return self._handle_recall()
+
+        # --- "Tell me something interesting" ---
+        if self._INTERESTING_PAT.search(txt):
+            return self._handle_interesting()
+
+        # --- "What do you know about X?" / "Tell me about X" ---
+        m = self._KNOWLEDGE_PAT.search(txt)
+        if m:
+            topic = m.group(1).strip()
+            return self._answer_what_is(topic)
 
         # --- 1. "What causes X?" ---
         m = self._CAUSAL_CAUSE_PAT.search(txt)
@@ -503,6 +546,123 @@ class DialogueManager:
             for s, r, o in facts[:5]
         ]
         return f"Here is what I know about {topic}: " + " ".join(sentences)
+
+    # ------------------------------------------------------------------
+    # Conversational handlers
+    # ------------------------------------------------------------------
+
+    def _handle_greeting(self, text: str) -> str:
+        """Respond to a greeting with self-identification."""
+        mem = self._sem_mem()
+        n_concepts = 0
+        if mem is not None:
+            n_concepts = mem.concept_graph.number_of_nodes()
+
+        parts = ["Hello! I am NSCK — a neuro-symbolic cognitive kernel."]
+        if n_concepts > 0:
+            parts.append(f"I currently have {n_concepts:,} concepts in my semantic memory.")
+        parts.append("Ask me about anything I've learned, or try 'What is X?' to query my knowledge.")
+        return " ".join(parts)
+
+    def _handle_farewell(self) -> str:
+        """Respond to a farewell."""
+        n_turns = len(self.context_window)
+        if n_turns > 2:
+            return f"Goodbye! We covered {n_turns} exchanges in this session. Until next time."
+        return "Goodbye! Feel free to return anytime."
+
+    def _handle_recall(self) -> str:
+        """Recall the last few exchanges from the context window."""
+        if len(self.context_window) < 2:
+            return "We haven't talked much yet — I have no previous exchanges to recall."
+
+        recent = list(self.context_window)[-4:]  # last 4 turns
+        lines = []
+        for sender, msg in recent:
+            prefix = "You said" if sender == "user" else "I replied"
+            # Truncate long messages
+            display = msg[:80] + ("..." if len(msg) > 80 else "")
+            lines.append(f'{prefix}: "{display}"')
+        return "Here is what I remember from our recent conversation:\n" + "\n".join(lines)
+
+    def _handle_interesting(self) -> str:
+        """Share a random fact from semantic memory."""
+        mem = self._sem_mem()
+        if mem is None:
+            return "I don't have any knowledge to share yet — try teaching me something first."
+
+        import random
+        g = mem.concept_graph
+        edges = list(g.edges(data=True))
+        if not edges:
+            return "My knowledge graph is empty — I haven't learned any relationships yet."
+
+        # Pick a random edge as a fact
+        sample = random.sample(edges, min(3, len(edges)))
+        facts = []
+        for src, tgt, data in sample:
+            rel = data.get("relation", "relates to").replace("_", " ")
+            facts.append(f"{str(src).capitalize()} {rel} {str(tgt)}.")
+
+        if self._fluent is not None:
+            frame_list = [
+                {"subject": str(s), "relation": data.get("relation", "relates to"), "object": str(t)}
+                for s, t, data in sample
+            ]
+            return self._fluent.respond(frame_list, topic="interesting facts", max_sentences=3)
+
+        return "Here's something interesting: " + " ".join(facts)
+
+    def _nlu_intent_fallback(self, user_input: str, structured: dict) -> str:
+        """Last-resort intent classification using VSANLUEngine.
+
+        Called when both regex patterns AND the VSA parser return 'unknown'.
+        Uses the separate intent classifier (question/greeting/sentiment/etc.)
+        to route to the correct handler.
+        """
+        # Try to get the VSA NLU engine from the language module
+        nlu = None
+        if hasattr(self.language, '_vsa_nlu'):
+            nlu = self.language._vsa_nlu
+        elif hasattr(self.language, '_nlu'):
+            nlu = self.language._nlu
+        elif hasattr(self.language, 'nlu'):
+            nlu = self.language.nlu
+
+        if nlu is not None and hasattr(nlu, 'classify'):
+            intent_label, confidence = nlu.classify(user_input)
+
+            if confidence > 0.3:
+                if intent_label == "greeting":
+                    return self._handle_greeting(user_input)
+
+                elif intent_label == "question":
+                    # Try to extract topic from the input
+                    entities = structured.get("entities", [])
+                    if entities:
+                        topic = entities[0]
+                        return self.retrieve_knowledge(topic)
+                    # Fallback: try to find a noun in the input
+                    words = user_input.lower().split()
+                    for w in reversed(words):
+                        clean = "".join(c for c in w if c.isalnum())
+                        if len(clean) >= 3 and clean not in {"what", "how", "why", "who", "when", "where",
+                                                               "the", "are", "you", "can", "does", "did"}:
+                            return self.retrieve_knowledge(clean)
+                    return "That's an interesting question — could you be more specific about the topic?"
+
+                elif intent_label == "sentiment":
+                    return "Thank you for sharing that! Is there something specific you'd like to explore?"
+
+                elif intent_label == "command":
+                    return self.handle_command(structured, None)
+
+                elif intent_label == "negation":
+                    return "I understand. Let me know if there's something I should correct or reconsider."
+
+        # True fallback
+        return "I didn't quite follow that — could you rephrase, or try asking 'What is X?'"\
+
 
     def get_context_hv(self):
         """Return the current dialogue history HyperVector."""

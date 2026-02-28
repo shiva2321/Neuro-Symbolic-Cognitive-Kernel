@@ -112,8 +112,8 @@ class LearnedProjector(BaseProjector):
         dim_in: int,
         hv_dim: int = 10240,
         seed: int = 42,
-        n_pairs: int = 1000,
-        n_epochs: int = 5,
+        n_pairs: int = 5000,
+        n_epochs: int = 20,
         lr: float = 0.01,
     ) -> None:
         rng = np.random.default_rng(seed)
@@ -129,12 +129,25 @@ class LearnedProjector(BaseProjector):
 
     def fit(self, embeddings: np.ndarray) -> None:
         """Train projection matrix on *embeddings*."""
+        import sys as _sys
         rng = np.random.default_rng(self._seed + 1)
         N = len(embeddings)
         if N < 2:
             return
 
-        for _ in range(self._n_epochs):
+        # Auto-reduce epochs for large vocabularies to keep runtime reasonable
+        effective_epochs = self._n_epochs
+        if N > 5000:
+            effective_epochs = min(self._n_epochs, 10)
+
+        _sys.stdout.write(f"  [LearnedProjector] Training: {N} embeddings, "
+                          f"{effective_epochs} epochs, {self._n_pairs} pairs/epoch\n")
+        _sys.stdout.flush()
+
+        import time as _time
+        t_start = _time.perf_counter()
+
+        for epoch in range(effective_epochs):
             # Sample n_pairs random pairs
             idx_a = rng.integers(0, N, size=self._n_pairs)
             idx_b = rng.integers(0, N, size=self._n_pairs)
@@ -159,6 +172,7 @@ class LearnedProjector(BaseProjector):
 
             # Loss gradient: dL/d(sim_pred) = 2*(sim_pred - sim_target)
             err = (sim_pred - sim_target).astype(np.float32)  # (n_pairs,)
+            mse = float(np.mean(err ** 2))
 
             # Gradient of cosine similarity w.r.t. Z_a
             # d(z_a·z_b / |z_a||z_b|) / dZ_a ≈ (Z_b - sim*Z_a) / (|z_a||z_b|)
@@ -169,7 +183,21 @@ class LearnedProjector(BaseProjector):
 
             # Chain to P: dL/dP += E_a^T @ dL_dZa
             grad_P = E_a.T @ dL_dZa / self._n_pairs  # (dim_in, hv_dim)
+            # Gradient norm clipping for stability on large vocabularies
+            grad_norm = np.linalg.norm(grad_P)
+            if grad_norm > 1.0:
+                grad_P = grad_P / grad_norm
             self._P -= self._lr * grad_P
+
+            elapsed = _time.perf_counter() - t_start
+            _sys.stdout.write(f"    Epoch {epoch + 1}/{effective_epochs}  "
+                              f"MSE={mse:.2e}  |∇|={grad_norm:.2e}  "
+                              f"({elapsed:.1f}s elapsed)\n")
+            _sys.stdout.flush()
+
+        total = _time.perf_counter() - t_start
+        _sys.stdout.write(f"  [LearnedProjector] Training complete ({total:.1f}s)\n")
+        _sys.stdout.flush()
 
     def project(
         self, embeddings: np.ndarray, vocab_mapping: Dict[str, int]
