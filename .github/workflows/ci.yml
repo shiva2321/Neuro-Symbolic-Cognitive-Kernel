@@ -44,18 +44,17 @@ jobs:
           pip install -r nsck/requirements-core.txt
           pip install "maturin>=1.4"
 
-      - name: Remove repo .venv to avoid maturin interpreter conflict
-        run: rm -rf .venv
-
       - name: Build hypervec_rs (VSA Rust backend)
         run: |
           cd nsck/rust_vsa
-          maturin develop --release
+          maturin build --release
+          pip install target/wheels/*.whl --force-reinstall
 
       - name: Build snn_rs (SNN Rust backend)
         run: |
           cd nsck/rust_snn
-          maturin develop --release
+          maturin build --release
+          pip install target/wheels/*.whl --force-reinstall
 
       - name: Verify Rust backends
         working-directory: nsck
