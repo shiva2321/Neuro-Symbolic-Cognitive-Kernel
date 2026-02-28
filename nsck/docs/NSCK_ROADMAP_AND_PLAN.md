@@ -330,3 +330,37 @@ speed-up.
 
 *This document is maintained alongside the codebase. Update it whenever a new
 version is tagged.*
+
+---
+
+## V17 — Enrichment Layer & Glass-Box Tracing (April 2026)
+
+**Status**: ✅ Complete
+
+### Deliverables
+
+| Module | Status |
+|--------|--------|
+| `CausalEnricher` | ✅ Implemented |
+| `PerceptualEnricher` | ✅ Implemented |
+| `SemanticEnricher` | ✅ Implemented |
+| `GlassBoxTracer` | ✅ Implemented |
+| `CrossModalEnricher` | ✅ Implemented |
+| V17 config flags + `NSCKConfig.v17()` | ✅ Implemented |
+| 56 new tests (unit + integration + benchmark) | ✅ All passing |
+| Capability benchmark (`vsa_capability_benchmark.py`) | ✅ Implemented |
+
+### Key Metrics
+
+- New modules: 5
+- New config flags: 10
+- New tests: 56
+- All tests pass: 1,478 total (V17 baseline)
+- Zero breaking changes from V16
+
+### Design Principles
+
+1. **Enrichment as post-processing**: All enrichers are optional decorators
+   around existing modules — no changes to existing APIs.
+2. **No neural dependencies**: All V17 enrichment is pure Python/numpy.
+3. **Glass-box by default**: The tracer is zero-cost when disabled (`enabled=False`).

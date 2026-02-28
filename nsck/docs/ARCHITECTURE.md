@@ -591,3 +591,35 @@ confidence_threshold: float = 0.6
 ---
 
 *Document generated for NSCK V13, February 2026.*
+
+---
+
+## V17 — Enrichment Layer & Glass-Box Tracing
+
+V17 adds an **Enrichment Layer** that sits between adapters/memory and the GWT
+broadcast stage, plus a **GlassBoxTracer** for full decision observability.
+
+### Enrichment Layer
+
+```
+PerceptPacket → PerceptualEnricher → EnrichedPercept → GWT
+CausalTriple  → CausalEnricher    → CausalTrace     → Reasoning
+Concept/Rel   → SemanticEnricher  → EnrichmentReport → SemanticMemory
+ModalConcept  → CrossModalEnricher→ CMAnchor         → CrossModalMemory
+```
+
+| Module | Location | Purpose |
+|--------|----------|---------|
+| `CausalEnricher` | `reasoning/causal_enricher.py` | Enrich causal chains |
+| `PerceptualEnricher` | `perception/perceptual_enricher.py` | Temporal ctx + confidence |
+| `SemanticEnricher` | `memory/semantic_enricher.py` | Inverse relations + coquery |
+| `CrossModalEnricher` | `memory/crossmodal_enricher.py` | Anchor linking + clusters |
+| `GlassBoxTracer` | `cognitive/glass_box_tracer.py` | Step-by-step decision trace |
+
+### GlassBoxTracer
+
+Every module can call `tracer.record(module, message, confidence)` inside a
+`tracer.span(name)` context to append a `TraceEntry` to the active
+`DecisionTrace`. Completed traces are archived in a rolling history.
+
+*Document updated for NSCK V17, April 2026.*

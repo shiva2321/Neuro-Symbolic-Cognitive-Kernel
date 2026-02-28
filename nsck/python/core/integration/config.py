@@ -269,6 +269,29 @@ class NSCKConfig:
             cfg.enable_hnsw_index = True
         return cfg
 
+    # === V17 Feature Flags — Enrichment & Glass-Box Tracing ===
+    enable_causal_enrichment: bool = False
+    enable_perceptual_enrichment: bool = False
+    enable_semantic_enrichment: bool = False
+    enable_glass_box_tracer: bool = False
+    enable_crossmodal_enrichment: bool = False
+    glass_box_max_history: int = 100
+    causal_enrichment_n_context: int = 3
+    perceptual_enricher_window: int = 8
+    semantic_enrichment_add_inverses: bool = True
+    crossmodal_similarity_threshold: float = 0.7
+
+    @classmethod
+    def v17(cls) -> "NSCKConfig":
+        """Preset enabling all V17 enrichment and glass-box capabilities."""
+        cfg = cls()
+        cfg.enable_causal_enrichment = True
+        cfg.enable_perceptual_enrichment = True
+        cfg.enable_semantic_enrichment = True
+        cfg.enable_glass_box_tracer = True
+        cfg.enable_crossmodal_enrichment = True
+        return cfg
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()
