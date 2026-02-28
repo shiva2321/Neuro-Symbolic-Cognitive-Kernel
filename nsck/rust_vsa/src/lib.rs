@@ -331,6 +331,106 @@ fn weber_fechner_compress(values: Vec<f64>) -> Vec<f64> {
         .collect()
 }
 
+/// Bundle (majority vote) a list of binary hypervectors stored as u8 bit arrays.
+///
+/// For each bit position, set the result bit to 1 iff more than half of the
+/// input vectors have a 1 at that position.
+/// Tie-breaking (even N): deterministic — bit position index % 2.
+///
+/// V4 fix: replaces OR-approximation with correct majority-vote semantics.
+/// bundle([A, A, A, B]) should be closer to A than to B.
+#[pyfunction]
+fn bundle_hvs(vectors: Vec<Vec<u8>>) -> Vec<u8> {
+    if vectors.is_empty() {
+        return vec![];
+    }
+    let dim = vectors[0].len();
+    let n = vectors.len() as u32;
+    let mut counts: Vec<u32> = vec![0u32; dim];
+    for v in &vectors {
+        for (i, &bit) in v.iter().enumerate() {
+            if i < counts.len() {
+                counts[i] += bit as u32;
+            }
+        }
+    }
+    let threshold = n / 2;
+    counts.iter().enumerate().map(|(i, &c)| {
+        if c > threshold { 1u8 }
+        else if c == threshold { (i % 2) as u8 }  // deterministic tie-break
+        else { 0u8 }
+    }).collect()
+}
+
+/// Compute an LSH bucket key for a binary HyperVector (stored as u64 blocks).
+///
+/// Uses ChaCha8-seeded random projections to map the high-dimensional binary
+/// vector into an n_bits-wide integer bucket key — O(n_bits·D/64) per call.
+/// The same seed always produces the same projections, ensuring consistent
+/// bucket assignment across calls.
+#[pyfunction]
+fn lsh_bucket(bits: Vec<u64>, n_bits: u32, seed: u64) -> u32 {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let num_u64 = bits.len();
+    if num_u64 == 0 || n_bits == 0 {
+        return 0;
+    }
+    let mut key: u32 = 0;
+    for bit_idx in 0..n_bits.min(32) {
+        // Generate a random projection vector (as u64 blocks)
+        let mut proj: Vec<u64> = (0..num_u64).map(|_| rng.gen::<u64>()).collect();
+        // Compute XOR popcount (Hamming distance to projection)
+        let mut hamming: u32 = 0;
+        for (a, b) in bits.iter().zip(proj.iter()) {
+            hamming += (a ^ b).count_ones();
+        }
+        // If similarity > 0.5 → set this bit to 1
+        let total_bits = (num_u64 * 64) as u32;
+        if hamming < total_bits / 2 {
+            key |= 1 << bit_idx;
+        }
+    }
+    key
+}
+
+/// Perform one step of spreading activation over a weighted graph.
+///
+/// Takes the current activation map (node_name → activation) and a list of
+/// directed weighted edges (from, to, weight), applies one step of the
+/// update rule:
+///   new_activation[to] += activation[from] * weight * decay
+/// and merges the result with the existing activations (max merge).
+///
+/// Returns the updated activation map.
+#[pyfunction]
+fn spreading_activation_step(
+    activations: std::collections::HashMap<String, f64>,
+    edges: Vec<(String, String, f64)>,
+    decay: f64,
+    max_frontier: usize,
+) -> std::collections::HashMap<String, f64> {
+    let mut new_acts = activations.clone();
+    for (from, to, weight) in &edges {
+        if let Some(&from_act) = activations.get(from.as_str()) {
+            if from_act > 0.0 {
+                let propagated = from_act * weight * decay;
+                let entry = new_acts.entry(to.clone()).or_insert(0.0);
+                if propagated > *entry {
+                    *entry = propagated;
+                }
+            }
+        }
+    }
+    // Trim to max_frontier by keeping top activations
+    if max_frontier > 0 && new_acts.len() > max_frontier {
+        let mut sorted: Vec<(String, f64)> = new_acts.into_iter().collect();
+        sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        sorted.truncate(max_frontier);
+        return sorted.into_iter().collect();
+    }
+    new_acts
+}
+
 #[pymodule]
 fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     // Core HyperVector class
@@ -339,6 +439,10 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     // Free functions
     m.add_function(wrap_pyfunction!(batch_similarity_matrix, m)?)?;
     m.add_function(wrap_pyfunction!(weber_fechner_compress, m)?)?;
+    // V4: new Rust hot-path functions
+    m.add_function(wrap_pyfunction!(bundle_hvs, m)?)?;
+    m.add_function(wrap_pyfunction!(lsh_bucket, m)?)?;
+    m.add_function(wrap_pyfunction!(spreading_activation_step, m)?)?;
     
     // Concurrent operations
     concurrent::register_concurrent_module(m)?;
@@ -433,6 +537,36 @@ mod tests {
         let hvs = vec![hv_from_seed(42), hv_from_seed(42)];
         let matrix = batch_similarity_matrix_impl(&hvs);
         assert_eq!(matrix[0 * 2 + 1], 1.0, "Identical HVs should have sim 1.0");
+    }
+
+    #[test]
+    fn test_bundle_hvs_majority_vote() {
+        // 3×A + 1×B → majority vote should match A on all bits
+        let a = vec![1u8, 1, 0, 1, 0];
+        let b = vec![0u8, 0, 1, 0, 1];
+        let result = bundle_hvs(vec![a.clone(), a.clone(), a.clone(), b]);
+        assert_eq!(result, a, "bundle([A,A,A,B]) should equal A (majority vote)");
+    }
+
+    #[test]
+    fn test_bundle_hvs_empty() {
+        let result = bundle_hvs(vec![]);
+        assert!(result.is_empty(), "Empty bundle should return empty vec");
+    }
+
+    #[test]
+    fn test_bundle_hvs_single() {
+        let a = vec![1u8, 0, 1, 0, 1];
+        let result = bundle_hvs(vec![a.clone()]);
+        assert_eq!(result, a, "Single-vector bundle should equal the vector");
+    }
+
+    #[test]
+    fn test_lsh_bucket_deterministic() {
+        let bits: Vec<u64> = (0..160).map(|i| i as u64 * 0x9E3779B97F4A7C15).collect();
+        let k1 = lsh_bucket(bits.clone(), 16, 0xDEAD);
+        let k2 = lsh_bucket(bits.clone(), 16, 0xDEAD);
+        assert_eq!(k1, k2, "LSH bucket should be deterministic");
     }
 
     // Internal implementations for testing (avoid PyO3 dependency in tests)

@@ -7,12 +7,12 @@ from python.core.bootstrap.knowledge_seeder import KnowledgeSeeder
 
 NAVIGATION_YAML = os.path.join(
     os.path.dirname(__file__),
-    "../../../../python/core/bootstrap/domain_kits/navigation.yaml"
+    "../../../python/core/bootstrap/domain_kits/navigation.yaml"
 )
 
 SCHEDULING_YAML = os.path.join(
     os.path.dirname(__file__),
-    "../../../../python/core/bootstrap/domain_kits/scheduling.yaml"
+    "../../../python/core/bootstrap/domain_kits/scheduling.yaml"
 )
 
 
