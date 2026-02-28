@@ -4,8 +4,8 @@
 Bachelor of Computer Science, University of Prince Edward Island
 Charlottetown, Prince Edward Island, Canada
 
-*Developed iteratively with AI coding-agent assistance over 2.5 years of research, exploration, and implementation.*
-*Open-source — February 2026*
+*NSCK Technical Report Series · Paper 1 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -15,11 +15,11 @@ We present **NSCK** (Neuro-Symbolic Cognitive Kernel), a CPU-native cognitive ar
 
 The kernel integrates eight layers: a VSA foundation, a Leaky-Integrate-and-Fire (LIF) spiking neural network (SNN) perception layer with STDP learning, two-tier episodic and semantic memory, a Global Workspace Theory (GWT)-based executive, causal discovery via Δ-P statistics, a STRIPS planner with learned operators, and a glass-box explanation generator. A dual Rust/PyO3 extension achieves 3–54× speedup over the Python baseline on individual VSA operations, with aggregate throughput exceeding 1.5 million operations per second.
 
-Evaluation on x86-64 with Rust backend shows over 4 million VSA operations per second (4,109,142 bind), sub-millisecond decision latency (p50: 0.126 ms), 2.37 ms SNN perception pipeline, 1.25 ms/sentence NLU throughput, and **1,424 passing tests** (7 skipped, 4 xfailed) as of V13 (February 2026). Honest limitations are documented: open-domain NLU coverage reaches approximately 40–60%; the SNN→predicate bridge now supports VSA cleanup-memory-based concept naming but full sensor-to-predicate grounding from raw pixels remains an open engineering item. The Rust advantage is concentrated on VSA bitwise operations (5× for bind, 30× for similarity, 65× for bundle); for SNN simulation, numpy vectorized operations are competitive with Rust+PyO3 at small neuron counts.
+Evaluation on x86-64 with Rust backend shows over 4 million VSA operations per second (4,109,142 bind), sub-millisecond decision latency (p50: 0.126 ms), 2.37 ms SNN perception pipeline, 1.25 ms/sentence NLU throughput, and **1,669 passing tests** (5 skipped, 4 xfailed) as of V13 (February 2026). Honest limitations are documented: open-domain NLU coverage reaches approximately 40–60%; the SNN→predicate bridge now supports VSA cleanup-memory-based concept naming but full sensor-to-predicate grounding from raw pixels remains an open engineering item. The Rust advantage is concentrated on VSA bitwise operations (5× for bind, 30× for similarity, 65× for bundle); for SNN simulation, numpy vectorized operations are competitive with Rust+PyO3 at small neuron counts.
 
 V8 adds nine new capabilities: concurrent multimodal fusion with coherence windowing; Ebbinghaus memory lifecycle (decay + prune + reconsolidation); multi-turn dialogue state tracking via rolling history hypervectors; MathReasoner wired into the GWT coalition loop; 2-level hierarchical resonator networks for nested semantic role labelling; multi-agent cognitive fusion via `MultiAgentSession`; an NSCK-Eval benchmark suite (bAbI, math word problems, cross-domain transfer, NLG quality, dialogue coherence); and an active inference full loop (`ActiveInferenceLearner`) that biases coalition salience via free-energy minimisation.
 
-V9–V13 extends the kernel further: a universal PerceptPacket contract with 10 modality adapters (text, dict, numeric, image, audio, video, etc.), FHRR complex-phasor VSA mode, NgramNLU (151K sentences/s), a FastAPI REST interface, conformal prediction for calibrated uncertainty bounds, procedural memory for cached skill fast-paths, cross-modal associative memory, concept drift detection, and KLE uncertainty quantification in the Global Workspace. The test suite now reaches 1,437 collected tests (1,424 passing, 4 xfailed) as of V13 (February 2026).
+V9–V13 extends the kernel further: a universal PerceptPacket contract with 10 modality adapters (text, dict, numeric, image, audio, video, etc.), FHRR complex-phasor VSA mode, NgramNLU (151K sentences/s), a FastAPI REST interface, conformal prediction for calibrated uncertainty bounds, procedural memory for cached skill fast-paths, cross-modal associative memory, concept drift detection, and KLE uncertainty quantification in the Global Workspace. The test suite now reaches 1,669 passing tests, 5 skipped, 4 xfailed as of V13 (February 2026).
 
 We release the full codebase (94 core Python modules (232 classes, ~36K LOC) and Rust source files (~4.3K LOC) across 2 crates), all benchmarks, and documentation under open license.
 
@@ -55,7 +55,7 @@ The implementation was done with substantial assistance from AI coding agents. T
 
 ### 1.3 Contributions
 
-1. A complete, open-source implementation of a unified neuro-symbolic cognitive architecture with 94 core modules (232 classes), two Rust extension crates, and 84 test files (1,424 passing, 7 skipped, 4 xfailed — V13, February 2026).
+1. A complete, open-source implementation of a unified neuro-symbolic cognitive architecture with 94 core modules (232 classes), two Rust extension crates, and 84 test files (1,669 passing, 5 skipped, 4 xfailed — V13, February 2026).
 2. A principled integration of Binary VSA with GWT, LIF-SNN, Δ-P causal inference, STRIPS planning, and Plutchik emotion within a single 10,240-bit representational space.
 3. A glass-box 11-stage decision trace (ThoughtTrace) that makes every cognitive step auditable at runtime — not post-hoc rationalisation.
 4. Empirical benchmarks across 11 real-world scenarios plus an NSCK-Eval suite (bAbI QA, math word problems, cross-domain transfer, NLG quality, dialogue coherence), reported with full honesty including failures.
@@ -413,7 +413,7 @@ Distributional similarity (after pre-training on 200-sentence built-in corpus):
 
 ### 5.5 V8–V13 Capability Results (February 2026)
 
-*Test suite: **1,424 passed**, 7 skipped, 4 xfailed — with Rust extensions active (V13).*
+*Test suite: **1,669 passed**, 5 skipped, 4 xfailed — with Rust extensions active (V13).*
 
 **Memory lifecycle:** `decay_concepts(λ=0.01)` and `prune_below(threshold=0.1)` verified. Access metadata (`access_count`, `last_accessed`, `importance_score`) correctly updated on every concept retrieval. Episodic reconsolidation (HV blending on recall when Hamming distance > 15%) confirmed in 20 unit tests.
 
@@ -543,13 +543,19 @@ To our knowledge, no prior published system simultaneously integrates BSC-VSA, L
 
 ## 10. Conclusion
 
-We have presented NSCK, a neuro-symbolic cognitive architecture built around a 10,240-bit binary VSA substrate, integrating spiking neural network perception, Global Workspace Theory-based executive control, Δ-P causal discovery, STRIPS planning, Plutchik emotion modelling, and glass-box explanation generation. V8 (February 2026) extends the system with 9 new capabilities: concurrent multimodal scheduling, Ebbinghaus memory lifecycle, multi-turn dialogue state tracking, MathReasoner–GWT integration, 2-level hierarchical resonator networks, multi-agent cognitive fusion, an active inference free-energy loop, and a formal NSCK-Eval benchmark suite. V9–V13 adds universal perceptual input (PerceptPacket with 10 modality adapters), FHRR complex-phasor VSA, NgramNLU, a FastAPI REST interface, conformal prediction, procedural memory, cross-modal associative memory, concept drift detection, and KLE uncertainty quantification. The full test suite reaches **1,424 passing tests** with Rust extensions active as of V13.
+We have presented NSCK, a neuro-symbolic cognitive architecture built around a 10,240-bit binary VSA substrate, integrating spiking neural network perception, Global Workspace Theory-based executive control, Δ-P causal discovery, STRIPS planning, Plutchik emotion modelling, and glass-box explanation generation. V8 (February 2026) extends the system with 9 new capabilities: concurrent multimodal scheduling, Ebbinghaus memory lifecycle, multi-turn dialogue state tracking, MathReasoner–GWT integration, 2-level hierarchical resonator networks, multi-agent cognitive fusion, an active inference free-energy loop, and a formal NSCK-Eval benchmark suite. V9–V13 adds universal perceptual input (PerceptPacket with 10 modality adapters), FHRR complex-phasor VSA, NgramNLU, a FastAPI REST interface, conformal prediction, procedural memory, cross-modal associative memory, concept drift detection, and KLE uncertainty quantification. The full test suite reaches **1,669 passing tests** with Rust extensions active as of V13.
 
 The system demonstrates that bitwise operations on binary hypervectors can serve as a unified representational substrate for perception, memory, reasoning, and language — without gradient descent, without matrix multiplication, and with every decision fully auditable.
 
 We are a single developer and lifelong student who wanted to explore an idea and make it into reality with an open mind. NSCK is not a finished product, nor a claim to have solved cognitive architecture. It is an honest attempt to build something coherent, well-tested, and fully open — to explore whether VSA can truly serve as the unifying language of a cognitive system.
 
 Code, benchmarks, and documentation: **https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel**
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

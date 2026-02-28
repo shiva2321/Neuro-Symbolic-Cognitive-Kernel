@@ -1,10 +1,10 @@
 # NSCK Research Papers
 
-This directory contains eight research papers derived from the NSCK (Neuro-Symbolic Cognitive Kernel) project. Each paper is independent and can be submitted separately.
+This directory contains eight research papers from the NSCK (Neuro-Symbolic Cognitive Kernel) project. Each paper is self-contained and may be read or cited independently.
 
-> **V4 Note (February 2026):** The current canonical release is **NSCK V4** — the consolidated version integrating all features from V3 through V18 development iterations. All benchmark numbers in the papers were produced with Rust backends active (`NSCK_USE_RUST=1`). To reproduce: `cd nsck && make bench-papers`.
+**Suggested reading order:** Papers 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
 
-**Current implementation status (Feb 2026): 1,669 tests passing (Rust backend active — hypervec\_rs + snn\_rs), 5 skipped, 4 xfailed. 94+ core modules, ~36K LOC Python, ~4.3K LOC Rust. All benchmark numbers measured on real hardware with the Rust backend.**
+**Current implementation status (February 2026):** 1,669 tests passing (Rust backend active — hypervec\_rs + snn\_rs), 5 skipped, 4 xfailed. 94+ core modules, ~36K LOC Python, ~4.3K LOC Rust.
 
 ## Papers
 
@@ -34,8 +34,6 @@ This directory contains eight research papers derived from the NSCK (Neuro-Symbo
 - **File:** `paper4_snn_bridge.md`
 - **Scope:** LIF SNN perception, STDP weight convergence, rate/temporal encoding, Rust-accelerated benchmarks
 - **Key Results:** 100% pattern accuracy @ 1.85 ms/call (Rust, 24× speedup), 90% noise robustness, STDP convergence step 50, sub-linear scaling 0.856→1.846 ms for 64→256 neurons
-- **Bug Fixed:** `TemporalCoder` `time_bins` kwarg removed (`snn_perception.py` L491)
-- **Errata (this PR):** The legacy `SNNPerceptionModule._apply_stdp()` method contained an O(snn_size × input_dim) nested Python loop. This was dead code in practice (Rust and `PythonSnnCore` fast paths are always preferred) but has been replaced with the vectorized outer-product implementation for correctness. Rust-accelerated results are unaffected.
 - **Target Venues:** Neural Networks, Neuromorphic Computing and Engineering, CogSci
 
 ### Paper 5 — Model Transplantation
@@ -50,7 +48,6 @@ This directory contains eight research papers derived from the NSCK (Neuro-Symbo
 - **File:** `paper6_active_inference.md`
 - **Scope:** FEP action selection, count-based exploration, LIDA competition, mental rehearsal veto
 - **Key Results:** World model PE → 0 in 10 updates, 30% exploration rate (60/200 steps), GWT winner at activation 1.350, 10/10 dangerous proposals vetoed
-- **Errata (this PR):** The `free_energy()` method previously returned near-constant ≈0.4 in the default no-CuriosityModule configuration. This was caused by `epistemic_value()` hardcoding `return 0.1` regardless of world model state. The fix (using world-model familiarity as an epistemic proxy) improves action differentiation from ~±0.02 salience bias to ~±0.04 for unseen vs. seen transitions. The paper's measured results (mean F = −0.510 with a configured CuriosityModule) remain valid.
 - **Target Venues:** Cognitive Science, Journal of Artificial Intelligence Research, Active Inference workshop
 
 ### Paper 7 — Memory Architecture
@@ -127,10 +124,10 @@ All papers are grounded in the actual NSCK implementation:
 
 ## Author Information
 
-**Shivam Prajapati**  
-Bachelor of Computer Science  
-University of Prince Edward Island  
-Charlottetown, PE, Canada
+**Shivam Prajapati**
+Bachelor of Computer Science
+University of Prince Edward Island
+Charlottetown, Prince Edward Island, Canada
 
 GitHub: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel
 

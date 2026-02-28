@@ -4,7 +4,8 @@
 Bachelor of Computer Science, University of Prince Edward Island
 Charlottetown, Prince Edward Island, Canada
 
-*Open-source implementation — February 2026*
+*NSCK Technical Report Series · Paper 3 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -368,6 +369,12 @@ The mechanism implements Gentner's Structure Mapping Theory using the mathematic
 The honest limitations are clear: dependence on structural isomorphism, sensitivity to threshold tuning, degradation with sparse source rules, and evaluation limited to toy domains. We present this as a demonstration that principled structural transfer is achievable within a lightweight, interpretable VSA framework — and invite the community to test these ideas at scale.
 
 Code and benchmarks: **https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel**
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

@@ -1,11 +1,11 @@
 # Model Transplantation: Absorbing Pretrained Neural Knowledge into Binary Hypervectors
 
-**Shivam Prajapati**  
-Bachelor of Computer Science  
-University of Prince Edward Island, Charlottetown, PE, Canada  
-GitHub: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel
+**Shivam Prajapati**
+Bachelor of Computer Science, University of Prince Edward Island
+Charlottetown, Prince Edward Island, Canada
 
-*Developed iteratively with AI coding-agent assistance.*
+*NSCK Technical Report Series · Paper 5 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -297,6 +297,12 @@ This composability is the primary value of transplantation. Dense embeddings fro
 ## 8. Conclusion
 
 We presented Model Transplantation for the NSCK architecture: a pipeline that projects dense pretrained embeddings into 10,240-bit binary hypervectors using random Gaussian projection followed by sign binarisation. Experiments confirmed Spearman $\rho > 0.995$, Recall@10 = 0.910–0.929, and cluster separation of 0.44 — sufficient for semantic nearest-neighbour query and VSA compositional operations. Round-trip fidelity is perfect (1.000) and projection is deterministic. Future work includes testing on real BERT/GPT embeddings, evaluating learned projections, and studying the interaction between transplanted codebooks and STDP-based SNN concept learning.
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

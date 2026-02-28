@@ -1,11 +1,11 @@
 # Transparent Cognitive Safety: Declarative Verification, Emotion Modulation, and Theory of Mind in a Neuro-Symbolic Architecture
 
-**Shivam Prajapati**  
-Bachelor of Computer Science  
-University of Prince Edward Island, Charlottetown, PE, Canada  
-GitHub: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel
+**Shivam Prajapati**
+Bachelor of Computer Science, University of Prince Edward Island
+Charlottetown, Prince Edward Island, Canada
 
-*Developed iteratively with AI coding-agent assistance.*
+*NSCK Technical Report Series · Paper 8 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -347,6 +347,12 @@ The ToM module correctly tracks that Alice (full observations) achieves 100% acc
 ## 8. Conclusion
 
 The NSCK safety layer provides three complementary mechanisms for safe cognitive decision-making: declarative rule verification (TPR = 1.00, FPR = 0.00), confidence-gated action release (hard threshold at 0.2), emotion-aware salience (8 orthogonal Plutchik HVs, 100% keyword accuracy, reward-driven dynamics), and first-order Theory of Mind (Sally-Anne test passed, multi-agent belief accuracy correctly tracked). End-to-end audit trails record full decision provenance from input text through emotion, safety, and action. Future work includes soft confidence gating, second-order ToM, adversarial safety testing, and emotion-weighted safety scores that modulate thresholds based on arousal level.
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

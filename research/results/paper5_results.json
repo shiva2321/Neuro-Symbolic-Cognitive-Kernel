@@ -78,15 +78,15 @@
     "projection_timing": [
       {
         "vocab_size": 100,
-        "projection_time_ms": 175.34672400006457
+        "projection_time_ms": 172.3275739998371
       },
       {
         "vocab_size": 500,
-        "projection_time_ms": 704.5433760001742
+        "projection_time_ms": 704.8199189998741
       },
       {
         "vocab_size": 1000,
-        "projection_time_ms": 1368.9349310000125
+        "projection_time_ms": 1395.8492360000037
       }
     ]
   }

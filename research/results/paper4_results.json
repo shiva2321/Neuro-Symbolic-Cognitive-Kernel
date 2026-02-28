@@ -5,7 +5,7 @@
   },
   "exp_4_1": {
     "accuracy": 1.0,
-    "avg_latency_ms": 1.8505366999761463,
+    "avg_latency_ms": 1.869028200030698,
     "n_concepts_learned": 10,
     "n_patterns": 10,
     "n_epochs": 10
@@ -38,7 +38,7 @@
     "stdp_weight_evolution": [
       {
         "step": 0,
-        "weight_norm": 642.3146583071922
+        "weight_norm": 641.8732415686223
       },
       {
         "step": 50,
@@ -62,15 +62,15 @@
     "snn_scaling": [
       {
         "snn_size": 64,
-        "avg_latency_ms": 0.85638434999737
+        "avg_latency_ms": 0.9310386100059986
       },
       {
         "snn_size": 128,
-        "avg_latency_ms": 1.208209810004064
+        "avg_latency_ms": 1.289542300003177
       },
       {
         "snn_size": 256,
-        "avg_latency_ms": 1.846078850005597
+        "avg_latency_ms": 1.950952660022267
       }
     ]
   },
@@ -88,17 +88,17 @@
   },
   "exp_4_6": {
     "spike_statistics": {
-      "mean_spike_count": 637.62,
-      "std_spike_count": 45.27047161229934,
-      "mean_active_neurons": 109.45,
-      "mean_processing_time_ms": 2.092979029998787,
+      "mean_spike_count": 631.82,
+      "std_spike_count": 43.03054264124495,
+      "mean_active_neurons": 108.57,
+      "mean_processing_time_ms": 2.578818389999924,
       "n_samples": 100
     }
   },
   "exp_4_7": {
     "backend_comparison": {
       "backend": "Rust",
-      "avg_latency_ms": 2.1369169500098906,
+      "avg_latency_ms": 3.237418419992082,
       "n_calls": 100,
       "speedup_vs_python": null,
       "note": "Only Rust backend available in this run"
