@@ -316,3 +316,56 @@ Served by `NSCKApiServer` (`nsck/python/core/api/nsck_api.py`).
     │                     ───► │  handle_status()          │
     │  ◄── system telemetry    │                           │
 ```
+
+---
+
+## Workflow 10 — Knowledge Bootstrapping (V4)
+
+```
+YAML Domain Kit
+    │
+    ▼
+KnowledgeSeeder.seed_from_yaml(yaml_path, engine)
+    │
+    ├── semantic_concepts → engine.semantic_memory.add_concept()
+    ├── causal_rules → engine.rule_learner.learned_rules[domain]
+    ├── causal_graph → engine.causal_graphs[domain].add_causes()
+    └── high-confidence rules → engine.procedural_memory.cache_skill()
+    │
+    ▼
+engine.seed_domain("navigation.yaml")
+    └── Returns: number of rules seeded
+```
+
+### Workflow 10 Steps:
+1. Load YAML domain kit (navigation.yaml, scheduling.yaml, or custom)
+2. Inject semantic concepts into SemanticMemory
+3. Inject causal rules directly into RuleLearner (bypassing learn/induce cycle)
+4. Build causal graph edges
+5. Cache high-confidence rules (≥0.8 confidence) as ProceduralMemory skills
+
+**Result**: Engine starts with domain knowledge, reducing cold-start from 50+ episodes to 0.
+
+---
+
+## Workflow 1 Update — Decision Loop with System-1 Fast-Path (V4)
+
+The System-1 fast-path now auto-populates from `learn()`:
+
+```
+learn(state, action, reward=1.0, task_tag)
+    │
+    ├── [existing] rule_learner.observe(...)
+    ├── [existing] episodic_memory.record(...)
+    └── [V4 NEW] if reward > 0.0 AND situation_hv is not None:
+            procedural_memory.cache_skill(context_hv, action, reward)
+```
+
+On subsequent `decide()` calls:
+```
+decide(state, task_tag)
+    │
+    └── [V4] Q_LEARNING coalition includes procedural recall hint
+            ProceduralMemory.recall_action(query_hv) → (action, similarity, reward)
+            [LSH bucket O(1) lookup, threshold 0.72]
+```

@@ -7,10 +7,15 @@ DashMap, so repeated calls to ``spread_activation_fast()`` only push
 *new* nodes rather than re-syncing the entire graph each time.
 """
 from __future__ import annotations
+import logging
 from typing import Dict, List, Optional, Any, Set
+
+logger = logging.getLogger(__name__)
 
 _USE_RUST = False
 _rust_instance: Optional[Any] = None
+# V4: cache the Rust spreading_activation_step free function if available
+_rust_step_fn: Optional[Any] = None
 # Track which concept names have already been synced to the Rust instance
 # to avoid redundant add_concept calls on repeated spread_activation calls.
 _synced_concepts: Set[str] = set()
@@ -19,6 +24,9 @@ try:
     import hypervec_rs as _ext
     if hasattr(_ext, "SemanticMemoryConcurrent") and _ext.SemanticMemoryConcurrent is not None:
         _USE_RUST = True
+    # V4: capture the spreading_activation_step free function at import time
+    if hasattr(_ext, "spreading_activation_step"):
+        _rust_step_fn = _ext.spreading_activation_step
 except ImportError:
     pass
 
@@ -76,11 +84,37 @@ def spread_activation_fast(
         if n_new > 0 and sync_errors > n_new // 2:
             return None
         
-        # Spreading activation loop (Python, using synced Rust concept set)
+        # Build initial activations dict
         activation: Dict[str, float] = {c: 1.0 for c in start_concepts if c in concept_graph}
         _MAX_FRONTIER = 200
         _stigmergy_boost = bool(stigmergy)
-        
+
+        # V4: Try Rust spreading_activation_step for each step.
+        # The free function is captured at module-import time in _rust_step_fn.
+        # Build the edge list once from the graph and call it for each step.
+        _active_step_fn = _rust_step_fn  # local alias; set to None on failure
+
+        if _active_step_fn is not None:
+            # Build edges list: (from, to, weight) — include stigmergy boost in weight
+            edges = []
+            for u, v, data in concept_graph.edges(data=True):
+                rel = data.get("relation", "similar_to")
+                w = relation_weights.get(rel, 0.3)
+                if _stigmergy_boost:
+                    w = w * (1.0 + stigmergy.get((u, v), 0.0))
+                edges.append((str(u), str(v), float(w)))
+            # Run each step through Rust
+            for _ in range(steps):
+                try:
+                    activation = _active_step_fn(activation, edges, decay, _MAX_FRONTIER)
+                except Exception as _exc:
+                    logger.debug("[shim] Rust spreading_activation_step failed: %s — falling back to Python", _exc)
+                    _active_step_fn = None
+                    break
+            if _active_step_fn is not None:
+                return activation
+
+        # Python fallback spreading activation loop
         for _ in range(steps):
             new_activation = activation.copy()
             frontier = sorted(

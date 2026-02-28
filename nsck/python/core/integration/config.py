@@ -292,6 +292,15 @@ class NSCKConfig:
         cfg.enable_crossmodal_enrichment = True
         return cfg
 
+    # === V4 Architecture Flags — Procedural Memory ===
+    procedural_reward_threshold: float = 0.0
+    procedural_familiarity_threshold: float = 0.72
+
+    # === V4 Architecture Flags — Semantic Memory ===
+    semantic_hot_cache_size: int = 256
+    semantic_hnsw_m: int = 16
+    semantic_hnsw_ef: int = 50
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()

@@ -152,6 +152,11 @@ class CognitiveEngine:
             recent_capacity=self.config.memory_capacity,
         )
         self.semantic_memory = SemanticMemory()
+        # V4: ProceduralMemory for System-1 fast-path
+        from python.core.memory.procedural_memory import ProceduralMemory
+        self.procedural_memory = ProceduralMemory(
+            familiarity_threshold=getattr(self.config, 'procedural_familiarity_threshold', 0.72)
+        )
         self.curiosity = CuriosityModule(
             novelty_threshold=self.config.novelty_threshold,
         )
@@ -771,6 +776,16 @@ class CognitiveEngine:
                 elif f"ACTION_{action}" in _allowed:
                     action = f"ACTION_{action}"
             winner_name = winner_coalition.source
+            # V4: EWC rule importance — increment gwt_win_count for winning RULES coalition
+            if winner_name == "RULES":
+                try:
+                    for rule in self.rule_learner.learned_rules.get(task_tag, []):
+                        if rule.consequence == action:
+                            rule.gwt_win_count += 1
+                            rule.ewc_importance = min(1.0, rule.gwt_win_count / 20.0)
+                            break
+                except Exception:
+                    pass
             trace["mode"] = winner_name
             trace["winner"] = winner_name
             trace["reason"] = (
@@ -1182,6 +1197,20 @@ class CognitiveEngine:
             _interval = getattr(self.config, 'ewc_consolidate_interval', 500)
             if self._ewc_update_count % _interval == 0:
                 self._compute_and_record_vsa_importance(task_tag)
+
+        # V4: Auto-populate ProceduralMemory for positive-reward familiar states
+        if (reward > 0.0 and self.current_state is not None and
+                self.current_state.situation_hv is not None and
+                hasattr(self, 'procedural_memory')):
+            try:
+                self.procedural_memory.cache_skill(
+                    context_hv=self.current_state.situation_hv,
+                    action=action,
+                    reward=float(reward),
+                    label=task_tag,
+                )
+            except Exception:
+                pass
 
         # 6. Causal discovery (requires next_state)
         if next_state:
@@ -1636,10 +1665,30 @@ class CognitiveEngine:
         if self._active_plan:
             next_action = self._active_plan.pop(0)
             confidence = 0.7 if len(self._active_plan) < 5 else 0.5
+
+            # V4: Validate plan via multi-step imagination
+            plan_salience = 0.75
+            if (self.current_state is not None and
+                    self.current_state.situation_hv is not None and
+                    self._active_plan):
+                try:
+                    preview_actions = [next_action] + list(self._active_plan[:4])
+                    _, plan_safe = self.imagine_rollout(
+                        initial_hv=self.current_state.situation_hv,
+                        action_sequence=preview_actions,
+                        task_tag=task_tag,
+                    )
+                    if not plan_safe:
+                        # Plan is potentially unsafe — reduce salience by 50%
+                        plan_salience *= 0.5
+                        logger.warning("[PLANNER] Imagination detected unsafe plan; salience halved")
+                except Exception:
+                    pass
+
             return Coalition(
                 source="PLANNER",
                 content=next_action,
-                base_salience=0.75,
+                base_salience=plan_salience,
                 relevance=0.3,  # Goal-directed gets relevance boost
                 sender_confidence=confidence,
             )
@@ -1871,6 +1920,73 @@ class CognitiveEngine:
                         set(rule.condition), rule.consequence, task,
                     )
 
+    # ------------------------------------------------------------------
+    # V4: Multi-step imagination
+    # ------------------------------------------------------------------
+
+    def imagine_rollout(
+        self,
+        initial_hv,
+        action_sequence: List[str],
+        task_tag: str,
+        gamma: float = 0.9,
+        danger_threshold: float = 0.75,
+        get_action_hv_fn=None,
+        danger_vectors=None,
+    ) -> Tuple[float, bool]:
+        """
+        N-step forward simulation. Returns (total_discounted_reward, is_plan_safe).
+
+        Aborts early if any predicted state exceeds danger_threshold similarity
+        to any registered danger vector.
+        """
+        total_reward = 0.0
+        current_hv = initial_hv
+        is_safe = True
+
+        _danger_vectors = (
+            danger_vectors
+            if danger_vectors is not None
+            else getattr(self.global_workspace, '_danger_vectors', [])
+        )
+
+        for step, action in enumerate(action_sequence):
+            # Get action HV
+            if get_action_hv_fn is not None:
+                action_hv = get_action_hv_fn(action)
+            else:
+                action_hv = hypervec_rs.HyperVector(hash(action) % (2**32))
+
+            # Predict next state via active inference world model
+            try:
+                next_hv = self.active_inference.predict_next_state(current_hv, action_hv)
+            except Exception:
+                next_hv = current_hv.xor(action_hv)
+
+            # Estimate reward from world model
+            try:
+                pred_reward = float(self.active_inference.predict_reward(current_hv, action_hv))
+            except Exception:
+                pred_reward = 0.0
+
+            total_reward += (gamma ** step) * pred_reward
+
+            # Safety check against danger vectors
+            for dv in _danger_vectors:
+                try:
+                    sim = float(next_hv.similarity(dv))
+                    if sim > danger_threshold:
+                        is_safe = False
+                        break
+                except Exception:
+                    pass
+            if not is_safe:
+                break
+
+            current_hv = next_hv
+
+        return total_reward, is_safe
+
     def _consolidate_semantic(self, task_tag: str):
         """Extract repeating patterns from episodes into semantic memory.
 
@@ -1967,6 +2083,23 @@ class CognitiveEngine:
     def register_broadcaster(self, callback):
         """Register callback for real-time event broadcasting."""
         self.msg_broadcaster = callback
+
+    def seed_domain(self, yaml_path: str) -> int:
+        """Seed a domain from a YAML bootstrap kit. Returns number of rules seeded.
+
+        Parameters
+        ----------
+        yaml_path : str
+            Path to a domain kit YAML file (see nsck/python/core/bootstrap/domain_kits/).
+
+        Returns
+        -------
+        int
+            Number of rules seeded.
+        """
+        from python.core.bootstrap.knowledge_seeder import KnowledgeSeeder
+        seeder = KnowledgeSeeder()
+        return seeder.seed_from_yaml(yaml_path, self)
 
     def get_causal_telemetry(self, task_tag: str) -> Dict[str, Any]:
         """Get causal graph details for monitoring."""

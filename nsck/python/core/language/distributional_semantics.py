@@ -294,3 +294,32 @@ class DistributionalCodebook:
             corpus = BUILTIN_CORPUS
         cb.build_from_corpus(corpus)
         return cb
+
+    def encode_sentence(self, tokens: List[str]) -> HyperVector:
+        """Encode a sentence as a HyperVector using sliding-window positional encoding.
+
+        Each word's HV is XOR'd with a position-specific HV to encode word order,
+        then all positional role-fillers are bundled together:
+
+            sentence_hv = bundle of [word_hv XOR position_hv(i) for i, word in enumerate(tokens)]
+
+        where position_hv(i) = HyperVector(seed=0x50531 + i).
+
+        This encodes word order so that "dog bites man" != "man bites dog".
+        """
+        if not tokens:
+            return HyperVector(0)
+        _POS_BASE_INT = 0x50531
+        positional_hvs = []
+        for i, token in enumerate(tokens):
+            word_hv = self.get_hv(token.lower())
+            if word_hv is None:
+                word_hv = HyperVector(hash(token.lower()) % (2**32))
+            pos_hv = HyperVector((_POS_BASE_INT + i) % (2**32))
+            positional_hvs.append(word_hv.xor(pos_hv))
+        if not positional_hvs:
+            return HyperVector(0)
+        result = positional_hvs[0]
+        for hv in positional_hvs[1:]:
+            result = result.bundle(hv)
+        return result

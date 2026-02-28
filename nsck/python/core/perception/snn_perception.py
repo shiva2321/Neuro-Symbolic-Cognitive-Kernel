@@ -55,11 +55,16 @@ class SimpleConceptMapper:
         self.concept_labels: Dict[int, str] = {}  # id → semantic name
         self.next_id = 0
         self._semantic_memory = None  # Optional SemanticMemory for HV lookup
+        self._registered: Dict[str, np.ndarray] = {}  # V4: named concept prototypes
     
     # ── optional SemanticMemory hookup ──────────────────────────────────
     def attach_semantic_memory(self, semantic_memory) -> None:
         """Attach a SemanticMemory for VSA cleanup-based concept naming."""
         self._semantic_memory = semantic_memory
+
+    def register(self, name: str, bits: np.ndarray) -> None:
+        """Register a named concept prototype for cleanup memory lookup (V4)."""
+        self._registered[name] = bits
 
     def recognize_pattern(self, active_neurons: List[int], threshold: float = 0.6) -> Tuple[int, float]:
         """
@@ -800,6 +805,28 @@ class SNNPerceptionModule:
     def reset_stats(self):
         """Clear statistics"""
         self.processing_times = []
+
+    def register_concepts_from_memory(self, semantic_memory) -> int:
+        """
+        Populate the concept mapper from SemanticMemory (V4 SNN grounding).
+        Call this after SemanticMemory has been populated.
+        Returns number of concepts registered.
+        """
+        count = 0
+        for concept_name, concept_hv in semantic_memory.concept_hvs.items():
+            try:
+                bits = np.asarray(concept_hv.bits, dtype=np.float32)
+                if len(bits) != self.hv_dimension:
+                    # Resize via random projection (Gaussian, std=0.1 keeps magnitudes small
+                    # before thresholding). Occurs when SemanticMemory was built with a
+                    # different HV dimension than the SNN perception module.
+                    proj = np.random.randn(self.hv_dimension, len(bits)).astype(np.float32) * 0.1
+                    bits = (proj @ bits > 0).astype(np.float32)
+                self.concept_mapper.register(concept_name, bits)
+                count += 1
+            except Exception:
+                pass
+        return count
 
 
 # ============================================================================

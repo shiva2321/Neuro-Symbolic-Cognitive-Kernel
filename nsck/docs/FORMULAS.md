@@ -1103,3 +1103,54 @@ the rolling window contains at least 10 observations.
 | Friston, K. (2010). The free-energy principle: a unified brain theory? *Nature Reviews Neuroscience*, 11(2), 127–138. | Active inference motivation (§23, §28) |
 | Jaynes, E.T. (1957). Information theory and statistical mechanics. *Physical Review*, 106(4), 620–630. | MaxEnt / KLE entropy (§23) |
 | Collins, A.M. & Loftus, E.F. (1975). A spreading-activation theory of semantic processing. *Psychological Review*, 82(6), 407–428. | Spreading activation (§4) |
+
+---
+
+## V4 Architecture Formulae
+
+### 1. Procedural Memory — Familiarity Threshold (V4)
+
+Threshold lowered from V3 value of 0.85 to **0.72** to enable faster System-1 activation:
+
+```
+familiar(q, s) = similarity(q.context_hv, s.context_hv) ≥ 0.72
+```
+
+Where `q` is the query context and `s` is a cached skill. At threshold 0.72, a state is considered "familiar" after fewer exposures, enabling earlier fast-path activation.
+
+### 2. LSH Bucket Key Formula
+
+For a binary hypervector `b ∈ {0,1}^D`, the LSH bucket key is computed using `n` fixed random projections `{p_0, ..., p_{n-1}}` where `p_j ∈ {0,...,D-1}` (sampled with seed `0xDEAD`):
+
+```
+lsh_key(b, n) = Σ_{j=0}^{n-1} (b[p_j] & 1) × 2^j
+```
+
+This maps D=10,240 dimensions to an n-bit integer key in O(n) time. Default n=16 gives 65,536 buckets. Expected bucket size for N skills: N/65,536.
+
+### 3. Majority-Vote Bundle Formula (V4)
+
+For N binary hypervectors `{v_0, ..., v_{N-1}}`:
+
+```
+bundle[i] = 1  if  Σ_k v_k[i] > N/2
+           = 0  if  Σ_k v_k[i] < N/2
+           = i % 2  (tie-break, deterministic)
+```
+
+The Rust `bundle_hvs()` function implements this directly. The Python pairwise `bundle(A, B)` uses random tie-breaking with a content-derived seed — mathematically equivalent in expectation.
+
+### 4. Sentence HV Encoding — Positional Role-Filler (V4)
+
+For a token sequence `[w_0, w_1, ..., w_{L-1}]`:
+
+```
+sentence_hv = Bundle_{i=0}^{L-1} [ word_hv(w_i) XOR position_hv(i) ]
+```
+
+Where:
+- `word_hv(w)` = distributional context HV from DistributionalCodebook
+- `position_hv(i)` = `HyperVector(seed = 0x50531 + i)` (fixed, deterministic)
+- `Bundle` = iterative pairwise majority-vote bundle
+
+This encodes word order: permuting tokens changes the sentence HV.

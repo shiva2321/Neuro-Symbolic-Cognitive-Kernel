@@ -218,14 +218,20 @@ class SemanticMemory:
         # V3: Stigmergy — edge-level pheromone strengths
         self._stigmergy: Dict[Tuple[str, str], float] = {}
 
+        # V4: Hot cache — LRU cache for recently/frequently activated concepts
+        _hot_cache_size = getattr(config, 'semantic_hot_cache_size', 256) if config else 256
+        self._HOT_CACHE_SIZE: int = _hot_cache_size
+        self._hot_cache: Dict[str, Any] = {}  # concept_name -> (hv, activation_score)
+
         # V3/V6: ANN index for fast nearest-concept lookup
         # Uses hnswlib when available; falls back to pure-Python NSW otherwise.
         self._hnsw_index = None
         self._hnsw_id_to_concept: List[str] = []
         self._hnsw_dim: int = 0
-        self._hnsw_enabled: bool = False
-        if getattr(config, 'enable_hnsw_index', False):
-            self._hnsw_enabled = True
+        # V4: HNSW enabled by default (was gated behind config flag)
+        self._hnsw_enabled: bool = True
+        if not getattr(config, 'enable_hnsw_index', True):
+            self._hnsw_enabled = False
             if _HNSWLIB_AVAILABLE:
                 logger.info("[SEMANTIC] HNSW index enabled (hnswlib)")
             else:
@@ -564,7 +570,22 @@ class SemanticMemory:
             
             activation = new_activation
             
+        # V4: Update hot cache with top activated concepts
+        self._update_hot_cache(activation)
         return activation
+
+    def _update_hot_cache(self, activations: Dict[str, float]) -> None:
+        """Update hot cache with top activated concepts (V4)."""
+        top = sorted(activations.items(), key=lambda x: x[1], reverse=True)[:self._HOT_CACHE_SIZE // 2]
+        for name, score in top:
+            hv = self.concept_hvs.get(name)
+            if hv is not None:
+                self._hot_cache[name] = (hv, score)
+        # LRU eviction: remove oldest inserted entries when over limit
+        # (insertion-order based; dict preserves insertion order since Python 3.7)
+        while len(self._hot_cache) > self._HOT_CACHE_SIZE:
+            oldest = next(iter(self._hot_cache))
+            del self._hot_cache[oldest]
 
     # V3: Stigmergy methods
 

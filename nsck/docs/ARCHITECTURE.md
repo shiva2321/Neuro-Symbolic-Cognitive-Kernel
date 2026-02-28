@@ -623,3 +623,38 @@ Every module can call `tracer.record(module, message, confidence)` inside a
 `DecisionTrace`. Completed traces are archived in a rolling history.
 
 *Document updated for NSCK V17, April 2026.*
+
+---
+
+## V4 Architecture (February 2026)
+
+### Summary of V4 Changes
+
+V4 implements 8 architectural pillars that address key capability gaps:
+
+#### Layer 1 — Perception (V4)
+- **SNN→Symbol Grounding Cleanup Memory Bridge**: `SNNPerceptionModule.register_concepts_from_memory(semantic_memory)` populates the concept mapper from SemanticMemory HVs. Spike patterns now resolve to named predicates via nearest-neighbor HV lookup (cleanup memory pattern). Closes the SNN→predicate bridge.
+
+#### Layer 3 — Reasoning (V4)
+- **Multi-Step Imagination**: `CognitiveEngine.imagine_rollout(initial_hv, action_sequence, ...)` performs N-step forward simulation using the active inference world model. Returns `(total_discounted_reward, is_plan_safe)`. Aborts early if any predicted state exceeds `danger_threshold=0.75` similarity to registered danger vectors.
+- **Planner Safety Validation**: `_build_planner_coalition()` validates plans via `imagine_rollout()`. Unsafe plans have coalition salience halved (0.75 → 0.375), allowing safer alternatives to compete.
+- **EWC Rule Protection**: Rules gain `gwt_win_count` and `ewc_importance` fields. `decide()` increments importance when RULES coalition wins. `prune_rules()` uses composite score `confidence × (1 + ewc_importance)` to protect frequently-winning rules.
+
+#### Layer 5 — Language (V4)
+- **VSANLUEngine as Primary NLU**: `VSANLUEngine` (new in V4) replaces `NgramNLU` as the primary intent classifier. Uses `DistributionalCodebook` for word HVs and intent prototype bundles for 7-class classification (question/command/statement/greeting/farewell/exclamation/negation). `NgramNLU` remains as fallback.
+- **Sentence HV Encoding**: `DistributionalCodebook.encode_sentence(tokens)` encodes word order via positional role-filler binding: `sentence_hv = Bundle[word_hv XOR position_hv(i)]`.
+
+#### Layer 7 — Memory (V4)
+- **HNSW Default-On**: `SemanticMemory` now enables the HNSW/NSW approximate nearest-neighbor index by default (was behind `config.enable_hnsw_index` flag).
+- **Hot Cache (256-entry LRU)**: `SemanticMemory._hot_cache` stores the top-K most recently activated concepts for near-instant repeated queries. Updated by `spread_activation()` via `_update_hot_cache()`.
+- **ProceduralMemory LSH Bucket Index**: `ProceduralMemory` replaces O(N) linear scan with 16-bit LSH bucket index for O(1) candidate lookup. Familiarity threshold lowered from 0.85 to 0.72.
+- **ProceduralMemory Auto-Population**: `CognitiveEngine.learn()` automatically caches skills in `ProceduralMemory` on every positive-reward experience.
+
+#### New Layer — Bootstrap (V4)
+- **KnowledgeSeeder**: Declarative domain bootstrapping from YAML domain kits. `engine.seed_domain("navigation.yaml")` injects rules, causal graph edges, semantic concepts, and high-confidence procedural skills in one call.
+- **Domain Kits**: `navigation.yaml` (grid-world navigation) and `scheduling.yaml` (task scheduling) ship as built-in domain kits.
+
+#### Rust (V4)
+- `bundle_hvs(Vec<Vec<u8>>) -> Vec<u8>`: Proper N-vector majority-vote bundle
+- `lsh_bucket(Vec<u64>, u32, u64) -> u32`: LSH bucket computation for ProceduralMemory
+- `spreading_activation_step(...)`: One step of graph spreading activation hot path

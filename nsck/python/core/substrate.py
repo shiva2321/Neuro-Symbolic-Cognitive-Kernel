@@ -14,6 +14,7 @@ V13 additions:
 """
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -21,6 +22,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 import numpy as np
 
 from python.core.integration.config import NSCKConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _stable_seed(obj: object) -> int:
@@ -113,6 +116,20 @@ class NSCKSubstrate:
         # V16: Auto-seed if enabled
         if getattr(self.config, 'enable_seeding', False):
             self._auto_seed()
+
+        # V4: Wire SNN perception to semantic memory for symbol grounding.
+        # This populates the concept mapper from SemanticMemory HVs so that
+        # spike patterns can resolve to named predicates (cleanup memory bridge).
+        _eng_perception = getattr(self._engine, 'perception', None)
+        if (_eng_perception is not None and
+                hasattr(_eng_perception, 'register_concepts_from_memory')):
+            try:
+                _n = _eng_perception.register_concepts_from_memory(
+                    self._engine.semantic_memory
+                )
+                logger.info("[SUBSTRATE] SNN grounded to %d semantic concepts", _n)
+            except Exception as _exc:
+                logger.debug("[SUBSTRATE] SNN grounding skipped: %s", _exc)
 
     def _init_rich_adapters(self) -> None:
         """Initialize rich perception adapters based on perception_mode."""

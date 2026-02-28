@@ -1,0 +1,63 @@
+domain: navigation
+version: "1.0"
+description: "Grid-world navigation bootstrap kit"
+actions: [MOVE_NORTH, MOVE_SOUTH, MOVE_EAST, MOVE_WEST, STAY]
+causal_rules:
+  - condition: [WALL_NORTH]
+    action: MOVE_NORTH
+    outcome: failure
+    confidence: 0.95
+    support: 20
+  - condition: [WALL_SOUTH]
+    action: MOVE_SOUTH
+    outcome: failure
+    confidence: 0.95
+    support: 20
+  - condition: [WALL_EAST]
+    action: MOVE_EAST
+    outcome: failure
+    confidence: 0.95
+    support: 20
+  - condition: [WALL_WEST]
+    action: MOVE_WEST
+    outcome: failure
+    confidence: 0.95
+    support: 20
+  - condition: [GOAL_NEARBY, PATH_CLEAR]
+    action: MOVE_TOWARD_GOAL
+    outcome: success
+    confidence: 0.85
+    support: 15
+  - condition: [AT_GOAL]
+    action: STAY
+    outcome: success
+    confidence: 0.99
+    support: 30
+semantic_concepts:
+  - name: WALL
+    properties: {type: obstacle, blocks_movement: true}
+  - name: GOAL
+    properties: {type: target, reward: 1.0}
+  - name: PATH
+    properties: {type: free_space, traversable: true}
+  - name: AGENT
+    properties: {type: entity, movable: true}
+causal_graph:
+  - cause: WALL_NORTH
+    effect: COLLISION
+    strength: 0.95
+  - cause: WALL_SOUTH
+    effect: COLLISION
+    strength: 0.95
+  - cause: WALL_EAST
+    effect: COLLISION
+    strength: 0.95
+  - cause: WALL_WEST
+    effect: COLLISION
+    strength: 0.95
+  - cause: MOVE_TOWARD_GOAL
+    effect: REWARD
+    strength: 0.8
+  - cause: AT_GOAL
+    effect: EPISODE_SUCCESS
+    strength: 0.99
