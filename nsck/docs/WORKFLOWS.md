@@ -1,13 +1,13 @@
-# Workflows — NSCK V13
+# Workflows — NSCK V4
 
 NSCK (Neuro-Symbolic Cognitive Kernel) is a neuro-symbolic cognitive architecture
 that combines VSA hypervectors, rule learning, and global workspace theory.
-Below are the step-by-step data flows for every key workflow in V13.
+Below are the step-by-step data flows for every key workflow in V4.
 Classes are referenced by their actual module paths under `nsck/python/core/`.
 
 ---
 
-## 1. Decision Loop (`NSCKSubstrate.process`)
+## Workflow 1: Decision Loop (V4)
 
 The primary inference path from raw input to `SubstrateResult`.
 
@@ -18,89 +18,74 @@ The primary inference path from raw input to `SubstrateResult`.
   NSCKSubstrate._encode_single()
        │  selects adapter by Python type
        ▼
-  Adapter.encode()  ──────────────────────────────────┐
-  (TextAdapter | DictStateAdapter | NumericAdapter     │
-   | ImageAdapter | AudioAdapter | MultimodalFuser)    │
-       │                                               │
-       ▼                                               │
-  PerceptPacket                                        │
-  { situation_hv, active_predicates, confidence }      │
-       │                                               │
-       ▼                                               │
-  CognitiveEngine.decide(packet, task_tag)             │
-       │                                               │
-       ├─►  1. Input normalization → raw_state_dict    │
-       ├─►  2. GroundingVerifier.get_active_predicates │
-       ├─►  3. CuriosityModule.should_explore()        │
-       │        novelty check → explore vs exploit     │
-       ├─►  4. Build coalition proposals               │
-       │        RULES | MEMORY | EXPLORATION           │
-       │        Q_LEARNING | PLANNER | MATH | EXTERNAL │
-       ├─►  5. ActiveInferenceLearner adjusts salience │
-       │        by expected free energy                │
-       ├─►  6. GlobalWorkspace.compete()               │
-       │        → winning Coalition                    │
-       ├─►  7. SafetyGateVerifier.gate_decision()      │
-       │        → pass or veto                         │
-       ├─►  8. Normalize action to allowed set         │
-       ├─►  9. ExplanationGenerator.explain()          │
-       │        → natural-language rationale           │
-       └─► 10. Return CognitiveState                   │
-                 │                                     │
-                 ▼                                     │
-           SubstrateResult (V13 fields)                │
-           { chosen_action, confidence, explanation,   │
-             kle_uncertainty, uncertainty_bounds,       │
-             procedural_hit, encoding_stats }          │
+  Adapter.encode()
+  (TextAdapter | DictStateAdapter | NumericAdapter
+   | ImageAdapter | AudioAdapter | MultimodalFuser)
+       │
+       ▼
+  PerceptPacket
+  { situation_hv, active_predicates, confidence }
+       │
+       ▼
+  [V4] VSANLUEngine.process(text)   ← primary NLU (replaces NgramNLU)
+       │  intent + entity extraction via VSA prototype matching
+       │
+       ▼
+  CognitiveEngine.decide(packet, task_tag)
+       │
+       ├─► [V4] ProceduralMemory fast-path (LSH O(1), threshold 0.72)
+       │        → HIT: return cached (action, confidence) immediately
+       │        → MISS: fall through to full pipeline
+       │
+       ├─►  1. Input normalization → raw_state_dict
+       ├─►  2. GroundingVerifier.get_active_predicates
+       ├─►  3. CuriosityModule.should_explore()
+       ├─►  4. Build coalition proposals
+       │        RULES | MEMORY | EXPLORATION
+       │        Q_LEARNING | PLANNER | MATH | EXTERNAL
+       ├─►  5. ActiveInferenceLearner adjusts salience
+       ├─►  6. GlobalWorkspace.compete()
+       ├─►  7. SafetyGateVerifier.gate_decision()
+       ├─►  8. Normalize action to allowed set
+       ├─►  9. ExplanationGenerator.explain()
+       └─► 10. Return CognitiveState / SubstrateResult
 ```
-
-### Steps in detail
-
-| # | Component | What happens |
-|---|-----------|--------------|
-| 1 | `CognitiveEngine` | Extracts `raw_state` dict from `PerceptPacket` for backward-compatible predicate evaluation |
-| 2 | `GroundingVerifier` | Evaluates registered predicate lambdas → `List[str]` of active predicates |
-| 3 | `CuriosityModule` | Compares `situation_hv` against visited states; high novelty → EXPLORATION coalition |
-| 4 | `CognitiveEngine._build_coalitions` | Each source proposes `Coalition(source, action, salience)` |
-| 5 | `ActiveInferenceLearner` | Re-weights saliences by expected information gain (free energy) |
-| 6 | `GlobalWorkspace.compete` | Scores = salience + relevance + affect + 0.5×confidence; threshold ≥ 0.5 |
-| 7 | `SafetyGateVerifier` | Critical violations → veto; warnings logged only |
-| 8 | `CognitiveEngine` | Maps winning action onto `available_actions`; falls back to explore |
-| 9 | `ExplanationGenerator` | Template-based NL: *"Chose {action} because {reason}"* |
-| 10 | `CognitiveEngine` | Packs everything into `CognitiveState` → wrapped as `SubstrateResult` |
 
 ---
 
-## 2. V13 Ingest / Feedback Loop
+## Workflow 2: Learning (V4 — auto-cache on positive reward)
 
 ```
-  ┌──────────────────────────────────────────────────┐
-  │  substrate.ingest(input, task_tag)               │
-  │                                                  │
-  │  1. ProceduralMemory.recall(situation_hv)        │
-  │     ├── HIT  → return cached action (fast path)  │
-  │     └── MISS → fall through                      │
-  │                                                  │
-  │  2. Full process() pipeline (§1 above)           │
-  │     → SubstrateResult                            │
-  └──────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────┐
+  │  substrate.ingest(input, task_tag)                       │
+  │                                                          │
+  │  1. ProceduralMemory.recall(situation_hv)  [LSH O(1)]   │
+  │     ├── HIT  → return cached action (fast path)          │
+  │     └── MISS → fall through                              │
+  │                                                          │
+  │  2. Full process() pipeline (Workflow 1)                 │
+  │     → SubstrateResult                                    │
+  └──────────────────────────────────────────────────────────┘
                       │
                       ▼  environment executes action
-  ┌──────────────────────────────────────────────────┐
-  │  substrate.feedback(action, reward, task_tag)    │
-  │                                                  │
-  │  3. Q-value TD(0) update                         │
-  │  4. RuleLearner.observe() + induce_rules()       │
-  │  5. EpisodicMemory.store(episode)                │
-  │  6. ConformalWrapper.calibrate(prediction, actual)│
-  │  7. ProceduralMemory.update()                    │
-  │     (store skill when reward > threshold)        │
-  └──────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────┐
+  │  substrate.feedback(action, reward, task_tag)            │
+  │  OR  engine.learn(state, action, reward)                 │
+  │                                                          │
+  │  3. Q-value TD(0) update                                 │
+  │  4. RuleLearner.observe() + induce_rules()               │
+  │     EWC-aware pruning (V4): composite score              │
+  │     confidence × (1 + ewc_importance)                    │
+  │  5. EpisodicMemory.store(episode)                        │
+  │  6. ConformalWrapper.calibrate(prediction, actual)       │
+  │  7. [V4 NEW] if reward > 0.0 AND situation_hv is not None:
+  │        ProceduralMemory.cache_skill(context_hv, action, reward)
+  └──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Sleep Consolidation (`NSCKSubstrate.sleep`)
+## Workflow 3: Sleep Consolidation (V4 — EWC task consolidation)
 
 Offline learning invoked periodically (e.g. after N episodes).
 
@@ -112,6 +97,7 @@ Offline learning invoked periodically (e.g. after N episodes).
     │
     ├─► 2. RuleLearner.induce_rules()
     │      promote frequent (state,action,reward) patterns
+    │      EWC-aware pruning protects high-importance rules (V4)
     │
     ├─► 3. SemanticMemory.build_prototypes()
     │      auto-generalize concept clusters (min_members=2)
@@ -119,174 +105,104 @@ Offline learning invoked periodically (e.g. after N episodes).
     ├─► 4. SemanticMemory.infer_transitive()
     │      discover transitive relations (is_a depth 3, causes depth 2)
     │
-    ├─► 5. PatternGeneralizer.generalize()         [V13]
+    ├─► 5. PatternGeneralizer.generalize()
     │      generalize patterns from recent examples
     │
-    └─► 6. ConceptDriftDetector.check()            [V13]
-           monitor semantic stability across tasks
-```
-
----
-
-## 4. Perception Pipeline (Adapter → `PerceptPacket`)
-
-Each modality has a dedicated adapter in `nsck/python/core/adapters/`.
-
-```
-  ┌─────────────┬──────────────────────────────────────────────────────┐
-  │ Modality    │ Adapter → encoding steps → PerceptPacket            │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Text        │ TextAdapter                                         │
-  │             │   tokenize → VSA encode (bind role HVs) → packet    │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Dict        │ DictStateAdapter                                    │
-  │             │   encode key-value pairs → bundle HVs → packet      │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Numeric     │ NumericAdapter                                      │
-  │             │   FPE quantize → packet                             │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Image       │ ImageAdapter                                        │
-  │             │   spatial grid + colour histogram + Sobel edges     │
-  │             │   → 65-dim FPE → packet                             │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Audio       │ AudioAdapter                                        │
-  │             │   MFCC + spectral features → 23-dim FPE → packet    │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Multimodal  │ MultimodalFuser                                     │
-  │             │   fuse List[PerceptPacket] → combined packet        │
-  └─────────────┴──────────────────────────────────────────────────────┘
-```
-
-Common output: `PerceptPacket(situation_hv, active_predicates, confidence, modality, raw_state)`.
-
----
-
-## 5. Memory Recall
-
-### Semantic Memory
-
-```
-  query (concept name or HV)
-    ├─► SemanticMemory.get_concept(name) — direct graph node lookup
-    ├─► SemanticMemory.query(hv) — cosine_sim against concept_hvs → top-k
-    └─► SemanticMemory.spread_activation(seed) — propagate edges, decay per hop
-```
-
-### Episodic Memory
-
-```
-  query (situation_hv)
-    → LSH bucket lookup (4 tables × 10-bit hashes)
-    → 1-bit neighbour probing
-    → exact similarity ranking on candidates
-    → top-k episodes (Rust-backed batch search)
-```
-
-### Procedural Memory (V13)
-
-```
-  query (situation_hv)
-    → hash(situation_hv) exact match
-    → HIT: return cached (action, reward) — no GWT needed
-    → MISS: fall through to full decide() pipeline
-```
-
----
-
-## 6. Rule Learning and Firing
-
-```
-  ┌─ Online ────────────────────────────────────┐
-  │ 1. Observe (state, action, reward) triple   │
-  │ 2. RuleLearner.observe() — count patterns   │
-  │ 3. RuleLearner.induce_rules()               │
-  │    → Rule(condition, consequence,            │
-  │           confidence, fire_count,            │
-  │           confidence_history)                │
-  └─────────────────────────────────────────────┘
-           │
-           ▼
-  ┌─ Coalition building ────────────────────────┐
-  │ 4. RuleNeuralScorer.rank_rules(applicable)  │
-  │    perceptron re-ranks by relevance (V10)   │
-  │ 5. Top rule → RULES Coalition(action, score)│
-  └─────────────────────────────────────────────┘
-```
-
-After feedback, `RuleNeuralScorer.update(rule, reward)` adjusts perceptron weights.
-
----
-
-## 7. Causal Discovery
-
-```
-  observe(context, causes, effects)
-       │
-       ▼
-  Accumulate contingency tables
-       │
-       ├─► _calculate_delta_p()
-       │     ΔP (causal strength) = P(effect|cause) - P(effect|¬cause)
-       │
-       ├─► _mutual_information()
-       │     detect confounders via MI
-       │
-       ▼
-  induce_graph()
-       │  build CausalGraph from confident links
-       │
-       ▼
-  CausalRuleAuditor.audit_rule()             [V13]
-       combined_score = 0.6×confidence + 0.4×causal_score
-       audit_trace: human-readable scoring
-```
-
----
-
-## 8. Analogy and Cross-Domain Transfer
-
-```
-  AnalogyEngine
+    ├─► 6. ConceptDriftDetector.check()
+    │      monitor semantic stability across tasks
     │
-    ├─► 1. Receive source + target domain HVs
-    ├─► 2. Structural alignment via VSA similarity
-    ├─► 3. Compute functoriality score
-    │        (how well structure is preserved)
-    ├─► 4. MaxEnt threshold for acceptance
-    │
-    ▼
-  CrossDomainTransferPipeline
-    │
-    ├─► register(hv, domain_label)
-    └─► transfer(query_hv, source, target)
-         → [{source_pattern, target_pattern, transfer_score}]
+    └─► 7. [V4] EWC task consolidation
+           ewc_importance updated from gwt_win_count for each rule
 ```
 
 ---
 
-## 9. Language Processing
+## Workflow 4: Knowledge Seeding — NEW V4
 
-Full NLU → NLG pipeline through modules in `nsck/python/core/language/`.
+Declarative domain bootstrapping from YAML domain kits.
 
 ```
-  raw text
-    │
-    ├─► 1. NgramNLU.predict()            → intent classification
-    ├─► 2. LeftCornerParser.parse()       → phrase tree
-    ├─► 3. ConstructionGrammar.match()    → pattern matching
-    ├─► 4. FrameSemantics.fill()          → frame filling
-    ├─► 5. SemanticRoleLabeler.label()    → agent / patient / theme
-    ├─► 6. CoreferenceResolver.resolve()  → pronoun resolution
-    ├─► 7. DialogueManager.process_turn() → state tracking, topic shift
-    │
-    ▼
-  FluentNLG / NSCKResponseEngine
-    └─► response generation (context-appropriate fluent prose)
+  YAML Domain Kit (navigation.yaml / scheduling.yaml / custom)
+      │
+      ▼
+  KnowledgeSeeder.seed_from_yaml(yaml_path, engine)
+      │
+      ├── semantic_concepts → SemanticMemory.add_concept()
+      ├── causal_rules → RuleLearner.learned_rules[domain]
+      ├── causal_graph → CausalGraph.add_causes()
+      └── high-confidence rules (≥ 0.8) → ProceduralMemory.cache_skill()
+      │
+      ▼
+  engine.seed_domain("navigation.yaml")  ← thin wrapper
+      └── Returns: int (number of rules seeded)
+```
+
+### Steps in Detail
+
+1. Load YAML domain kit (`navigation.yaml`, `scheduling.yaml`, or custom)
+2. Inject semantic concepts into `SemanticMemory`
+3. Inject causal rules directly into `RuleLearner` (bypassing learn/induce cycle)
+4. Build causal graph edges
+5. Cache high-confidence rules (≥ 0.8 confidence) as `ProceduralMemory` skills
+
+**Result**: Engine starts with domain knowledge, reducing cold-start from 50+ episodes to 0.
+
+---
+
+## Workflow 5: Spreading Activation with Rust — NEW V4
+
+The Rust `spreading_activation_step` free-function is the hot path for
+`SemanticMemory.spread_activation()`.
+
+```
+  SemanticMemory.spread_activation(seed_concepts, steps, decay)
+      │
+      ▼
+  semantic_memory_shim.spread_activation_fast(concept_graph, ...)
+      │
+      ├── [Rust available] _rust_step_fn(activation, edges, decay, max_frontier)
+      │       → Dict[concept → activation_float]
+      │       (V4: _rust_step_fn captured at import, not per call)
+      │
+      └── [Rust unavailable] Python graph traversal fallback
+              for each step:
+                  for each (u, v) edge in frontier:
+                      A'[v] += decay × w(u,v) × A[u]
+      │
+      ▼
+  _update_hot_cache(activated_concepts)   [V4 new]
+      └── LRU cache of top-256 concept HVs updated
 ```
 
 ---
 
-## 10. REST API Flow
+## Workflow 6: Procedural Fast-Path — V4 Enhanced
+
+LSH bucket check enables O(1) average candidate lookup.
+
+```
+  ProceduralMemory.recall_action(query_hv)
+      │
+      ▼
+  [V4] lsh_bucket(query_hv.bits, n_bits=16, seed=0xDEAD) → bucket_key
+      │
+      ▼
+  Look up _lsh_index[bucket_key]  → List[Skill candidates]
+      │
+      ├── For each candidate:
+      │       sim = similarity(query_hv, skill.context_hv)
+      │       if sim ≥ 0.72 (V4 threshold, was 0.85):
+      │           return (skill.action, sim, skill.reward)
+      │
+      └── No match → return None (fall through to full decide())
+```
+
+**Complexity:** O(1) average (LSH bucket lookup + small candidate list)
+vs. O(N) linear scan in V3.
+
+---
+
+## Workflow 7: REST API Flow
 
 Served by `NSCKApiServer` (`nsck/python/core/api/nsck_api.py`).
 
@@ -319,53 +235,4 @@ Served by `NSCKApiServer` (`nsck/python/core/api/nsck_api.py`).
 
 ---
 
-## Workflow 10 — Knowledge Bootstrapping (V4)
-
-```
-YAML Domain Kit
-    │
-    ▼
-KnowledgeSeeder.seed_from_yaml(yaml_path, engine)
-    │
-    ├── semantic_concepts → engine.semantic_memory.add_concept()
-    ├── causal_rules → engine.rule_learner.learned_rules[domain]
-    ├── causal_graph → engine.causal_graphs[domain].add_causes()
-    └── high-confidence rules → engine.procedural_memory.cache_skill()
-    │
-    ▼
-engine.seed_domain("navigation.yaml")
-    └── Returns: number of rules seeded
-```
-
-### Workflow 10 Steps:
-1. Load YAML domain kit (navigation.yaml, scheduling.yaml, or custom)
-2. Inject semantic concepts into SemanticMemory
-3. Inject causal rules directly into RuleLearner (bypassing learn/induce cycle)
-4. Build causal graph edges
-5. Cache high-confidence rules (≥0.8 confidence) as ProceduralMemory skills
-
-**Result**: Engine starts with domain knowledge, reducing cold-start from 50+ episodes to 0.
-
----
-
-## Workflow 1 Update — Decision Loop with System-1 Fast-Path (V4)
-
-The System-1 fast-path now auto-populates from `learn()`:
-
-```
-learn(state, action, reward=1.0, task_tag)
-    │
-    ├── [existing] rule_learner.observe(...)
-    ├── [existing] episodic_memory.record(...)
-    └── [V4 NEW] if reward > 0.0 AND situation_hv is not None:
-            procedural_memory.cache_skill(context_hv, action, reward)
-```
-
-On subsequent `decide()` calls:
-```
-decide(state, task_tag)
-    │
-    └── [V4] Q_LEARNING coalition includes procedural recall hint
-            ProceduralMemory.recall_action(query_hv) → (action, similarity, reward)
-            [LSH bucket O(1) lookup, threshold 0.72]
-```
+*Document updated for NSCK V4, February 2026.*

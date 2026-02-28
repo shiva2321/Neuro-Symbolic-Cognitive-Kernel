@@ -1,15 +1,15 @@
-# NSCK V13 — Repository Navigation Map
+# NSCK V4 — Repository Navigation Map
 
-> **94 core Python modules · 232 classes · ~36K LOC Python · ~4.3K LOC Rust · 1437 tests**
+> **~96 core Python modules · ~232 classes · ~38K LOC Python · ~4.5K LOC Rust · 1443+ tests**
 
 | Metric | Value |
 |--------|-------|
-| Core Python modules | 94 (in `python/core/`, excl. `__init__.py` and tests) |
-| Classes | 232 |
-| Python core LOC | ~36,000 |
-| Rust LOC | ~4,300 |
-| Test files / LOC | 84 / ~19,000 |
-| Tests | 1437 (1424 pass, 2 stochastic, 7 skipped, 4 xfailed) |
+| Core Python modules | ~96 (in `python/core/`, excl. `__init__.py` and tests) |
+| Classes | ~232 |
+| Python core LOC | ~38,000 |
+| Rust LOC | ~4,500 |
+| Test files / LOC | 84+ / ~19,000+ |
+| Tests | 1443+ (1430+ pass, 2 stochastic, 7 skipped, 4 xfailed) |
 
 ---
 
@@ -21,9 +21,12 @@ nsck/
 │   ├── adapters/      (10 files) Input normalization and multimodal fusion
 │   ├── cognitive/      (5 files) Higher-order cognition and safety
 │   ├── integration/    (5 files) Config, persistence, fusion, explanation
-│   ├── language/      (20 files) NLU/NLG pipeline, dialogue, pragmatics
+│   ├── language/      (21 files) NLU/NLG pipeline, dialogue, pragmatics
+│   │                            V4 new: vsa_nlu.py (VSANLUEngine)
 │   ├── learning/      (10 files) Hebbian, curiosity, active inference, rules
-│   ├── memory/         (7 files) Semantic, episodic, procedural stores
+│   ├── memory/         (8 files) Semantic, episodic, procedural stores
+│   │                            V4 updated: semantic_memory (hot cache LRU),
+│   │                            procedural_memory (LSH O(1)), semantic_memory_shim
 │   ├── multimodal/     (2 files) Cross-modal processing and image generation
 │   ├── perception/     (8 files) SNN, symbol grounding, VSA-SNN bridge
 │   ├── reasoning/     (14 files) Central engine, GWT, causal, planning
@@ -31,17 +34,23 @@ nsck/
 │   ├── types/          (2 files) PerceptPacket, ModalityAdapter protocols
 │   ├── vsa/            (7 files) HyperVector ops (Python + Rust shim)
 │   └── substrate.py              Public API entry point
+│   (bootstrap/ V4 new)
+│       ├── knowledge_seeder.py   KnowledgeSeeder — YAML domain bootstrapper
+│       └── domain_kits/
+│           ├── navigation.yaml   Navigation domain kit
+│           └── scheduling.yaml   Scheduling domain kit
 ├── rust_vsa/                     Rust VSA accelerator (PyO3) → hypervec_rs.so (4.3 MB)
 ├── rust_snn/                     Rust SNN accelerator (PyO3) → snn_rs.so (1.1 MB)
 ├── api/                          FastAPI REST: /decide, /learn, /sleep, /status
-├── tests/                        84 files across unit/, integration/, core_architecture/,
-│                                 experiments/, regression/, benchmarks/
+├── tests/                        84+ files across unit/, integration/, core_architecture/,
+│   │                             experiments/, regression/, benchmarks/
+│   │                             V4 new: tests/integration/test_v4_full_system.py (6 classes)
 ├── benchmarks/                   Benchmark runner + domain benchmarks
 ├── eval/                         Evaluation harness and end-to-end evals
 ├── scripts/                      Utility scripts (verify_rust, generate_v11_report)
 ├── examples/                     Runnable demos (quickstart, custom_module, learn_from_text, demo_snn)
 ├── data/                         Built-in datasets
-├── docs/                         9 documentation files
+├── docs/                         12+ documentation files
 ├── pyproject.toml                Project metadata and build config
 └── conftest.py                   Shared pytest fixtures
 ```
@@ -72,17 +81,17 @@ nsck/
 
 `brain_fusion`, `config` (NSCKConfig + feature flags), `explanation`, `knowledge_integration`, `persistence` (BrainStore)
 
-### `language/` — 20 files · Full NLU → dialogue → NLG pipeline
+### `language/` — 21 files · Full NLU → dialogue → NLG pipeline
 
-`parser`, `language_module`, `vsa_language_module`, `ngram_nlu`, `fluent_nlg`, `nlg`, `dialogue_manager`, `construction_grammar`, `frame_semantics`, `coreference`, `semantic_roles`, `pragmatics`, `distributional_semantics`, `text_knowledge_learner`, `pos_tagger` (300+ lexicon), `universal_input`, `lingua_cortex`, `control`, `hf_corpus_loader`, `compositional_semantics_backup`
+`parser`, `language_module`, `vsa_language_module`, `ngram_nlu`, **`vsa_nlu` (V4 new — VSANLUEngine, 7 intents)**, `fluent_nlg`, `nlg`, `dialogue_manager`, `construction_grammar`, `frame_semantics`, `coreference`, `semantic_roles`, `pragmatics`, `distributional_semantics`, `text_knowledge_learner`, `pos_tagger` (300+ lexicon), `universal_input`, `lingua_cortex`, `control`, `hf_corpus_loader`, `compositional_semantics_backup`
 
 ### `learning/` — 10 files · From Hebbian to meta-learning
 
 `hebbian`, `curiosity`, `active_inference`, `rule_neural_scorer`, `conformal_wrapper`, `pattern_generalizer`, `cross_domain`, `cross_modal`, `continual_learning`, `meta_learning`
 
-### `memory/` — 7 files · Three-store architecture + maintenance
+### `memory/` — 8 files · Three-store architecture + maintenance
 
-`semantic_memory` (NSW search), `episodic_memory`, `procedural_memory`, `cross_modal_associative_memory`, `concept_drift_detector`, `homeostasis`, `staged_recall` (fast → deep)
+`semantic_memory` (NSW/HNSW default-on + **hot cache V4**), `episodic_memory`, `procedural_memory` (**LSH O(1) V4**, threshold 0.72), `cross_modal_associative_memory`, `concept_drift_detector`, `homeostasis`, `staged_recall` (fast → deep), `semantic_memory_shim` (**_rust_step_fn at import V4**)
 
 ### `multimodal/` — 2 files
 
@@ -239,20 +248,21 @@ tests/                            84 files, ~19K LOC, 1437 tests
 
 | Result | Count |
 |--------|-------|
-| Pass (with Rust) | 1424 |
+| Pass (with Rust) | 1430+ |
 | Stochastic | 2 |
 | Skipped | 7 |
 | xfailed | 4 |
-| **Total** | **1437** |
+| **Total** | **1443+** |
 
 ---
 
 ## Quick Reference
 
 ```bash
-pytest                            # run all 1437 tests (auto-detects Rust .so)
-pytest tests/unit/reasoning/      # subsystem tests
-pytest tests/integration/         # pipeline tests
-uvicorn nsck.api.nsck_api:app     # start REST API
-python -m nsck.benchmarks.runner  # run benchmarks
+NSCK_USE_RUST=1 pytest                    # run all 1443+ tests (Rust default-on)
+pytest tests/integration/test_v4_full_system.py -v  # V4 tests
+pytest tests/unit/reasoning/             # subsystem tests
+pytest tests/integration/               # pipeline tests
+uvicorn nsck.api.nsck_api:app            # start REST API
+python -m nsck.benchmarks.runner         # run benchmarks
 ```

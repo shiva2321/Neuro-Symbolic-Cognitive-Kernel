@@ -1,6 +1,8 @@
-# Module Reference — NSCK V14
+# NSCK Module Reference — V4
 
-Complete reference for every module in the NSCK codebase. 100 core modules, 238 classes across 12 subsystems. Every class and method listed here is taken directly from source code.
+Complete reference for every module in the NSCK codebase. ~96 core modules, ~232 classes across 13 subsystems. Every class and method listed here is taken directly from source code.
+
+> **V4 new modules** are marked *(V4 new)*. **V4 updated modules** are marked *(V4 updated)*.
 
 > **Ground truth is always the source files** under `nsck/python/core/`, `nsck/api/`, and `nsck_ai_model/`.
 
@@ -277,14 +279,14 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `recall_by_reward(min_reward)` | Filter by reward threshold. |
 | `get_statistics()` | Episode store statistics. |
 
-### `procedural_memory.py`
+### `procedural_memory.py` *(V4 updated)*
 
-**ProceduralMemory** (V13) — Skill cache with fast-path lookup.
+**ProceduralMemory** — Skill cache with LSH fast-path lookup. V4: 16-bit LSH bucket index, familiarity threshold lowered to **0.72** (was 0.85), O(1) average lookup.
 
 | Method | Description |
 |--------|-------------|
-| `cache_skill(action, context_hv, reward)` | Store a skill. |
-| `recall_action(context_hv)` | Fast-path skill retrieval. |
+| `cache_skill(action, context_hv, reward)` | Store a skill; updates LSH bucket index. |
+| `recall_action(context_hv)` | Fast-path skill retrieval via LSH O(1) lookup (threshold 0.72). |
 | `get_statistics()` | Cache statistics. |
 
 ### `cross_modal_associative_memory.py`
@@ -329,15 +331,19 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `update_cache(key, value)` | Update recall cache. |
 | `query(query_hv, top_k, threshold)` | Multi-stage recall. |
 
-### `semantic_memory_shim.py` *(V14)*
+### `semantic_memory_shim.py` *(V4 updated)*
 
-Auto-selects Rust or Python backend for spreading activation, using the same pattern as `hypervec_shim.py`.
+Auto-selects Rust or Python backend for spreading activation. V4: `_rust_step_fn` is captured at module import time (not lazily per call), ensuring `spreading_activation_step` Rust free-fn is used for every step.
 
 | Function | Description |
 |----------|-------------|
 | `spread_activation_fast(concept_graph, start_concepts, relation_weights, stigmergy, steps, decay)` | Attempt Rust-accelerated spreading activation. Returns `Dict[str, float]` on success, `None` if Rust unavailable or sync fails. |
 
 The caller (`SemanticMemory.spread_activation`) falls through to the Python path when `None` is returned. When `hypervec_rs.SemanticMemoryConcurrent` is importable, the shim syncs concept nodes from the NetworkX graph to the Rust DashMap backend before running activation.
+
+### `semantic_memory.py` *(V4 updated)*
+
+**SemanticMemory** — Graph-structured concept store. V4: HNSW index enabled by default, `_hot_cache` LRU (256 entries) populated during `spread_activation()` via `_update_hot_cache()`.
 
 ---
 
@@ -696,7 +702,7 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 
 ### `ngram_nlu.py`
 
-**NgramNLU** — Fast n-gram intent classifier (143K sent/s).
+**NgramNLU** — Fast n-gram intent classifier (143K sent/s). Retained as fallback in V4.
 
 | Method | Description |
 |--------|-------------|
@@ -707,6 +713,18 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 | `extract_entities(text)` | Named entity extraction. |
 
 **NgramNLUAdapter** — GWT adapter for NgramNLU.
+
+### `vsa_nlu.py` *(V4 new)*
+
+**VSANLUEngine** — VSA-based intent classifier. Primary NLU in V4 (replaces `NgramNLU` as primary). Uses `DistributionalCodebook` word HVs and 7 intent prototype bundles for classification.
+
+| Method | Description |
+|--------|-------------|
+| `process(text)` | Returns `dict` with `intent`, `confidence`, `entities`. |
+| `classify_intent(text)` | Returns `(intent_str, confidence_float)`. |
+| `extract_entities(text)` | Returns `List[dict]` of entity spans. |
+
+**7 intents:** `question`, `command`, `statement`, `greeting`, `farewell`, `exclamation`, `negation`.
 
 ### `fluent_nlg.py`
 
@@ -840,6 +858,27 @@ Legacy backup of compositional semantics module.
 **SafetyRuleVerifier** — Formula-based safety checks: `add_property()`, `verify_rule()`, `verify_ruleset()`.
 
 **SafetyGateVerifier** (V10) — GWT safety gate: `gate_decision()`.
+
+---
+
+## Bootstrap *(V4 new)*
+
+`python/core/bootstrap/`
+
+### `knowledge_seeder.py` *(V4 new)*
+
+**KnowledgeSeeder** — Declarative domain bootstrapper from YAML domain kits.
+
+| Method | Description |
+|--------|-------------|
+| `seed_from_yaml(yaml_path, engine)` | Load domain kit YAML and inject into engine. Returns `int` (number of rules seeded). |
+
+**Domain kits** shipped in `bootstrap/domain_kits/`:
+
+| File | Domain |
+|------|--------|
+| `navigation.yaml` | Grid-world navigation (concepts, causal rules, procedural skills) |
+| `scheduling.yaml` | Task scheduling domain |
 
 ---
 

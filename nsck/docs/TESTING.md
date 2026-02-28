@@ -1,23 +1,25 @@
-# NSCK V13 Testing Guide
+# NSCK V4 Testing Guide
 
 ## Quick Start
 
 Run the full test suite from the repository root:
 
 ```bash
-python -m pytest nsck/tests/ -q
+NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
 ```
+
+> **As of V4, `NSCK_USE_RUST=1` is the default.** Rust is expected to be built.
 
 **Current results** (with Rust backends `hypervec_rs.so` + `snn_rs.so`):
 
 | Metric     | Value                          |
 |------------|--------------------------------|
-| Collected  | 1437 tests across 84 files     |
-| Passed     | 1424                           |
+| Collected  | 1443+ tests across 84+ files   |
+| Passed     | 1430+                          |
 | Failed     | 2 (stochastic — see below)     |
 | Skipped    | 7                              |
 | Xfailed    | 4                              |
-| Run time   | ~13 seconds                    |
+| Run time   | ~14 seconds                    |
 
 ---
 
@@ -26,14 +28,17 @@ python -m pytest nsck/tests/ -q
 All commands assume you are in the repository root.
 
 ```bash
-# Full suite
-python -m pytest nsck/tests/ -q
+# Full suite (V4: Rust default-on)
+NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
 
 # Unit tests only (~8s)
 python -m pytest nsck/tests/unit/ -q
 
 # Integration tests
 python -m pytest nsck/tests/integration/ -q
+
+# V4-specific tests
+python -m pytest nsck/tests/integration/test_v4_full_system.py -v
 
 # Specific subsystem
 python -m pytest nsck/tests/unit/reasoning/ -q
@@ -61,11 +66,13 @@ nsck/tests/
 │   ├── integration_core/    # brain_fusion, global_workspace
 │   ├── language/            # nlg, construction_grammar, semantic_roles,
 │   │                        # distributional, lingua, frame, pragmatics,
-│   │                        # coreference, dialogue, v4_features
+│   │                        # coreference, dialogue, v4_features,
+│   │                        # test_vsa_nlu.py (V4 new)
 │   ├── learning/            # cross_domain, text_knowledge, active_inference,
 │   │                        # cross_modal
 │   ├── memory/              # stigmergy, homeostasis, memory_lifecycle,
-│   │                        # cleanup_memory, lsh_rebuild, hnsw_memory
+│   │                        # cleanup_memory, lsh_rebuild, hnsw_memory,
+│   │                        # test_procedural_lsh.py (V4), test_semantic_hot_cache.py (V4)
 │   ├── multimodal/          # concurrent_multimodal
 │   ├── perception/          # stream_encoder, semantic_roles, semantic_folding
 │   ├── reasoning/           # math, belief_revision, counterfactuals,
@@ -94,6 +101,7 @@ nsck/tests/
 │   ├── test_realworld_capabilities.py
 │   ├── test_benchmarks.py
 │   ├── test_stability.py
+│   ├── test_v4_full_system.py  (V4 new — 6 classes)
 │   └── (several others)
 ├── core_architecture/       # Architecture-level tests
 │   ├── test_learning.py
@@ -158,8 +166,19 @@ the compiled backends alongside their pure-Python equivalents.
 Snapshot taken with Rust backends enabled on a standard CI runner.
 
 ```
-1437 passed, 2 failed, 7 skipped, 4 xfailed in ~13s
+1443+ collected, 1430+ passed, 2 failed, 7 skipped, 4 xfailed in ~14s
 ```
+
+### V4 Test Classes (`test_v4_full_system.py`)
+
+| Class | Key checks |
+|---|---|
+| `TestProceduralFastPath` | LSH lookup wired, skills populated after positive reward, threshold == 0.72 |
+| `TestSemanticHotCache` | `_hot_cache` dict exists, HNSW enabled by default, cache updated after spread_activation |
+| `TestNLU` | VSANLUEngine classifies intent, confidence ≥ 0.0, entity extraction, process() dict output |
+| `TestBundleMajorityVote` | bundle_hvs majority correct, result closer to majority input |
+| `TestImagination` | imagine_rollout() returns tuple, multi-step works |
+| `TestKnowledgeSeeder` | seed_from_yaml() returns int, navigation domain seeded, rules > 0 |
 
 ### Stochastic Failures (2)
 
@@ -288,4 +307,4 @@ are the only failures, re-running the job is the correct response.
 
 ---
 
-*Last updated for NSCK V13.*
+*Last updated for NSCK V4.*

@@ -1154,3 +1154,28 @@ Where:
 - `Bundle` = iterative pairwise majority-vote bundle
 
 This encodes word order: permuting tokens changes the sentence HV.
+
+---
+
+## V4 New Formulas
+
+### VSA Bundle Majority-Vote Proof
+`bundle_hvs([A,A,A,B]) → A`. For bit position `i`, count `c_i = Σ v[i]` across all N vectors. If `c_i > N/2`: output 1. If `c_i < N/2`: output 0. Tie `(N even, c_i = N/2)`: `bit_pos % 2` (deterministic).
+
+### LSH Bucket
+`key = Σ_{j=0}^{n_bits-1} (dot(hv_bits, proj_j) > 0) · 2^j` where projections are ChaCha8-seeded pseudorandom. Complexity O(n_bits · D/64).
+
+### spreading_activation_step
+One step `A'[v] = A[v] + Σ_{(u,v) ∈ E} decay · w(u,v) · A[u]` where `w(u,v)` is relation_weight × (1 + stigmergy_pheromone). Complexity O(E).
+
+### EWC Loss
+`L_EWC = Σ_i F_i · (θ_i - θ*_i)^2` where `F_i` is Fisher information, `θ*_i` is parameters at task completion.
+
+### VSA-NLU Intent Classification
+`intent* = argmax_k cosine(encode_sentence(text), prototype_k)` where `encode_sentence(text) = ⊕_{i=1}^{L} permute(w_i, i)` (positional role-filler binding).
+
+### ProceduralMemory LSH
+bucket key is 16-bit (n_bits=16, seed=0xDEAD), lookup is O(1) average.
+
+### Hot Cache LRU
+`_hot_cache` stores top-K concept HVs by access frequency; cache hit avoids full dict lookup.

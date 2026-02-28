@@ -1,6 +1,6 @@
 # NSCK Goal Tracker — AGI Vision vs Implementation
 
-> **Version 14 (V14)** — Updated February 2026
+> **Version 4 (V4) — Updated February 2026**
 >
 > This is a living document that tracks the creator's original AGI vision against
 > the actual state of implementation. It is meant to be honest, not aspirational.
@@ -27,16 +27,22 @@ This statement defines ten capabilities. Each is tracked below.
 
 | # | Capability | Status | Evidence |
 |---|---|---|---|
-| 1 | **Learning** | ✅ Implemented | Hebbian, Q-learning, STDP, rule induction, active inference, online |
-| 2 | **Reasoning** | ✅ Implemented | Causal, rules, STRIPS planning, analogy, spatial, math, belief revision |
-| 3 | **Remembrance & Recall** | ✅ Implemented | Episodic + semantic memory; HV similarity recall; Rust lock-free backend |
+| 1 | **Learning** | ✅ Implemented | Hebbian, Q-learning, STDP, rule induction, active inference, EWC-aware rule pruning (V4) |
+| 2 | **Reasoning** | ✅ Implemented | Causal, rules, STRIPS planning, analogy, spatial, math, belief revision; imagine_rollout() multi-step (V4) |
+| 3 | **Remembrance & Recall** | ✅ Implemented | Episodic + semantic memory; HV similarity recall; Rust lock-free backend; LSH procedural O(1) (V4) |
 | 4 | **Generalization** | ✅ Implemented | `PatternGeneralizer` (V13) clusters HVs into abstract prototypes |
-| 5 | **Cross-domain Transfer** | ⚠️ Partial | Analogy engine enables structural transfer; no automatic domain bridge |
-| 6 | **Lifelong Learning** | ✅ Implemented | No catastrophic forgetting; tenure-based rule decay; `sleep()` consolidation |
+| 5 | **Cross-domain Transfer** | ⚠️ Partial | Analogy engine enables structural transfer; KnowledgeSeeder YAML domain kits (V4) |
+| 6 | **Lifelong Learning** | ✅ Implemented | No catastrophic forgetting; EWC-aware rule pruning (V4); `sleep()` consolidation |
 | 7 | **Multi-modal Input** | ✅ Implemented | 10 adapters + V14 rich adapters (text/image/audio bridge); `PerceptPacket` contract |
 | 8 | **Glass-box Transparency** | ✅ Implemented | Every decision yields `Explanation` + `ThoughtTrace`; zero hidden layers |
-| 9 | **Efficiency** | ✅ Implemented | Rust VSA/SNN backends (5–85× speedup); runs on laptop CPU, no GPU required |
-| 10 | **Developer Extensibility** | ✅ Implemented | `register_task()`, `register_encoder()`, `KnowledgePack` (V14) |
+| 9 | **Efficiency** | ✅ Implemented | Rust default-on (V4); spreading_activation_step, bundle_hvs, lsh_bucket Rust exports; 5–85× speedup |
+| 10 | **Developer Extensibility** | ✅ Implemented | `register_task()`, `register_encoder()`, `KnowledgePack`; `KnowledgeSeeder` YAML domain kits (V4) |
+| 11 | **VSA-NLU** | ✅ Implemented (V4) | VSANLUEngine 7-intent classifier with entity extraction; replaces NgramNLU as primary |
+| 12 | **KnowledgeSeeder** | ✅ Implemented (V4) | `seed_from_yaml()` bootstrap with navigation.yaml + scheduling.yaml domain kits |
+| 13 | **EWC-aware rules** | ✅ Implemented (V4) | `gwt_win_count` + `ewc_importance` fields on Rule; composite prune score |
+| 14 | **LSH procedural memory** | ✅ Implemented (V4) | 16-bit LSH bucket index, O(1) lookup, threshold 0.72 |
+| 15 | **SNN auto-grounding** | ✅ Implemented (V4) | `register_concepts_from_memory()` called at startup in `NSCKSubstrate.__init__()` |
+| 16 | **Rust step dispatch** | ✅ Implemented (V4) | `_rust_step_fn` captured at import; `spreading_activation_step`, `bundle_hvs`, `lsh_bucket` |
 
 ---
 
@@ -252,4 +258,4 @@ report = substrate.transplant(model=bert, domain_name="nlp")
 - [x] **Knowledge bootstrapping**: KnowledgeSeeder + navigation.yaml + scheduling.yaml domain kits
 - [x] **seed_domain()**: CognitiveEngine.seed_domain() thin wrapper
 - [x] **EWC rule importance**: gwt_win_count + ewc_importance fields on Rule; prune_rules() protects important rules
-- [x] **50 new tests**: All passing, total 1507 tests pass (0 regressions)
+- [x] **50 new tests**: All passing, total 1507 tests pass (0 regressions). V4 adds `test_v4_full_system.py` (6 test classes: TestProceduralFastPath, TestSemanticHotCache, TestNLU, TestBundleMajorityVote, TestImagination, TestKnowledgeSeeder). Running suite: `python -m pytest nsck/tests/integration/test_v4_full_system.py -v`.

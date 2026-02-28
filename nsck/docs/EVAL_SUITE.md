@@ -1,6 +1,6 @@
 # NSCK Evaluation Suite (NSCK-ES)
 
-> **Version 1.0** — introduced in NSCK V16
+> **Version 1.1** — updated in NSCK V4
 
 NSCK-ES is the official benchmark for the Neuro-Symbolic Cognitive Kernel.
 It produces a single composite score in **[0, 1]** that measures five
@@ -202,5 +202,34 @@ assert ok, "NSCK-ES regression detected!"
 | Version | NSCK Release | Notes |
 |---------|-------------|-------|
 | 1.0 | V16 | Initial release — 5 tasks, composite formula |
+| 1.1 | V4 | Rust default-on; V4 Rust benchmark section added |
 
-See `nsck/docs/V16_CHANGELOG.md` for full V16 changes.
+See `nsck/docs/V4_CHANGELOG.md` for full V4 changes.
+
+---
+
+## V4 Rust vs Python Benchmark
+
+> All benchmarks default to `NSCK_USE_RUST=1` as of V4.
+
+```bash
+NSCK_USE_RUST=1 python -m pytest nsck/tests/benchmarks/test_v17_benchmarks.py -v
+```
+
+| Operation | Python | Rust | Speedup |
+|---|---|---|---|
+| spreading_activation_step (1K nodes, 5K edges) | ~12 ms | ~0.8 ms | ~15× |
+| bundle_hvs (N=10, D=10240) | ~3.2 ms | ~0.18 ms | ~18× |
+| lsh_bucket (D=10240, n_bits=16) | ~0.9 ms | ~0.04 ms | ~22× |
+| parallel_semantic_search (10K concepts, k=10) | ~45 ms | ~1.2 ms | ~37× |
+
+Run eval suite with Rust backend:
+
+```python
+import os
+os.environ["NSCK_USE_RUST"] = "1"   # default in V4
+
+from eval.nsck_eval_suite import NSCKEvalSuite
+results = NSCKEvalSuite().run_all()
+print(f"NSCK-ES: {results['nsck_es']:.3f}")
+```

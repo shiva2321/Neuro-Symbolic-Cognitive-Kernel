@@ -1,6 +1,6 @@
-# NSCK Architecture — Neuro-Symbolic Cognitive Kernel
+# NSCK Architecture — V4 (Neuro-Symbolic Cognitive Kernel)
 
-> **Version 13 (V13)** — February 2026
+> **Version 4 (V4) — February 2026**
 >
 > This document is the definitive reference for NSCK's internal design.
 > It covers the seven-layer architecture, data-flow pipeline,
@@ -22,7 +22,8 @@
 9. [Perception Pipeline](#9-perception-pipeline)
 10. [Rust Acceleration](#10-rust-acceleration)
 11. [Configuration](#11-configuration)
-12. [Limitations](#12-limitations)
+12. [V4 Additions](#12-v4-additions)
+13. [Limitations](#13-limitations)
 
 ---
 
@@ -51,37 +52,30 @@ fuses three computational paradigms into a single decision loop:
 ## 2. Seven-Layer Architecture
 
 ```
+Input → Perception → GWT Broadcast → CognitiveEngine
+      → Memory (Semantic+Episodic+Procedural) → Learning → Output
+```
+
+```
 Layer 6 — Executive      Metacognition · SelfModel · TheoryOfMind · Safety
-Layer 5 — Language        Parser · ConstructionGrammar · NgramNLU · NLG · Dialogue
+Layer 5 — Language        Parser · ConstructionGrammar · VSANLUEngine · NLG · Dialogue
 Layer 4 — Learning        Hebbian · Q-Learning · RuleInduction · ActiveInference · Curiosity · Conformal
-Layer 3 — Reasoning       Causal · Rules · Planning · Analogy · Spatial · Math · Beliefs
-Layer 2 — Memory          Semantic (KG + HNSW) · Episodic (Rust) · Procedural · CrossModal
-Layer 1 — Perception      10 Adapters · SignalIngestor · UniversalHVEncoder · SNN
-Layer 0 — Substrate       VSA Engine (10 240-bit HVs) · GWT · Dual-Process · Rust backends
+Layer 3 — Reasoning       Causal · Rules · Planning · Analogy · Spatial · Math · Beliefs · imagine_rollout()
+Layer 2 — Memory          Semantic (KG + HNSW + hot cache) · Episodic (Rust) · Procedural (LSH O(1))
+Layer 1 — Perception      10 Adapters · SignalIngestor · UniversalHVEncoder · SNN (auto-grounded V4)
+Layer 0 — Substrate       VSA Engine (10 240-bit HVs) · GWT · Dual-Process · Rust backends (default-on V4)
 ```
 
 ### Layer 0 — Substrate
-
-**Purpose.** Provide the fundamental computational primitives that every
-higher layer depends on: hypervector algebra, the GWT broadcast bus,
-and the dual-process router.
 
 | Component | File | Role |
 |---|---|---|
 | `HyperVector` | `core/vsa/hypervec_shim.py` → `hypervec_rs` | 10 240-bit binary VSA vector |
 | `FHRRVector` | `core/vsa/fhrr.py` | Complex-phasor VSA variant |
 | `GlobalWorkspace` | `core/reasoning/global_workspace.py` | Coalition competition + broadcast |
-| `NSCKConfig` | `core/integration/config.py` | Central configuration (dual-process flag, thresholds) |
-
-**Interfaces ↑ Layer 1:** Perception adapters call `HyperVector.bind / bundle`
-to build `PerceptPacket.situation_hv`.
-
----
+| `NSCKConfig` | `core/integration/config.py` | Central configuration |
 
 ### Layer 1 — Perception
-
-**Purpose.** Convert arbitrary raw input into a uniform `PerceptPacket`
-that downstream layers can consume without knowing the original modality.
 
 | Adapter | File | Accepts |
 |---|---|---|
@@ -96,99 +90,59 @@ that downstream layers can consume without knowing the original modality.
 | `AudioAdapter` | `core/adapters/audio_adapter.py` | audio signal |
 | `VideoAdapter` | `core/adapters/video_adapter.py` | video frames |
 
-**V13 additions:**
-- `SignalIngestor` (`core/perception/signal_ingestor.py`) — normalisation,
-  windowing, and routing of raw signals before adapter dispatch.
-- `UniversalHVEncoder` (`core/vsa/universal_hv_encoder.py`) — signal-agnostic
-  statistical encoder that works across all modalities.
-
-**Interfaces ↑ Layer 2:** `PerceptPacket.entity_hvs` feed into
-`SemanticMemory` look-ups; ↑ Layer 3: `active_predicates` feed the rule engine.
-
----
+**V4:** SNN auto-grounding — `register_concepts_from_memory()` called at
+`NSCKSubstrate.__init__()` to bridge spike patterns to semantic predicates.
 
 ### Layer 2 — Memory
 
-**Purpose.** Persistent and working memory stores that ground symbols
-and recall past experience.
-
 | Store | File | Backend |
 |---|---|---|
-| `SemanticMemory` | `core/memory/semantic_memory.py` | NetworkX KG + `_NSWIndex` (HNSW when available) |
+| `SemanticMemory` | `core/memory/semantic_memory.py` | NetworkX KG + HNSW (default-on V4) + `_hot_cache` LRU 256 |
 | `EpisodicMemory` | `core/memory/episodic_memory.py` | Python + `EpisodicMemoryConcurrent` (Rust) |
-| `ProceduralMemory` | `core/memory/procedural_memory.py` | In-memory skill cache (`Skill` dataclass) |
+| `ProceduralMemory` | `core/memory/procedural_memory.py` | LSH 16-bit bucket index (V4), threshold 0.72 |
 | `CrossModalAssociativeMemory` | `core/memory/cross_modal_associative_memory.py` | HV bind across modalities |
 | `ConceptDriftDetector` | `core/memory/concept_drift_detector.py` | Tracks semantic drift |
 
-**Interfaces ↑ Layer 3:** Episodic recall proposes `MEMORY` coalitions;
-semantic similarity underpins analogy; ↓ Layer 1: perception writes new
-episodes.
-
----
-
 ### Layer 3 — Reasoning
-
-**Purpose.** Symbolic and hybrid inference over grounded predicates and
-hypervectors.
 
 | Module | File | Technique |
 |---|---|---|
 | `CausalReasoner` | `core/reasoning/causal_reasoning.py` | `CausalGraph` + intervention / counterfactual |
-| `RuleLearner` | `core/reasoning/rule_learner.py` | Predicate-condition → action rules |
+| `RuleLearner` | `core/reasoning/rule_learner.py` | EWC-aware rule pruning (V4) |
 | `STRIPSPlanner` | `core/reasoning/planner.py` | Forward-search STRIPS planning |
 | `AnalogyEngine` | `core/reasoning/analogy.py` | Structure-mapping over HV similarity |
 | `SpatialReasoner` | `core/reasoning/spatial_reasoning.py` | Position codebook + relation inference |
 | `MathReasoner` | `core/reasoning/math_reasoning.py` | FPE codebook + expression evaluation |
 | `BeliefScorer` | `core/reasoning/belief_revision.py` | Bayesian belief update |
-
-**Interfaces ↑ Layer 4:** Rule learner invokes Hebbian strengthening;
-↑ Layer 6: Safety gate may veto any proposed action.
-
----
+| `imagine_rollout()` | `core/reasoning/cognitive_engine.py` | Multi-step forward simulation (V4) |
 
 ### Layer 4 — Learning
-
-**Purpose.** Online adaptation without gradient-based training.
 
 | Module | File |
 |---|---|
 | `VSAHebbianLearner` | `core/learning/hebbian.py` |
 | Q-learning policy | embedded in `CognitiveEngine` |
-| `RuleLearner` (induction) | `core/reasoning/rule_learner.py` |
+| `RuleLearner` (induction + EWC pruning V4) | `core/reasoning/rule_learner.py` |
 | `ActiveInferenceLearner` | `core/learning/active_inference.py` |
 | `CuriosityModule` | `core/learning/curiosity.py` |
 | `ConformalWrapper` | `core/learning/conformal_wrapper.py` |
 | `PatternGeneralizer` | `core/learning/pattern_generalizer.py` |
 | `MetaLearner` | `core/learning/meta_learning.py` |
 
-**Interfaces ↓ Layer 3:** Active inference adjusts coalition salience;
-curiosity injects `EXPLORATION` proposals.
-
----
-
 ### Layer 5 — Language
-
-**Purpose.** Natural-language understanding and generation (rule-based /
-n-gram; no deep learning).
 
 | Module | File |
 |---|---|
 | `LeftCornerParser` | `core/language/parser.py` |
 | `ConstructionMatcher` | `core/language/construction_grammar.py` |
-| `NgramNLU` | `core/language/ngram_nlu.py` |
+| `VSANLUEngine` *(V4 new — primary)* | `core/language/vsa_nlu.py` |
+| `NgramNLU` *(fallback)* | `core/language/ngram_nlu.py` |
 | `NLGEngine` | `core/language/nlg.py` |
 | `FluentResponseComposer` | `core/language/fluent_nlg.py` |
 | `DialogueManager` | `core/language/dialogue_manager.py` |
 | `BrillPosTagger` | `core/language/pos_tagger.py` |
 
-**Interfaces ↓ Layer 1:** `TextAdapter` uses language module for predicate
-extraction; ↑ Layer 6: dialogue state informs metacognition.
-
----
-
 ### Layer 6 — Executive
-
-**Purpose.** Self-monitoring, safety enforcement, and theory-of-mind.
 
 | Module | File |
 |---|---|
@@ -198,9 +152,6 @@ extraction; ↑ Layer 6: dialogue state informs metacognition.
 | `TheoryOfMind` | `core/cognitive/theory_of_mind.py` |
 | `EmotionSystem` | `core/cognitive/emotion_system.py` |
 | `SafetyGateVerifier` | `core/cognitive/safety_verifier.py` |
-
-**Interfaces ↓ Layer 3:** Safety gate can veto any coalition winner;
-self-model tracks confidence calibration history.
 
 ---
 
@@ -212,59 +163,32 @@ self-model tracks confidence calibration history.
        ▼
  ┌──────────────────────────────────────────────────────────┐
  │  NSCKSubstrate.process()                                 │
- │  ├─ SignalIngestor (V13): normalise / window / route     │
+ │  ├─ SignalIngestor: normalise / window / route           │
  │  ├─ Detect modality → select Adapter                     │
  │  └─ Adapter.encode() → PerceptPacket                     │
- │     (situation_hv, entity_hvs, active_predicates, …)     │
  └──────────────────────────────────────────────────────────┘
        │
        ▼
  ┌──────────────────────────────────────────────────────────┐
  │  CognitiveEngine.decide(percept)                         │
  │                                                          │
- │  0. V13 ProceduralMemory fast-path check                 │
- │     └─ if similarity(state_hv, skill.context_hv) ≥ 0.85 │
+ │  0. V4 ProceduralMemory fast-path (LSH O(1))             │
+ │     └─ if similarity(state_hv, skill.context_hv) ≥ 0.72  │
  │        → return cached (action, confidence) immediately  │
  │                                                          │
  │  1. Grounding: extract active_predicates                 │
  │                                                          │
  │  2. Build coalitions from 7 sources:                     │
- │     ┌────────────────────────────────────────────────┐   │
- │     │ RULES        — matching predicate rules        │   │
- │     │ MEMORY       — episodic recall (System 2)      │   │
- │     │ EXPLORATION  — curiosity-driven action          │   │
- │     │ Q_LEARNING   — reward-based policy              │   │
- │     │ PLANNER      — STRIPS goal-directed (System 2)  │   │
- │     │ MATH         — MathReasoner proposals           │   │
- │     │ EXTERNAL     — metacognition / SNN coalitions   │   │
- │     └────────────────────────────────────────────────┘   │
+ │     RULES | MEMORY | EXPLORATION | Q_LEARNING            │
+ │     PLANNER | MATH | EXTERNAL                            │
  │                                                          │
- │  3. ActiveInference adjusts salience:                    │
- │     c.base_salience += weight × (0.5 − free_energy)     │
- │                                                          │
- │  4. Dual-Process routing (§5)                            │
- │                                                          │
- │  5. GWT competition → winner broadcast (§4)              │
- │                                                          │
+ │  3. ActiveInference adjusts salience                     │
+ │  4. Dual-Process routing                                 │
+ │  5. GWT competition → winner broadcast                   │
  │  6. Safety gate check → possible veto                    │
- │                                                          │
  │  7. Return CognitiveState                                │
- │     (chosen_action, confidence, explanation,             │
- │      kle_uncertainty, uncertainty_bounds, system_used)   │
  └──────────────────────────────────────────────────────────┘
 ```
-
-**CognitiveState** fields (abridged):
-
-| Field | Type | Meaning |
-|---|---|---|
-| `chosen_action` | `str` | Winning action label |
-| `confidence` | `float` | Normalised activation of winner |
-| `explanation` | `Explanation` | Glass-box trace |
-| `system_used` | `str` | `"system_1"` or `"system_2"` |
-| `kle_uncertainty` | `float` | Shannon entropy of activation distribution |
-| `uncertainty_bounds` | `tuple` | Conformal prediction interval *(V13)* |
-| `active_predicates` | `list[str]` | Grounded predicates for this tick |
 
 ---
 
@@ -272,53 +196,29 @@ self-model tracks confidence calibration history.
 
 File: `core/reasoning/global_workspace.py`
 
-### 4.1 Coalition Structure
-
 ```python
 @dataclass
 class Coalition:
-    source:            str    # e.g. "RULES", "Q_LEARNING"
-    content:           Any    # proposed action / information
-    base_salience:     float  # intrinsic loudness  [0–1]
-    relevance:         float  # context match        [0–1]
-    affect_match:      float  # drive/emotion match  [0–1]
-    sender_confidence: float  # proposer confidence   [0–1]
+    source:            str
+    content:           Any
+    base_salience:     float
+    relevance:         float
+    affect_match:      float
+    sender_confidence: float
 
     activation = base_salience + relevance + affect_match
-                 + 0.5 × sender_confidence          # max ≈ 3.5
+                 + 0.5 × sender_confidence
 ```
 
-`_effective_activation` adds a **mission-focus bonus** (0.0–0.2) on top,
-biasing competition toward the current goal.
+### Mental Rehearsal (V4)
 
-### 4.2 Competition
+Before committing to the winner the workspace can *rehearse* via
+`imagine_rollout()` (V4 multi-step):
 
-1. All coalitions ranked by `_effective_activation`.
-2. Winner takes the workspace; its `content` is broadcast.
-3. Registered `WorkspaceModule` instances receive `receive_broadcast(content)`.
-
-### 4.3 KLE Uncertainty
-
-```
-activations  = [eff_act(c) for c in proposals]
-probs        = normalise(activations)            # sum-to-1
-KLE          = − Σ pᵢ · log(pᵢ)                 # Shannon entropy
-```
-
-High KLE → multiple strong competitors → uncertain decision.
-Returned in `CognitiveState.kle_uncertainty`.
-
-### 4.4 Mental Rehearsal
-
-Before committing to the winner the workspace can *rehearse*:
-
-1. `WorldModel.imagine(state_hv, action_hv)` → predicted next state.
-2. Compare predicted state against registered **danger vectors**.
-3. If `similarity ≥ veto_threshold` (0.75) → **VETO**: halve salience,
-   remove candidate, retry with next-best (up to 3 cycles).
-4. If all candidates vetoed → emergency `ACTION_STAY`.
-
-Veto events are logged in `rehearsal_log` for telemetry.
+1. `imagine_rollout(state_hv, action_sequence)` → `(total_reward, is_plan_safe)`
+2. Compare predicted states against registered **danger vectors**.
+3. If `similarity ≥ veto_threshold` (0.75) → **VETO**: halve salience, retry.
+4. Unsafe plans have coalition salience halved (0.75 → 0.375).
 
 ---
 
@@ -329,6 +229,7 @@ File: `core/reasoning/cognitive_engine.py`
 ```
                ┌─────────────────────────────┐
                │  System 1 — Fast (≤ 1 ms)   │
+               │  ProceduralMemory (LSH O(1)) │
                │  modules: RULES,             │
                │           Q_LEARNING,        │
                │           EXPLORATION        │
@@ -346,18 +247,6 @@ File: `core/reasoning/cognitive_engine.py`
               GWT competition on full coalition set
 ```
 
-- **System 1** builds *quick* coalitions (rules, Q-table, exploration),
-  runs a preliminary GWT competition, and normalises activation
-  (`activation / 2.0`).  If confidence ≥ `system1_confidence_threshold`
-  (default **0.75**), the answer is returned *without* consulting
-  episodic memory or the planner.
-
-- **System 2** adds MEMORY and PLANNER coalitions and runs full
-  competition.
-
-- Controlled by `NSCKConfig.enable_dual_process` (default `False`).
-  `CognitiveState.system_used` records which path fired.
-
 ---
 
 ## 6. VSA Engine
@@ -366,41 +255,29 @@ File: `core/reasoning/cognitive_engine.py`
 
 - **Dimensionality:** 10 240 bits (stored as 160 × `u64`).
 - **Type:** Binary (Multiply-Add-Permute family).
-- **Operations:**
 
 | Op | Impl | Semantics |
 |---|---|---|
 | **Bind** | XOR | Role–filler binding |
 | **Bundle** | Majority vote | Superposition / set union |
+| **Bundle N-vectors** | `bundle_hvs()` Rust (V4) | Correct majority-vote over N vectors |
 | **Permute** | Bit rotation | Sequence / order encoding |
 | **Similarity** | 1 − (Hamming / dim) | Cosine-like ∈ [0, 1] |
 
-### 6.2 FHRR Mode
+### 6.2 Rust Backend — `hypervec_rs`
 
-`FHRRVector` (`core/vsa/fhrr.py`) uses **complex-phasor** hypervectors
-for continuous-valued binding (element-wise multiply on the unit circle).
+Compiled extension (`hypervec_rs.so`, 4.3 MB). Built with **maturin + PyO3**; uses **rayon**.
 
-### 6.3 Rust Backend — `hypervec_rs`
+**Existing exports:** `HyperVector`, `HyperVectorRegistry`, `parallel_bundle`,
+`SemanticMemoryConcurrent`, `EpisodicMemoryConcurrent`, `CognitiveWorkerPool`, `PersistentStorage`
 
-Compiled extension (`hypervec_rs.so`, 4.3 MB).  Built with
-**maturin + PyO3**; uses **rayon** for data-parallelism.
+**V4 new exports:**
 
-**Key exports:**
-
-| Class / Function | Module |
-|---|---|
-| `HyperVector` | `lib.rs` |
-| `HyperVectorRegistry` | `concurrent.rs` |
-| `parallel_bundle` | `concurrent.rs` |
-| `batch_parallel_similarity_search` | `concurrent.rs` |
-| `SemanticMemoryConcurrent` | `semantic.rs` |
-| `EpisodicMemoryConcurrent` | `episodic.rs` |
-| `CognitiveWorkerPool` | `worker_pool.rs` |
-| `PersistentStorage` | `persistence.rs` |
-
-**Fallback:** When `.so` is unavailable, `hypervec_shim.py` transparently
-loads the pure-Python `HyperVectorPy` from `hypervec_py.py`.
-Benchmark: Rust path is **5–85× faster** depending on operation.
+| Function | Signature | Purpose |
+|---|---|---|
+| `bundle_hvs` | `(Vec<Vec<u8>>) -> Vec<u8>` | Correct N-vector majority-vote bundle |
+| `lsh_bucket` | `(Vec<u64>, u32, u64) -> u32` | LSH bucket for ProceduralMemory O(1) |
+| `spreading_activation_step` | `(activation, edges, decay, max_frontier) -> Dict` | One step of graph spreading activation |
 
 ---
 
@@ -408,24 +285,22 @@ Benchmark: Rust path is **5–85× faster** depending on operation.
 
 ### 7.1 Neuron Model — LIF
 
-Leaky Integrate-and-Fire with configurable `tau`, `v_thresh`,
-`v_reset`, `refractory_period`, and `dt`.
+Leaky Integrate-and-Fire with configurable `tau`, `v_thresh`, `v_reset`,
+`refractory_period`, and `dt`.
 
 ### 7.2 Learning — STDP
 
-Spike-Timing Dependent Plasticity: potentiation when pre fires before
-post; depression when post fires before pre.
+Spike-Timing Dependent Plasticity via `StdpEngine` (Rust).
 
-### 7.3 Coding Modes
+### 7.3 V4 SNN Auto-Grounding
 
-| Mode | Class | Encoding |
-|---|---|---|
-| **Rate** | `RateCoder` | Value → firing rate |
-| **Temporal** | `TemporalCoder` (Python) | Value → precise spike time |
+`SNNPerceptionModule.register_concepts_from_memory(semantic_memory)` is called
+at `NSCKSubstrate.__init__()`. Spike patterns now resolve to named predicates
+via nearest-neighbor HV lookup (cleanup memory pattern).
 
 ### 7.4 Rust Backend — `snn_rs`
 
-Compiled extension (`snn_rs.so`, 1.1 MB).  PyO3 + rayon.
+Compiled extension (`snn_rs.so`, 1.1 MB).
 
 | Export | File |
 |---|---|
@@ -436,38 +311,31 @@ Compiled extension (`snn_rs.so`, 1.1 MB).  PyO3 + rayon.
 | `ConceptMapper` | `concept.rs` |
 | `RateCoder` | `concept.rs` |
 
-### 7.5 VSA ↔ SNN Bridge
-
-`core/perception/vsa_snn_bridge.py` converts between spike patterns
-and hypervectors (`SpikeEncoding`, `HVtoSpikeDecoder`), enabling
-Layer 0 (VSA) and Layer 1 (SNN) to share representations.
-
 ---
 
 ## 8. Memory Architecture
 
-### 8.1 Semantic Memory
+### 8.1 Semantic Memory *(V4 updated)*
 
 File: `core/memory/semantic_memory.py`
 
 - **Knowledge graph** backed by `networkx.DiGraph`.
-- **HV index** via `_NSWIndex` (navigable small-world); upgrades to
-  HNSW when the library is available.
-- **Concept decay:** unused concepts lose activation over time.
-- **Stigmergy:** frequently co-accessed concepts strengthen links.
-- **Prototype building:** bundle exemplar HVs into a single prototype.
+- **HV index** via HNSW (default-on in V4; was behind config flag).
+- **Hot cache:** `_hot_cache` LRU stores 256 most-recently-activated concept HVs.
+  Updated by `spread_activation()` → `_update_hot_cache()`. Cache hits avoid
+  full dict lookup.
+- **Spreading activation** hot path uses `spreading_activation_step` Rust free-fn
+  (V4) via `semantic_memory_shim.py`.
 
 ### 8.2 Episodic Memory
 
 File: `core/memory/episodic_memory.py`
 
 - Case-based: stores `(situation_hv, action, reward, predicates)`.
-- Rust backend `EpisodicMemoryConcurrent` for lock-free concurrent
-  reads.
-- Similarity search: best-match recall by Hamming distance.
-- Default capacity: **10 000** episodes (configurable).
+- Rust backend `EpisodicMemoryConcurrent` for lock-free concurrent reads.
+- Default capacity: **10 000** episodes.
 
-### 8.3 Procedural Memory *(V13)*
+### 8.3 Procedural Memory *(V4 updated)*
 
 File: `core/memory/procedural_memory.py`
 
@@ -482,16 +350,17 @@ class Skill:
     label:         str | None = None
 ```
 
-- **Fast-path:** if `similarity(query_hv, skill.context_hv) ≥ 0.85`,
-  return cached action immediately (short-circuits `CognitiveEngine.decide`).
+- **V4 fast-path:** 16-bit LSH bucket index → O(1) average candidate lookup.
+  Familiarity threshold **0.72** (was 0.85).
+- **V4 auto-population:** `CognitiveEngine.learn()` automatically caches skills
+  on every positive-reward experience.
 - LRU eviction when `len(skills) > max_skills` (default 500).
 
-### 8.4 Cross-Modal Associative Memory *(V13)*
+### 8.4 Cross-Modal Associative Memory
 
 File: `core/memory/cross_modal_associative_memory.py`
 
-Binds entity HVs from different modalities (e.g. visual "cup" ↔
-auditory "cup") using `ModalityBinding` records.
+Binds entity HVs from different modalities using `ModalityBinding` records.
 
 ---
 
@@ -504,58 +373,58 @@ File: `core/types/percept_packet.py`
 ```python
 @dataclass(frozen=True)
 class PerceptPacket:
-    modality:          str                          # "text", "dict", "image", …
+    modality:          str
     timestamp:         float
-    situation_hv:      HyperVector                  # bundled scene HV
-    entity_hvs:        dict[str, HyperVector]       # named entities
-    relation_hvs:      list[tuple[s, p, o, HV]]     # (subj, pred, obj, triple_hv)
-    active_predicates: frozenset[str]               # grounded symbols
-    confidence:        float                        # [0, 1]
-    raw_state:         dict | None                  # original input
+    situation_hv:      HyperVector
+    entity_hvs:        dict[str, HyperVector]
+    relation_hvs:      list[tuple[s, p, o, HV]]
+    active_predicates: frozenset[str]
+    confidence:        float
+    raw_state:         dict | None
     adapter_name:      str
-    adapter_trace:     dict                         # adapter metadata
+    adapter_trace:     dict
 ```
-
-All 10 adapters produce exactly this type.  Downstream code never
-inspects `modality` — it only consumes HVs and predicates.
-
-### 9.2 V13 Additions
-
-| Component | File | Role |
-|---|---|---|
-| `SignalIngestor` | `core/perception/signal_ingestor.py` | Pre-processing: normalisation, windowing, type routing |
-| `UniversalHVEncoder` | `core/vsa/universal_hv_encoder.py` | Statistical features → HV, modality-agnostic |
 
 ---
 
 ## 10. Rust Acceleration
 
-| Extension | File | Size | Crate deps |
+| Extension | File | Size | Default |
 |---|---|---|---|
-| `hypervec_rs.so` | `rust_vsa/` | 4.3 MB | pyo3, rayon, dashmap, parking_lot, crossbeam, tokio |
-| `snn_rs.so` | `rust_snn/` | 1.1 MB | pyo3, rayon, rand, parking_lot |
+| `hypervec_rs.so` | `rust_vsa/` | 4.3 MB | **On** (V4) |
+| `snn_rs.so` | `rust_snn/` | 1.1 MB | **On** (V4) |
 
-Both are built with `maturin develop --release` and loaded at import
-time.  If the `.so` is missing, pure-Python fallbacks activate
-transparently — no user action required.
+As of V4, `NSCK_USE_RUST=1` is the default. If the `.so` files are missing,
+pure-Python fallbacks activate transparently.
 
-### Performance (representative benchmarks)
+### Dispatch Logic
+
+```python
+# semantic_memory_shim.py — V4: captured at import, not per call
+_rust_step_fn = getattr(hypervec_rs, 'spreading_activation_step', None)
+
+def spread_activation_fast(concept_graph, ...):
+    if _rust_step_fn is not None:
+        return _rust_step_fn(...)
+    return None  # Python fallback
+```
+
+### Performance
 
 | Operation | Python | Rust | Speedup |
 |---|---|---|---|
-| `xor` 10 240-bit | ~12 µs | ~0.14 µs | **85×** |
-| `similarity` | ~18 µs | ~0.25 µs | **72×** |
-| `bundle` (pair) | ~30 µs | ~0.45 µs | **67×** |
-| SNN `step` 1 024 neurons | ~4 ms | ~0.8 ms | **5×** |
+| HyperVector XOR bind | ~120 µs | ~6 µs | **20×** |
+| HyperVector similarity | ~18 µs | ~0.25 µs | **72×** |
+| bundle_hvs (N=10, D=10240) | ~3.2 ms | ~0.18 ms | **18×** |
+| lsh_bucket (n_bits=16) | ~0.9 ms | ~0.04 ms | **22×** |
+| spreading_activation_step | ~12 ms | ~0.8 ms | **15×** |
+| SNN step (1 024 neurons) | ~4 ms | ~0.8 ms | **5×** |
 
 ---
 
 ## 11. Configuration
 
 File: `core/integration/config.py`
-
-`NSCKConfig` is a `@dataclass` with 75+ fields covering hardware,
-hyper-parameters, feature flags, and capacity limits.
 
 | Factory | Behaviour |
 |---|---|
@@ -564,97 +433,78 @@ hyper-parameters, feature flags, and capacity limits.
 | `NSCKConfig.production()` | Stable + performance flags on, experimental off |
 | `NSCKConfig.from_env()` | Reads `NSCK_DEVICE`, `NSCK_LR`, … from environment |
 
-Critical fields:
+Critical fields (V4 defaults):
 
 ```python
 enable_dual_process: bool = False
 system1_confidence_threshold: float = 0.75
+procedural_familiarity_threshold: float = 0.72  # V4: was 0.85
 memory_capacity: int = 2500
 episode_capacity: int = 10000
-vsa_strength: float = 5.0
-confidence_threshold: float = 0.6
+enable_hnsw_index: bool = True   # V4: default-on
+hot_cache_size: int = 256        # V4 new
 ```
 
 ---
 
-## 12. Limitations
+## 12. V4 Additions
+
+### VSANLUEngine (replaces NgramNLU as primary)
+
+`VSANLUEngine` (`core/language/vsa_nlu.py`) classifies intent using
+`DistributionalCodebook` word HVs and 7 intent prototype bundles:
+`question`, `command`, `statement`, `greeting`, `farewell`, `exclamation`, `negation`.
+
+`intent* = argmax_k cosine(encode_sentence(text), prototype_k)`
+
+### KnowledgeSeeder
+
+`KnowledgeSeeder` (`core/bootstrap/knowledge_seeder.py`) provides
+declarative domain bootstrapping from YAML domain kits. Ships with
+`navigation.yaml` and `scheduling.yaml`.
+
+`engine.seed_domain("navigation.yaml")` → injects concepts, rules, causal edges,
+and procedural skills in one call.
+
+### LSH ProceduralMemory (threshold 0.72, 16-bit LSH)
+
+`ProceduralMemory` replaces O(N) linear scan with 16-bit LSH bucket index.
+`key = lsh_bucket(hv.bits, n_bits=16, seed=0xDEAD)` → 65 536 buckets.
+Familiarity threshold: **0.72** (was 0.85).
+
+### SemanticMemory Hot Cache
+
+`SemanticMemory._hot_cache` (LRU, 256 entries) stores top-K concept HVs by
+access frequency. Populated during `spread_activation()`. Cache hits avoid
+full dict lookup.
+
+### SNN Auto-Grounding
+
+`NSCKSubstrate.__init__()` calls
+`SNNPerceptionModule.register_concepts_from_memory(semantic_memory)`,
+closing the SNN→predicate bridge. Spike patterns resolve to named predicates
+via nearest-neighbor HV lookup.
+
+### EWC-Aware Rule Pruning
+
+`Rule` gains `gwt_win_count: int = 0` and `ewc_importance: float = 0.0`.
+`decide()` increments `ewc_importance` when RULES coalition wins.
+`prune_rules()` uses composite score `confidence × (1 + ewc_importance)`,
+protecting frequently-winning rules from pruning.
+
+---
+
+## 13. Limitations
 
 | Area | Limitation |
 |---|---|
-| **NLU** | N-gram heuristics and pattern matching — no semantic parsing or transformers |
+| **NLU** | VSA prototype matching — no semantic parsing or transformers |
 | **Deep learning** | Zero gradient-based models; no CNNs, transformers, or embeddings |
-| **SNN FFI** | Rust ↔ Python overhead dominates at fine per-neuron granularity |
+| **SNN grounding** | Fires at startup only; new concepts added after `__init__()` require manual re-grounding |
+| **HNSW persistence** | Index not persisted across save/load cycles — rebuilds on next `add_concept()` |
 | **Scale** | Semantic memory practical ceiling ≈ **10 000** concepts |
-| **Media adapters** | Image / audio / video adapters are schematic stubs, not production-grade feature extractors |
-| **Cold start** | Analogy and causal reasoning require a populated memory to be useful |
+| **Rust step dispatch** | `spreading_activation_step` uses uniform decay; full relation-weighted spreading uses Python path |
 
 ---
 
-*Document generated for NSCK V13, February 2026.*
-
----
-
-## V17 — Enrichment Layer & Glass-Box Tracing
-
-V17 adds an **Enrichment Layer** that sits between adapters/memory and the GWT
-broadcast stage, plus a **GlassBoxTracer** for full decision observability.
-
-### Enrichment Layer
-
-```
-PerceptPacket → PerceptualEnricher → EnrichedPercept → GWT
-CausalTriple  → CausalEnricher    → CausalTrace     → Reasoning
-Concept/Rel   → SemanticEnricher  → EnrichmentReport → SemanticMemory
-ModalConcept  → CrossModalEnricher→ CMAnchor         → CrossModalMemory
-```
-
-| Module | Location | Purpose |
-|--------|----------|---------|
-| `CausalEnricher` | `reasoning/causal_enricher.py` | Enrich causal chains |
-| `PerceptualEnricher` | `perception/perceptual_enricher.py` | Temporal ctx + confidence |
-| `SemanticEnricher` | `memory/semantic_enricher.py` | Inverse relations + coquery |
-| `CrossModalEnricher` | `memory/crossmodal_enricher.py` | Anchor linking + clusters |
-| `GlassBoxTracer` | `cognitive/glass_box_tracer.py` | Step-by-step decision trace |
-
-### GlassBoxTracer
-
-Every module can call `tracer.record(module, message, confidence)` inside a
-`tracer.span(name)` context to append a `TraceEntry` to the active
-`DecisionTrace`. Completed traces are archived in a rolling history.
-
-*Document updated for NSCK V17, April 2026.*
-
----
-
-## V4 Architecture (February 2026)
-
-### Summary of V4 Changes
-
-V4 implements 8 architectural pillars that address key capability gaps:
-
-#### Layer 1 — Perception (V4)
-- **SNN→Symbol Grounding Cleanup Memory Bridge**: `SNNPerceptionModule.register_concepts_from_memory(semantic_memory)` populates the concept mapper from SemanticMemory HVs. Spike patterns now resolve to named predicates via nearest-neighbor HV lookup (cleanup memory pattern). Closes the SNN→predicate bridge.
-
-#### Layer 3 — Reasoning (V4)
-- **Multi-Step Imagination**: `CognitiveEngine.imagine_rollout(initial_hv, action_sequence, ...)` performs N-step forward simulation using the active inference world model. Returns `(total_discounted_reward, is_plan_safe)`. Aborts early if any predicted state exceeds `danger_threshold=0.75` similarity to registered danger vectors.
-- **Planner Safety Validation**: `_build_planner_coalition()` validates plans via `imagine_rollout()`. Unsafe plans have coalition salience halved (0.75 → 0.375), allowing safer alternatives to compete.
-- **EWC Rule Protection**: Rules gain `gwt_win_count` and `ewc_importance` fields. `decide()` increments importance when RULES coalition wins. `prune_rules()` uses composite score `confidence × (1 + ewc_importance)` to protect frequently-winning rules.
-
-#### Layer 5 — Language (V4)
-- **VSANLUEngine as Primary NLU**: `VSANLUEngine` (new in V4) replaces `NgramNLU` as the primary intent classifier. Uses `DistributionalCodebook` for word HVs and intent prototype bundles for 7-class classification (question/command/statement/greeting/farewell/exclamation/negation). `NgramNLU` remains as fallback.
-- **Sentence HV Encoding**: `DistributionalCodebook.encode_sentence(tokens)` encodes word order via positional role-filler binding: `sentence_hv = Bundle[word_hv XOR position_hv(i)]`.
-
-#### Layer 7 — Memory (V4)
-- **HNSW Default-On**: `SemanticMemory` now enables the HNSW/NSW approximate nearest-neighbor index by default (was behind `config.enable_hnsw_index` flag).
-- **Hot Cache (256-entry LRU)**: `SemanticMemory._hot_cache` stores the top-K most recently activated concepts for near-instant repeated queries. Updated by `spread_activation()` via `_update_hot_cache()`.
-- **ProceduralMemory LSH Bucket Index**: `ProceduralMemory` replaces O(N) linear scan with 16-bit LSH bucket index for O(1) candidate lookup. Familiarity threshold lowered from 0.85 to 0.72.
-- **ProceduralMemory Auto-Population**: `CognitiveEngine.learn()` automatically caches skills in `ProceduralMemory` on every positive-reward experience.
-
-#### New Layer — Bootstrap (V4)
-- **KnowledgeSeeder**: Declarative domain bootstrapping from YAML domain kits. `engine.seed_domain("navigation.yaml")` injects rules, causal graph edges, semantic concepts, and high-confidence procedural skills in one call.
-- **Domain Kits**: `navigation.yaml` (grid-world navigation) and `scheduling.yaml` (task scheduling) ship as built-in domain kits.
-
-#### Rust (V4)
-- `bundle_hvs(Vec<Vec<u8>>) -> Vec<u8>`: Proper N-vector majority-vote bundle
-- `lsh_bucket(Vec<u64>, u32, u64) -> u32`: LSH bucket computation for ProceduralMemory
-- `spreading_activation_step(...)`: One step of graph spreading activation hot path
+*Document generated for NSCK V4, February 2026.*

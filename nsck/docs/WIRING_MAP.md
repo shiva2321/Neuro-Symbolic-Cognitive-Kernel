@@ -1,6 +1,6 @@
-# NSCK Wiring Map — V17
+# NSCK Wiring Map — V4
 
-This document describes how all major NSCK modules connect in the V17 system.
+This document describes how all major NSCK modules connect in the V4 system.
 
 ---
 
@@ -15,9 +15,17 @@ External Input
 │  TextAdapter / ImageAdapter / AudioAdapter              │
 │      │                                                   │
 │      ▼                                                   │
-│  PerceptualEnricher (V17) ──► EnrichedPercept           │
+│  PerceptPacket                                           │
 └──────────────────┬──────────────────────────────────────┘
-                   │  PerceptPacket + EnrichedPercept
+                   │  PerceptPacket
+                   ▼
+┌─────────────────────────────────────────────────────────┐
+│  ProceduralMemory fast-path (V4 — LSH O(1))             │
+│  if similarity(state_hv, skill.context_hv) ≥ 0.72       │
+│      └── return cached (action, confidence) immediately  │
+│  else fall through ↓                                     │
+└──────────────────┬──────────────────────────────────────┘
+                   │  (on cache miss)
                    ▼
 ┌─────────────────────────────────────────────────────────┐
 │  GWT Broadcast (Global Workspace Theory)                │
@@ -30,83 +38,77 @@ External Input
 │  CognitiveEngine.decide()                               │
 │      │                                                   │
 │      ├── CausalRuleAuditor                              │
-│      ├── CausalEnricher (V17) ──► CausalTrace           │
-│      └── GlassBoxTracer (V17)  ──► DecisionTrace        │
+│      ├── imagine_rollout() (V4 multi-step imagination)  │
+│      └── EWC-aware rule pruning (V4)                    │
 └──────────────────┬──────────────────────────────────────┘
-                   │  DecisionState + CausalTrace
+                   │  DecisionState
                    ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Memory Layer                                            │
-│  SemanticMemory ◄── SemanticEnricher (V17)              │
+│  SemanticMemory [Rust] ← spreading_activation_step (V4) │
+│      hot cache LRU 256 entries (V4)                     │
 │  EpisodicMemory                                          │
-│  CrossModalAssociativeMemory ◄── CrossModalEnricher (V17)│
+│  ProceduralMemory [LSH O(1)] (V4)                       │
 └──────────────────┬──────────────────────────────────────┘
-                   │  Updated knowledge graph
+                   │  Updated knowledge
                    ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Learning Layer                                          │
-│  RuleLearner / ContinualLearner (EWC, V16)              │
+│  Learning Layer (EWC-aware, V4)                          │
+│  RuleLearner (EWC pruning) / ContinualLearner            │
+│  Auto-cache skill on positive reward → ProceduralMemory │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## V17 Enrichment Wiring
-
-### CausalEnricher
+## V4 Rust Acceleration Points
 
 ```
-CognitiveEngine.decide()
-    └── causal context lookup
-            └── CausalEnricher.enrich(cause, effect)
-                    └── SemanticMemory.get_related(cause, n=3)  [optional]
-                    └── returns CausalTrace
+hypervec_rs [Rust]
+    ├── bundle_hvs()          — N-vector majority-vote bundle (V4)
+    ├── lsh_bucket()          — ProceduralMemory O(1) lookup (V4)
+    ├── spreading_activation_step() — SemanticMemory hot path (V4)
+    ├── HyperVector           — 10240-bit XOR/bundle/similarity
+    ├── SemanticMemoryConcurrent
+    ├── EpisodicMemoryConcurrent
+    └── CognitiveWorkerPool
+
+snn_rs [Rust]
+    ├── SnnCore / LIFLayer
+    ├── StdpEngine
+    ├── HebbianMatrix
+    ├── ConceptMapper
+    └── RateCoder
 ```
 
-### PerceptualEnricher
+---
+
+## V4 Knowledge Seeding Wiring
 
 ```
-ModalityAdapter.encode(input)
-    └── returns PerceptPacket
-            └── PerceptualEnricher.enrich(packet)
-                    └── HV confidence scoring (numpy)
-                    └── temporal window check (deque)
-                    └── returns EnrichedPercept
+YAML Domain Kit (navigation.yaml / scheduling.yaml)
+    │
+    ▼
+KnowledgeSeeder.seed_from_yaml(yaml_path, engine)
+    ├── semantic_concepts → SemanticMemory.add_concept()
+    ├── causal_rules → RuleLearner.learned_rules[domain]
+    ├── causal_graph → CausalGraph.add_causes()
+    └── high-confidence rules → ProceduralMemory.cache_skill()
+    │
+    ▼
+engine.seed_domain("navigation.yaml")  ← thin wrapper
 ```
 
-### SemanticEnricher
+---
+
+## V4 SNN Auto-Grounding Wiring
 
 ```
-substrate.add_concept(concept, properties)
-    └── SemanticEnricher.enrich_concept(concept, relation, target)
-            └── SemanticMemory.add_relation(target, inv_rel, concept)  [if add_inverses]
-            └── coquery_counts updated
-            └── returns EnrichmentReport
-```
-
-### CrossModalEnricher
-
-```
-CrossModalAssociativeMemory.register_concept(concept, modality)
-    └── CrossModalEnricher.link_modalities(anchor, [(modality, concept), ...])
-            └── anchor_registry updated
-            └── CrossModalAssociativeMemory.register_concept(...)  [optional]
-            └── returns CrossModalEnrichmentReport
-```
-
-### GlassBoxTracer
-
-```
-NSCKSubstrate / CognitiveEngine
-    └── tracer.begin_decision(id)
-            └── [perception span]
-            │       └── tracer.record("PerceptualEnricher", ...)
-            └── [reasoning span]
-            │       └── tracer.record("CognitiveEngine", ...)
-            │       └── tracer.record("CausalEnricher", ...)
-            └── [memory span]
-            │       └── tracer.record("SemanticEnricher", ...)
-            └── tracer.end_decision() → DecisionTrace
+NSCKSubstrate.__init__()
+    └── SNNPerceptionModule.register_concepts_from_memory(semantic_memory)
+            └── for each concept in SemanticMemory:
+                    ConceptMapper.register(concept_name, concept_hv)
+            → spike patterns now resolve to named predicates
 ```
 
 ---
@@ -116,15 +118,16 @@ NSCKSubstrate / CognitiveEngine
 ```
 NSCKConfig
     └── NSCKSubstrate
-            ├── SemanticMemory ◄── SemanticEnricher
+            ├── SemanticMemory (hot cache V4) [Rust shim]
             ├── EpisodicMemory
-            ├── CrossModalAssociativeMemory ◄── CrossModalEnricher
+            ├── ProceduralMemory (LSH O(1) V4)
             ├── CognitiveEngine
             │       ├── CausalRuleAuditor
-            │       ├── CausalEnricher
-            │       └── GlassBoxTracer
-            ├── PerceptualEnricher
-            └── [V16] ContinualLearner (EWC)
+            │       ├── imagine_rollout() (V4)
+            │       ├── EWC rule pruning (V4)
+            │       └── VSANLUEngine (V4, primary NLU)
+            ├── KnowledgeSeeder (V4)
+            └── ContinualLearner (EWC)
 ```
 
 ---
@@ -138,11 +141,11 @@ NSCKConfig
 | `enable_semantic_enrichment` | `SemanticEnricher` |
 | `enable_glass_box_tracer` | `GlassBoxTracer` |
 | `enable_crossmodal_enrichment` | `CrossModalEnricher` |
-| `enable_ewc` (V16) | `ContinualLearner` |
-| `enable_seeding` (V16) | `SemanticSeeder` |
-| `enable_hnsw_index` | HNSW in `SemanticMemory` |
+| `enable_ewc` | `ContinualLearner` + EWC rule pruning (V4) |
+| `enable_seeding` | `KnowledgeSeeder` (V4) |
+| `enable_hnsw_index` | HNSW in `SemanticMemory` (default-on V4) |
 | `perception_mode="bridge"` | Bridge adapters |
 
 ---
 
-*Updated for NSCK V17, April 2026.*
+*Updated for NSCK V4, February 2026.*
