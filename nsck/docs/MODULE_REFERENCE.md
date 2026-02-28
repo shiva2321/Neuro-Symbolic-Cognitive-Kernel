@@ -765,6 +765,33 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 
 **DistributionalCodebook** — Co-occurrence statistics, pre-trained on built-in corpus.
 
+| Method | Description |
+|--------|-------------|
+| `build_default(strategy="auto")` | Build codebook; tries SemanticBootstrapper first, falls back to corpus. |
+| `build_semantic()` | Alias: `build_default(strategy="bridge")` — bridge → corpus fallback. |
+| `build_from_corpus(sentences)` | Build from raw token lists via sliding co-occurrence window. |
+| `get_hv(word)` | Return HV for word, or `None` if unknown. |
+| `similarity(w1, w2)` | Cosine similarity between two words. |
+| `encode_sentence(tokens)` | Positional-encoding sentence HV. |
+| `save(path)` / `load(path)` | Pickle serialisation. |
+
+### `semantic_bootstrap.py`
+
+**SemanticBootstrapper** — V18 tiered builder for semantically meaningful codebooks.
+
+| Method | Description |
+|--------|-------------|
+| `build_codebook(strategy, ...)` | Build codebook via Tier 0–3 fallback chain. |
+| `benchmark(cb)` | Return `{(w1,w2): sim}` dict for standard semantic pairs. |
+| `save_codebook(cb, path)` | Persist codebook to `.pkl`. |
+| `load_codebook(path)` | Load codebook from `.pkl`. |
+
+### `cognitive_vocabulary.py`
+
+`COGNITIVE_VOCABULARY` — curated list of 500+ words across 9 semantic domains
+(Cognition, Biology, Physics/Math, Computing/AI, Actions, Entities, Emotions/Social,
+Temporal/Causal, Spatial/Geometric). Used by `SemanticBootstrapper` Tier 1.
+
 ### `text_knowledge_learner.py`
 
 **TextKnowledgeLearner**, **LearningSession** — Extract knowledge from text.
