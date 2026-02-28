@@ -91,6 +91,16 @@ cp /tmp/hv/hypervec_rs/*.so ../hypervec_rs.so
 - `CognitiveWorkerPool` — Rayon parallel task execution
 - `PersistentStorage` — SQLite-backed HV persistence (via rusqlite)
 - `AsyncCognitiveRuntime` — Tokio async runtime for concurrent decisions
+- **`bundle_hvs`** *(V4 new)* — correct N-vector majority-vote bundle
+- **`lsh_bucket`** *(V4 new)* — LSH bucket key for ProceduralMemory O(1) lookup
+- **`spreading_activation_step`** *(V4 new)* — one step of graph spreading activation hot path
+
+> **As of V4, `NSCK_USE_RUST=1` is the default. Rust is expected to be built.**
+
+Verify Rust is active:
+```python
+python -c "import hypervec_rs; print('Rust OK:', hypervec_rs.HyperVector(1).bits[:5])"
+```
 
 ### 4. Build `snn_rs`
 
@@ -167,10 +177,9 @@ Verified on x86-64 Linux (rustc 1.93.1, Python 3.12, February 2026):
 | VSA bundle | ~21 K ops/s | **~1.0 M ops/s** | **50×** |
 | Memory query (1K) | ~15 ms | ~0.6 ms | **25×** |
 
-> **Note**: V17 enrichment modules (`CausalEnricher`, `PerceptualEnricher`,
-> `SemanticEnricher`, `GlassBoxTracer`, `CrossModalEnricher`) are pure Python
-> and do not require Rust. They achieve > 1 M ops/s with or without Rust,
-> but VSA operations inside them accelerate when Rust is active.
+> **Note**: V4 modules (`bundle_hvs`, `lsh_bucket`, `spreading_activation_step`) are pure Rust
+> and do not require additional Python dependencies. VSA operations inside enrichment modules
+> accelerate when Rust is active.
 
 ---
 
@@ -178,12 +187,15 @@ Verified on x86-64 Linux (rustc 1.93.1, Python 3.12, February 2026):
 
 ```bash
 # Run the full test suite (Rust active)
-python -m pytest nsck/tests/ --tb=short -q
+NSCK_USE_RUST=1 python -m pytest nsck/tests/ --tb=short -q
 
 # Run only Rust-specific tests
 python -m pytest nsck/tests/unit/rust/ nsck/tests/unit/vsa/test_hypervec_parity.py -v
 
-# Run V17 benchmarks
+# Run V4 full-system tests
+NSCK_USE_RUST=1 python -m pytest nsck/tests/integration/test_v4_full_system.py -v
+
+# Run V4 benchmarks
 python nsck/eval/vsa_capability_benchmark.py
 python -m pytest nsck/tests/benchmarks/test_v17_benchmarks.py -v --benchmark-disable
 ```
@@ -224,8 +236,8 @@ cd nsck/rust_snn && cargo check --lib
 
 - `nsck/docs/RUST_API_REFERENCE.md` — full Rust extension API reference
 - `nsck/docs/ARCHITECTURE.md` — system architecture overview
-- `nsck/docs/V17_REPORT.md` — V17 enrichment layer and capability benchmarks
+- `nsck/docs/V4_RELEASE_REPORT.md` — V4 implementation report
 
 ---
 
-*Updated for NSCK V17, February 2026. Verified on rustc 1.93.1 / Python 3.12 / x86-64 Linux.*
+*Updated for NSCK V4, February 2026. Verified on rustc 1.75+ / Python 3.9+ / x86-64 Linux.*

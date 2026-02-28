@@ -1,13 +1,13 @@
-# Workflows — NSCK V13
+# Workflows — NSCK V4
 
 NSCK (Neuro-Symbolic Cognitive Kernel) is a neuro-symbolic cognitive architecture
 that combines VSA hypervectors, rule learning, and global workspace theory.
-Below are the step-by-step data flows for every key workflow in V13.
+Below are the step-by-step data flows for every key workflow in V4.
 Classes are referenced by their actual module paths under `nsck/python/core/`.
 
 ---
 
-## 1. Decision Loop (`NSCKSubstrate.process`)
+## Workflow 1: Decision Loop (V4)
 
 The primary inference path from raw input to `SubstrateResult`.
 
@@ -18,89 +18,74 @@ The primary inference path from raw input to `SubstrateResult`.
   NSCKSubstrate._encode_single()
        │  selects adapter by Python type
        ▼
-  Adapter.encode()  ──────────────────────────────────┐
-  (TextAdapter | DictStateAdapter | NumericAdapter     │
-   | ImageAdapter | AudioAdapter | MultimodalFuser)    │
-       │                                               │
-       ▼                                               │
-  PerceptPacket                                        │
-  { situation_hv, active_predicates, confidence }      │
-       │                                               │
-       ▼                                               │
-  CognitiveEngine.decide(packet, task_tag)             │
-       │                                               │
-       ├─►  1. Input normalization → raw_state_dict    │
-       ├─►  2. GroundingVerifier.get_active_predicates │
-       ├─►  3. CuriosityModule.should_explore()        │
-       │        novelty check → explore vs exploit     │
-       ├─►  4. Build coalition proposals               │
-       │        RULES | MEMORY | EXPLORATION           │
-       │        Q_LEARNING | PLANNER | MATH | EXTERNAL │
-       ├─►  5. ActiveInferenceLearner adjusts salience │
-       │        by expected free energy                │
-       ├─►  6. GlobalWorkspace.compete()               │
-       │        → winning Coalition                    │
-       ├─►  7. SafetyGateVerifier.gate_decision()      │
-       │        → pass or veto                         │
-       ├─►  8. Normalize action to allowed set         │
-       ├─►  9. ExplanationGenerator.explain()          │
-       │        → natural-language rationale           │
-       └─► 10. Return CognitiveState                   │
-                 │                                     │
-                 ▼                                     │
-           SubstrateResult (V13 fields)                │
-           { chosen_action, confidence, explanation,   │
-             kle_uncertainty, uncertainty_bounds,       │
-             procedural_hit, encoding_stats }          │
+  Adapter.encode()
+  (TextAdapter | DictStateAdapter | NumericAdapter
+   | ImageAdapter | AudioAdapter | MultimodalFuser)
+       │
+       ▼
+  PerceptPacket
+  { situation_hv, active_predicates, confidence }
+       │
+       ▼
+  [V4] VSANLUEngine.process(text)   ← primary NLU (replaces NgramNLU)
+       │  intent + entity extraction via VSA prototype matching
+       │
+       ▼
+  CognitiveEngine.decide(packet, task_tag)
+       │
+       ├─► [V4] ProceduralMemory fast-path (LSH O(1), threshold 0.72)
+       │        → HIT: return cached (action, confidence) immediately
+       │        → MISS: fall through to full pipeline
+       │
+       ├─►  1. Input normalization → raw_state_dict
+       ├─►  2. GroundingVerifier.get_active_predicates
+       ├─►  3. CuriosityModule.should_explore()
+       ├─►  4. Build coalition proposals
+       │        RULES | MEMORY | EXPLORATION
+       │        Q_LEARNING | PLANNER | MATH | EXTERNAL
+       ├─►  5. ActiveInferenceLearner adjusts salience
+       ├─►  6. GlobalWorkspace.compete()
+       ├─►  7. SafetyGateVerifier.gate_decision()
+       ├─►  8. Normalize action to allowed set
+       ├─►  9. ExplanationGenerator.explain()
+       └─► 10. Return CognitiveState / SubstrateResult
 ```
-
-### Steps in detail
-
-| # | Component | What happens |
-|---|-----------|--------------|
-| 1 | `CognitiveEngine` | Extracts `raw_state` dict from `PerceptPacket` for backward-compatible predicate evaluation |
-| 2 | `GroundingVerifier` | Evaluates registered predicate lambdas → `List[str]` of active predicates |
-| 3 | `CuriosityModule` | Compares `situation_hv` against visited states; high novelty → EXPLORATION coalition |
-| 4 | `CognitiveEngine._build_coalitions` | Each source proposes `Coalition(source, action, salience)` |
-| 5 | `ActiveInferenceLearner` | Re-weights saliences by expected information gain (free energy) |
-| 6 | `GlobalWorkspace.compete` | Scores = salience + relevance + affect + 0.5×confidence; threshold ≥ 0.5 |
-| 7 | `SafetyGateVerifier` | Critical violations → veto; warnings logged only |
-| 8 | `CognitiveEngine` | Maps winning action onto `available_actions`; falls back to explore |
-| 9 | `ExplanationGenerator` | Template-based NL: *"Chose {action} because {reason}"* |
-| 10 | `CognitiveEngine` | Packs everything into `CognitiveState` → wrapped as `SubstrateResult` |
 
 ---
 
-## 2. V13 Ingest / Feedback Loop
+## Workflow 2: Learning (V4 — auto-cache on positive reward)
 
 ```
-  ┌──────────────────────────────────────────────────┐
-  │  substrate.ingest(input, task_tag)               │
-  │                                                  │
-  │  1. ProceduralMemory.recall(situation_hv)        │
-  │     ├── HIT  → return cached action (fast path)  │
-  │     └── MISS → fall through                      │
-  │                                                  │
-  │  2. Full process() pipeline (§1 above)           │
-  │     → SubstrateResult                            │
-  └──────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────┐
+  │  substrate.ingest(input, task_tag)                       │
+  │                                                          │
+  │  1. ProceduralMemory.recall(situation_hv)  [LSH O(1)]   │
+  │     ├── HIT  → return cached action (fast path)          │
+  │     └── MISS → fall through                              │
+  │                                                          │
+  │  2. Full process() pipeline (Workflow 1)                 │
+  │     → SubstrateResult                                    │
+  └──────────────────────────────────────────────────────────┘
                       │
                       ▼  environment executes action
-  ┌──────────────────────────────────────────────────┐
-  │  substrate.feedback(action, reward, task_tag)    │
-  │                                                  │
-  │  3. Q-value TD(0) update                         │
-  │  4. RuleLearner.observe() + induce_rules()       │
-  │  5. EpisodicMemory.store(episode)                │
-  │  6. ConformalWrapper.calibrate(prediction, actual)│
-  │  7. ProceduralMemory.update()                    │
-  │     (store skill when reward > threshold)        │
-  └──────────────────────────────────────────────────┘
+  ┌──────────────────────────────────────────────────────────┐
+  │  substrate.feedback(action, reward, task_tag)            │
+  │  OR  engine.learn(state, action, reward)                 │
+  │                                                          │
+  │  3. Q-value TD(0) update                                 │
+  │  4. RuleLearner.observe() + induce_rules()               │
+  │     EWC-aware pruning (V4): composite score              │
+  │     confidence × (1 + ewc_importance)                    │
+  │  5. EpisodicMemory.store(episode)                        │
+  │  6. ConformalWrapper.calibrate(prediction, actual)       │
+  │  7. [V4 NEW] if reward > 0.0 AND situation_hv is not None:
+  │        ProceduralMemory.cache_skill(context_hv, action, reward)
+  └──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 3. Sleep Consolidation (`NSCKSubstrate.sleep`)
+## Workflow 3: Sleep Consolidation (V4 — EWC task consolidation)
 
 Offline learning invoked periodically (e.g. after N episodes).
 
@@ -112,6 +97,7 @@ Offline learning invoked periodically (e.g. after N episodes).
     │
     ├─► 2. RuleLearner.induce_rules()
     │      promote frequent (state,action,reward) patterns
+    │      EWC-aware pruning protects high-importance rules (V4)
     │
     ├─► 3. SemanticMemory.build_prototypes()
     │      auto-generalize concept clusters (min_members=2)
@@ -119,174 +105,104 @@ Offline learning invoked periodically (e.g. after N episodes).
     ├─► 4. SemanticMemory.infer_transitive()
     │      discover transitive relations (is_a depth 3, causes depth 2)
     │
-    ├─► 5. PatternGeneralizer.generalize()         [V13]
+    ├─► 5. PatternGeneralizer.generalize()
     │      generalize patterns from recent examples
     │
-    └─► 6. ConceptDriftDetector.check()            [V13]
-           monitor semantic stability across tasks
-```
-
----
-
-## 4. Perception Pipeline (Adapter → `PerceptPacket`)
-
-Each modality has a dedicated adapter in `nsck/python/core/adapters/`.
-
-```
-  ┌─────────────┬──────────────────────────────────────────────────────┐
-  │ Modality    │ Adapter → encoding steps → PerceptPacket            │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Text        │ TextAdapter                                         │
-  │             │   tokenize → VSA encode (bind role HVs) → packet    │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Dict        │ DictStateAdapter                                    │
-  │             │   encode key-value pairs → bundle HVs → packet      │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Numeric     │ NumericAdapter                                      │
-  │             │   FPE quantize → packet                             │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Image       │ ImageAdapter                                        │
-  │             │   spatial grid + colour histogram + Sobel edges     │
-  │             │   → 65-dim FPE → packet                             │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Audio       │ AudioAdapter                                        │
-  │             │   MFCC + spectral features → 23-dim FPE → packet    │
-  ├─────────────┼──────────────────────────────────────────────────────┤
-  │ Multimodal  │ MultimodalFuser                                     │
-  │             │   fuse List[PerceptPacket] → combined packet        │
-  └─────────────┴──────────────────────────────────────────────────────┘
-```
-
-Common output: `PerceptPacket(situation_hv, active_predicates, confidence, modality, raw_state)`.
-
----
-
-## 5. Memory Recall
-
-### Semantic Memory
-
-```
-  query (concept name or HV)
-    ├─► SemanticMemory.get_concept(name) — direct graph node lookup
-    ├─► SemanticMemory.query(hv) — cosine_sim against concept_hvs → top-k
-    └─► SemanticMemory.spread_activation(seed) — propagate edges, decay per hop
-```
-
-### Episodic Memory
-
-```
-  query (situation_hv)
-    → LSH bucket lookup (4 tables × 10-bit hashes)
-    → 1-bit neighbour probing
-    → exact similarity ranking on candidates
-    → top-k episodes (Rust-backed batch search)
-```
-
-### Procedural Memory (V13)
-
-```
-  query (situation_hv)
-    → hash(situation_hv) exact match
-    → HIT: return cached (action, reward) — no GWT needed
-    → MISS: fall through to full decide() pipeline
-```
-
----
-
-## 6. Rule Learning and Firing
-
-```
-  ┌─ Online ────────────────────────────────────┐
-  │ 1. Observe (state, action, reward) triple   │
-  │ 2. RuleLearner.observe() — count patterns   │
-  │ 3. RuleLearner.induce_rules()               │
-  │    → Rule(condition, consequence,            │
-  │           confidence, fire_count,            │
-  │           confidence_history)                │
-  └─────────────────────────────────────────────┘
-           │
-           ▼
-  ┌─ Coalition building ────────────────────────┐
-  │ 4. RuleNeuralScorer.rank_rules(applicable)  │
-  │    perceptron re-ranks by relevance (V10)   │
-  │ 5. Top rule → RULES Coalition(action, score)│
-  └─────────────────────────────────────────────┘
-```
-
-After feedback, `RuleNeuralScorer.update(rule, reward)` adjusts perceptron weights.
-
----
-
-## 7. Causal Discovery
-
-```
-  observe(context, causes, effects)
-       │
-       ▼
-  Accumulate contingency tables
-       │
-       ├─► _calculate_delta_p()
-       │     ΔP (causal strength) = P(effect|cause) - P(effect|¬cause)
-       │
-       ├─► _mutual_information()
-       │     detect confounders via MI
-       │
-       ▼
-  induce_graph()
-       │  build CausalGraph from confident links
-       │
-       ▼
-  CausalRuleAuditor.audit_rule()             [V13]
-       combined_score = 0.6×confidence + 0.4×causal_score
-       audit_trace: human-readable scoring
-```
-
----
-
-## 8. Analogy and Cross-Domain Transfer
-
-```
-  AnalogyEngine
+    ├─► 6. ConceptDriftDetector.check()
+    │      monitor semantic stability across tasks
     │
-    ├─► 1. Receive source + target domain HVs
-    ├─► 2. Structural alignment via VSA similarity
-    ├─► 3. Compute functoriality score
-    │        (how well structure is preserved)
-    ├─► 4. MaxEnt threshold for acceptance
-    │
-    ▼
-  CrossDomainTransferPipeline
-    │
-    ├─► register(hv, domain_label)
-    └─► transfer(query_hv, source, target)
-         → [{source_pattern, target_pattern, transfer_score}]
+    └─► 7. [V4] EWC task consolidation
+           ewc_importance updated from gwt_win_count for each rule
 ```
 
 ---
 
-## 9. Language Processing
+## Workflow 4: Knowledge Seeding — NEW V4
 
-Full NLU → NLG pipeline through modules in `nsck/python/core/language/`.
+Declarative domain bootstrapping from YAML domain kits.
 
 ```
-  raw text
-    │
-    ├─► 1. NgramNLU.predict()            → intent classification
-    ├─► 2. LeftCornerParser.parse()       → phrase tree
-    ├─► 3. ConstructionGrammar.match()    → pattern matching
-    ├─► 4. FrameSemantics.fill()          → frame filling
-    ├─► 5. SemanticRoleLabeler.label()    → agent / patient / theme
-    ├─► 6. CoreferenceResolver.resolve()  → pronoun resolution
-    ├─► 7. DialogueManager.process_turn() → state tracking, topic shift
-    │
-    ▼
-  FluentNLG / NSCKResponseEngine
-    └─► response generation (context-appropriate fluent prose)
+  YAML Domain Kit (navigation.yaml / scheduling.yaml / custom)
+      │
+      ▼
+  KnowledgeSeeder.seed_from_yaml(yaml_path, engine)
+      │
+      ├── semantic_concepts → SemanticMemory.add_concept()
+      ├── causal_rules → RuleLearner.learned_rules[domain]
+      ├── causal_graph → CausalGraph.add_causes()
+      └── high-confidence rules (≥ 0.8) → ProceduralMemory.cache_skill()
+      │
+      ▼
+  engine.seed_domain("navigation.yaml")  ← thin wrapper
+      └── Returns: int (number of rules seeded)
+```
+
+### Steps in Detail
+
+1. Load YAML domain kit (`navigation.yaml`, `scheduling.yaml`, or custom)
+2. Inject semantic concepts into `SemanticMemory`
+3. Inject causal rules directly into `RuleLearner` (bypassing learn/induce cycle)
+4. Build causal graph edges
+5. Cache high-confidence rules (≥ 0.8 confidence) as `ProceduralMemory` skills
+
+**Result**: Engine starts with domain knowledge, reducing cold-start from 50+ episodes to 0.
+
+---
+
+## Workflow 5: Spreading Activation with Rust — NEW V4
+
+The Rust `spreading_activation_step` free-function is the hot path for
+`SemanticMemory.spread_activation()`.
+
+```
+  SemanticMemory.spread_activation(seed_concepts, steps, decay)
+      │
+      ▼
+  semantic_memory_shim.spread_activation_fast(concept_graph, ...)
+      │
+      ├── [Rust available] _rust_step_fn(activation, edges, decay, max_frontier)
+      │       → Dict[concept → activation_float]
+      │       (V4: _rust_step_fn captured at import, not per call)
+      │
+      └── [Rust unavailable] Python graph traversal fallback
+              for each step:
+                  for each (u, v) edge in frontier:
+                      A'[v] += decay × w(u,v) × A[u]
+      │
+      ▼
+  _update_hot_cache(activated_concepts)   [V4 new]
+      └── LRU cache of top-256 concept HVs updated
 ```
 
 ---
 
-## 10. REST API Flow
+## Workflow 6: Procedural Fast-Path — V4 Enhanced
+
+LSH bucket check enables O(1) average candidate lookup.
+
+```
+  ProceduralMemory.recall_action(query_hv)
+      │
+      ▼
+  [V4] lsh_bucket(query_hv.bits, n_bits=16, seed=0xDEAD) → bucket_key
+      │
+      ▼
+  Look up _lsh_index[bucket_key]  → List[Skill candidates]
+      │
+      ├── For each candidate:
+      │       sim = similarity(query_hv, skill.context_hv)
+      │       if sim ≥ 0.72 (V4 threshold, was 0.85):
+      │           return (skill.action, sim, skill.reward)
+      │
+      └── No match → return None (fall through to full decide())
+```
+
+**Complexity:** O(1) average (LSH bucket lookup + small candidate list)
+vs. O(N) linear scan in V3.
+
+---
+
+## Workflow 7: REST API Flow
 
 Served by `NSCKApiServer` (`nsck/python/core/api/nsck_api.py`).
 
@@ -319,53 +235,229 @@ Served by `NSCKApiServer` (`nsck/python/core/api/nsck_api.py`).
 
 ---
 
-## Workflow 10 — Knowledge Bootstrapping (V4)
+*Document updated for NSCK V4, February 2026.*
+
+## Workflow 8: Model Transplantation (V15)
+
+Transfer learned knowledge from any pre-trained neural network into NSCK.
 
 ```
-YAML Domain Kit
-    │
-    ▼
-KnowledgeSeeder.seed_from_yaml(yaml_path, engine)
-    │
-    ├── semantic_concepts → engine.semantic_memory.add_concept()
-    ├── causal_rules → engine.rule_learner.learned_rules[domain]
-    ├── causal_graph → engine.causal_graphs[domain].add_causes()
-    └── high-confidence rules → engine.procedural_memory.cache_skill()
-    │
-    ▼
-engine.seed_domain("navigation.yaml")
-    └── Returns: number of rules seeded
+  config = NSCKConfig.transplant()
+  substrate = NSCKSubstrate(config)
+       │
+       ▼
+  substrate.transplant(
+       model         = bert_model,
+       domain_name   = "language",
+       strategy      = "svd_factored",      # or "random" / "learned"
+       calibration_epochs = 10,             # 0 = skip STDP fine-tuning
+       save_pack_path = "language.kp",      # optional: persist as KnowledgePack
+       cognitive_engine = substrate.engine  # optional: inject on pass
+  )
+       │
+       ▼ TransplantPipeline.run()
+  ┌─────────────────────────────────────────────────────────────────┐
+  │ Stage 1 — HARVEST (harvester.py)                                │
+  │   ModelHarvester().harvest(model, method="auto")                │
+  │   ├── probe LM attrs: embeddings, embed_tokens, wte             │
+  │   ├── probe vision attrs: patch_embed, features, conv1          │
+  │   ├── probe encoder-decoder: model.encoder                      │
+  │   └── fallback: largest 2-D matrix in named_parameters()        │
+  │   → HarvestResult(embeddings[N×d], vocab_mapping, model_type)   │
+  └──────────────────────────────────────────────────────────────┬──┘
+                                                                 │
+  ┌──────────────────────────────────────────────────────────────▼──┐
+  │ Stage 2 — PROJECT (projector.py)                                │
+  │   SVDFactoredProjector:                                         │
+  │   a. SVD(E − mean) → keep k=128 principal components           │
+  │   b. Per-component FPE codebook (seed=j*31+7777)                │
+  │   c. Role HVs (seed=(j*1013+5003)%2^32)                        │
+  │   d. Encode each token: ⊕ over all components                  │
+  │   → Dict[token → HyperVector]  (codebook)                      │
+  └──────────────────────────────────────────────────────────────┬──┘
+                                                                 │
+  ┌──────────────────────────────────────────────────────────────▼──┐
+  │ Stage 3 — CALIBRATE (calibrator.py)  [optional]                 │
+  │   STDPCalibrator: for each epoch:                               │
+  │   a. Simulate n_pairs token pairs through PythonSnnCore         │
+  │   b. Re-encode tokens: mean_firing_rate ≥ threshold → bits      │
+  │   c. Measure Recall@10; keep best codebook; early-stop          │
+  │   → CalibratedResult(codebook, snn_weights, quality_curve)      │
+  └──────────────────────────────────────────────────────────────┬──┘
+                                                                 │
+  ┌──────────────────────────────────────────────────────────────▼──┐
+  │ Stage 4 — VALIDATE (validator.py)                               │
+  │   TransplantValidator:                                          │
+  │   a. Spearman ρ on 2000 random pairs                            │
+  │   b. Recall@10 and Recall@50 over 200 queries                   │
+  │   c. ARI: k-means (k=10) in embedding vs HV space               │
+  │   d. Per-token quality → worst/best concept lists               │
+  │   passed = (ρ≥0.80 AND R@10≥0.70 AND R@50≥0.60 AND ARI≥0.65)  │
+  │   → TransplantReport                                            │
+  └──────────────────────────────────────────────────────────────┬──┘
+                                                                 │
+                                           report.passed == True?
+                                     yes ──┤           no → return report
+                                           │
+  ┌──────────────────────────────────────────────────────────────▼──┐
+  │ Stage 5 — INTEGRATE                                             │
+  │   For each token in codebook:                                   │
+  │     sem.add_concept(token, {domain, token})                     │
+  │     sem.concept_hvs[token] = codebook[token]                    │
+  │   For each pair where similarity > 0.7:                         │
+  │     sem.add_relation(t_a, "similar_to", t_b)                    │
+  │   (capped at 500 tokens to bound O(n²) cost)                    │
+  └──────────────────────────────────────────────────────────────┬──┘
+                                                                 │
+  ┌──────────────────────────────────────────────────────────────▼──┐
+  │ Stage 6 — SAVE (optional)                                       │
+  │   KnowledgePack(name=domain_name)                               │
+  │     .add_concept(), .add_relation()                             │
+  │     .save(save_pack_path)                                       │
+  └─────────────────────────────────────────────────────────────────┘
+       │
+       ▼
+  TransplantReport returned to caller
 ```
 
-### Workflow 10 Steps:
-1. Load YAML domain kit (navigation.yaml, scheduling.yaml, or custom)
-2. Inject semantic concepts into SemanticMemory
-3. Inject causal rules directly into RuleLearner (bypassing learn/induce cycle)
-4. Build causal graph edges
-5. Cache high-confidence rules (≥0.8 confidence) as ProceduralMemory skills
+### Quick-Start Example
 
-**Result**: Engine starts with domain knowledge, reducing cold-start from 50+ episodes to 0.
+```python
+from python.core.substrate import NSCKSubstrate
+from python.core.integration.config import NSCKConfig
+
+config = NSCKConfig.transplant()
+substrate = NSCKSubstrate(config)
+
+import torch
+bert = torch.hub.load(
+    'huggingface/pytorch-transformers', 'model', 'bert-base-uncased'
+)
+report = substrate.transplant(
+    model=bert, domain_name="language", strategy="svd_factored",
+    calibration_epochs=0, save_pack_path="language.kp"
+)
+print(f"Passed: {report.passed}, ρ={report.spearman_rho:.3f}, R@10={report.recall_at_10:.3f}")
+```
 
 ---
 
-## Workflow 1 Update — Decision Loop with System-1 Fast-Path (V4)
+## Workflow 9: V17 Enrichment
 
-The System-1 fast-path now auto-populates from `learn()`:
+V17 enrichment modules post-process decisions at various pipeline stages.
+Enable all via `NSCKConfig.v17()`.
 
 ```
-learn(state, action, reward=1.0, task_tag)
-    │
-    ├── [existing] rule_learner.observe(...)
-    ├── [existing] episodic_memory.record(...)
-    └── [V4 NEW] if reward > 0.0 AND situation_hv is not None:
-            procedural_memory.cache_skill(context_hv, action, reward)
+  config = NSCKConfig.v17()
+  substrate = NSCKSubstrate(config)
+       │
+       ▼
+  substrate.process(input)
+       │
+       ▼  (Stage A — Perceptual Enrichment)
+  ┌─────────────────────────────────────────────────────────┐
+  │ PerceptualEnricher.enrich(packet)                       │
+  │   ├── normalise situation HV                            │
+  │   ├── bundle temporal context from rolling window (8)   │
+  │   └── compute confidence score                          │
+  │   → EnrichedPercept(confidence, temporal_ctx_available) │
+  │   Runs AFTER Adapter.encode() and BEFORE GWT broadcast  │
+  └──────────────────────────────────────────────┬──────────┘
+                                                 │
+       ▼  (Stage B — Causal Enrichment)
+  ┌─────────────────────────────────────────────────────────┐
+  │ CausalEnricher.enrich(cause, effect, strength)          │
+  │   ├── lookup n_context=3 nearest neighbours in SemanticMemory │
+  │   ├── bundle context into enriched causal HV            │
+  │   └── store enriched triple back                        │
+  │   → CausalTrace(context_concepts, enrichment_steps)     │
+  │   Called during CognitiveEngine causal reasoning step   │
+  └──────────────────────────────────────────────┬──────────┘
+                                                 │
+       ▼  (Stage C — Semantic Enrichment)
+  ┌─────────────────────────────────────────────────────────┐
+  │ SemanticEnricher.enrich_concept(concept, relation, tgt) │
+  │   ├── add inverse relation (is_a → sub_class_of, etc.)  │
+  │   ├── track co-query counts                             │
+  │   └── rebundle frequently co-queried pairs              │
+  │   → EnrichmentReport                                    │
+  │   Called after SemanticMemory.add_concept() / queries   │
+  └──────────────────────────────────────────────┬──────────┘
+                                                 │
+       ▼  (Stage D — CrossModal Enrichment)
+  ┌─────────────────────────────────────────────────────────┐
+  │ CrossModalEnricher.link_modalities(anchor, pairs)       │
+  │   ├── register modality-specific concepts under anchor  │
+  │   └── detect cross-modal clusters (similarity > 0.7)   │
+  │   → CrossModalEnrichmentReport                          │
+  │   Called when multi-modal concepts are registered       │
+  └──────────────────────────────────────────────┬──────────┘
+                                                 │
+       ▼  (Stage E — Glass-Box Tracing, every stage)
+  ┌─────────────────────────────────────────────────────────┐
+  │ GlassBoxTracer                                          │
+  │   tracer.begin_decision()                               │
+  │   with tracer.span("perception"):                       │
+  │       tracer.record("TextAdapter", "encoded...", 0.9)   │
+  │   with tracer.span("reasoning"):                        │
+  │       tracer.record("CognitiveEngine", "rule R42", 0.75)│
+  │   trace = tracer.end_decision()                         │
+  │   → DecisionTrace with full step-by-step log            │
+  └─────────────────────────────────────────────────────────┘
 ```
 
-On subsequent `decide()` calls:
+### GlassBoxTracer Usage
+
+```python
+from python.core.cognitive.glass_box_tracer import GlassBoxTracer
+
+tracer = GlassBoxTracer(max_history=100, enabled=True)
+decision_id = tracer.begin_decision()
+
+with tracer.span("perception"):
+    tracer.record("TextAdapter", "encoded 'navigate to kitchen'", confidence=0.92)
+
+with tracer.span("reasoning"):
+    tracer.record("ProceduralMemory", "LSH hit: navigate skill", confidence=0.87)
+
+trace = tracer.end_decision()
+print(tracer.format_trace(trace))
+# Span [perception]:
+#   [TextAdapter] encoded 'navigate to kitchen'  conf=0.92
+# Span [reasoning]:
+#   [ProceduralMemory] LSH hit: navigate skill  conf=0.87
+# Elapsed: 0.3 ms
 ```
-decide(state, task_tag)
-    │
-    └── [V4] Q_LEARNING coalition includes procedural recall hint
-            ProceduralMemory.recall_action(query_hv) → (action, similarity, reward)
-            [LSH bucket O(1) lookup, threshold 0.72]
+
+---
+
+## Workflow 10: Knowledge Pack Load
+
+Loading and injecting a pre-built domain knowledge pack at startup.
+
+```python
+config = NSCKConfig(knowledge_packs=[
+    "nsck/data/knowledge_packs/conceptnet_en_50k.kp",
+    "my_domain.kp",
+])
+substrate = NSCKSubstrate(config)
+# NSCKSubstrate.__init__() auto-loads all packs:
+#   for path in config.knowledge_packs:
+#       pack = KnowledgePack.load(path)
+#       stats = pack.inject_into(self.engine)
+#       → {"concepts": N, "relations": M, "causal_links": K}
 ```
+
+Manual injection:
+
+```python
+from python.core.integration.knowledge_pack import KnowledgePack
+
+pack = KnowledgePack.load("my_domain.kp")
+stats = pack.inject_into(substrate.engine)
+print(stats)  # {"concepts": 50000, "relations": 200000, "causal_links": 10000}
+```
+
+---
+
+*Document updated for NSCK V4, February 2026.*

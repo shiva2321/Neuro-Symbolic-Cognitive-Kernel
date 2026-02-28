@@ -9,7 +9,7 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V16** — 1,420+ tests. V15 baseline: 1,375 passed. Zero regressions.
+**Current release: V4** — 1,443+ tests. V3 baseline: 1,437 passed. Zero regressions.
 
 ---
 
@@ -24,11 +24,12 @@ hidden layers.
 7. [Performance Benchmarks](#performance-benchmarks)
 8. [Rust Backend](#rust-backend)
 9. [Testing](#testing)
-10. [V16 Features — Security, EWC, Eval Suite & Seeding](#v16-features--security-ewc-eval-suite--seeding)
-11. [V15 Features — Model Transplantation](#v15-features--model-transplantation)
-12. [V14 Features](#v14-features)
-13. [V13 Features](#v13-features)
-14. [Further Documentation](#further-documentation)
+10. [V4 Features — VSA-NLU, KnowledgeSeeder, LSH Memory & Rust Default-On](#v4-features--vsa-nlu-knowledgeseeder-lsh-memory--rust-default-on)
+11. [V16 Features — Security, EWC, Eval Suite & Seeding](#v16-features--security-ewc-eval-suite--seeding)
+12. [V15 Features — Model Transplantation](#v15-features--model-transplantation)
+13. [V14 Features](#v14-features)
+14. [V13 Features](#v13-features)
+15. [Further Documentation](#further-documentation)
 
 ---
 
@@ -657,6 +658,69 @@ python -m pytest tests/ -v
 Tests are in `tests/` with `unit/` and `integration/` subdirectories. The
 `conftest.py` at the package root provides shared fixtures. The `pytest.ini` at
 the repository root configures markers and test paths.
+
+---
+
+## V4 Features — VSA-NLU, KnowledgeSeeder, LSH Memory & Rust Default-On
+
+V4 delivers 5 new capabilities and 6 performance improvements, all backward-compatible with V3.
+
+### VSA-Native NLU (VSANLUEngine)
+
+`VSANLUEngine` replaces `NgramNLU` as the primary intent classifier. Uses `DistributionalCodebook` word HVs and 7 intent prototype bundles — no neural networks required.
+
+```python
+from python.core.language.vsa_nlu import VSANLUEngine
+
+nlu = VSANLUEngine()
+result = nlu.process("what is the weather today?")
+# {'intent': 'question', 'confidence': 0.87, 'entities': [...]}
+```
+
+### Knowledge Seeding (KnowledgeSeeder)
+
+Bootstrap NSCK's memory from YAML domain kits before training.
+
+```python
+from python.core.bootstrap.knowledge_seeder import KnowledgeSeeder
+
+seeder = KnowledgeSeeder()
+n = seeder.seed_from_yaml("nsck/python/core/bootstrap/domain_kits/navigation.yaml", engine)
+print(f"Seeded {n} rules")
+```
+
+Built-in domain kits: `navigation.yaml`, `scheduling.yaml`.
+
+### LSH Procedural Memory (O(1) Lookup)
+
+`ProceduralMemory` now uses a 16-bit LSH bucket index for O(1) average skill lookup. Familiarity threshold lowered from 0.85 to **0.72** for faster System-1 activation.
+
+```python
+# After positive reward, skills are auto-cached
+engine.learn(state="at_crossroads", action="turn_left", reward=1.0)
+# Next decide() call will hit procedural fast-path (threshold 0.72)
+```
+
+### Semantic Hot Cache
+
+`SemanticMemory._hot_cache` stores the 256 most recently activated concepts for near-instant repeated queries. Updated by `spread_activation()` via `_update_hot_cache()`.
+
+### Rust Default-On (NSCK_USE_RUST=1)
+
+As of V4, Rust is on by default. Three new Rust exports accelerate key hot paths:
+
+| Export | Purpose | Speedup |
+|--------|---------|---------|
+| `bundle_hvs` | N-vector majority-vote bundle | ~18× |
+| `lsh_bucket` | ProceduralMemory O(1) key | ~22× |
+| `spreading_activation_step` | SemanticMemory graph step | ~15× |
+
+```bash
+# Verify Rust is active
+python -c "import hypervec_rs; print('Rust OK:', hypervec_rs.HyperVector(1).bits[:5])"
+```
+
+See [docs/V4_CHANGELOG.md](docs/V4_CHANGELOG.md) and [docs/V4_RELEASE_REPORT.md](docs/V4_RELEASE_REPORT.md) for complete details.
 
 ---
 

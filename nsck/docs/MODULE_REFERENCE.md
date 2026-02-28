@@ -1,6 +1,8 @@
-# Module Reference — NSCK V14
+# NSCK Module Reference — V4
 
-Complete reference for every module in the NSCK codebase. 100 core modules, 238 classes across 12 subsystems. Every class and method listed here is taken directly from source code.
+Complete reference for every module in the NSCK codebase. ~96 core modules, ~232 classes across 13 subsystems. Every class and method listed here is taken directly from source code.
+
+> **V4 new modules** are marked *(V4 new)*. **V4 updated modules** are marked *(V4 updated)*.
 
 > **Ground truth is always the source files** under `nsck/python/core/`, `nsck/api/`, and `nsck_ai_model/`.
 
@@ -22,6 +24,9 @@ Complete reference for every module in the NSCK codebase. 100 core modules, 238 
 - [API](#api)
 - [Multimodal](#multimodal)
 - [Training](#training)
+- [Bootstrap](#bootstrap-v4-new)
+- [Seeding](#seeding)
+- [Transplant](#transplant-v15)
 
 ---
 
@@ -277,14 +282,14 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `recall_by_reward(min_reward)` | Filter by reward threshold. |
 | `get_statistics()` | Episode store statistics. |
 
-### `procedural_memory.py`
+### `procedural_memory.py` *(V4 updated)*
 
-**ProceduralMemory** (V13) — Skill cache with fast-path lookup.
+**ProceduralMemory** — Skill cache with LSH fast-path lookup. V4: 16-bit LSH bucket index, familiarity threshold lowered to **0.72** (was 0.85), O(1) average lookup.
 
 | Method | Description |
 |--------|-------------|
-| `cache_skill(action, context_hv, reward)` | Store a skill. |
-| `recall_action(context_hv)` | Fast-path skill retrieval. |
+| `cache_skill(action, context_hv, reward)` | Store a skill; updates LSH bucket index. |
+| `recall_action(context_hv)` | Fast-path skill retrieval via LSH O(1) lookup (threshold 0.72). |
 | `get_statistics()` | Cache statistics. |
 
 ### `cross_modal_associative_memory.py`
@@ -329,15 +334,19 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `update_cache(key, value)` | Update recall cache. |
 | `query(query_hv, top_k, threshold)` | Multi-stage recall. |
 
-### `semantic_memory_shim.py` *(V14)*
+### `semantic_memory_shim.py` *(V4 updated)*
 
-Auto-selects Rust or Python backend for spreading activation, using the same pattern as `hypervec_shim.py`.
+Auto-selects Rust or Python backend for spreading activation. V4: `_rust_step_fn` is captured at module import time (not lazily per call), ensuring `spreading_activation_step` Rust free-fn is used for every step.
 
 | Function | Description |
 |----------|-------------|
 | `spread_activation_fast(concept_graph, start_concepts, relation_weights, stigmergy, steps, decay)` | Attempt Rust-accelerated spreading activation. Returns `Dict[str, float]` on success, `None` if Rust unavailable or sync fails. |
 
 The caller (`SemanticMemory.spread_activation`) falls through to the Python path when `None` is returned. When `hypervec_rs.SemanticMemoryConcurrent` is importable, the shim syncs concept nodes from the NetworkX graph to the Rust DashMap backend before running activation.
+
+### `semantic_memory.py` *(V4 updated)*
+
+**SemanticMemory** — Graph-structured concept store. V4: HNSW index enabled by default, `_hot_cache` LRU (256 entries) populated during `spread_activation()` via `_update_hot_cache()`.
 
 ---
 
@@ -696,7 +705,7 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 
 ### `ngram_nlu.py`
 
-**NgramNLU** — Fast n-gram intent classifier (143K sent/s).
+**NgramNLU** — Fast n-gram intent classifier (143K sent/s). Retained as fallback in V4.
 
 | Method | Description |
 |--------|-------------|
@@ -707,6 +716,18 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 | `extract_entities(text)` | Named entity extraction. |
 
 **NgramNLUAdapter** — GWT adapter for NgramNLU.
+
+### `vsa_nlu.py` *(V4 new)*
+
+**VSANLUEngine** — VSA-based intent classifier. Primary NLU in V4 (replaces `NgramNLU` as primary). Uses `DistributionalCodebook` word HVs and 7 intent prototype bundles for classification.
+
+| Method | Description |
+|--------|-------------|
+| `process(text)` | Returns `dict` with `intent`, `confidence`, `entities`. |
+| `classify_intent(text)` | Returns `(intent_str, confidence_float)`. |
+| `extract_entities(text)` | Returns `List[dict]` of entity spans. |
+
+**7 intents:** `question`, `command`, `statement`, `greeting`, `farewell`, `exclamation`, `negation`.
 
 ### `fluent_nlg.py`
 
@@ -840,6 +861,27 @@ Legacy backup of compositional semantics module.
 **SafetyRuleVerifier** — Formula-based safety checks: `add_property()`, `verify_rule()`, `verify_ruleset()`.
 
 **SafetyGateVerifier** (V10) — GWT safety gate: `gate_decision()`.
+
+---
+
+## Bootstrap *(V4 new)*
+
+`python/core/bootstrap/`
+
+### `knowledge_seeder.py` *(V4 new)*
+
+**KnowledgeSeeder** — Declarative domain bootstrapper from YAML domain kits.
+
+| Method | Description |
+|--------|-------------|
+| `seed_from_yaml(yaml_path, engine)` | Load domain kit YAML and inject into engine. Returns `int` (number of rules seeded). |
+
+**Domain kits** shipped in `bootstrap/domain_kits/`:
+
+| File | Domain |
+|------|--------|
+| `navigation.yaml` | Grid-world navigation (concepts, causal rules, procedural skills) |
+| `scheduling.yaml` | Task scheduling domain |
 
 ---
 
@@ -1209,3 +1251,194 @@ Data classes: `TrainingConfig`, `TrainingMetrics`.
 - `_HOT_CACHE_SIZE: int = 256` — configurable via `config.semantic_hot_cache_size`
 - `_update_hot_cache(activations)` — populates hot cache from top activated concepts
 - `spread_activation()` — now calls `_update_hot_cache()` on completion
+
+---
+
+## Seeding
+
+`python/core/seeding/`
+
+Higher-level knowledge seeding from external sources (ConceptNet CSV, BERT embeddings).
+
+### `semantic_seeder.py`
+
+**SemanticSeeder** — Orchestrates ConceptNet and BERT seeding.
+
+| Method | Description |
+|--------|-------------|
+| `seed_from_conceptnet_pack(substrate, pack_path)` | Load a ConceptNet `.kp` pack into the substrate's semantic memory. |
+| `seed_from_bert(substrate, model_name, n_concepts)` | Harvest top-n BERT vocabulary embeddings via `BertSeeder` and inject HVs. |
+| `post_seed_enrich(substrate)` | Run `SemanticEnricher` after seeding to add inverse relations and strengthen co-queried pairs. |
+| `full_seed(substrate, conceptnet_path, bert_model, n_concepts)` | Combined ConceptNet + BERT + post-enrich in one call. |
+
+### `conceptnet_loader.py`
+
+**ConceptNetLoader** — Parses ConceptNet CSV assertion files into concept triples.
+
+| Method | Description |
+|--------|-------------|
+| `load_from_csv(path, language, max_concepts)` | Stream ConceptNet assertions filtered to `language` (default `"en"`). Returns iterable of `(concept, relation, concept)` triples. |
+
+Helper `_en_concept(uri)` — convert `/c/en/foo` → `"foo"`.
+
+### `bert_seeder.py`
+
+**BertSeeder** — Harvest BERT embedding vocabulary and transplant top-n concepts.
+
+| Method | Description |
+|--------|-------------|
+| `seed(substrate, model_name, n_concepts)` | Uses `ModelHarvester` (auto method) + `SVDFactoredProjector` to inject vocabulary HVs into `substrate.semantic_memory`. Returns count of injected concepts. |
+
+Internally calls the V15 Transplant Pipeline: `ModelHarvester().harvest(model)` → `SVDFactoredProjector.project()` → `sem.add_concept()` + `sem.concept_hvs[token] = hv`.
+
+---
+
+## Transplant *(V15)*
+
+`python/core/transplant/` — Five-module pipeline for absorbing knowledge from
+any pre-trained neural network into NSCK's hypervector space.
+
+### `harvester.py`
+
+**ModelHarvester** — Extract embedding matrices from external neural models.
+
+| Method | Description |
+|--------|-------------|
+| `harvest(model, method="auto")` | Extract embedding matrix. Returns `HarvestResult`. Supports `"auto"`, `"embedding_layer"`, `"named_params"`, `"forward_hook"`. |
+
+`harvest()` auto-detection order:
+1. LM embedding attrs: `embeddings`, `embed_tokens`, `wte`, `word_embeddings`
+2. Vision attrs: `patch_embed`, `features`, `conv1`
+3. Encoder-decoder: `model.encoder` + LM attr scan
+4. Fallback: largest 2-D matrix in `named_parameters()`
+
+**HarvestResult** (dataclass): `embeddings` (np.ndarray, shape N×d), `vocab_mapping` (token→index), `model_type` (`"transformer_lm"` / `"transformer_vision"` / `"encoder_decoder"` / `"generic"` / `"error"`), `embedding_dim`, `vocab_size`, `source_model`, `metadata`.
+
+On any failure, returns `model_type="error"` with `metadata["error"]` set.
+
+---
+
+### `projector.py`
+
+Three concrete projectors, all inheriting **BaseProjector** with `project(embeddings, vocab_mapping)` → `Dict[str, HyperVector]` and `encode_new(embedding)` → `HyperVector`.
+
+**RandomProjector** — Johnson–Lindenstrauss random projection.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `dim_in` | — | Input embedding dimension |
+| `hv_dim` | 10240 | Target HV dimension |
+| `seed` | 42 | RNG seed for `P ~ N(0,1)` |
+
+Algorithm: `bits = sign(embedding @ P)`; Spearman ρ ≈ 0.6 on clustered data.
+
+---
+
+**LearnedProjector** — Gradient-descent cosine-similarity-preserving projection.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `n_pairs` | 1000 | Pairs sampled per epoch |
+| `n_epochs` | 5 | Training epochs |
+| `lr` | 0.01 | Learning rate |
+
+Loss: `L = Σ (cosine(e_a, e_b) - hamming_sim(sign(e_a·P), sign(e_b·P)))²`
+
+Calls `fit(embeddings)` automatically during `project()`.
+
+---
+
+**SVDFactoredProjector** *(default, recommended)* — SVD + FPE codebook encoding.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `n_components` | 128 | SVD principal components to keep |
+| `n_bins` | 256 | FPE quantisation bins per component |
+
+Algorithm:
+1. `U, S, Vt = SVD(E − mean(E))` — capped at 10 000 rows for large vocabs
+2. Project: `Z = (E − mean) @ Vt[:k]`  — shape (N, k)
+3. Per-component FPE codebook: `HyperVector(i*31 + cb_seed_base)` where `cb_seed_base = j*31 + 7777` for component `j`, bin `i` — mirrors `image_adapter.py`'s `i*31 + 7777` but adds a per-component offset
+4. Role HVs: `HyperVector((j*1013 + 5003) % 2**32)` — mirrors `image_adapter.py` / `audio_adapter.py`
+5. Encode: `XOR(codebook[bin], role_hv)` for each component → `bundle()` all
+
+Falls back to `RandomProjector` if SVD fails (degenerate matrix).
+
+---
+
+### `calibrator.py`
+
+**STDPCalibrator** — Optional STDP SNN fine-tuning of the initial codebook.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `input_dim` | — | Embedding dimensionality |
+| `snn_size` | 10240 | SNN neuron count |
+| `n_epochs` | 10 | Maximum STDP epochs |
+| `n_pairs` | 500 | Pairs simulated per epoch |
+| `patience` | 3 | Epochs without improvement before early stop |
+| `min_improvement` | 0.005 | Minimum quality delta to reset patience counter |
+
+**`calibrate(embeddings, initial_codebook, vocab_mapping)`** → `CalibratedResult`
+
+Algorithm per epoch:
+1. Sample `n_pairs` random pairs, simulate each through `PythonSnnCore` with `learn=True`
+2. Re-encode all tokens: `mean_firing_rate ≥ threshold → bits`
+3. Measure Recall@10; save best codebook, early-stop on plateau
+
+**CalibratedResult** (dataclass): `codebook`, `snn_weights` (np.ndarray), `quality_curve` (List[float]), `n_epochs_run`, `final_quality`.
+
+---
+
+### `validator.py`
+
+**TransplantValidator** — Quality metrics for HV codebooks.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `rho_threshold` | 0.80 | Minimum Spearman ρ to pass |
+| `recall10_threshold` | 0.70 | Minimum Recall@10 to pass |
+| `recall50_threshold` | 0.60 | Minimum Recall@50 to pass |
+| `ari_threshold` | 0.65 | Minimum ARI to pass |
+
+**`validate(embeddings, codebook, vocab_mapping, n_sample_pairs=2000)`** → `TransplantReport`
+
+Metrics computed:
+- **Spearman ρ**: rank correlation between cosine similarity (embedding space) and normalised Hamming similarity (HV space) over `n_sample_pairs` random pairs
+- **Recall@10/50**: fraction of true top-k cosine neighbours found in HV top-k; averaged over 200 query tokens
+- **ARI**: Adjusted Rand Index between k-means (k=10) clustering in embedding vs HV space
+- **Per-token quality**: Recall@10 for up to 500 query tokens → `worst_concepts`, `best_concepts`
+
+**TransplantReport** (dataclass): `spearman_rho`, `recall_at_10`, `recall_at_50`, `ari`, `passed` (all thresholds met), `phase_timings`, `n_concepts`, `worst_concepts`, `best_concepts`, `svd_variance_explained`, `calibration_quality_curve`, `metadata`.
+
+---
+
+### `pipeline.py`
+
+**TransplantPipeline** — Orchestrates all five stages.
+
+| Method | Description |
+|--------|-------------|
+| `run(model, domain_name, strategy, calibration_epochs, save_pack_path, cognitive_engine)` | Execute full Harvest → Project → Calibrate → Validate → Integrate → Save pipeline. Returns `TransplantReport`. |
+
+Constructor: `TransplantPipeline(config=None)` — reads thresholds from `NSCKConfig` fields.
+
+`run()` parameters:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `strategy` | `"svd_factored"` | `"random"`, `"learned"`, or `"svd_factored"` |
+| `calibration_epochs` | `None` (0 = skip) | STDP calibration epochs |
+| `save_pack_path` | `None` | If set, saves a `KnowledgePack` to this path |
+| `cognitive_engine` | `None` | If set and `report.passed`, inject into `SemanticMemory` |
+
+Integration logic (when `report.passed`):
+- All `codebook[token]` HVs → `sem.add_concept()` + `sem.concept_hvs[token] = hv`
+- Token pairs with `similarity > 0.7` → `sem.add_relation(t_a, "similar_to", t_b)`
+- Capped at `_RELATION_TOKEN_CAP = 500` tokens to bound O(n²) cost
+
+**`NSCKSubstrate.transplant(model, domain_name, ...)`** delegates to `TransplantPipeline.run()`.
+
+---
+
+*End of NSCK Module Reference — V4*
