@@ -232,3 +232,24 @@ substrate = NSCKSubstrate(config)
 report = substrate.transplant(model=bert, domain_name="nlp")
 # report.passed → True if quality thresholds met
 ```
+
+---
+
+## V4 Milestone — Completed February 2026
+
+### Completed in V4
+- [x] **System-1 fast-path activation**: ProceduralMemory now auto-populated from learn() on positive rewards; threshold lowered 0.85→0.72
+- [x] **LSH-bucket fast recall**: ProceduralMemory O(N)→O(1) lookup via 16-bit LSH index
+- [x] **HNSW default-on**: SemanticMemory HNSW index enabled by default (was gated behind config flag)
+- [x] **Semantic hot cache**: 256-entry LRU hot cache populated during spread_activation()
+- [x] **VSA-NLU engine**: VSANLUEngine with 7 intent prototypes replaces NgramNLU as primary path
+- [x] **Sentence HV encoding**: DistributionalCodebook.encode_sentence() with positional role-filler binding
+- [x] **Multi-step imagination**: imagine_rollout() N-step forward simulation with danger-vector safety abort
+- [x] **Planner safety**: _build_planner_coalition() halves salience when imagination flags unsafe plan
+- [x] **Rust bundle_hvs**: Proper majority-vote bundle for N vectors (V4 fix to comment uncertainty)
+- [x] **Rust lsh_bucket + spreading_activation_step**: New Rust hot-path functions exposed via PyO3
+- [x] **SNN grounding**: register_concepts_from_memory() closes SNN→predicate bridge
+- [x] **Knowledge bootstrapping**: KnowledgeSeeder + navigation.yaml + scheduling.yaml domain kits
+- [x] **seed_domain()**: CognitiveEngine.seed_domain() thin wrapper
+- [x] **EWC rule importance**: gwt_win_count + ewc_importance fields on Rule; prune_rules() protects important rules
+- [x] **50 new tests**: All passing, total 1507 tests pass (0 regressions)

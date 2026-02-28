@@ -206,3 +206,30 @@ BOTTOM LINE:
   It is a complementary architecture for explainable, rule-grounded,
   causally-aware AI. The V3 improvements are real and correct.
 ================================================================================
+
+================================================================================
+V4 ARCHITECTURE CAPABILITIES (February 2026)
+================================================================================
+
+NEW CAPABILITIES:
+  - System-1 procedural fast-path: auto-populated, 0.72 familiarity threshold
+  - LSH bucket index for O(1) procedural recall
+  - Semantic memory HNSW (default-on)
+  - Semantic hot cache (256-entry LRU)
+  - VSANLUEngine: 7-class intent classification, no training data
+  - Sentence HV encoding with positional role-filler binding
+  - N-step plan imagination (imagine_rollout)
+  - Knowledge bootstrapping from YAML (KnowledgeSeeder)
+  - EWC rule importance tracking and protection
+  - Rust: bundle_hvs (majority vote), lsh_bucket, spreading_activation_step
+
+IMPROVED CAPABILITIES:
+  - Procedural memory: threshold 0.85 → 0.72 (earlier familiarity)
+  - Semantic queries: HNSW now enabled by default (not behind config flag)
+  - NLU: VSANLUEngine as primary path (NgramNLU as fallback)
+  - Planner: safety-validated plans via imagination
+
+RUST EXTENSIONS:
+  - bundle_hvs: O(N·D) majority-vote bundle for N vectors
+  - lsh_bucket: O(n_bits·D/64) LSH bucket computation
+  - spreading_activation_step: O(E) one-step graph spreading activation
