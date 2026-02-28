@@ -5,7 +5,9 @@
 > This document is the definitive reference for NSCK's internal design.
 > It covers the seven-layer architecture, data-flow pipeline,
 > Global Workspace Theory (GWT) competition, dual-process routing,
-> VSA / SNN subsystems, memory architecture, and Rust acceleration.
+> VSA / SNN subsystems, memory architecture, Rust acceleration,
+> the V15 Model Transplantation Pipeline, V17 enrichment modules,
+> and the full configuration system.
 
 ---
 
@@ -22,8 +24,11 @@
 9. [Perception Pipeline](#9-perception-pipeline)
 10. [Rust Acceleration](#10-rust-acceleration)
 11. [Configuration](#11-configuration)
-12. [V4 Additions](#12-v4-additions)
-13. [Limitations](#13-limitations)
+12. [V15 Model Transplantation Pipeline](#12-v15-model-transplantation-pipeline)
+13. [V17 Enrichment Modules](#13-v17-enrichment-modules)
+14. [Seeding Subsystem](#14-seeding-subsystem)
+15. [V4 Additions](#15-v4-additions)
+16. [Limitations](#16-limitations)
 
 ---
 
@@ -426,28 +431,348 @@ def spread_activation_fast(concept_graph, ...):
 
 File: `core/integration/config.py`
 
+### Factory Methods
+
 | Factory | Behaviour |
 |---|---|
-| `NSCKConfig.minimal()` | All V3+ flags off — original behaviour |
-| `NSCKConfig.research()` | All capability flags on |
+| `NSCKConfig.minimal()` | All V3+ flags off — original behaviour, zero extra cost |
+| `NSCKConfig.research()` | All V3+V4 capability flags on — maximum feature exploration |
 | `NSCKConfig.production()` | Stable + performance flags on, experimental off |
-| `NSCKConfig.from_env()` | Reads `NSCK_DEVICE`, `NSCK_LR`, … from environment |
+| `NSCKConfig.rich()` | Research flags + bridge perception mode (`perception_mode="bridge"`) |
+| `NSCKConfig.for_scale(n_concepts)` | Auto-tunes `memory_capacity` and enables HNSW at ≥10 000 concepts |
+| `NSCKConfig.seeded()` | Enables ConceptNet + auto-seeding from `.kp` pack |
+| `NSCKConfig.transplant()` | All transplant flags enabled (`svd_factored`, 10 calibration epochs) |
+| `NSCKConfig.v17()` | All V17 enrichment and glass-box tracing flags enabled |
+| `NSCKConfig.from_env()` | Reads `NSCK_DEVICE`, `NSCK_LR`, `NSCK_MODEL_PATH` from environment |
 
-Critical fields (V4 defaults):
+### Key Fields
 
 ```python
+# Hardware
+device: str = "cpu"                              # "cpu" or "cuda"
+
+# VSA
 enable_dual_process: bool = False
 system1_confidence_threshold: float = 0.75
-procedural_familiarity_threshold: float = 0.72  # V4: was 0.85
+enable_hnsw_index: bool = False                  # on in production() + research()
+
+# Memory
 memory_capacity: int = 2500
 episode_capacity: int = 10000
-enable_hnsw_index: bool = True   # V4: default-on
-hot_cache_size: int = 256        # V4 new
+procedural_familiarity_threshold: float = 0.72   # V4: was 0.85
+
+# Rule Learning
+min_rule_support: int = 5
+min_rule_confidence: float = 0.7
+enable_ewc: bool = False                         # EWC-aware pruning
+ewc_lambda: float = 1000.0
+
+# Transplant (V15)
+enable_transplant: bool = False
+transplant_strategy: str = "svd_factored"        # "random" | "learned" | "svd_factored"
+transplant_calibration_epochs: int = 10
+transplant_validation_threshold: float = 0.80
+transplant_svd_components: int = 128
+transplant_fpe_bins: int = 256
+transplant_rho_threshold: float = 0.80           # Spearman ρ gate
+transplant_recall10_threshold: float = 0.70      # Recall@10 gate
+transplant_recall50_threshold: float = 0.60      # Recall@50 gate
+transplant_ari_threshold: float = 0.65           # ARI gate
+
+# V17 Enrichment
+enable_causal_enrichment: bool = False
+enable_perceptual_enrichment: bool = False
+enable_semantic_enrichment: bool = False
+enable_crossmodal_enrichment: bool = False
+causal_enrichment_n_context: int = 3
+perceptual_enricher_window: int = 8
+semantic_enrichment_add_inverses: bool = True
+
+# Seeding (V14)
+enable_seeding: bool = False
+seed_conceptnet_pack: str = ""
+knowledge_packs: List[str] = []                  # paths to .kp files loaded at substrate init
+
+# Rich Perception (V14)
+perception_mode: str = "internal"                # "internal" | "bridge"
+distillation_threshold: float = 0.80
+
+# HNSW
+semantic_hnsw_m: int = 16
+semantic_hnsw_ef: int = 50
 ```
 
 ---
 
-## 12. V4 Additions
+## 12. V15 Model Transplantation Pipeline
+
+File: `core/transplant/` (5 modules)
+
+V15 enables NSCK to absorb learned knowledge from any pre-trained neural network —
+BERT, GPT, ViT, Whisper, CLIP, etc. — by converting their embedding spaces into
+NSCK's native 10 240-bit binary hypervector space.
+
+### Pipeline Stages
+
+```
+External Model (BERT / GPT / ViT / Whisper / CLIP / …)
+           │
+    ┌──────▼──────┐
+    │  Harvester  │  core/transplant/harvester.py
+    │             │  → HarvestResult(embeddings, vocab_mapping,
+    └──────┬──────┘    model_type, embedding_dim, vocab_size, source_model)
+           │
+    ┌──────▼──────┐
+    │  Projector  │  core/transplant/projector.py
+    │             │  → Dict[token → HyperVector]  (codebook)
+    └──────┬──────┘
+           │
+    ┌──────▼──────┐
+    │  Calibrator │  core/transplant/calibrator.py  (optional STDP fine-tune)
+    │             │  → CalibratedResult(codebook, snn_weights, quality_curve)
+    └──────┬──────┘
+           │
+    ┌──────▼──────┐
+    │  Validator  │  core/transplant/validator.py
+    │             │  → TransplantReport(spearman_rho, recall@10, recall@50, ari, passed)
+    └──────┬──────┘
+           │ report.passed == True?
+    ┌──────▼──────┐
+    │  Integrate  │  inject into SemanticMemory + add similarity relations
+    └──────┬──────┘
+           │
+    ┌──────▼──────┐
+    │    Save     │  persist as KnowledgePack (optional)
+    └─────────────┘
+```
+
+### Harvesting Strategies
+
+`ModelHarvester.harvest(model, method="auto")` supports four methods:
+
+| Method | Probes | Use case |
+|---|---|---|
+| `"auto"` | LM attrs → vision attrs → encoder-decoder → named params | Default |
+| `"embedding_layer"` | `model.embeddings`, `embed_tokens`, `wte`, `word_embeddings` | Transformer LM |
+| `"named_params"` | Scans all 2-D weight matrices for largest (N > d) parameter | Any model |
+| `"forward_hook"` | Registers hook on first detectable embedding layer, runs dummy forward pass | When weight access fails |
+
+Model types detected: `"transformer_lm"`, `"transformer_vision"`, `"encoder_decoder"`, `"generic"`, `"error"`.
+
+### Projection Strategies
+
+| Strategy | Class | Algorithm | Similarity preservation |
+|---|---|---|---|
+| `"random"` | `RandomProjector` | Johnson–Lindenstrauss: `sign(e · P)`, `P ~ N(0,1)` | Spearman ρ ≈ 0.6 |
+| `"learned"` | `LearnedProjector` | Gradient descent on `(cos_sim − hamming_sim)²` over sampled pairs | ρ ≈ 0.6 after 5 epochs |
+| `"svd_factored"` *(default)* | `SVDFactoredProjector` | SVD to 128 components + FPE codebook encoding (matches `image_adapter.py` pattern) | Cluster structure preserved; continuous ρ ≈ 0.1 |
+
+**SVDFactoredProjector seed formulas** (mirror `image_adapter.py` / `audio_adapter.py`):
+- Codebook HVs: `HyperVector(i*31 + j*31 + 7777)` for bin `i`, component `j`
+- Role HVs: `HyperVector((j*1013 + 5003) % 2**32)`
+
+### STDP Calibration
+
+`STDPCalibrator` refines the codebook by running pairs of embeddings through
+`PythonSnnCore` and re-encoding via spike rates:
+
+1. Simulate N random pairs through SNN for 10 steps with `learn=True`
+2. Re-encode all tokens: `bits = (mean_firing_rate ≥ threshold)`
+3. Measure Recall@10; if improvement > `min_improvement`: save new codebook
+4. Early stopping after `patience` epochs without improvement
+
+### Quality Metrics (TransplantReport)
+
+| Metric | Threshold | Meaning |
+|---|---|---|
+| `spearman_rho` | ≥ 0.80 | Rank correlation between cosine and Hamming similarity on 2 000 random pairs |
+| `recall_at_10` | ≥ 0.70 | Fraction of true top-10 cosine neighbours found in HV top-10 |
+| `recall_at_50` | ≥ 0.60 | Same at top-50 |
+| `ari` | ≥ 0.65 | Adjusted Rand Index between k-means clustering in embedding vs HV space |
+
+Report also lists `worst_concepts`, `best_concepts` (per-token Recall@10), and
+`calibration_quality_curve` (one float per STDP epoch).
+
+### Integration
+
+When `report.passed == True` and `cognitive_engine` is provided:
+- All `codebook[token]` HVs are injected into `SemanticMemory.concept_hvs`
+- Concept pairs with `similarity > 0.7` get a `"similar_to"` relation
+- Capped at `_RELATION_TOKEN_CAP = 500` tokens to bound O(n²) cost
+
+### NSCKSubstrate API
+
+```python
+config = NSCKConfig.transplant()
+substrate = NSCKSubstrate(config)
+report = substrate.transplant(
+    model=bert_model,
+    domain_name="language",
+    strategy="svd_factored",       # default
+    calibration_epochs=10,
+    save_pack_path="my_domain.kp", # optional
+)
+print(report.passed, report.spearman_rho, report.recall_at_10)
+```
+
+---
+
+## 13. V17 Enrichment Modules
+
+V17 adds five enrichment modules and a glass-box tracer. Enabled individually
+or all at once via `NSCKConfig.v17()`.
+
+### CausalEnricher (`core/reasoning/causal_enricher.py`)
+
+Enriches causal triples `(cause, effect, strength)` with semantic context:
+1. Look up `n_context` nearest-neighbour concepts for each endpoint in `SemanticMemory`
+2. Bundle co-occurring context into an enriched causal HV
+3. Store enriched triple back for future queries
+4. Return `CausalTrace(cause, effect, strength, context_concepts, enrichment_steps)`
+
+Key methods: `enrich(cause, effect, strength)`, `enrich_chain(chain, base_strength)`
+
+Enable: `NSCKConfig(enable_causal_enrichment=True, causal_enrichment_n_context=3)`
+
+### PerceptualEnricher (`core/perception/perceptual_enricher.py`)
+
+Post-processes `PerceptPacket` after the modality adapter, before GWT broadcast:
+1. Normalise the situation HV (binarise near-threshold dimensions)
+2. Add a temporal context HV derived from a rolling window (`window_size=8`) of recent packets
+3. Tag packet with a confidence score (fraction of HV dims above threshold)
+4. Return `EnrichedPercept(original_modality, confidence, temporal_ctx_available, tags)`
+
+Enable: `NSCKConfig(enable_perceptual_enrichment=True, perceptual_enricher_window=8)`
+
+### SemanticEnricher (`core/memory/semantic_enricher.py`)
+
+Lightweight post-processing after concept insertion into `SemanticMemory`:
+1. Infer missing property concepts via spreading activation
+2. Add inverse relations automatically (`is_a → sub_class_of`, `has_part → part_of`, `causes → caused_by`, etc.)
+3. Strengthen frequently co-queried concept pairs by rebundling their HVs
+4. Return `EnrichmentReport(concepts_enriched, inverse_relations_added, bundles_strengthened)`
+
+Enable: `NSCKConfig(enable_semantic_enrichment=True, semantic_enrichment_add_inverses=True)`
+
+### GlassBoxTracer (`core/cognitive/glass_box_tracer.py`)
+
+Captures a step-by-step human-readable trace of every decision:
+
+```python
+tracer = GlassBoxTracer()
+with tracer.span("perception"):
+    tracer.record("TextAdapter", "encoded 'hello world'", confidence=0.9)
+with tracer.span("reasoning"):
+    tracer.record("CognitiveEngine", "selected rule R42", confidence=0.75)
+
+trace = tracer.export()   # → DecisionTrace
+print(tracer.format_trace(trace))
+```
+
+Key types: `TraceEntry(span, module, message, confidence, timestamp_ms)`,
+`DecisionTrace(decision_id, entries, start_ms, end_ms, elapsed_ms)`.
+
+Key methods: `begin_decision()`, `end_decision()`, `record()`, `span()`,
+`export()`, `last_trace()`, `history()`, `format_trace()`.
+
+Enable: `NSCKConfig(enable_glass_box_tracer=True)` or via `NSCKConfig.v17()`
+
+### CrossModalEnricher (`core/memory/crossmodal_enricher.py`)
+
+Enriches `CrossModalAssociativeMemory` by:
+1. Automatically linking modality-specific concept HVs to a shared cross-modal anchor
+2. Computing pairwise similarity between anchors to detect cross-modal concept clusters
+3. Generating a `CrossModalEnrichmentReport(anchors_created, links_added, clusters_detected)`
+
+Enable: `NSCKConfig(enable_crossmodal_enrichment=True)`
+
+### V17 Config Preset
+
+```python
+cfg = NSCKConfig.v17()
+# Equivalent to:
+cfg.enable_causal_enrichment = True
+cfg.enable_perceptual_enrichment = True
+cfg.enable_semantic_enrichment = True
+cfg.enable_crossmodal_enrichment = True
+cfg.enable_glass_box_tracer = True
+```
+
+---
+
+## 14. Seeding Subsystem
+
+Two seeding pathways exist: the **KnowledgeSeeder** (V4 — YAML domain kits)
+and the **SemanticSeeder** (V14 — ConceptNet / BERT embedding seeding).
+
+### KnowledgeSeeder (`core/bootstrap/knowledge_seeder.py`)
+
+Declarative YAML-based domain bootstrapping:
+
+```python
+from python.core.bootstrap.knowledge_seeder import KnowledgeSeeder
+seeder = KnowledgeSeeder()
+n = seeder.seed_from_yaml("nsck/python/core/bootstrap/domain_kits/navigation.yaml", engine)
+```
+
+Domain YAML format:
+```yaml
+concepts:
+  - name: room
+    properties: {type: place}
+relations:
+  - [room, connects_to, corridor]
+rules:
+  - if: [at_location=room]
+    then: navigate
+    confidence: 0.9
+```
+
+Ships with: `bootstrap/domain_kits/navigation.yaml`, `bootstrap/domain_kits/scheduling.yaml`
+
+### SemanticSeeder (`core/seeding/semantic_seeder.py`)
+
+Higher-level seeder orchestrating ConceptNet and BERT seeding:
+
+| Method | Description |
+|---|---|
+| `seed_from_conceptnet_pack(substrate, pack_path)` | Load a ConceptNet `.kp` pack into semantic memory |
+| `seed_from_bert(substrate, model_name, n_concepts)` | Harvest BERT embeddings and transplant top-n concepts |
+| `post_seed_enrich(substrate)` | Run SemanticEnricher after seeding |
+| `full_seed(substrate, ...)` | Combined ConceptNet + BERT + post-enrich in one call |
+
+### ConceptNetLoader (`core/seeding/conceptnet_loader.py`)
+
+Parses ConceptNet CSV assertions into `(concept, relation, concept)` triples.
+`load_from_csv(path, language="en", max_concepts=50000)` → iterable of triples.
+
+### BertSeeder (`core/seeding/bert_seeder.py`)
+
+`BertSeeder.seed(substrate, model_name, n_concepts)` uses `ModelHarvester` +
+`SVDFactoredProjector` to inject BERT vocabulary HVs into semantic memory.
+
+### KnowledgePack (`core/integration/knowledge_pack.py`) *(V14)*
+
+Portable, serialisable domain bundle (gzip+JSON, `schema_version=2`):
+
+```python
+pack = KnowledgePack(name="my_domain")
+pack.add_concept("room", {"type": "place"}, hv=room_hv)
+pack.add_relation("room", "connects_to", "corridor")
+pack.add_causal_link("fire", "evacuate", strength=0.95)
+pack.save("my_domain.kp")
+
+# Later:
+loaded = KnowledgePack.load("my_domain.kp")
+stats = loaded.inject_into(cognitive_engine)
+# → {"concepts": 1, "relations": 1, "causal_links": 1}
+```
+
+HVs serialise as base64-encoded int8 arrays for security (no pickle).
+
+---
+
+## 15. V4 Additions
 
 ### VSANLUEngine (replaces NgramNLU as primary)
 
@@ -494,16 +819,18 @@ protecting frequently-winning rules from pruning.
 
 ---
 
-## 13. Limitations
+## 16. Limitations
 
 | Area | Limitation |
 |---|---|
 | **NLU** | VSA prototype matching — no semantic parsing or transformers |
-| **Deep learning** | Zero gradient-based models; no CNNs, transformers, or embeddings |
+| **Deep learning** | Zero gradient-based models built-in; CNNs/transformers accessed only via Transplant Pipeline |
 | **SNN grounding** | Fires at startup only; new concepts added after `__init__()` require manual re-grounding |
 | **HNSW persistence** | Index not persisted across save/load cycles — rebuilds on next `add_concept()` |
 | **Scale** | Semantic memory practical ceiling ≈ **10 000** concepts |
 | **Rust step dispatch** | `spreading_activation_step` uses uniform decay; full relation-weighted spreading uses Python path |
+| **Transplant similarity** | SVDFactoredProjector Spearman ρ ≈ 0.1 on random pairs; cluster structure preserved but continuous rank is not |
+| **STDP calibration** | Calibration quality depends on SNN convergence; stochastic — re-running may yield different results |
 
 ---
 

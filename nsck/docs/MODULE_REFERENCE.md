@@ -24,6 +24,9 @@ Complete reference for every module in the NSCK codebase. ~96 core modules, ~232
 - [API](#api)
 - [Multimodal](#multimodal)
 - [Training](#training)
+- [Bootstrap](#bootstrap-v4-new)
+- [Seeding](#seeding)
+- [Transplant](#transplant-v15)
 
 ---
 
@@ -1248,3 +1251,194 @@ Data classes: `TrainingConfig`, `TrainingMetrics`.
 - `_HOT_CACHE_SIZE: int = 256` — configurable via `config.semantic_hot_cache_size`
 - `_update_hot_cache(activations)` — populates hot cache from top activated concepts
 - `spread_activation()` — now calls `_update_hot_cache()` on completion
+
+---
+
+## Seeding
+
+`python/core/seeding/`
+
+Higher-level knowledge seeding from external sources (ConceptNet CSV, BERT embeddings).
+
+### `semantic_seeder.py`
+
+**SemanticSeeder** — Orchestrates ConceptNet and BERT seeding.
+
+| Method | Description |
+|--------|-------------|
+| `seed_from_conceptnet_pack(substrate, pack_path)` | Load a ConceptNet `.kp` pack into the substrate's semantic memory. |
+| `seed_from_bert(substrate, model_name, n_concepts)` | Harvest top-n BERT vocabulary embeddings via `BertSeeder` and inject HVs. |
+| `post_seed_enrich(substrate)` | Run `SemanticEnricher` after seeding to add inverse relations and strengthen co-queried pairs. |
+| `full_seed(substrate, conceptnet_path, bert_model, n_concepts)` | Combined ConceptNet + BERT + post-enrich in one call. |
+
+### `conceptnet_loader.py`
+
+**ConceptNetLoader** — Parses ConceptNet CSV assertion files into concept triples.
+
+| Method | Description |
+|--------|-------------|
+| `load_from_csv(path, language, max_concepts)` | Stream ConceptNet assertions filtered to `language` (default `"en"`). Returns iterable of `(concept, relation, concept)` triples. |
+
+Helper `_en_concept(uri)` — convert `/c/en/foo` → `"foo"`.
+
+### `bert_seeder.py`
+
+**BertSeeder** — Harvest BERT embedding vocabulary and transplant top-n concepts.
+
+| Method | Description |
+|--------|-------------|
+| `seed(substrate, model_name, n_concepts)` | Uses `ModelHarvester` (auto method) + `SVDFactoredProjector` to inject vocabulary HVs into `substrate.semantic_memory`. Returns count of injected concepts. |
+
+Internally calls the V15 Transplant Pipeline: `ModelHarvester().harvest(model)` → `SVDFactoredProjector.project()` → `sem.add_concept()` + `sem.concept_hvs[token] = hv`.
+
+---
+
+## Transplant *(V15)*
+
+`python/core/transplant/` — Five-module pipeline for absorbing knowledge from
+any pre-trained neural network into NSCK's hypervector space.
+
+### `harvester.py`
+
+**ModelHarvester** — Extract embedding matrices from external neural models.
+
+| Method | Description |
+|--------|-------------|
+| `harvest(model, method="auto")` | Extract embedding matrix. Returns `HarvestResult`. Supports `"auto"`, `"embedding_layer"`, `"named_params"`, `"forward_hook"`. |
+
+`harvest()` auto-detection order:
+1. LM embedding attrs: `embeddings`, `embed_tokens`, `wte`, `word_embeddings`
+2. Vision attrs: `patch_embed`, `features`, `conv1`
+3. Encoder-decoder: `model.encoder` + LM attr scan
+4. Fallback: largest 2-D matrix in `named_parameters()`
+
+**HarvestResult** (dataclass): `embeddings` (np.ndarray, shape N×d), `vocab_mapping` (token→index), `model_type` (`"transformer_lm"` / `"transformer_vision"` / `"encoder_decoder"` / `"generic"` / `"error"`), `embedding_dim`, `vocab_size`, `source_model`, `metadata`.
+
+On any failure, returns `model_type="error"` with `metadata["error"]` set.
+
+---
+
+### `projector.py`
+
+Three concrete projectors, all inheriting **BaseProjector** with `project(embeddings, vocab_mapping)` → `Dict[str, HyperVector]` and `encode_new(embedding)` → `HyperVector`.
+
+**RandomProjector** — Johnson–Lindenstrauss random projection.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `dim_in` | — | Input embedding dimension |
+| `hv_dim` | 10240 | Target HV dimension |
+| `seed` | 42 | RNG seed for `P ~ N(0,1)` |
+
+Algorithm: `bits = sign(embedding @ P)`; Spearman ρ ≈ 0.6 on clustered data.
+
+---
+
+**LearnedProjector** — Gradient-descent cosine-similarity-preserving projection.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `n_pairs` | 1000 | Pairs sampled per epoch |
+| `n_epochs` | 5 | Training epochs |
+| `lr` | 0.01 | Learning rate |
+
+Loss: `L = Σ (cosine(e_a, e_b) - hamming_sim(sign(e_a·P), sign(e_b·P)))²`
+
+Calls `fit(embeddings)` automatically during `project()`.
+
+---
+
+**SVDFactoredProjector** *(default, recommended)* — SVD + FPE codebook encoding.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `n_components` | 128 | SVD principal components to keep |
+| `n_bins` | 256 | FPE quantisation bins per component |
+
+Algorithm:
+1. `U, S, Vt = SVD(E − mean(E))` — capped at 10 000 rows for large vocabs
+2. Project: `Z = (E − mean) @ Vt[:k]`  — shape (N, k)
+3. Per-component FPE codebook: `HyperVector(i*31 + j*31 + 7777)` for bin `i`, component `j`
+4. Role HVs: `HyperVector((j*1013 + 5003) % 2**32)` — mirrors `image_adapter.py` / `audio_adapter.py`
+5. Encode: `XOR(codebook[bin], role_hv)` for each component → `bundle()` all
+
+Falls back to `RandomProjector` if SVD fails (degenerate matrix).
+
+---
+
+### `calibrator.py`
+
+**STDPCalibrator** — Optional STDP SNN fine-tuning of the initial codebook.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `input_dim` | — | Embedding dimensionality |
+| `snn_size` | 10240 | SNN neuron count |
+| `n_epochs` | 10 | Maximum STDP epochs |
+| `n_pairs` | 500 | Pairs simulated per epoch |
+| `patience` | 3 | Epochs without improvement before early stop |
+| `min_improvement` | 0.005 | Minimum quality delta to reset patience counter |
+
+**`calibrate(embeddings, initial_codebook, vocab_mapping)`** → `CalibratedResult`
+
+Algorithm per epoch:
+1. Sample `n_pairs` random pairs, simulate each through `PythonSnnCore` with `learn=True`
+2. Re-encode all tokens: `mean_firing_rate ≥ threshold → bits`
+3. Measure Recall@10; save best codebook, early-stop on plateau
+
+**CalibratedResult** (dataclass): `codebook`, `snn_weights` (np.ndarray), `quality_curve` (List[float]), `n_epochs_run`, `final_quality`.
+
+---
+
+### `validator.py`
+
+**TransplantValidator** — Quality metrics for HV codebooks.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `rho_threshold` | 0.80 | Minimum Spearman ρ to pass |
+| `recall10_threshold` | 0.70 | Minimum Recall@10 to pass |
+| `recall50_threshold` | 0.60 | Minimum Recall@50 to pass |
+| `ari_threshold` | 0.65 | Minimum ARI to pass |
+
+**`validate(embeddings, codebook, vocab_mapping, n_sample_pairs=2000)`** → `TransplantReport`
+
+Metrics computed:
+- **Spearman ρ**: rank correlation between cosine similarity (embedding space) and normalised Hamming similarity (HV space) over `n_sample_pairs` random pairs
+- **Recall@10/50**: fraction of true top-k cosine neighbours found in HV top-k; averaged over 200 query tokens
+- **ARI**: Adjusted Rand Index between k-means (k=10) clustering in embedding vs HV space
+- **Per-token quality**: Recall@10 for up to 500 query tokens → `worst_concepts`, `best_concepts`
+
+**TransplantReport** (dataclass): `spearman_rho`, `recall_at_10`, `recall_at_50`, `ari`, `passed` (all thresholds met), `phase_timings`, `n_concepts`, `worst_concepts`, `best_concepts`, `svd_variance_explained`, `calibration_quality_curve`, `metadata`.
+
+---
+
+### `pipeline.py`
+
+**TransplantPipeline** — Orchestrates all five stages.
+
+| Method | Description |
+|--------|-------------|
+| `run(model, domain_name, strategy, calibration_epochs, save_pack_path, cognitive_engine)` | Execute full Harvest → Project → Calibrate → Validate → Integrate → Save pipeline. Returns `TransplantReport`. |
+
+Constructor: `TransplantPipeline(config=None)` — reads thresholds from `NSCKConfig` fields.
+
+`run()` parameters:
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `strategy` | `"svd_factored"` | `"random"`, `"learned"`, or `"svd_factored"` |
+| `calibration_epochs` | `None` (0 = skip) | STDP calibration epochs |
+| `save_pack_path` | `None` | If set, saves a `KnowledgePack` to this path |
+| `cognitive_engine` | `None` | If set and `report.passed`, inject into `SemanticMemory` |
+
+Integration logic (when `report.passed`):
+- All `codebook[token]` HVs → `sem.add_concept()` + `sem.concept_hvs[token] = hv`
+- Token pairs with `similarity > 0.7` → `sem.add_relation(t_a, "similar_to", t_b)`
+- Capped at `_RELATION_TOKEN_CAP = 500` tokens to bound O(n²) cost
+
+**`NSCKSubstrate.transplant(model, domain_name, ...)`** delegates to `TransplantPipeline.run()`.
+
+---
+
+*End of NSCK Module Reference — V4*
