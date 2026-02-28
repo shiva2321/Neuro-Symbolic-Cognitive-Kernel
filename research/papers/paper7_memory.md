@@ -318,6 +318,10 @@ The stable density (0.01485 vs. target 0.02) means the regulator measures the cu
 
 7. **No concurrent write safety.** SemanticMemory uses a `networkx.DiGraph` with no write locks; concurrent writes from multiple threads are unsafe. The Rust backend (`SemanticMemoryConcurrent`) addresses this.
 
+### Implementation Note (V4 Fix)
+
+The `SemanticMemory.spread_activation()` method previously caught exceptions from the Rust fast-path silently (bare `except Exception: pass`), meaning a misconfigured Rust build would silently fall back to the Python implementation with no diagnostic. The fallback now emits `logger.warning` to make the degradation visible. Similarly, the Rust step function failure in `semantic_memory_shim.py` now emits a warning instead of a debug message. All benchmark results in this paper used the Rust path and are unaffected.
+
 ---
 
 ## 7. Related Work

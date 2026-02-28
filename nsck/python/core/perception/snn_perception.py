@@ -603,28 +603,20 @@ class SNNPerceptionModule:
         if len(output_spike_idx) > 0:
             self.post_spike_times[output_spike_idx] = self.current_time
         
-        # Calculate weight changes for all synapses
-        # Only update if both pre and post have spiked recently (within 5*tau_stdp)
+        # Vectorized STDP weight update (outer-product, same as PythonStdpEngine.apply()).
+        # NOTE: this path is only reached when both the Rust SnnCore and PythonSnnCore
+        # are unavailable (i.e. essentially never in production).
+        window = 5.0 * self.tau_stdp
+        vp = self.post_spike_times > -999.0
+        vr = self.pre_spike_times > -999.0
+        dt_mat = self.post_spike_times[:, None] - self.pre_spike_times[None, :]
+        mask = vp[:, None] & vr[None, :] & (np.abs(dt_mat) < window)
+        ltp = mask & (dt_mat > 0)
+        ltd = mask & (dt_mat <= 0)
         delta_w = np.zeros_like(self.input_weights)
-        
-        for post_idx in range(self.snn_size):
-            if self.post_spike_times[post_idx] > -1000:  # Neuron has spiked at least once
-                for pre_idx in range(self.input_dim):
-                    if self.pre_spike_times[pre_idx] > -1000:  # Input has spiked
-                        # Calculate spike time difference
-                        delta_t = self.post_spike_times[post_idx] - self.pre_spike_times[pre_idx]
-                        
-                        # Only apply STDP if spikes are close in time
-                        if abs(delta_t) < 5 * self.tau_stdp:
-                            if delta_t > 0:
-                                # Post after pre → LTP (strengthen)
-                                dw = self.a_plus * np.exp(-delta_t / self.tau_stdp)
-                            else:
-                                # Pre after post → LTD (weaken)
-                                dw = -self.a_minus * np.exp(delta_t / self.tau_stdp)
-                            
-                            delta_w[post_idx, pre_idx] += dw
-        
+        delta_w[ltp] = self.a_plus * np.exp(-dt_mat[ltp] / self.tau_stdp)
+        delta_w[ltd] = -self.a_minus * np.exp(dt_mat[ltd] / self.tau_stdp)
+
         # Apply weight update with learning rate
         self.input_weights += self.stdp_lr * delta_w
         

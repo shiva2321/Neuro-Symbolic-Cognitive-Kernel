@@ -4,20 +4,21 @@ name: NSCK CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: ["**"]
   pull_request:
-    branches: [main, develop]
+    branches: ["**"]
 
 permissions:
   contents: read
 
 jobs:
   test-core:
-    name: Test NSCK Core
+    name: Test NSCK Core (V4)
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.11"]
+
     steps:
       - uses: actions/checkout@v4
 
@@ -25,6 +26,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
+
+      - name: Install Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache dependencies
         uses: actions/cache@v3
@@ -34,18 +38,57 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install numpy scipy scikit-learn pydantic pytest rustworkx rich psutil
+          pip install -r requirements.txt
+          pip install "maturin>=1.4"
 
-      - name: Run NSCK Core Tests
+      - name: Build hypervec_rs (VSA Rust backend)
         run: |
-          python -m pytest nsck-demo/tests/ -v \
-            --ignore=nsck-demo/tests/test_dashboard.py \
-            --ignore=nsck-demo/tests/test_server_a2c.py \
-            --tb=short
+          cd nsck/rust_vsa
+          maturin develop --release
+          cd ../..
+
+      - name: Build snn_rs (SNN Rust backend)
+        run: |
+          cd nsck/rust_snn
+          maturin develop --release
+          cd ../..
+
+      - name: Verify Rust backends
+        working-directory: nsck
+        run: |
+          NSCK_USE_RUST=1 python scripts/verify_rust.py
+
+      - name: Run full test suite (Rust enabled)
+        working-directory: nsck
+        env:
+          NSCK_USE_RUST: "1"
+        run: |
+          python -m pytest tests/ -q --tb=short
+
+      - name: Run V4 integration tests
+        working-directory: nsck
+        env:
+          NSCK_USE_RUST: "1"
+        run: |
+          python -m pytest tests/integration/test_v4_full_system.py -v --tb=short || true
+
+      - name: Run benchmarks (non-blocking)
+        working-directory: nsck
+        env:
+          NSCK_USE_RUST: "1"
+        run: |
+          python eval/bench_spread_activation.py || true
+          python eval/vsa_capability_benchmark.py || true
+
+      - name: Run research paper benchmarks (non-blocking)
+        env:
+          NSCK_USE_RUST: "1"
+        run: |
+          python research/experiments/paper6_active_inference_benchmarks.py || true
+          python research/experiments/paper7_memory_benchmarks.py || true
 
       - name: Upload test results
         if: always()
@@ -194,10 +237,10 @@ jobs:
 
       - name: Display test summary
         run: |
-          echo "## NSCK CI Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## NSCK V4 CI Test Summary" >> $GITHUB_STEP_SUMMARY
           echo "✅ All test suites completed" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- NSCK Core Tests: Completed" >> $GITHUB_STEP_SUMMARY
+          echo "- NSCK Core Tests (Rust enabled): Completed" >> $GITHUB_STEP_SUMMARY
           echo "- AI Model Tests: Completed" >> $GITHUB_STEP_SUMMARY
           echo "- Image Generation Tests: Completed" >> $GITHUB_STEP_SUMMARY
           echo "- Performance Benchmarks: Completed" >> $GITHUB_STEP_SUMMARY

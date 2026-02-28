@@ -1,8 +1,8 @@
 # Neuro-Symbolic Cognitive Kernel (NSCK)
 
-**V13 · February 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
+**V4 (V3–V18 Consolidated) · February 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
 
-94 modules · 232 classes · ~37K LOC Python · ~4K LOC Rust · 1 437 tests (1 424 pass with Rust)
+94+ modules · 232+ classes · ~36K LOC Python · ~4.3K LOC Rust · 1,669 tests passing
 
 ---
 
@@ -88,12 +88,19 @@ cd Neuro-Symbolic-Cognitive-Kernel
 # 2. Install Python dependencies
 pip install -r requirements.txt
 
-# 3. (Optional) Build Rust accelerators
+# 3. Build Rust backends (strongly recommended — 6–76× speedup)
+pip install maturin
 cd nsck/rust_vsa && maturin develop --release && cd ../..
 cd nsck/rust_snn && maturin develop --release && cd ../..
 
-# 4. Run the basic example
-python examples/01_cognitive_engine_basic.py
+# 4. Verify Rust is active
+NSCK_USE_RUST=1 python nsck/scripts/verify_rust.py
+
+# 5. Run the full test suite with Rust
+NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
+
+# — OR — do all of the above in one command:
+cd nsck && make test-full
 ```
 
 ### Minimal Code
@@ -143,7 +150,7 @@ Neuro-Symbolic-Cognitive-Kernel/
 │   ├── rust_vsa/            # Rust VSA accelerator (PyO3/maturin)
 │   ├── rust_snn/            # Rust SNN accelerator (PyO3/maturin)
 │   ├── api/                 # FastAPI REST interface
-│   ├── tests/               # 1 437 tests
+│   ├── tests/               # 1,669 tests
 │   ├── docs/                # Architecture, formulas, roadmap, references
 │   ├── scripts/             # Utility scripts
 │   └── data/                # Built-in datasets
@@ -176,9 +183,14 @@ Detailed docs live in [`nsck/docs/`](nsck/docs/):
 
 Companion papers are in [`research/papers/`](research/papers/):
 
-1. **Foundation** — VSA fundamentals and the cognitive kernel design
-2. **Causal Reasoning** — ΔP calculus with mutual-information confounder detection
-3. **Cross-Domain Transfer** — Analogical transfer across task domains
+1. **Paper 1 — Foundation** — VSA fundamentals and the full cognitive kernel design
+2. **Paper 2 — Causal Reasoning** — ΔP calculus with mutual-information confounder detection
+3. **Paper 3 — Cross-Domain Transfer** — Analogical transfer across task domains
+4. **Paper 4 — SNN Bridge** — Bidirectional VSA-SNN perception with STDP plasticity
+5. **Paper 5 — Model Transplantation** — Zero-shot projector-based knowledge transplantation
+6. **Paper 6 — Active Inference** — Free energy minimization for action selection (FEP)
+7. **Paper 7 — Memory Architecture** — Four-store memory system with Rust acceleration
+8. **Paper 8 — Safety** — Conformal prediction, veto gates, and transparency guarantees
 
 ---
 
@@ -192,6 +204,11 @@ NSCK is a research prototype. Be aware of these constraints:
 - **Cold-start analogy.** The analogy engine requires populated memory; it cannot generalise from a single example.
 - **Perception adapters are schematic.** Image, audio, and video adapters provide the interface but not production-grade feature extraction.
 - **Scale ceiling.** The architecture is tested up to ~10 K concepts in semantic memory. Behaviour at larger scales is unexplored.
+- **Free energy differentiation:** in default config (no CuriosityModule), `free_energy()` previously returned near-constant ≈0.4. Now uses world-model familiarity as epistemic proxy. **Fixed in this PR.**
+- **`_apply_stdp` nested loop:** O(N²) Python loop in the SNN fallback path. **Vectorized in this PR.**
+- **World model key collisions:** HV hash used first 8–16 bytes only. **Extended to 32-byte MD5 fingerprint in this PR.**
+- **Python N-way bundle used sequential pairwise bundling.** True majority-vote added via `bundle_n_way` in this PR.
+- **Rust fallback in spreading activation was silent.** Now emits `logger.warning`. **Fixed in this PR.**
 
 ---
 

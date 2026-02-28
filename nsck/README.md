@@ -9,7 +9,7 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V4** — 1,443+ tests. V3 baseline: 1,437 passed. Zero regressions.
+**Current release: V4 (V3–V18 Consolidated)** — 1,669 tests passing (Rust backend active). Zero regressions vs. V3 baseline.
 
 ---
 
@@ -39,20 +39,23 @@ hidden layers.
 # From the repository root
 pip install -r requirements.txt
 
-# Optional: build Rust VSA accelerator (~6–76× faster HV operations)
-cd nsck/rust_vsa && cargo build --release && \
-  cp target/release/libhypervec_rs.so ../hypervec_rs.so && cd ../..
+# Recommended: build Rust backends (strongly recommended — 6–76× speedup)
+pip install maturin
+cd nsck/rust_vsa && maturin develop --release && cd ../..
+cd nsck/rust_snn && maturin develop --release && cd ../..
 
-# Optional: build Rust SNN accelerator
-cd nsck/rust_snn && cargo build --release && \
-  cp target/release/libsnn_rs.so ../snn_rs.so && cd ../..
+# Verify Rust is active
+NSCK_USE_RUST=1 python nsck/scripts/verify_rust.py
 
-# Verify
-cd nsck && python -m pytest tests/ -q
+# Run the full test suite with Rust
+NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
+
+# Or use the Makefile (does all of the above):
+cd nsck && make test-full
 ```
 
 The Python shims (`vsa/hypervec_shim.py`, `perception/snn_shim.py`)
-automatically detect the `.so` files at import time and fall back to the
+automatically detect the compiled extensions at import time and fall back to the
 pure-Python/NumPy implementation when they are absent.
 
 ---
@@ -608,15 +611,16 @@ Built from `rust_snn/`.
 ### Building
 
 ```bash
-# VSA accelerator
-cd nsck/rust_vsa
-cargo build --release
-cp target/release/libhypervec_rs.so ../hypervec_rs.so
+# Recommended: maturin develop (installs directly into active Python env)
+pip install maturin
+cd nsck/rust_vsa && maturin develop --release && cd ../..
+cd nsck/rust_snn && maturin develop --release && cd ../..
 
-# SNN accelerator
-cd nsck/rust_snn
-cargo build --release
-cp target/release/libsnn_rs.so ../snn_rs.so
+# Verify
+NSCK_USE_RUST=1 python scripts/verify_rust.py
+
+# Or use the Makefile
+make install-rust && make build-rust
 ```
 
 ---
@@ -631,7 +635,7 @@ cd nsck
 # Full suite
 python -m pytest tests/ -q
 
-# Expected (with Rust): 1437 collected, 1424 passed, 2 failed, 7 skipped, 4 xfailed
+# Expected (with Rust): 1,669 tests passing (Rust backend active), 5 skipped, 4 xfailed
 
 # Unit tests only
 python -m pytest tests/unit/ -q
@@ -661,9 +665,38 @@ the repository root configures markers and test paths.
 
 ---
 
-## V4 Features — VSA-NLU, KnowledgeSeeder, LSH Memory & Rust Default-On
+## V4 Features — Consolidated Canonical Version (V3–V18)
 
-V4 delivers 5 new capabilities and 6 performance improvements, all backward-compatible with V3.
+**V4 is the consolidated canonical version** incorporating all features from V3 through V18 development iterations. The version numbering in the codebase refers to development milestones; V4 is the unified release that integrates all of them.
+
+### Feature Provenance Table
+
+| Feature Area | Introduced In | Status |
+|---|---|---|
+| VSA binary hypervectors (10,240-bit) | V1 | Stable |
+| LIF SNN perception + STDP | V2 | Stable |
+| Episodic + Semantic memory | V2 | Stable |
+| GWT coalition competition | V3 | Stable |
+| Construction grammar / frame semantics | V3 | Stable |
+| Negation, temporal, conditional logic | V4 | Stable |
+| STRIPS planner | V5 | Stable |
+| Active inference (FEP) | V8 | Stable |
+| EWC continual learning | V16 | Feature-flagged |
+| FHRR complex phasor VSA | V10 | Available |
+| Model transplantation | V15 | Feature-flagged |
+| Mental rehearsal veto | V8 | Stable |
+| Stigmergic semantic memory | V3 | Feature-flagged |
+| HNSW approximate nearest neighbour | V14 | Feature-flagged |
+| System 1 / System 2 dual-process | V3 | Feature-flagged |
+| Semantic HV bootstrap (SemanticBootstrapper) | V18 | Stable |
+
+### Code Issues Fixed (this PR)
+
+- **Free energy differentiation:** in default config (no CuriosityModule), `free_energy()` previously returned near-constant ≈0.4. Now uses world-model familiarity as epistemic proxy. **Fixed.**
+- **`_apply_stdp` nested loop:** O(N²) Python loop in the SNN fallback path. **Vectorized.**
+- **World model key collisions:** HV hash used first 8–16 bytes only. **Extended to 32-byte MD5 fingerprint.**
+- **Python N-way bundle used sequential pairwise bundling.** True majority-vote added via `bundle_n_way`. **Fixed.**
+- **Rust fallback in spreading activation was silent.** Now emits `logger.warning`. **Fixed.**
 
 ### VSA-Native NLU (VSANLUEngine)
 
