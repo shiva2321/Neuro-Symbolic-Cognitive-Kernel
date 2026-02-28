@@ -30,7 +30,7 @@ _NSCK_PKG  = os.path.join(_REPO_ROOT, "nsck")
 if _NSCK_PKG not in sys.path:
     sys.path.insert(0, _NSCK_PKG)
 
-import os; os.environ.setdefault('NSCK_USE_RUST', '1')
+os.environ.setdefault('NSCK_USE_RUST', '1')
 
 # ---------------------------------------------------------------------------
 # NSCK imports
