@@ -12,10 +12,13 @@ The LLM is a PERIPHERAL. It does NOT make decisions.
 It simply translates intent/meaning to/from the core system's symbolic language.
 """
 
+import logging
 import os
 import sys
 from typing import Dict, Any, Optional, List
 import json
+
+logger = logging.getLogger("nsck.language.language_module")
 
 # Try to import dependencies, handle gracefully if missing
 try:
@@ -54,6 +57,15 @@ class LanguageModule:
             except Exception as e:
                 print(f"[Language] Failed to init VSA Backend: {e}. Falling back to LLM/Mock.")
                 self.use_vsa = False
+
+        # V4: Initialize VSANLUEngine as the primary NLU path
+        self._vsa_nlu = None
+        try:
+            from python.core.language.vsa_nlu import VSANLUEngine
+            self._vsa_nlu = VSANLUEngine()
+            print("[Language] VSANLUEngine (V4) initialized as primary NLU.")
+        except Exception as _vsa_nlu_exc:
+            logger.warning("[Language] VSANLUEngine init failed: %s", _vsa_nlu_exc)
         
         if not self.use_vsa: # Only load LLM if VSA is not primary (or if we want hybrid?)
             # For now, if use_vsa is True, we skip LLM for 'understand' but might need it for 'generate'?
