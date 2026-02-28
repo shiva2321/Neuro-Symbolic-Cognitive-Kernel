@@ -3,6 +3,9 @@
 **/.pytest_cache/
 # Compiled Rust extension binaries (built locally, not committed)
 *.so
+# Allow prebuilt Rust extensions so CI can use them without a Rust toolchain
+!nsck/hypervec_rs*.so
+!nsck/snn_rs*.so
 .benchmarks/
 .idea/
 .vscode/
@@ -14,6 +17,8 @@
 *.png
 *.gguf
 *.json
+# Allow research results JSON files
+!research/results/*.json
 *.npz
 
 # Runtime / generated
@@ -31,3 +36,5 @@ nsck-demo/10Minute_experiment_video.mp4
 .venv/
 nsck/__init__.py
 nsck/*.so
+!nsck/hypervec_rs*.so
+!nsck/snn_rs*.so

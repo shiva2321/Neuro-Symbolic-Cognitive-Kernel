@@ -199,14 +199,8 @@ def exp_4_5():
 
     coding_results = []
     for mode in ["rate", "temporal"]:
-        try:
-            snn = SNNPerceptionModule(input_dim=input_dim, snn_size=128,
-                                       hv_dimension=1024, encoding_mode=mode)
-        except TypeError as e:
-            # TemporalCoder may not support all kwargs — skip gracefully
-            coding_results.append({"encoding_mode": mode, "accuracy": None, "note": str(e)})
-            print(f"  mode={mode} SKIPPED: {e}")
-            continue
+        snn = SNNPerceptionModule(input_dim=input_dim, snn_size=128,
+                                   hv_dimension=1024, encoding_mode=mode)
         concept_map = {}
         for _ in range(5):
             for i, pat in enumerate(patterns):

@@ -489,8 +489,7 @@ class SNNPerceptionModule:
                                      dimension=hv_dimension)
         else:
             self.encoder = TemporalCoder(n_neurons=snn_size,  # Match SNN size!
-                                         dimension=hv_dimension,
-                                         time_bins=10)
+                                         dimension=hv_dimension)
         
         self.snn_layer = LIFNeuronLayer(n_neurons=snn_size,
                                         tau=10.0,  # Faster dynamics

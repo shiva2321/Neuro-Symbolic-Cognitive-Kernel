@@ -52,7 +52,7 @@ def exp_5_1():
     for vocab_size in [100, 500]:
         embeddings = rng.standard_normal((vocab_size, dim)).astype(np.float32)
         vocab_mapping = {f"tok{i}": i for i in range(vocab_size)}
-        projector = RandomProjector(dim_in=dim, hv_dim=1024, seed=42)
+        projector = RandomProjector(dim_in=dim, hv_dim=10240, seed=42)
         codebook = projector.project(embeddings, vocab_mapping)
         # Validate with lower thresholds for small vocab
         validator = TransplantValidator(
@@ -93,7 +93,7 @@ def exp_5_2():
     labels = np.array(labels)
 
     vocab_mapping = {f"tok{i}": i for i in range(vocab_size)}
-    projector = RandomProjector(dim_in=dim, hv_dim=1024, seed=42)
+    projector = RandomProjector(dim_in=dim, hv_dim=10240, seed=42)
     codebook = projector.project(embeddings, vocab_mapping)
 
     # Build HV bit matrix
@@ -126,7 +126,7 @@ def exp_5_3():
     rng = np.random.default_rng(3)
     dim = 32
     vocab_size = 200
-    hv_dim = 1024
+    hv_dim = 10240
 
     embeddings = rng.standard_normal((vocab_size, dim)).astype(np.float32)
     vocab_mapping = {f"tok{i}": i for i in range(vocab_size)}
@@ -179,12 +179,12 @@ def exp_5_4():
     vocab_mapping = {f"tok{i}": i for i in range(vocab_size)}
 
     # Same seed → same codebook
-    cb1 = RandomProjector(dim_in=dim, hv_dim=1024, seed=99).project(embeddings, vocab_mapping)
-    cb2 = RandomProjector(dim_in=dim, hv_dim=1024, seed=99).project(embeddings, vocab_mapping)
+    cb1 = RandomProjector(dim_in=dim, hv_dim=10240, seed=99).project(embeddings, vocab_mapping)
+    cb2 = RandomProjector(dim_in=dim, hv_dim=10240, seed=99).project(embeddings, vocab_mapping)
     same_seed_identical = all(np.array_equal(cb1[k].bits, cb2[k].bits) for k in cb1)
 
     # Different seed → different codebook
-    cb3 = RandomProjector(dim_in=dim, hv_dim=1024, seed=1234).project(embeddings, vocab_mapping)
+    cb3 = RandomProjector(dim_in=dim, hv_dim=10240, seed=1234).project(embeddings, vocab_mapping)
     diff_seed_different = not all(np.array_equal(cb1[k].bits, cb3[k].bits) for k in cb1)
 
     result = {
@@ -202,7 +202,7 @@ def exp_5_5():
     rng = np.random.default_rng(5)
     dim_in = 64
     n_samples = 50
-    bridge = EmbeddingVSABridge(dim_in=dim_in, hv_dim=1024, seed=42)
+    bridge = EmbeddingVSABridge(dim_in=dim_in, hv_dim=10240, seed=42)
 
     sims = []
     for _ in range(n_samples):
@@ -235,7 +235,7 @@ def exp_5_6():
     for vocab_size in vocab_sizes:
         embeddings = rng.standard_normal((vocab_size, dim)).astype(np.float32)
         vocab_mapping = {f"tok{i}": i for i in range(vocab_size)}
-        projector = RandomProjector(dim_in=dim, hv_dim=1024, seed=42)
+        projector = RandomProjector(dim_in=dim, hv_dim=10240, seed=42)
         t0 = time.perf_counter()
         projector.project(embeddings, vocab_mapping)
         elapsed_ms = (time.perf_counter() - t0) * 1000
