@@ -53,23 +53,24 @@ impl HyperVector {
         HyperVector { bits: fused }
     }
 
-    // Simple majority bundling: if used mostly for superposition, usually we'd track counts. 
-    // For binary VSA, "bundling" usually means majority vote. Without counters, we can approximate 
-    // or just use XOR if it's MAP. But standard bundling requires integers or random tie breaking.
-    // For this prototype, let's implement a deterministic bitwise majority if we had 3 vectors, 
-    // but for 2 vectors, bundling is often just XOR or OR. 
-    // However, the prompt implies specific VSA operations.
-    // Let's implement a 'bundle' that takes a list of vectors? 
-    // Or implementing simple OR for now effectively creates a bloom filter like property, 
-    // but strict VSA bundling (addition) usually needs bipolar or integer vectors.
-    // Given the constraints (binary hypervectors), bundling 2 vectors usually requires a random tie-break 
-    // for every bit where they differ.
+    /// Pairwise bundle (superposition) of two binary hypervectors.
+    ///
+    /// For binary VSA, bundling two vectors requires a random tie-break for every
+    /// bit position where they differ (majority vote with N=2 is always a tie).
+    /// The seed is derived from BOTH vectors so the result is:
+    ///   1. Deterministic (same inputs → same output)
+    ///   2. Pair-specific (bundle(A,B) ≠ bundle(C,D) unless A=C and B=D)
+    ///
+    /// Mathematical correctness:
+    ///   bit=1 in both  → result=1 (both agree)
+    ///   bit=0 in both  → result=0 (both agree)
+    ///   bit differs    → result drawn uniformly from {0,1} (random tie-break)
+    ///
+    /// Expected similarity: sim(bundle(A,B), A) ≈ 0.75 (agrees on A's 1s + half the diff bits).
+    ///
+    /// For bundling N>2 vectors with true majority vote, use the free function
+    /// `bundle_hvs(Vec<Vec<u8>>)` which operates on bit arrays.
     fn bundle(&self, other: &HyperVector) -> HyperVector {
-        // For each bit: if both agree, keep it. If they differ, random tie-break.
-        // Seed is derived from the content of BOTH vectors so that:
-        //   1. bundle(A, B) is deterministic (same inputs → same output)
-        //   2. bundle(A, B) vs bundle(C, D) use DIFFERENT masks (fair per-pair)
-        
         let pair_seed = self.bits[0]
             ^ other.bits[0]
             ^ self.bits[1].wrapping_mul(0x9E3779B97F4A7C15)
@@ -79,21 +80,10 @@ impl HyperVector {
         let fused: Vec<u64> = self.bits.iter()
             .zip(other.bits.iter())
             .map(|(a, b)| {
-                let mask: u64 = rng.gen(); 
-                // Effectively choosing bits from A or B randomly where they differ
-                // (a & b) | (a & mask) | (b & !mask) ?? 
-                // Actually, standard way is majority. With 2, it is random.
-                let diff = a ^ b;
-                let same = a & b;
-                // If diff is 1, we need to choose. 
-                // if mask bit is 1, take a, else take b.
-                // (a & mask) | (b & !mask) covers the choice.
-                // The same bits are preserved automatically?
-                // if a=1, b=1 -> (1&m)|(1&!m) = m|!m = 1. Correct.
-                // if a=0, b=0 -> 0. Correct.
-                // if a=1, b=0 -> (1&m) = m.
-                // if a=0, b=1 -> (1&!m) = !m.
-                
+                let mask: u64 = rng.gen();
+                // When bits agree: (a & mask) | (b & !mask) = (x & mask) | (x & !mask) = x ✓
+                // When a=1, b=0:   (1 & mask) = mask        → random from {0,1} ✓
+                // When a=0, b=1:   (1 & !mask) = !mask      → random from {0,1} ✓
                 (a & mask) | (b & !mask)
             })
             .collect();
