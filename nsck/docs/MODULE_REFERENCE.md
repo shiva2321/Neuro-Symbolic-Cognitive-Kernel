@@ -1068,3 +1068,87 @@ Data classes: `TrainingConfig`, `TrainingMetrics`.
 **BenchmarkSuite** — `run_all()`, `benchmark_pattern_classification()`, `benchmark_temporal_sequences()`, `print_summary()`.
 
 **BenchmarkResult** (dataclass).
+
+---
+
+## V17 Enrichment Modules
+
+### `python/core/reasoning/causal_enricher.py`
+
+**CausalEnricher** — enrich causal triples with semantic context.
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `enrich(cause, effect, strength)` | Returns `CausalTrace` with context concepts. |
+| `enrich_chain(chain, base_strength)` | Pairwise enrichment with 0.9^i decay. |
+| `enrichment_count` | Total enrichments performed. |
+
+**CausalTrace** (dataclass): `cause`, `effect`, `strength`, `context_concepts`, `enrichment_steps`.
+
+---
+
+### `python/core/perception/perceptual_enricher.py`
+
+**PerceptualEnricher** — temporal context + confidence for PerceptPackets.
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `enrich(packet)` | Returns `EnrichedPercept`. |
+| `reset()` | Clear temporal history window. |
+| `enrich_count` | Total enrichments performed. |
+
+**EnrichedPercept** (dataclass): `original_modality`, `confidence`, `temporal_ctx_available`, `tags`, `metadata`.
+
+---
+
+### `python/core/memory/semantic_enricher.py`
+
+**SemanticEnricher** — inverse-relation inference and co-query tracking.
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `enrich_concept(concept, relation, target)` | Single triple enrichment. |
+| `enrich_bulk(triples)` | Batch enrichment. |
+| `coquery_stats()` | Returns `{(concept, target): count}` dict. |
+| `total_enrichments` | Total enrichment calls. |
+
+**EnrichmentReport** (dataclass): `concepts_enriched`, `inverse_relations_added`, `bundles_strengthened`, `steps`.
+
+**INVERSE_RELATION_MAP**: `is_a→sub_class_of`, `has_part→part_of`, `causes→caused_by`, `used_for→uses`, `at_location→location_of`.
+
+---
+
+### `python/core/cognitive/glass_box_tracer.py`
+
+**GlassBoxTracer** — step-by-step decision trace.
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `begin_decision(decision_id)` | Start a new trace. |
+| `end_decision()` | Finalise and archive trace; returns `DecisionTrace`. |
+| `record(module, message, confidence, **metadata)` | Append a `TraceEntry`. |
+| `span(name)` | Context manager for grouping entries. |
+| `export()` | Return active (in-progress) trace. |
+| `last_trace()` | Most recent completed trace. |
+| `history()` | All archived traces. |
+| `format_trace(trace)` | Static; human-readable string. |
+
+**DecisionTrace** (dataclass): `decision_id`, `entries`, `start_ms`, `end_ms`, `elapsed_ms`.
+
+**TraceEntry** (dataclass): `span`, `module`, `message`, `confidence`, `timestamp_ms`, `metadata`.
+
+---
+
+### `python/core/memory/crossmodal_enricher.py`
+
+**CrossModalEnricher** — anchor-based cross-modal linking.
+
+| Method/Property | Description |
+|-----------------|-------------|
+| `link_modalities(anchor, pairs)` | Register modality concepts under anchor. |
+| `detect_clusters()` | Find anchors in 2+ modalities. |
+| `summary()` | Dict with `total_links`, `anchor_count`, `anchors`. |
+| `total_links` | Total modality links registered. |
+| `anchor_count` | Number of distinct anchors. |
+
+**CrossModalEnrichmentReport** (dataclass): `anchors_created`, `links_added`, `clusters_detected`, `steps`.
