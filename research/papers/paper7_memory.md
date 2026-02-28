@@ -1,11 +1,11 @@
 # Homeostatic Memory Architecture: Four-Store VSA Memory with Self-Regulation and Drift Detection
 
-**Shivam Prajapati**  
-Bachelor of Computer Science  
-University of Prince Edward Island, Charlottetown, PE, Canada  
-GitHub: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel
+**Shivam Prajapati**
+Bachelor of Computer Science, University of Prince Edward Island
+Charlottetown, Prince Edward Island, Canada
 
-*Developed iteratively with AI coding-agent assistance.*
+*NSCK Technical Report Series · Paper 7 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -318,10 +318,6 @@ The stable density (0.01485 vs. target 0.02) means the regulator measures the cu
 
 7. **No concurrent write safety.** SemanticMemory uses a `networkx.DiGraph` with no write locks; concurrent writes from multiple threads are unsafe. The Rust backend (`SemanticMemoryConcurrent`) addresses this.
 
-### Implementation Note (V4 Fix)
-
-The `SemanticMemory.spread_activation()` method previously caught exceptions from the Rust fast-path silently (bare `except Exception: pass`), meaning a misconfigured Rust build would silently fall back to the Python implementation with no diagnostic. The fallback now emits `logger.warning` to make the degradation visible. Similarly, the Rust step function failure in `semantic_memory_shim.py` now emits a warning instead of a debug message. All benchmark results in this paper used the Rust path and are unaffected.
-
 ---
 
 ## 7. Related Work
@@ -343,6 +339,12 @@ The `SemanticMemory.spread_activation()` method previously caught exceptions fro
 ## 8. Conclusion
 
 The NSCK four-store memory architecture achieves functional separation of semantic (graph + HNSW), episodic (timestamped HV episodes), procedural (skill cache), and cross-modal (XOR-bound) memory, with self-regulation via drift detection and homeostasis. Benchmarks confirm correct scaling, fast retrieval (0.072 ms episodic, 1.41–2.60 ms semantic), 100% procedural hit rate, drift alarm at ≥30% bit corruption, and stable homeostasis. Future work includes testing at $n = 10{,}000$+ concepts, active pruning tests for homeostasis, and integration with STDP-driven concept updates that generate realistic concept drift.
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

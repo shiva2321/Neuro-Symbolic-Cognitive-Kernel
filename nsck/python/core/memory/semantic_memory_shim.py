@@ -94,29 +94,29 @@ def spread_activation_fast(
         # Build the edge list once from the graph and call it for each step.
         _active_step_fn = _rust_step_fn  # local alias; set to None on failure
 
+        if _active_step_fn is not None:
+            # Build edges list: (from, to, weight) — include stigmergy boost in weight
+            edges = []
+            for u, v, data in concept_graph.edges(data=True):
+                rel = data.get("relation", "similar_to")
+                w = relation_weights.get(rel, 0.3)
+                if _stigmergy_boost:
+                    w = w * (1.0 + stigmergy.get((u, v), 0.0))
+                edges.append((str(u), str(v), float(w)))
+            # Run each step through Rust
+            for _ in range(steps):
+                try:
+                    activation = _active_step_fn(activation, edges, decay, _MAX_FRONTIER)
+                except Exception as _exc:
+                    logger.warning(
+                        "[shim] Rust spreading_activation_step failed (%s); "
+                        "falling back to Python. Ensure snn_rs/hypervec_rs are built correctly.",
+                        _exc,
+                    )
+                    _active_step_fn = None
+                    break
             if _active_step_fn is not None:
-                # Build edges list: (from, to, weight) — include stigmergy boost in weight
-                edges = []
-                for u, v, data in concept_graph.edges(data=True):
-                    rel = data.get("relation", "similar_to")
-                    w = relation_weights.get(rel, 0.3)
-                    if _stigmergy_boost:
-                        w = w * (1.0 + stigmergy.get((u, v), 0.0))
-                    edges.append((str(u), str(v), float(w)))
-                # Run each step through Rust
-                for _ in range(steps):
-                    try:
-                        activation = _active_step_fn(activation, edges, decay, _MAX_FRONTIER)
-                    except Exception as _exc:
-                        logger.warning(
-                            "[shim] Rust spreading_activation_step failed (%s); "
-                            "falling back to Python. Ensure snn_rs/hypervec_rs are built correctly.",
-                            _exc,
-                        )
-                        _active_step_fn = None
-                        break
-                if _active_step_fn is not None:
-                    return activation
+                return activation
 
         # Python fallback spreading activation loop
         for _ in range(steps):

@@ -6,19 +6,19 @@
     "semantic_memory_scaling": [
       {
         "n_concepts": 100,
-        "avg_query_ms": 1.4086882699962189
+        "avg_query_ms": 1.3152116100081912
       },
       {
         "n_concepts": 500,
-        "avg_query_ms": 1.9567924400053016
+        "avg_query_ms": 1.7293192000033741
       },
       {
         "n_concepts": 1000,
-        "avg_query_ms": 2.2477943100011544
+        "avg_query_ms": 2.243036060006034
       },
       {
         "n_concepts": 2000,
-        "avg_query_ms": 2.5991319100148758
+        "avg_query_ms": 2.6984207900159163
       }
     ]
   },
@@ -26,7 +26,7 @@
     "episodic_recall": {
       "n_episodes": 500,
       "n_queries": 50,
-      "avg_recall_ms": 0.07186562000242702,
+      "avg_recall_ms": 0.07200643999567546,
       "mean_similarity_of_top5": 0.60544609375
     }
   },
@@ -34,7 +34,7 @@
     "procedural_fast_path": {
       "n_skills_cached": 50,
       "hit_rate": 1.0,
-      "avg_lookup_ms": 1.166934530006074,
+      "avg_lookup_ms": 1.2009446699858017,
       "library_hit_rate": 0.5
     }
   },

@@ -4,7 +4,8 @@
 Bachelor of Computer Science, University of Prince Edward Island
 Charlottetown, Prince Edward Island, Canada
 
-*Open-source implementation — February 2026*
+*NSCK Technical Report Series · Paper 2 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -457,6 +458,12 @@ The system learned 9 causal rules from 500 navigation cycles, correctly rejected
 The honest limitations are clear: synthetic ground truth, independence assumptions in chain strength, partially addressed confounder detection (MI-based for observed variables, but not for truly hidden confounders), and a dependence on discrete symbolic grounding. We present this as a foundation for further research in auditable causal AI.
 
 Code and benchmarks: **https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel**
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

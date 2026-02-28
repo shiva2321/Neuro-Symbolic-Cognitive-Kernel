@@ -1,11 +1,11 @@
 # Active Inference Meets Global Workspace Theory: Free-Energy-Guided Coalition Competition in a Cognitive Architecture
 
-**Shivam Prajapati**  
-Bachelor of Computer Science  
-University of Prince Edward Island, Charlottetown, PE, Canada  
-GitHub: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel
+**Shivam Prajapati**
+Bachelor of Computer Science, University of Prince Edward Island
+Charlottetown, Prince Edward Island, Canada
 
-*Developed iteratively with AI coding-agent assistance.*
+*NSCK Technical Report Series · Paper 6 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -271,8 +271,6 @@ This signal can gate metacognitive actions: high $H_{\text{KLE}}$ triggers delib
 
 3. **Binary free energy.** Surprise = 0.5 if unseen, 0 if seen — no gradient, no annealing. This is a discrete approximation.
 
-   **3a. Degenerate epistemic value in default configuration.** Without a `CuriosityModule`, `epistemic_value()` previously returned a hardcoded constant 0.1 for all actions, making `free_energy() ≈ 0.5 − 0.1 = 0.4` for all unvisited states. With `active_inference_weight = 0.2` in `CognitiveEngine`, this caused every coalition to receive an identical `+0.02` salience bonus — providing no differentiation between actions. **Fixed:** `epistemic_value()` now uses world-model familiarity as a proxy (0.3 for unseen transitions, 0.1 for seen), improving salience differentiation to `±0.04` without requiring a full CuriosityModule. The paper's measured results (Exp 6.1 mean F = −0.510) used a configured CuriosityModule and remain valid.
-
 4. **Mental rehearsal vetoes all proposals in Exp 6.5.** The mock world model was designed to always return danger, so this is expected. Real deployments need a danger vector registry populated from actual harmful outcomes.
 
 5. **GWT modules are stubs.** `WorkspaceModule` in experiments does nothing except record broadcast content. Real cognitive modules (perception, language, memory) need to influence coalition salience dynamically.
@@ -296,6 +294,12 @@ This signal can gate metacognitive actions: high $H_{\text{KLE}}$ triggers delib
 ## 8. Conclusion
 
 We implemented and benchmarked a functional integration of Active Inference and Global Workspace Theory within the NSCK neuro-symbolic cognitive architecture. The system correctly transitions from exploration to exploitation (step 60 of 200), learns transition models to zero error in 10 updates, runs LIDA-style coalition competition (GWT winner: vision at 1.350 activation), and vetoes dangerous proposals via mental rehearsal. KLE uncertainty (1.057) correctly quantifies competition intensity. Future work includes continuous free energy minimisation via variational inference, a generalising world model, and integration with SNN perception for sensor-driven state estimation.
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 

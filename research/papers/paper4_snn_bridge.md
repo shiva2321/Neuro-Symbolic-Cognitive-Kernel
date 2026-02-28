@@ -1,12 +1,11 @@
 # Bridging Spikes and Symbols: Bidirectional VSA-SNN Perception with STDP Plasticity
 
-**Author:** Shivam Prajapati  
-Bachelor of Computer Science, University of Prince Edward Island  
-Charlottetown, PE, Canada
+**Shivam Prajapati**
+Bachelor of Computer Science, University of Prince Edward Island
+Charlottetown, Prince Edward Island, Canada
 
-**Series:** Neuro-Symbolic Cognitive Kernel (NSCK) Technical Report, Paper 4 of 8  
-**Status:** Working Implementation — benchmarks from actual experiment runs  
-*Developed iteratively with AI coding-agent assistance.*
+*NSCK Technical Report Series · Paper 4 of 8 · February 2026*
+*Open-source: https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel*
 
 ---
 
@@ -496,10 +495,6 @@ The experiments do not compare against standard classification methods (k-NN, SV
 
 The NSCK codebase was developed iteratively with AI coding-agent assistance and has not undergone a formal peer review process or rigorous test-driven development. While unit tests exist for individual components, integration-level and adversarial tests are limited. The results reported here should be treated as engineering benchmarks of a research prototype rather than as reproducibility-certified scientific claims.
 
-### Implementation Note (V4 Fix)
-
-The `SNNPerceptionModule._apply_stdp()` fallback method previously contained an O(snn_size × input_dim) nested Python loop — equivalent to 16,384 Python iterations per timestep at the default 256×64 configuration. While this path is only reached when both Rust `SnnCore` and `PythonSnnCore` are unavailable (i.e., essentially never in production), it has been replaced with the same vectorized outer-product implementation used by `PythonSnnCore` and `PythonStdpEngine`. The Rust-accelerated results reported in this paper are unaffected.
-
 ---
 
 ## 7. Related Work
@@ -535,6 +530,12 @@ Experimental results on the Python backend establish that the system achieves 10
 Key limitations documented honestly in Section 6 include: the absence of Rust acceleration in the tested run, the TemporalCoder API mismatch preventing temporal-coding comparison, high neuron activation density (76.4%) indicating missing lateral inhibition, fixed Jaccard threshold causing occasional over-registration, and the small scale of evaluation (10 patterns, ≤256 neurons).
 
 Future work will address: (1) fixing the TemporalCoder API and running rate-vs-temporal comparison experiments, (2) implementing winner-take-all lateral inhibition to achieve sparse codes, (3) scaling experiments to $N \in \{1024, 4096, 16384\}$ with the Rust backend, (4) evaluation on standard neuromorphic benchmarks (N-MNIST, DVSGesture), and (5) full end-to-end demonstration of the SNN→VSA→GlobalWorkspace→Language pipeline on a grounded perception-to-language task.
+
+---
+
+## Acknowledgements
+
+The author used AI coding assistants as iterative development and pair-programming tools during implementation of the NSCK codebase. All architectural decisions, experimental design, theoretical framing, and written content are the author's own. This work was conducted independently, without institutional funding.
 
 ---
 
