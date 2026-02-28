@@ -6,9 +6,12 @@ Also benchmarks Rust vs Python (SNNPerceptionModule) for perceive() speed.
 
 import sys, time, math
 import numpy as np
+from pathlib import Path
 
-sys.path.insert(0, r"d:\Node_network")
-sys.path.insert(0, r"d:\Node_network\nsck")
+_repo_root = Path(__file__).resolve().parents[3]  # nsck/rust_snn/tests/ -> repo root
+_nsck_root = _repo_root / "nsck"
+sys.path.insert(0, str(_repo_root))
+sys.path.insert(0, str(_nsck_root))
 
 # ── import Rust extension ────────────────────────────────────────────────────
 import snn_rs
