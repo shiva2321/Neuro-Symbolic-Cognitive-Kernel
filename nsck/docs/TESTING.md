@@ -47,7 +47,10 @@ python -m pytest nsck/tests/unit/memory/ -q
 # Rust backend tests (requires .so files built)
 python -m pytest nsck/tests/unit/rust/ -q
 
-# V13-specific tests
+# V4-specific tests
+python -m pytest nsck/tests/integration/test_v4_full_system.py -v
+
+# V13 substrate tests (baseline)
 python -m pytest nsck/tests/unit/test_v13_universal_substrate.py -q
 
 # Verbose output with short tracebacks

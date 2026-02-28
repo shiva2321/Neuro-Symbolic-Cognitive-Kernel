@@ -1,7 +1,7 @@
-# NSCK V14 — Theory, Formulas, and Mathematical Foundations
+# NSCK V4 — Theory, Formulas, and Mathematical Foundations
 
 This document covers the complete mathematical and theoretical foundations of
-NSCK V14: every formula, derivation, and design rationale — extracted directly
+NSCK V4: every formula, derivation, and design rationale — extracted directly
 from the source code and the research ideas that motivated each component.
 
 ---
