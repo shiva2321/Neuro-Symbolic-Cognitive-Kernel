@@ -28,7 +28,7 @@
 13. [V17 Enrichment Modules](#13-v17-enrichment-modules)
 14. [Seeding Subsystem](#14-seeding-subsystem)
 15. [V4 Additions](#15-v4-additions)
-16. [Limitations](#16-limitations)
+16. [Design Boundaries, Known Gaps, and Trade-offs](#16-design-boundaries-known-gaps-and-trade-offs)
 
 ---
 
@@ -568,7 +568,7 @@ Model types detected: `"transformer_lm"`, `"transformer_vision"`, `"encoder_deco
 | `"svd_factored"` *(default)* | `SVDFactoredProjector` | SVD to 128 components + FPE codebook encoding (matches `image_adapter.py` pattern) | Cluster structure preserved; continuous ρ ≈ 0.1 |
 
 **SVDFactoredProjector seed formulas** (mirror `image_adapter.py` / `audio_adapter.py`):
-- Codebook HVs: `HyperVector(i*31 + j*31 + 7777)` for bin `i`, component `j`
+- Codebook HVs: `HyperVector(i*31 + cb_seed_base)` where `cb_seed_base = j*31 + 7777` for component `j`, bin `i` — mirrors `image_adapter.py`'s `i*31 + 7777` with per-component offset
 - Role HVs: `HyperVector((j*1013 + 5003) % 2**32)`
 
 ### STDP Calibration
@@ -819,18 +819,56 @@ protecting frequently-winning rules from pruning.
 
 ---
 
-## 16. Limitations
+## 16. Design Boundaries, Known Gaps, and Trade-offs
 
-| Area | Limitation |
+Not everything here is a "limitation" in the defect sense. This section
+distinguishes **intentional design choices** from **genuine implementation gaps**
+and **known trade-offs**, so readers understand *why* each behaviour exists.
+
+---
+
+### Design Boundaries (intentional architectural choices)
+
+These are not defects. They are deliberate decisions that make NSCK what it is.
+
+| Boundary | What it means | Why it's intentional |
+|---|---|---|
+| **VSA-based NLU only** | `VSANLUEngine` uses prototype HV matching — no semantic parsing, no neural language models built in | Preserves glass-box transparency; every NLU decision traces back to a cosine similarity over symbolic prototypes. No gradient tensors, no hidden states. The module's own docstring says "No gradients, no transformers." |
+| **No built-in gradient learning** | NSCK has zero backprop-trained models internally | The architecture is explicitly neuro-symbolic: all learning is Hebbian, STDP, rule induction, or Q-learning. Gradient models are *intentionally external*. The V15 Transplant Pipeline is the designed bridge for injecting knowledge from gradient-trained models into NSCK's HV space. |
+| **Rust is the fast path, Python is the correctness path** | The Rust `spreading_activation_step` computes per-edge weighted activation (relation weights + stigmergy are pre-computed by the shim and passed as edge weights). Both Rust and Python paths produce the same mathematical result — Rust is simply faster. | Performance without sacrificing semantics. The Python path remains as a verified fallback. |
+
+---
+
+### Known Implementation Gaps
+
+These are genuine TODOs where a feature is incomplete or not yet wired up.
+
+| Gap | Exact behaviour | What it means in practice |
+|---|---|---|
+| **SNN grounding fires once** | `SNNPerceptionModule.register_concepts_from_memory()` is called only during `NSCKSubstrate.__init__()` | Concepts added to `SemanticMemory` after substrate construction are not automatically registered in the SNN. Call `substrate.engine.snn_perception.register_concepts_from_memory(substrate.engine.semantic_memory)` manually after bulk concept additions. |
+| **HNSW index is not persisted** | `SemanticMemory.save()` serialises concepts, HVs, and graph edges as gzip+JSON — the HNSW index object itself is not serialised | After `load()`, the HNSW index is rebuilt lazily on the first `add_concept()` call. This is automatic but adds latency after a cold load on large memories. |
+
+---
+
+### Scalability Characteristics
+
+These depend on which backend is active and how the system is configured.
+
+| Characteristic | Python-only path | With Rust backends (`NSCK_USE_RUST=1`, default) |
+|---|---|---|
+| **Semantic memory scale** | Practical ceiling ≈ 10 000 concepts (NetworkX graph + linear similarity scan) | `SemanticMemoryConcurrent` (Rust DashMap + Rayon parallel search) scales to 100 K+ concepts; `for_scale(n)` enables HNSW automatically at ≥ 10 000 |
+| **Spreading activation throughput** | ~83 ops/s at 1 000 nodes / 5 000 edges | ~1 250 ops/s (15× faster); relation weights and stigmergy are computed by the shim and included in the per-edge weight passed to Rust |
+| **Parallel similarity search** | Linear scan — O(N·D) | Rust `parallel_semantic_search` via Rayon — O(N·D/cores) with HNSW ANN shortcut |
+
+---
+
+### Known Trade-offs (strategy-specific, by design)
+
+| Trade-off | Detail |
 |---|---|
-| **NLU** | VSA prototype matching — no semantic parsing or transformers |
-| **Deep learning** | Zero gradient-based models built-in; CNNs/transformers accessed only via Transplant Pipeline |
-| **SNN grounding** | Fires at startup only; new concepts added after `__init__()` require manual re-grounding |
-| **HNSW persistence** | Index not persisted across save/load cycles — rebuilds on next `add_concept()` |
-| **Scale** | Semantic memory practical ceiling ≈ **10 000** concepts |
-| **Rust step dispatch** | `spreading_activation_step` uses uniform decay; full relation-weighted spreading uses Python path |
-| **Transplant similarity** | SVDFactoredProjector Spearman ρ ≈ 0.1 on random pairs; cluster structure preserved but continuous rank is not |
-| **STDP calibration** | Calibration quality depends on SNN convergence; stochastic — re-running may yield different results |
+| **SVDFactoredProjector: cluster structure vs. continuous rank** | Reduces to 128 principal components then FPE-quantises each. Preserves cluster membership (ARI ≥ 0.65 target) but sacrifices continuous cosine rank (Spearman ρ ≈ 0.1 on random pairs). **RandomProjector** achieves ρ ≈ 0.6 if continuous rank matters more than interpretable components. See `TRANSPLANT_REPORT.md` for strategy comparison. |
+| **STDP calibration is stochastic** | Random pair sampling in `STDPCalibrator` means two runs may produce slightly different codebooks. This is fundamental to STDP learning, not a bug. The `patience` parameter and `min_improvement` threshold bound the variance. Calibration is optional (`calibration_epochs=0` skips it). |
+| **Transplant quality gates may reject** | `TransplantReport.passed` is `False` when any of ρ, Recall@10, Recall@50, or ARI fall below thresholds. Lower the thresholds in `NSCKConfig.transplant()` or switch to `"random"` strategy if the default `"svd_factored"` strategy fails a domain. |
 
 ---
 

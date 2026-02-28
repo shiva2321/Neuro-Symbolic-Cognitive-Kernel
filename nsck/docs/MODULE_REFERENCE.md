@@ -1358,7 +1358,7 @@ Calls `fit(embeddings)` automatically during `project()`.
 Algorithm:
 1. `U, S, Vt = SVD(E − mean(E))` — capped at 10 000 rows for large vocabs
 2. Project: `Z = (E − mean) @ Vt[:k]`  — shape (N, k)
-3. Per-component FPE codebook: `HyperVector(i*31 + j*31 + 7777)` for bin `i`, component `j`
+3. Per-component FPE codebook: `HyperVector(i*31 + cb_seed_base)` where `cb_seed_base = j*31 + 7777` for component `j`, bin `i` — mirrors `image_adapter.py`'s `i*31 + 7777` but adds a per-component offset
 4. Role HVs: `HyperVector((j*1013 + 5003) % 2**32)` — mirrors `image_adapter.py` / `audio_adapter.py`
 5. Encode: `XOR(codebook[bin], role_hv)` for each component → `bundle()` all
 
