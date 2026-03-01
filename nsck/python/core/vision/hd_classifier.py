@@ -435,11 +435,13 @@ class NSCKHDVisionClassifier:
         n_levels: int = 32,
         hv_dim: int = 10240,
         seed: int = 77777,
+        rotation_augment: bool = False,
     ) -> None:
         self.n_lda = n_lda
         self.n_levels = n_levels
         self.hv_dim = hv_dim
         self.seed = seed
+        self.rotation_augment = rotation_augment
 
         self._lda = None
         self._pca = None
@@ -470,6 +472,11 @@ class NSCKHDVisionClassifier:
         """
         Train on a list of images.
 
+        If the ``rotation_augment`` instance attribute (set via ``__init__``) is True,
+        training data is automatically augmented with 0°/90°/180°/270° rotations so that
+        LDA learns rotation-invariant discriminant directions.  This addresses the HOG
+        rotation-sensitivity limitation at the cost of some clean-image accuracy.
+
         Parameters
         ----------
         images : list of np.ndarray  (any shape/dtype)
@@ -479,14 +486,29 @@ class NSCKHDVisionClassifier:
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
         from sklearn.decomposition import PCA
 
-        labels_arr = np.array(labels)
+        # ── 1. Optional rotation augmentation ───────────────────────────────
+        if self.rotation_augment:
+            aug_images: List[np.ndarray] = []
+            aug_labels: List[Any] = []
+            for img, lbl in zip(images, labels):
+                arr = np.asarray(img, dtype=np.float64)
+                for k in range(4):        # 0°, 90°, 180°, 270°
+                    aug_images.append(np.rot90(arr, k))
+                    aug_labels.append(lbl)
+            train_images = aug_images
+            train_labels = aug_labels
+        else:
+            train_images = list(images)
+            train_labels = list(labels)
+
+        labels_arr = np.array(train_labels)
         self._classes = sorted(set(labels))
         n_classes = len(self._classes)
 
         # Feature extraction (fixed-length 497 features for any image type/size)
         X = np.array([
             _extract_fixed_features(np.asarray(img, dtype=np.float64))
-            for img in images
+            for img in train_images
         ])
 
         # ── 2. PCA pre-reduction (prevents LDA rank-deficiency) ──────────────
