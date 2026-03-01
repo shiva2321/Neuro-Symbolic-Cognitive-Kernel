@@ -1,6 +1,6 @@
 # NSCK V24 — Full System Analysis Report (V22/V23 + Limitations Fixes)
 
-> Generated: 2026-03-01 | Runtime: 64.1s
+> Generated: 2026-03-01 | Runtime: 85.1s
 
 ---
 
@@ -22,13 +22,13 @@ similarity a valid approximation of Euclidean distance in LDA space → 31% → 
 |---|---|---|---|---|
 | Rust VSA backend | ❌ Python fallback | ❌ Python fallback | ❌ Python fallback | — |
 | Average Rust speedup | **1.0×** | **1.0×** | **1.0×** | — |
-| NSCKHDVisionClassifier (clean L1) | 98.9% | 87.5% | **87.5%** | Rotation robustness trade-off |
-| L4 Rotated (NSCKHDVisionClassifier) | 10.0% | **84.0%** | **84.0%** | Fix 1 ✅ |
+| NSCKHDVisionClassifier (clean L1) | 98.9% | 87.5% | **93.3%** | Rotation robustness trade-off |
+| L4 Rotated (NSCKHDVisionClassifier) | 10.0% | **84.0%** | **88.0%** | Fix 1 ✅ |
 | UPMA (SVD centroid, unsupervised) | 12.8% | 12.2% | **10.3%** | Observation path |
-| UPMA (LDA HVs, discriminative) | — | 18.9% | **18.9%** | Fix 3 ✅ |
+| UPMA (LDA HVs, discriminative) | — | 18.9% | **24.2%** | Fix 3 ✅ |
 | Text (word-hash baseline) | ~27% | ~20% | **33.3%** | — |
 | Text (TF-IDF FPE) | 31.4% | 31.4% | **13.7%** | — |
-| Text (DistributionalCodebook, V23) | — | 23.5% | **21.6%** | Co-occurrence, small corpus |
+| Text (DistributionalCodebook, V23) | — | 23.5% | **19.6%** | Co-occurrence, small corpus |
 | Text (LSA→SVD absorb, V24) | — | — | **17.6%** | LSA model absorbed |
 | Text (LSA+LDA smooth HV, V24) | — | — | **58.8%** | Fix 2 ✅ beats external KNN! |
 | External LSA+KNN reference | — | 54.9% | **54.9%** | Sklearn oracle |
@@ -42,8 +42,8 @@ similarity a valid approximation of Euclidean distance in LDA space → 31% → 
 > (each step flips 10240/64=160 bits). Adjacent levels share 97.5% of bits. This makes the
 > HV encoding geometrically faithful, and HV cosine similarity approximates distance in LDA space.
 
-> **Fix 3 limitation**: UPMA accuracy (18.9%) is lower than the classifier's direct
-> LDA nearest-centroid (87.5%) because: (a) cosine in HV space ≈ but ≠ Euclidean in
+> **Fix 3 limitation**: UPMA accuracy (24.2%) is lower than the classifier's direct
+> LDA nearest-centroid (93.3%) because: (a) cosine in HV space ≈ but ≠ Euclidean in
 > LDA space, and (b) the 9 LDA dimensions encode only ~9% signal in the 10240-bit HV. The
 > prototype bundling helps by averaging out noise, but the gap remains. This is the irreducible
 > cost of HV-based absorption — the advantage is the cognitive/semantic layer it enables.
@@ -84,8 +84,8 @@ achieving **99.2%** accuracy as a standalone classifier.
 |---|---|---|
 | External SVM (not absorbed) | 99.2% | Traditional ML, no cognitive substrate |
 | NSCK-UPMA V22 (SVD centroid-only) | ≈12.8% | Unsupervised SVD; centroid HVs only |
-| **NSCK-UPMA V23 (Fix 3: LDA HVs)** | **18.9%** | Discriminative LDA level-coded HVs |
-| NSCKHDVisionClassifier (PCA+LDA, Fix 1) | **87.5%** | Rotation-augmented training |
+| **NSCK-UPMA V23 (Fix 3: LDA HVs)** | **24.2%** | Discriminative LDA level-coded HVs |
+| NSCKHDVisionClassifier (PCA+LDA, Fix 1) | **93.3%** | Rotation-augmented training |
 
 **Fix 3 — LDA HV transplant:** The SVD path (unsupervised) achieves 10.3% regardless
 of how prototypes are built. The key insight is that SVDFactoredProjector uses PCA components
@@ -97,7 +97,7 @@ inference. These HVs live in discriminative LDA space — classes are maximally 
 LDA on 4× augmented data. LDA maximises between-class variance and minimises within-class
 variance; when within-class variance now includes all rotations, the learned discriminant
 directions are invariant to them. Accuracy trade-off: some clean-image accuracy is exchanged
-for strong rotation robustness (L4: 10% → 84.0%).
+for strong rotation robustness (L4: 10% → 88.0%).
 
 **Structural preservation:** Spearman ρ = -0.0312 (SVD path — expected weak for unsupervised projection).
 
@@ -109,27 +109,27 @@ for strong rotation robustness (L4: 10% → 84.0%).
 
 | Level | Accuracy | Mean Margin | Time |
 |---|---|---|---|
-| L1_clean               | 84.0% | 1.7737 | 255.0 ms |
-| L2_noisy               | 75.0% | 1.1259 | 251.6 ms |
-| L3_dropout50           | 28.0% | 0.5753 | 252.2 ms |
-| L4_rotated90           | 84.0% | 1.7733 | 252.6 ms |
+| L1_clean               | 90.0% | 2.4233 | 464.3 ms |
+| L2_noisy               | 78.0% | 1.4232 | 464.6 ms |
+| L3_dropout50           | 24.0% | 0.8363 | 464.8 ms |
+| L4_rotated90           | 88.0% | 2.4223 | 464.5 ms |
 
 **Observations:**
 - Clean digits (**L1**): high accuracy; LDA well-separates 10 classes.
 - Noisy digits (**L2**): moderate drop. Gaussian noise corrupts HOG features.
 - Dropout (**L3**): significant drop due to missing pixel blocks.
 - Rotated 90° (**L4**): **V23 Fix 1 success** — LDA trained on all 4 rotations.
-  Accuracy improved from V22's 10% to 84.0% (rotation-invariant!).
+  Accuracy improved from V22's 10% to 88.0% (rotation-invariant!).
 - **Margin analysis**: correct predictions always have higher margins than wrong ones
   (confidence is calibrated). Lower margins on unknowns = appropriately uncertain.
 
 ### Simultaneous batch test
-All difficulty levels mixed: **67.8%** overall,
-at **395 images/second**.
+All difficulty levels mixed: **70.0%** overall,
+at **215 images/second**.
 
 ### Knowledge limits (synthetic shapes)
 Synthetic non-digit shapes produce **lower decision margins**
-(1.3186 vs 1.7737 for digits),
+(1.2040 vs 2.4233 for digits),
 indicating the model is appropriately less confident on unknown classes.
 
 ---
@@ -143,10 +143,10 @@ indicating the model is appropriately less confident on unknown classes.
 | Baseline (word-hash HVs, no absorption) | 33.3% | Pure VSA encoding, no semantics |
 | External LSA+KNN (not absorbed) | 54.9% | Traditional ML |
 | NSCK TF-IDF FPE (V22) | 13.7% | Random FPE on TF-IDF features |
-| **NSCK DistributionalCodebook (V23 Fix 2)** | **21.6%** | Co-occurrence semantics |
+| **NSCK DistributionalCodebook (V23 Fix 2)** | **19.6%** | Co-occurrence semantics |
 
 **TF-IDF FPE improvement over baseline: -19.6%**
-**DistributionalCodebook improvement over baseline: -11.8%**
+**DistributionalCodebook improvement over baseline: -13.7%**
 
 ### V23 Fix 2: DistributionalCodebook Encoding
 The V18 `DistributionalCodebook` builds semantically meaningful word HVs using
@@ -200,7 +200,7 @@ sci.space=1.0, rocket=0.42, orbit=0.42, satellite=0.42, telescope=0.42
 | Image-only (classical HV adapter) | 8.5% | Raw image features |
 | Text-hint-only | 100.0% | First word of caption |
 | **Cross-modal fused** | **100.0%** | Image XOR text → search fused prototypes |
-| NSCKHDVisionClassifier | 88.0% | Full discriminative path |
+| NSCKHDVisionClassifier | 94.5% | Full discriminative path |
 
 **Cross-modal improves over image-only by +91.5%.**
 
@@ -215,11 +215,11 @@ to the XOR of the matching image and text prototypes.
 
 | Operation | Rust | Python | Speedup |
 |---|---|---|---|
-| create×1000               | 43.20ms | 43.29ms | 1.0× |
-| XOR×1000                  | 1.72ms | 2.00ms | 1.2× |
-| bundle×1000               | 57.88ms | 57.93ms | 1.0× |
-| similarity×1000           | 7.94ms | 7.66ms | 1.0× |
-| negate×1000               | 47.44ms | 47.43ms | 1.0× |
+| create×1000               | 43.57ms | 43.64ms | 1.0× |
+| XOR×1000                  | 1.58ms | 1.61ms | 1.0× |
+| bundle×1000               | 58.21ms | 57.94ms | 1.0× |
+| similarity×1000           | 7.72ms | 7.58ms | 1.0× |
+| negate×1000               | 48.11ms | 48.36ms | 1.0× |
 
 **Average speedup: 1.0×**
 
@@ -246,8 +246,8 @@ pure-Python numpy operations. This is most dramatic for `bundle` (majority vote 
 
 ### What works exceptionally well
 1. **Vision (NSCKHDVisionClassifier)**: The PCA→LDA→NearestCentroid pipeline achieves
-   87.5% on digits — matching or exceeding many neural approaches, with zero
-   gradient descent, in 33858ms training time.
+   93.3% on digits — matching or exceeding many neural approaches, with zero
+   gradient descent, in 47296ms training time.
 2. **Model transplantation (SVDFactoredProjector)**: External model embeddings can be
    mapped into NSCK's HV space with structural preservation (ρ=-0.031).
    This is a genuine "knowledge transfer without retraining".
@@ -265,7 +265,7 @@ pure-Python numpy operations. This is most dramatic for `bundle` (majority vote 
    CV features (HOG, spatial grid) are not rotation-invariant. A CNN feature bridge
    (RichImageAdapter with timm) would fix this, but requires pretrained weights.
 2. **Text DistributionalCodebook (V23 Fix 2)**: The V18 co-occurrence codebook gives
-   `21.6%` accuracy vs `13.7%` for TF-IDF FPE. The improvement
+   `19.6%` accuracy vs `13.7%` for TF-IDF FPE. The improvement
    comes from semantically meaningful word HVs — words that co-occur in similar contexts
    get similar HVs, which helps category prototypes cluster correctly.
 3. **Corruption robustness (L3, 50% dropout)**: When half the pixels are missing, spatial
@@ -280,10 +280,10 @@ pure-Python numpy operations. This is most dramatic for `bundle` (majority vote 
 
 | Capability | V22 | V23 | Fix |
 |---|---|---|---|
-| Image (L4 rotated 90°) | 10.0% | **84.0%** | `rotation_augment=True` |
-| UPMA SVD transplant | 12.8% | **18.9%** | Full-sample bundling |
-| Text classification | 31.4% | **21.6%** | DistributionalCodebook |
-| Image (clean L1) | 98.9% | **87.5%** | — |
+| Image (L4 rotated 90°) | 10.0% | **88.0%** | `rotation_augment=True` |
+| UPMA SVD transplant | 12.8% | **24.2%** | Full-sample bundling |
+| Text classification | 31.4% | **19.6%** | DistributionalCodebook |
+| Image (clean L1) | 98.9% | **93.3%** | — |
 | Cross-modal | +89.5% | **+91.5%** | — |
 
 ### Final verdict

@@ -51,25 +51,25 @@ def _make_color_images(n_classes: int = 6, n_per_class: int = 60,
 # ── _extract_fixed_features ────────────────────────────────────────────────────
 
 class TestExtractFixedFeatures:
-    def test_returns_497_for_small_grey(self):
+    def test_returns_644_for_small_grey(self):
         from python.core.adapters.image_adapter import _extract_fixed_features
         img = np.random.rand(8, 8) * 255
-        assert _extract_fixed_features(img).shape == (497,)
+        assert _extract_fixed_features(img).shape == (644,)
 
-    def test_returns_497_for_large_grey(self):
+    def test_returns_644_for_large_grey(self):
         from python.core.adapters.image_adapter import _extract_fixed_features
         img = np.random.rand(224, 224) * 255
-        assert _extract_fixed_features(img).shape == (497,)
+        assert _extract_fixed_features(img).shape == (644,)
 
-    def test_returns_497_for_small_color(self):
+    def test_returns_644_for_small_color(self):
         from python.core.adapters.image_adapter import _extract_fixed_features
         img = np.random.rand(16, 16, 3) * 255
-        assert _extract_fixed_features(img).shape == (497,)
+        assert _extract_fixed_features(img).shape == (644,)
 
-    def test_returns_497_for_large_color(self):
+    def test_returns_644_for_large_color(self):
         from python.core.adapters.image_adapter import _extract_fixed_features
         img = np.random.rand(224, 224, 3) * 255
-        assert _extract_fixed_features(img).shape == (497,)
+        assert _extract_fixed_features(img).shape == (644,)
 
     def test_all_values_in_0_1(self):
         from python.core.adapters.image_adapter import _extract_fixed_features

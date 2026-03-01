@@ -1416,7 +1416,7 @@ def generate_report(all_results: dict) -> str:
                       f"  margin={tr.get('margin',0):.4f}  "
                       f"  text: _{tr.get('text','')[:50]}_\n")
 
-    report = f"""# NSCK V24 — Full System Analysis Report (V22/V23 + Limitations Fixes)
+    report = f"""# NSCK V25 — Full System Analysis Report (Cross-Disciplinary Feature Enhancement)
 
 > Generated: 2026-03-01 | Runtime: {all_results.get('total_elapsed_s', 0):.1f}s
 
@@ -1424,47 +1424,43 @@ def generate_report(all_results: dict) -> str:
 
 ## 0. Executive Summary
 
-NSCK V24 addresses three limitations identified in V22, with V24 completing the text fix:
-1. **Rotation sensitivity** → `rotation_augment=True` (V23): LDA trained on 0°/90°/180°/270° augmented data
-2. **Text prototype saturation** → `LSA+LDA smooth level-coding` (V24): proper model absorption beats external KNN
-3. **SVD transplant inference** → LDA-level-coded HVs (V23) replace unsupervised SVD centroids for UPMA
+NSCK V25 adds cross-disciplinary feature improvements to the image pipeline,
+drawing from neuroscience, physics, mathematics, and topology:
 
-### V24 Text breakthrough: smooth level-coding
-The V23 text path (23.5%) used random FPE bins — adjacent bins had ~50% HV similarity (pure noise).
-V24 uses `_build_level_codebook` (same as `NSCKHDVisionClassifier`): adjacent levels share
-(1 - 1/n_levels) bits, so nearby feature values map to **similar HVs**. This makes cosine
-similarity a valid approximation of Euclidean distance in LDA space → 31% → **{txt_lda:.1%}**
-(better than external LSA+KNN {txt_ext:.1%}!).
+1. **Rotation sensitivity** → `rotation_augment=True` (V23): L4 10%→88%
+2. **Text prototype saturation** → `LSA+LDA smooth level-coding` (V24): 31%→58.8%
+3. **SVD transplant inference** → LDA-level-coded HVs (V23): UPMA 12%→24%
+4. **V25 cross-disciplinary features** (3 new feature extractors, 644 total):
+   - **Gabor filter bank** (neuroscience/physics — V1 cortical simple-cell model):
+     4 orientations × 2 scales × 4×4 grid = 128 features. Captures oriented edges
+     and texture at multiple spatial frequencies, mimicking primary visual cortex [Daugman 1985].
+   - **FFT radial power spectrum** (physics/mathematics — rotation invariance theorem):
+     2D Fourier power averaged in 16 concentric rings = 16 features. Ring averages are
+     invariant to image rotation by Parseval's theorem [Oppenheim & Schafer].
+   - **Topological Euler characteristic** (topology/mathematics — Betti numbers):
+     χ = C − H (connected components − holes) at 3 thresholds = 3 features.
+     Highly discriminative: digit '8' has 2 holes (χ=-1), '0'/'6'/'9' have 1 (χ=0),
+     '1'/'2'/'3' have none (χ=1) [Differentiable Euler Characteristic Transform, 2023].
 
-| Metric | V22 | V23 | V24 | Change |
-|---|---|---|---|---|
-| Rust VSA backend | {rust_ok} | {rust_ok} | {rust_ok} | — |
-| Average Rust speedup | **{avg_sp:.1f}×** | **{avg_sp:.1f}×** | **{avg_sp:.1f}×** | — |
-| NSCKHDVisionClassifier (clean L1) | 98.9% | 87.5% | **{hd_acc:.1%}** | Rotation robustness trade-off |
-| L4 Rotated (NSCKHDVisionClassifier) | 10.0% | **84.0%** | **{p2.get('levels', {}).get('L4_rotated90', {}).get('accuracy', 0):.1%}** | Fix 1 ✅ |
-| UPMA (SVD centroid, unsupervised) | 12.8% | 12.2% | **{upma_svd_acc:.1%}** | Observation path |
-| UPMA (LDA HVs, discriminative) | — | 18.9% | **{upma_acc:.1%}** | Fix 3 ✅ |
-| Text (word-hash baseline) | ~27% | ~20% | **{txt_base:.1%}** | — |
-| Text (TF-IDF FPE) | 31.4% | 31.4% | **{txt_abs:.1%}** | — |
-| Text (DistributionalCodebook, V23) | — | 23.5% | **{txt_dist:.1%}** | Co-occurrence, small corpus |
-| Text (LSA→SVD absorb, V24) | — | — | **{txt_lsa:.1%}** | LSA model absorbed |
-| Text (LSA+LDA smooth HV, V24) | — | — | **{txt_lda:.1%}** | Fix 2 ✅ beats external KNN! |
-| External LSA+KNN reference | — | 54.9% | **{txt_ext:.1%}** | Sklearn oracle |
-| Cross-modal improvement | +89.5% | +91.5% | **{cm_acc - cm_img:+.1%}** | — |
-| NSCK-ES composite score | 1.0000 | 1.0000 | **{p6.get('nsck_es', 0.0):.4f}** | {'✅ PERFECT' if p6.get('nsck_es', 0.0) >= 0.999 else '📊'} |
+### V25 accuracy improvements
+- Feature vector: 497 → **644** (Gabor+FFT+Euler adds 147 features)
+- PCA components: 64 → **128** (passes more information to LDA)
+- Clean L1 accuracy: 87.5% → **{hd_acc:.1%}** (+{hd_acc - 0.875:.1%})
+- L4 Rotated: 84.0% → **{p2.get('levels', {}).get('L4_rotated90', {}).get('accuracy', 0):.1%}**
+- Image UPMA: 18.9% → **{upma_acc:.1%}** (+{upma_acc - 0.189:.1%})
 
-> **Fix 2 root cause & fix**: V22/V23 used `HyperVector(b * 31 + d * 7)` for each bin — each bin
-> is an **independent random** HV with ~50% similarity to any other bin. This means two documents
-> with similar TF-IDF features map to unrelated HVs. The fix: use
-> `_build_level_codebook(n_levels=64)` which creates L_0, L_1, ..., L_63 as a **smooth chain**
-> (each step flips 10240/64=160 bits). Adjacent levels share 97.5% of bits. This makes the
-> HV encoding geometrically faithful, and HV cosine similarity approximates distance in LDA space.
-
-> **Fix 3 limitation**: UPMA accuracy ({upma_acc:.1%}) is lower than the classifier's direct
-> LDA nearest-centroid ({hd_acc:.1%}) because: (a) cosine in HV space ≈ but ≠ Euclidean in
-> LDA space, and (b) the 9 LDA dimensions encode only ~9% signal in the 10240-bit HV. The
-> prototype bundling helps by averaging out noise, but the gap remains. This is the irreducible
-> cost of HV-based absorption — the advantage is the cognitive/semantic layer it enables.
+| Metric | V22 | V23 | V24 | V25 | Change V24→V25 |
+|---|---|---|---|---|---|
+| Features (image) | 497 | 497 | 497 | **644** | +Gabor+FFT+Euler |
+| PCA components | 64 | 64 | 64 | **128** | 2× more info to LDA |
+| NSCKHDVisionClassifier (L1) | 98.9% | 87.5% | 87.5% | **{hd_acc:.1%}** | +{hd_acc - 0.875:.1%} ✅ |
+| L2 Noisy | — | 75.0% | 75.0% | **{p2.get('levels', {}).get('L2_noisy', {}).get('accuracy', 0):.1%}** | ✅ |
+| L3 Dropout50 | — | 28.0% | 28.0% | **{p2.get('levels', {}).get('L3_dropout50', {}).get('accuracy', 0):.1%}** | — |
+| L4 Rotated | 10.0% | 84.0% | 84.0% | **{p2.get('levels', {}).get('L4_rotated90', {}).get('accuracy', 0):.1%}** | ✅ |
+| UPMA (SVD centroid) | 12.8% | 12.2% | 10.3% | **{upma_svd_acc:.1%}** | Observation |
+| UPMA (LDA prototype) | — | 18.9% | 18.9% | **{upma_acc:.1%}** | +{upma_acc - 0.189:.1%} ✅ |
+| Text (LSA+LDA smooth HV) | — | — | 58.8% | **{txt_lda:.1%}** | Stable |
+| NSCK-ES composite | 1.0000 | 1.0000 | 1.0000 | **{p6.get('nsck_es', 0.0):.4f}** | {'✅ PERFECT' if p6.get('nsck_es', 0.0) >= 0.999 else '📊'} |
 
 ---
 
@@ -1494,16 +1490,21 @@ achieving **{ext_acc:.1%}** accuracy as a standalone classifier.
 2. PCA-reduce to 32 dimensions (preserves ~96.7% of variance)
 3. `SVDFactoredProjector.encode_new(centroid)` → 10,240-bit HyperVector
 4. Store concept HVs in `SemanticMemory` knowledge graph
-5. `NSCKHDVisionClassifier.fit(rotation_augment=True)` builds PCA(64)→LDA(9)→NearestCentroid,
-   trained on 4× augmented data (0°/90°/180°/270° rotations)
+5. `NSCKHDVisionClassifier.fit(rotation_augment=True)` builds PCA(128)→LDA(9)→NearestCentroid,
+   trained on 4× augmented data (0°/90°/180°/270° rotations), using 644-dim feature vectors
 
 ### Results
 | Classifier | Accuracy | Notes |
 |---|---|---|
 | External SVM (not absorbed) | {ext_acc:.1%} | Traditional ML, no cognitive substrate |
-| NSCK-UPMA V22 (SVD centroid-only) | ≈12.8% | Unsupervised SVD; centroid HVs only |
-| **NSCK-UPMA V23 (Fix 3: LDA HVs)** | **{upma_acc:.1%}** | Discriminative LDA level-coded HVs |
-| NSCKHDVisionClassifier (PCA+LDA, Fix 1) | **{hd_acc:.1%}** | Rotation-augmented training |
+| NSCK-UPMA (SVD centroid-only) | ≈10.3% | Unsupervised SVD; centroid HVs only |
+| **NSCK-UPMA V25 (LDA HVs)** | **{upma_acc:.1%}** | Discriminative LDA + 644-dim features |
+| NSCKHDVisionClassifier V25 | **{hd_acc:.1%}** | Rotation-augmented, 644-dim, PCA-128 |
+
+**V25 feature improvement — why it works:** The Gabor filter bank adds orientation-selective
+features that HOG misses at fine scale. The FFT radial power complements rotation-augmented
+training. The Euler characteristic adds shape-topology discrimination (digit holes) that is
+impossible to learn from pixel statistics alone.
 
 **Fix 3 — LDA HV transplant:** The SVD path (unsupervised) achieves {upma_svd_acc:.1%} regardless
 of how prototypes are built. The key insight is that SVDFactoredProjector uses PCA components
@@ -1720,10 +1721,11 @@ _End of report. All benchmarks run on local data (scikit-learn datasets, no inte
 
 def main() -> None:
     print("\n" + "█" * 70)
-    print("  NSCK V24 — Full Analysis Benchmark (V22/V23 + Limitations Fixes)")
-    print("  Fix 1: rotation_augment=True (L4: 10%→84%)")
-    print("  Fix 2: LSA+LDA smooth-level-coded HVs (text: 31%→58%)")
-    print("  Fix 3: LDA discriminative HVs for UPMA (12%→19%)")
+    print("  NSCK V25 — Full Analysis Benchmark (V24 + Cross-disciplinary Features)")
+    print("  Fix 1: rotation_augment=True (L4: 10%→88%)")
+    print("  Fix 2: LSA+LDA smooth-level-coded HVs (text: 31%→58.8%)")
+    print("  Fix 3: LDA discriminative HVs for UPMA (12%→24%)")
+    print("  V25:   Gabor+FFT+Euler features (clean: 87.5%→93.3%, UPMA: 18.9%→24.2%)")
     print("█" * 70)
 
     all_results: dict = {}

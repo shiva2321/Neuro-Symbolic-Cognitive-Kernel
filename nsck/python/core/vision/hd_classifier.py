@@ -520,7 +520,9 @@ class NSCKHDVisionClassifier:
         ])
 
         # ── 2. PCA pre-reduction (prevents LDA rank-deficiency) ──────────────
-        n_pca = min(64, X.shape[0] // 10, X.shape[1])
+        # V25: increase cap to 128 (was 64) to pass more information to LDA
+        # when the richer 644-feature vector (Gabor+FFT+Euler+HOG+LBP) is used.
+        n_pca = min(128, X.shape[0] // 10, X.shape[1])
         self._pca = PCA(n_components=n_pca, random_state=42)
         X_pca = self._pca.fit_transform(X)
 

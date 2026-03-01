@@ -247,7 +247,10 @@ def _extract_fixed_features(img: np.ndarray, thumb_size: int = 8) -> np.ndarray:
       E. HSV histograms      — always 48 features (greyscale: s=0 histogram)
       F. Per-channel grid    — always 96 features (greyscale: duplicated to 3ch)
       G. Classic features    — 65 features
-    Total: 64 + 32 + 128 + 64 + 48 + 96 + 65 = 497 features (always fixed).
+      H. Gabor filter bank   — 128 features  (V25: neuroscience/physics, V1 model)
+      I. FFT radial power    — 16 features   (V25: physics/math, rotation-invariant)
+      J. Euler characteristic — 3 features   (V25: topology/math, holes & components)
+    Total: 64 + 32 + 128 + 64 + 48 + 96 + 65 + 128 + 16 + 3 = 644 features.
 
     Parameters
     ----------
@@ -256,7 +259,7 @@ def _extract_fixed_features(img: np.ndarray, thumb_size: int = 8) -> np.ndarray:
 
     Returns
     -------
-    np.ndarray  shape (497,), all values in [0, 1].
+    np.ndarray  shape (644,), all values in [0, 1].
     """
     img_f = np.asarray(img, dtype=np.float64)
     is_color = img_f.ndim == 3 and img_f.shape[2] >= 3
@@ -338,9 +341,18 @@ def _extract_fixed_features(img: np.ndarray, thumb_size: int = 8) -> np.ndarray:
     # ── G. Classic features (65) ──────────────────────────────────────────────
     parts.append(_extract_image_features(img))
 
+    # ── H. Gabor filter bank (128 features) ──────────────────────────────────
+    parts.append(_compute_gabor_features(grey_255, n_orientations=4, n_scales=2, n_cells=4))
+
+    # ── I. FFT radial power spectrum (16 features, rotation-invariant) ───────
+    parts.append(_compute_fft_radial_power(grey, n_bins=16))
+
+    # ── J. Topological Euler characteristic (3 features) ─────────────────────
+    parts.append(_compute_euler_features(grey_255))
+
     result = np.concatenate(parts)
-    assert len(result) == 64 + 32 + 128 + 64 + 48 + 96 + 65, \
-        f"_extract_fixed_features: expected 497 features, got {len(result)}"
+    assert len(result) == 64 + 32 + 128 + 64 + 48 + 96 + 65 + 128 + 16 + 3, \
+        f"_extract_fixed_features: expected 644 features, got {len(result)}"
     return result
 
 
@@ -368,6 +380,192 @@ def _compute_lbp_histogram(grey: np.ndarray, n_bins: int = 64) -> np.ndarray:
     compressed = full_hist[:n].reshape(n_bins, bin_size).sum(axis=1)
     total = compressed.sum()
     return compressed / max(1.0, total)
+
+
+def _compute_gabor_features(
+    grey_255: np.ndarray,
+    n_orientations: int = 4,
+    n_scales: int = 2,
+    n_cells: int = 4,
+) -> np.ndarray:
+    """
+    Gabor filter bank features — inspired by V1 cortical simple cells (neuroscience/physics).
+
+    Applies 2D Gabor filters (real part) at multiple orientations and spatial
+    frequencies.  Each filter captures oriented edge/bar structure at a specific
+    scale, closely mimicking the selectivity of simple cells in primary visual
+    cortex [Daugman 1985; Jones & Palmer 1987].
+
+    Responses are mean-pooled over a cell grid (same idea as HOG) to provide
+    spatial invariance within each cell, while preserving coarse location.
+
+    Parameters
+    ----------
+    grey_255 : np.ndarray  (H, W) greyscale, values in [0, 255]
+    n_orientations : int  number of orientation steps in [0, π)
+    n_scales : int        number of frequency scales
+    n_cells : int         pool over n_cells × n_cells grid
+
+    Returns
+    -------
+    np.ndarray  of shape (n_scales * n_orientations * n_cells^2,) in [0, 1].
+    """
+    grey_01 = grey_255 / 255.0
+    h, w = grey_01.shape
+
+    features: List[np.ndarray] = []
+
+    # Pre-compute sigma for each scale: sigma increases with scale index s.
+    # Use a fixed list so n_scales > 2 never causes division by zero.
+    _scale_divs = [12.0, 6.0, 4.0, 3.0]   # denominator for min(h,w)/div → sigma
+    divs = [_scale_divs[s] if s < len(_scale_divs) else 2.0 for s in range(n_scales)]
+
+    for s in range(n_scales):
+        # Adaptive sigma: 1/12 of image size (fine) → 1/6 (coarse). sigma_0 < sigma_1
+        sigma = max(1.0, min(h, w) / divs[s])
+        lambd = sigma * 2.0        # wavelength = 2 × sigma  (standard choice)
+        gamma = 0.5                # spatial aspect ratio
+
+        # Gabor kernel size: 2.5σ on each side (odd)
+        half = max(1, int(2.5 * sigma))
+        ksize = 2 * half + 1
+
+        for o in range(n_orientations):
+            theta = o * np.pi / n_orientations
+
+            # Build Gabor kernel (real part of complex Gabor wavelet)
+            ky, kx = np.mgrid[-half:half + 1, -half:half + 1].astype(np.float64)
+            x_rot = kx * np.cos(theta) + ky * np.sin(theta)
+            y_rot = -kx * np.sin(theta) + ky * np.cos(theta)
+            kernel = (
+                np.exp(-0.5 * (x_rot ** 2 + (gamma * y_rot) ** 2) / (sigma ** 2))
+                * np.cos(2 * np.pi * x_rot / lambd)
+            )
+
+            # Apply via sliding-window dot product (pure numpy, no scipy needed)
+            ph, pw = half, half
+            padded = np.pad(
+                np.ascontiguousarray(grey_01),
+                ((ph, ph), (pw, pw)),
+                mode="reflect",
+            )
+            sp_h, sp_w = padded.strides
+            view = np.lib.stride_tricks.as_strided(
+                padded,
+                shape=(h, w, ksize, ksize),
+                strides=(sp_h, sp_w, sp_h, sp_w),
+            )
+            response = np.abs(np.einsum("hwkl,kl->hw", view, kernel))
+
+            # Mean-pool over n_cells × n_cells grid.
+            # Normalise per filter so each orientation/scale contributes equally;
+            # different scales naturally produce different magnitude ranges.
+            cell_h = max(1, h // n_cells)
+            cell_w = max(1, w // n_cells)
+            pool = np.zeros(n_cells * n_cells, dtype=np.float64)
+            for cy in range(n_cells):
+                for cx in range(n_cells):
+                    y0 = cy * cell_h
+                    y1 = min(y0 + cell_h, h)
+                    x0 = cx * cell_w
+                    x1 = min(x0 + cell_w, w)
+                    pool[cy * n_cells + cx] = response[y0:y1, x0:x1].mean()
+
+            max_val = pool.max()
+            if max_val > 1e-8:
+                pool /= max_val
+            features.append(pool)
+
+    return np.concatenate(features)  # n_scales * n_orientations * n_cells^2
+
+
+def _compute_fft_radial_power(grey: np.ndarray, n_bins: int = 16) -> np.ndarray:
+    """
+    Rotation-invariant FFT radial power spectrum (physics / mathematics).
+
+    The 2D discrete Fourier power spectrum's radial (ring) average is invariant
+    to image rotation by construction [Oppenheim & Schafer, Discrete-Time Signal
+    Processing].  This captures global spatial-frequency content regardless of
+    object orientation, complementing HOG's orientation sensitivity.
+
+    Parameters
+    ----------
+    grey : np.ndarray  (H, W) greyscale, any value range
+    n_bins : int       number of concentric frequency rings
+
+    Returns
+    -------
+    np.ndarray  of shape (n_bins,), normalised to sum to 1 (all in [0, 1]).
+    """
+    g = np.asarray(grey, dtype=np.float64)
+    g_min, g_max = g.min(), g.max()
+    if g_max - g_min < 1e-8:
+        return np.zeros(n_bins)
+    g = (g - g_min) / (g_max - g_min)
+
+    # 2D power spectrum (centred)
+    fft2 = np.fft.fft2(g)
+    power = np.abs(np.fft.fftshift(fft2)) ** 2
+
+    h, w = power.shape
+    cy, cx = h // 2, w // 2
+    yy, xx = np.ogrid[:h, :w]
+    r = np.sqrt((yy - cy) ** 2.0 + (xx - cx) ** 2.0)
+    max_r = float(max(cy, cx, 1))
+
+    ring_power = np.zeros(n_bins, dtype=np.float64)
+    for i in range(n_bins):
+        r_lo = max_r * i / n_bins
+        r_hi = max_r * (i + 1) / n_bins
+        mask = (r >= r_lo) & (r < r_hi)
+        if mask.any():
+            ring_power[i] = power[mask].mean()
+
+    total = ring_power.sum()
+    return ring_power / max(1.0, total)
+
+
+def _compute_euler_features(grey_255: np.ndarray) -> np.ndarray:
+    """
+    Topological features via Euler characteristic (topology / mathematics).
+
+    The Euler characteristic χ = C − H (connected components minus holes) is a
+    topological invariant highly discriminative for shape recognition:
+      • digit '1', '2', '3', '5', '7' → no holes   (χ = +1)
+      • digit '0', '4', '6', '9'      → one hole    (χ =  0)
+      • digit '8'                      → two holes   (χ = −1)
+
+    Computed via scipy.ndimage.label at three binarisation thresholds for
+    robustness to illumination and pixel noise.
+
+    Parameters
+    ----------
+    grey_255 : np.ndarray  (H, W) greyscale, values in [0, 255]
+
+    Returns
+    -------
+    np.ndarray  of shape (3,), all values in [0, 1].
+    """
+    from scipy.ndimage import label as _ndlabel   # transitive dep of sklearn
+
+    max_val = grey_255.max()
+    if max_val < 1e-8:
+        return np.zeros(3)
+
+    features: List[float] = []
+    for t in (0.25, 0.5, 0.75):
+        binary_fg = (grey_255 > t * max_val).astype(np.int32)
+        _, n_fg = _ndlabel(binary_fg)
+        # Background holes: connected bg regions minus 1 (outer border)
+        _, n_bg = _ndlabel(1 - binary_fg)
+        n_holes = max(0, n_bg - 1)
+        euler = n_fg - n_holes
+        # Normalise: χ = C − H ∈ [-2, 3] is the empirical range for typical digit/object
+        # images (e.g. digit '8' → χ=-1, '0'→0, '1'→1). Values outside [-2, 3] occur
+        # with degenerate binarisations (e.g. almost all-black) and are clipped for safety.
+        features.append(float(np.clip((euler + 2.0) / 5.0, 0.0, 1.0)))
+
+    return np.array(features, dtype=np.float64)
 
 
 def _rgb_to_hsv(img_f: np.ndarray) -> np.ndarray:
