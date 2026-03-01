@@ -275,6 +275,11 @@ class NSCKConfig:
     semantic_bootstrap_model: str = "all-MiniLM-L6-v2"
     semantic_codebook_path: str = ""  # path to pre-built .pkl codebook
 
+    # === V19 Feature Flags — Pretrained Model Adapter ===
+    enable_pretrained_adapter: bool = False
+    pretrained_adapter_strategy: str = "random"     # "random" or "svd_factored"
+    pretrained_adapter_bind_domain: bool = True
+
     # === V17 Feature Flags — Enrichment & Glass-Box Tracing ===
     enable_causal_enrichment: bool = False
     enable_perceptual_enrichment: bool = False

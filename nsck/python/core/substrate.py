@@ -718,3 +718,109 @@ class NSCKSubstrate:
             self._transplant_projectors[domain_name] = pipeline._projectors[domain_name]
 
         return report
+
+    # ------------------------------------------------------------------
+    # V19 Pretrained Model Adapter API
+    # ------------------------------------------------------------------
+
+    def absorb_pretrained(
+        self,
+        name: str,
+        embedding_dim: int,
+        *,
+        weight: float = 1.0,
+        domain: str = "",
+        strategy: Optional[str] = None,
+        fit_embeddings: Optional[np.ndarray] = None,
+    ) -> None:
+        """Register a pretrained-model source for multi-model fusion.
+
+        Creates or reuses the substrate-level
+        :class:`~python.core.adapters.pretrained_model_adapter.PretrainedModelAdapter`
+        and registers *name* as a new source.
+
+        Parameters
+        ----------
+        name : str
+            Unique identifier for this model source.
+        embedding_dim : int
+            Dimensionality of the embeddings the model produces.
+        weight : float
+            Relative importance during fusion (default 1.0).
+        domain : str
+            Optional domain label (``"medical"``, ``"satellite"``, etc.).
+        strategy : str or None
+            Projection strategy override; falls back to config.
+        fit_embeddings : np.ndarray or None
+            Representative embeddings for SVD fitting (if applicable).
+        """
+        from python.core.adapters.pretrained_model_adapter import (  # noqa: PLC0415
+            PretrainedModelAdapter,
+        )
+
+        if not hasattr(self, "_pretrained_adapter") or self._pretrained_adapter is None:
+            cfg_strategy = strategy or getattr(
+                self.config, "pretrained_adapter_strategy", "random"
+            )
+            bind_domain = getattr(
+                self.config, "pretrained_adapter_bind_domain", True
+            )
+            self._pretrained_adapter = PretrainedModelAdapter(
+                default_strategy=cfg_strategy,
+                bind_domain_role=bind_domain,
+            )
+        self._pretrained_adapter.register_source(
+            name,
+            embedding_dim,
+            weight=weight,
+            domain=domain,
+            strategy=strategy,
+            fit_embeddings=fit_embeddings,
+        )
+
+    def process_pretrained(
+        self,
+        embeddings: Dict[str, Any],
+        task_tag: str,
+    ) -> "SubstrateResult":
+        """Process a dict of pretrained-model embeddings through the substrate.
+
+        Parameters
+        ----------
+        embeddings : dict[str, array-like]
+            Mapping of ``source_name → embedding_vector`` for registered
+            sources (see :meth:`absorb_pretrained`).
+        task_tag : str
+            Task domain identifier.
+
+        Returns
+        -------
+        SubstrateResult
+        """
+        if not hasattr(self, "_pretrained_adapter") or self._pretrained_adapter is None:
+            raise RuntimeError(
+                "No pretrained sources registered. "
+                "Call absorb_pretrained() first."
+            )
+        if task_tag not in self._registered_tasks:
+            self.register_task(task_tag)
+
+        pkt = self._pretrained_adapter.encode(embeddings, task_tag)
+        cog_state = self._engine.decide(pkt, task_tag)
+
+        explanation_text = ""
+        if cog_state.explanation:
+            try:
+                explanation_text = str(cog_state.explanation.text)
+            except Exception:
+                explanation_text = str(cog_state.explanation)
+
+        return SubstrateResult(
+            chosen_action=cog_state.chosen_action,
+            confidence=cog_state.confidence,
+            explanation=explanation_text,
+            predicates=set(cog_state.active_predicates),
+            trace=cog_state.trace or {},
+            modalities_processed=["pretrained_fusion"],
+            generalization_triggered=False,
+        )
