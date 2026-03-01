@@ -561,8 +561,12 @@ class PretrainedModelAdapter:
         if n == 0:
             return "unknown", 0.0, []
 
-        rng = np.random.default_rng(int(abs(feat.sum()) * 1e4) % (2**32))
-        # Deterministic pseudo-scores based on feature hash
+        import struct, hashlib
+        feat_bytes = feat.tobytes()
+        digest = hashlib.md5(feat_bytes).digest()
+        seed = struct.unpack("<I", digest[:4])[0]
+        rng = np.random.default_rng(seed)
+        # Deterministic pseudo-scores seeded from MD5 hash of feature bytes
         scores = rng.random(n).astype(np.float32)
         scores = scores / scores.sum()
 

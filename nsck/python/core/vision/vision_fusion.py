@@ -265,9 +265,19 @@ class NSCKVisionFusion:
                 and causal_depth >= min_causal_depth
             )
 
-        # --- Domain coverage ---
+        # --- Domain coverage (fraction of absorbed domains that match query domain) ---
         all_domains = self._domain_tagger.all_domains()
-        domain_coverage = min(1.0, len(all_domains) / max(1, len(all_domains) + 1))
+        if domain is not None and len(all_domains) > 0:
+            # Coverage: how many absorbed domains are related to the query domain
+            related = sum(
+                1 for d in all_domains
+                if self._domain_tagger.get_cross_domain_similarity(domain, d) > 0.0
+            )
+            domain_coverage = float(related) / max(1, len(all_domains))
+        else:
+            # No domain specified: use absorbed model count as proxy (saturates at 10)
+            n_models = len(self._domain_tagger.domain_coverage_stats()["domain_sizes"])
+            domain_coverage = min(1.0, n_models / 10.0)
 
         # --- Accuracy estimation ---
         agreement = (ref_label is None) or (label == ref_label)

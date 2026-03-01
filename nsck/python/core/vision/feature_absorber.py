@@ -319,7 +319,7 @@ class FeatureAbsorber:
             n_episodes_stored=n_episodes,
             n_causal_links_added=n_causal,
             spearman_rho=float(spearman),
-            recall_at_10=min(1.0, len(stored_hvs) / max(10, 1)),
+            recall_at_10=min(1.0, len(stored_hvs) / 10),
             absorption_time_s=absorption_time,
             hv_per_second=hv_per_s,
             rust_backend_active=self._rust_active,
