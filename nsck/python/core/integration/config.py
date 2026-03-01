@@ -319,6 +319,32 @@ class NSCKConfig:
     semantic_hnsw_m: int = 16
     semantic_hnsw_ef: int = 50
 
+    # === NSCK-UPMA Vision Absorption Feature Flags ===
+    enable_vision_absorption: bool = False
+    vision_reference_model: str = "openai/clip-vit-base-patch32"
+    vision_absorption_max_samples: int = 500
+    vision_absorption_batch_size: int = 32
+    vision_fusion_override_threshold: float = 0.95
+    vision_causal_chain_min_depth: int = 1
+    vision_domains: List[str] = field(default_factory=list)
+
+    @classmethod
+    def vision(cls) -> "NSCKConfig":
+        """Vision config: enable NSCK-UPMA universal model absorption."""
+        cfg = cls()
+        cfg.enable_vision_absorption = True
+        cfg.enable_transplant = True
+        cfg.transplant_strategy = "svd_factored"
+        cfg.transplant_svd_components = 128
+        cfg.transplant_fpe_bins = 256
+        cfg.transplant_auto_live_encoding = True
+        cfg.vision_reference_model = "openai/clip-vit-base-patch32"
+        cfg.vision_absorption_max_samples = 500
+        cfg.vision_absorption_batch_size = 32
+        cfg.vision_fusion_override_threshold = 0.95
+        cfg.vision_causal_chain_min_depth = 1
+        return cfg
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()
