@@ -275,9 +275,14 @@ class _ExactVoteAccumulator:
         self._n: int = 0
 
     def add(self, hv: Any) -> None:
-        words = np.array(hv.__getstate__(), dtype=np.uint64)
-        # little-endian matches what from_u64_words / from_bits expect
-        bits = np.unpackbits(words.view(np.uint8), bitorder='little').astype(np.float32)
+        state = hv.__getstate__()
+        if isinstance(state, dict):
+            # Python HyperVectorPy: state['bits'] is a (10240,) int8 array of 0/1
+            bits = np.asarray(state["bits"], dtype=np.float32)
+        else:
+            # Rust HyperVector: state is a list of uint64 words
+            words = np.array(state, dtype=np.uint64)
+            bits = np.unpackbits(words.view(np.uint8), bitorder="little").astype(np.float32)
         if self._bit_sums is None:
             self._bit_sums = np.zeros(len(bits), dtype=np.float32)
         self._bit_sums += bits
@@ -287,9 +292,12 @@ class _ExactVoteAccumulator:
         if self._bit_sums is None or self._n == 0:
             return _shim.HyperVector(0)
         majority = (self._bit_sums / self._n >= 0.5).astype(np.uint8)
-        packed = np.packbits(majority, bitorder='little')
-        words = list(packed.view(np.uint64))
-        return _shim.HyperVector.from_u64_words(words)
+        if hasattr(_shim.HyperVector, "from_u64_words"):
+            packed = np.packbits(majority, bitorder="little")
+            words = list(packed.view(np.uint64))
+            return _shim.HyperVector.from_u64_words(words)
+        # Python HyperVectorPy fallback: use from_bits
+        return _shim.HyperVector.from_bits(majority)
 
     def reset(self) -> None:
         self._bit_sums = None
