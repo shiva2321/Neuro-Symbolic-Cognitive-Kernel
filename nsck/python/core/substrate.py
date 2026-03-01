@@ -112,7 +112,8 @@ class NSCKSubstrate:
 
         # V15: Transplant projector registry for live encoding
         self._transplant_projectors: Dict[str, Any] = {}
-        # NSCK-UPMA Vision fields (lazy init)
+        # NSCK-UPMA Vision fields — lazily initialized on first call to
+        # absorb_vision_model() or analyze_image() via _ensure_vision_components().
         self._vision_absorber = None
         self._absorption_memory = None
         self._domain_tagger = None
