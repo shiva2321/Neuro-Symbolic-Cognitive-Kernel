@@ -137,6 +137,8 @@ class FeatureAbsorber:
         self._episodic_memory = episodic_memory
         self._causal_graph = causal_graph
         self._rust_active = _detect_rust_backend()
+        # Keyed by model_id; populated during absorb() for inference-time encoding
+        self._projectors: Dict[str, VSAProjector] = {}
 
     # ------------------------------------------------------------------
     # Core absorption
@@ -236,6 +238,8 @@ class FeatureAbsorber:
 
         # Build projector
         projector = self._make_projector(dim_in, model_id, strategy)
+        # Cache for inference-time encoding (accessed by substrate.analyze_image)
+        self._projectors[model_id] = projector
 
         # Stack and project
         emb_matrix = np.stack(feature_list, axis=0)  # (N, dim_in)

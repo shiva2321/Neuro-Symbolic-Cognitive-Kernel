@@ -1,187 +1,30 @@
 {
-  "backend": {
-    "rust_vsa": true
+  "experiment": "paper6_nsck_upma_vision",
+  "timestamp": 1772358405.0536864,
+  "config": {
+    "n_classes": 10,
+    "n_train": 100,
+    "n_test": 50,
+    "feature_dim": 512
   },
-  "exp_6_1": {
-    "free_energy_trace": [
-      {
-        "step": 0,
-        "action": "explore",
-        "free_energy": -0.5
-      },
-      {
-        "step": 20,
-        "action": "rest",
-        "free_energy": -0.5
-      },
-      {
-        "step": 40,
-        "action": "exploit",
-        "free_energy": -0.5
-      },
-      {
-        "step": 60,
-        "action": "explore",
-        "free_energy": -0.5
-      },
-      {
-        "step": 80,
-        "action": "rest",
-        "free_energy": -0.5
-      },
-      {
-        "step": 100,
-        "action": "exploit",
-        "free_energy": -0.5
-      },
-      {
-        "step": 120,
-        "action": "explore",
-        "free_energy": -0.5
-      },
-      {
-        "step": 140,
-        "action": "rest",
-        "free_energy": -0.5
-      },
-      {
-        "step": 160,
-        "action": "exploit",
-        "free_energy": -0.5
-      },
-      {
-        "step": 180,
-        "action": "explore",
-        "free_energy": -1.0
-      }
-    ],
-    "mean_free_energy": -0.5075,
-    "n_steps": 200
+  "absorption": {
+    "n_concepts_absorbed": 10,
+    "absorption_time_s": 2.855245425999783,
+    "hv_per_second": 3.5025170549855438,
+    "spearman_rho": -0.16429512516469047,
+    "rust_backend_active": false,
+    "strategy": "svd_factored"
   },
-  "exp_6_2": {
-    "explore_rate_trace": [
-      {
-        "step": 0,
-        "explore_rate": 1.0
-      },
-      {
-        "step": 20,
-        "explore_rate": 1.0
-      },
-      {
-        "step": 40,
-        "explore_rate": 1.0
-      },
-      {
-        "step": 60,
-        "explore_rate": 0.0
-      },
-      {
-        "step": 80,
-        "explore_rate": 0.0
-      },
-      {
-        "step": 100,
-        "explore_rate": 0.0
-      },
-      {
-        "step": 120,
-        "explore_rate": 0.0
-      },
-      {
-        "step": 140,
-        "explore_rate": 0.0
-      },
-      {
-        "step": 160,
-        "explore_rate": 0.0
-      },
-      {
-        "step": 180,
-        "explore_rate": 0.0
-      }
-    ],
-    "total_explorations": 60,
-    "n_steps": 200
+  "classification": {
+    "top1_accuracy": 0.08,
+    "correct": 4,
+    "total": 50
   },
-  "exp_6_3": {
-    "world_model_learning": [
-      {
-        "n_updates": 1,
-        "mean_prediction_error": 0.45
-      },
-      {
-        "n_updates": 5,
-        "mean_prediction_error": 0.25
-      },
-      {
-        "n_updates": 10,
-        "mean_prediction_error": 0.0
-      },
-      {
-        "n_updates": 25,
-        "mean_prediction_error": 0.0
-      },
-      {
-        "n_updates": 50,
-        "mean_prediction_error": 0.0
-      },
-      {
-        "n_updates": 100,
-        "mean_prediction_error": 0.0
-      }
-    ]
-  },
-  "exp_6_4": {
-    "gwt_competition": {
-      "winner_source": "vision",
-      "winner_activation": 1.35,
-      "coalition_scores": [
-        {
-          "source": "vision",
-          "activation": 1.35
-        },
-        {
-          "source": "language",
-          "activation": 1.15
-        },
-        {
-          "source": "motor",
-          "activation": 0.65
-        }
-      ],
-      "kle_uncertainty": 1.056653710590147
-    }
-  },
-  "exp_6_5": {
-    "mental_rehearsal_veto": {
-      "n_proposals": 10,
-      "n_vetoed": 10,
-      "n_rehearsal_events": 10
-    }
-  },
-  "exp_6_6": {
-    "free_energy_surprise": [
-      {
-        "n_training_updates": 0,
-        "surprise_score": 0.5
-      },
-      {
-        "n_training_updates": 1,
-        "surprise_score": 0.0
-      },
-      {
-        "n_training_updates": 5,
-        "surprise_score": 0.0
-      },
-      {
-        "n_training_updates": 20,
-        "surprise_score": 0.0
-      },
-      {
-        "n_training_updates": 50,
-        "surprise_score": 0.0
-      }
-    ]
+  "latency": {
+    "mean_ms": 7.5877859000138415,
+    "p50_ms": 7.530095500214884,
+    "p95_ms": 7.708396000020912,
+    "target_ms": 500.0,
+    "target_met": true
   }
 }
