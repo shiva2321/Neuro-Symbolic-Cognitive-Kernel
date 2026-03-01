@@ -1,6 +1,6 @@
 {
   "experiment": "paper6_nsck_upma_vision",
-  "timestamp": 1772358405.0536864,
+  "timestamp": 1772358503.671911,
   "config": {
     "n_classes": 10,
     "n_train": 100,
@@ -9,8 +9,8 @@
   },
   "absorption": {
     "n_concepts_absorbed": 10,
-    "absorption_time_s": 2.855245425999783,
-    "hv_per_second": 3.5025170549855438,
+    "absorption_time_s": 2.7904959729999064,
+    "hv_per_second": 3.5837980465460713,
     "spearman_rho": -0.16429512516469047,
     "rust_backend_active": false,
     "strategy": "svd_factored"
@@ -18,12 +18,13 @@
   "classification": {
     "top1_accuracy": 0.08,
     "correct": 4,
-    "total": 50
+    "total": 50,
+    "recall_at_10": 1.0
   },
   "latency": {
-    "mean_ms": 7.5877859000138415,
-    "p50_ms": 7.530095500214884,
-    "p95_ms": 7.708396000020912,
+    "mean_ms": 7.516866420010047,
+    "p50_ms": 7.429634500113025,
+    "p95_ms": 7.737595099933969,
     "target_ms": 500.0,
     "target_met": true
   }
