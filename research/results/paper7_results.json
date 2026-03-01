@@ -6,19 +6,19 @@
     "semantic_memory_scaling": [
       {
         "n_concepts": 100,
-        "avg_query_ms": 1.3152116100081912
+        "avg_query_ms": 1.3250098699984392
       },
       {
         "n_concepts": 500,
-        "avg_query_ms": 1.7293192000033741
+        "avg_query_ms": 1.7392188099995565
       },
       {
         "n_concepts": 1000,
-        "avg_query_ms": 2.243036060006034
+        "avg_query_ms": 2.583794779998243
       },
       {
         "n_concepts": 2000,
-        "avg_query_ms": 2.6984207900159163
+        "avg_query_ms": 3.3372852099989814
       }
     ]
   },
@@ -26,7 +26,7 @@
     "episodic_recall": {
       "n_episodes": 500,
       "n_queries": 50,
-      "avg_recall_ms": 0.07200643999567546,
+      "avg_recall_ms": 0.07030833999579045,
       "mean_similarity_of_top5": 0.60544609375
     }
   },
@@ -34,7 +34,7 @@
     "procedural_fast_path": {
       "n_skills_cached": 50,
       "hit_rate": 1.0,
-      "avg_lookup_ms": 1.2009446699858017,
+      "avg_lookup_ms": 1.2084315899915055,
       "library_hit_rate": 0.5
     }
   },
@@ -142,7 +142,7 @@
     "spreading_activation": {
       "n_start_nodes": 3,
       "n_activated_nodes": 30,
-      "mean_activation": 0.09110245161290326,
+      "mean_activation": 0.09110245161290324,
       "max_activation": 1.0,
       "activation_distribution": {
         "p25": 0.009261,

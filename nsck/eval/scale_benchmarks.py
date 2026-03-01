@@ -37,7 +37,7 @@ def bench_query(n: int) -> float:
         mem.add_concept(f"c{i}", {"idx": i})
     query = hv_mod.HyperVector(0)
     t = time.perf_counter()
-    mem.query_similar(query, k=10)
+    mem.query(query, k=10)
     return (time.perf_counter() - t) * 1000
 
 

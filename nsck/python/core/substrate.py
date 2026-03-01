@@ -112,6 +112,11 @@ class NSCKSubstrate:
 
         # V15: Transplant projector registry for live encoding
         self._transplant_projectors: Dict[str, Any] = {}
+        # NSCK-UPMA Vision fields — lazily initialized on first call to
+        # absorb_vision_model() or analyze_image() via _ensure_vision_components().
+        self._vision_absorber = None
+        self._absorption_memory = None
+        self._domain_tagger = None
 
         # V16: Auto-seed if enabled
         if getattr(self.config, 'enable_seeding', False):
@@ -718,3 +723,257 @@ class NSCKSubstrate:
             self._transplant_projectors[domain_name] = pipeline._projectors[domain_name]
 
         return report
+
+    # ── NSCK-UPMA Vision Absorption API ──────────────────────────────────
+
+    def _ensure_vision_components(self) -> None:
+        """Lazily initialize vision absorption components."""
+        if self._vision_absorber is not None:
+            return
+        from python.core.vision.absorption_memory import AbsorptionMemory  # noqa: PLC0415
+        from python.core.vision.domain_tagger import DomainTagger  # noqa: PLC0415
+        from python.core.vision.feature_absorber import FeatureAbsorber  # noqa: PLC0415
+
+        sem_mem = getattr(self._engine, "_semantic_memory", None)
+        ep_mem = getattr(self._engine, "_episodic_memory", None)
+        causal = getattr(self._engine, "_causal_graph", None)
+
+        self._absorption_memory = AbsorptionMemory(semantic_memory=sem_mem)
+        self._domain_tagger = DomainTagger()
+        self._vision_absorber = FeatureAbsorber(
+            absorption_memory=self._absorption_memory,
+            domain_tagger=self._domain_tagger,
+            semantic_memory=sem_mem,
+            episodic_memory=ep_mem,
+            causal_graph=causal,
+        )
+
+    def absorb_vision_model(
+        self,
+        model_or_name: Any,
+        domain: str,
+        dataset_iter=None,
+        layer_names=None,
+        model_id: Optional[str] = None,
+        max_samples: int = 500,
+        strategy: str = "svd_factored",
+    ) -> Any:
+        """Absorb a pretrained vision/text model into NSCK's HV space.
+
+        Parameters
+        ----------
+        model_or_name:
+            A PyTorch module, HuggingFace model name string, or any object
+            supported by ``PretrainedModelAdapter``.
+        domain:
+            Semantic domain label (e.g. ``"medical"``, ``"satellite"``).
+        dataset_iter:
+            Iterable of ``(image_tensor, label)`` pairs for absorption.
+            If ``None``, synthetic random samples are used.
+        layer_names:
+            Names of layers to extract features from.
+        model_id:
+            Unique identifier for this model.  Defaults to ``str(model_or_name)``.
+        max_samples:
+            Maximum number of samples to absorb.
+        strategy:
+            Projection strategy: ``"svd_factored"`` (default), ``"random"``.
+
+        Returns
+        -------
+        AbsorptionReport
+        """
+        if not getattr(self.config, "enable_vision_absorption", False):
+            raise RuntimeError(
+                "Vision absorption is disabled. "
+                "Set NSCKConfig.enable_vision_absorption=True or use NSCKConfig.vision()."
+            )
+        self._ensure_vision_components()
+        eff_model_id = model_id or str(model_or_name)
+        eff_max = max_samples or getattr(self.config, "vision_absorption_max_samples", 500)
+        return self._vision_absorber.absorb(
+            model=model_or_name,
+            model_id=eff_model_id,
+            domain=domain,
+            dataset_iter=dataset_iter,
+            layer_names=layer_names,
+            max_samples=eff_max,
+            strategy=strategy,
+        )
+
+    def absorb_vision_models_parallel(self, model_specs: List[Dict[str, Any]]) -> List[Any]:
+        """Absorb multiple models simultaneously using ThreadPoolExecutor.
+
+        Parameters
+        ----------
+        model_specs:
+            List of dicts, each with keys: ``model`` (or ``model_or_name``),
+            ``domain``, and optionally ``model_id``, ``layer_names``,
+            ``max_samples``, ``strategy``.
+
+        Returns
+        -------
+        List[AbsorptionReport]
+        """
+        if not getattr(self.config, "enable_vision_absorption", False):
+            raise RuntimeError(
+                "Vision absorption is disabled. "
+                "Set NSCKConfig.enable_vision_absorption=True or use NSCKConfig.vision()."
+            )
+        self._ensure_vision_components()
+        specs = []
+        for s in model_specs:
+            spec = dict(s)
+            if "model_or_name" in spec and "model" not in spec:
+                spec["model"] = spec.pop("model_or_name")
+            specs.append(spec)
+        return self._vision_absorber.absorb_batch(specs)
+
+    def analyze_image(
+        self,
+        image: Any,
+        reference_model=None,
+        task_tag: str = "vision",
+    ) -> Any:
+        """Analyze an image using NSCK absorbed knowledge plus optional reference model.
+
+        Parameters
+        ----------
+        image:
+            PIL Image, numpy array, or base64 string.
+        reference_model:
+            Optional reference model (PretrainedModelAdapter or name string).
+        task_tag:
+            Semantic task tag.
+
+        Returns
+        -------
+        VisionResponse
+        """
+        import time as _time  # noqa: PLC0415
+        import uuid  # noqa: PLC0415
+        t0 = _time.perf_counter()
+
+        self._ensure_vision_components()
+
+        from python.core.vision.vision_fusion import NSCKVisionFusion, VisionResponse  # noqa: PLC0415
+        from python.core.vision.pretrained_adapter import PretrainedModelAdapter  # noqa: PLC0415
+
+        # Encode the image into an HV using any absorbed model's projector
+        query_hv = None
+        nsck_label = "unknown"
+        nsck_conf = 0.0
+        prov: List[str] = []
+
+        if self._absorption_memory and len(self._absorption_memory._records) > 0:
+            # Use the first available projector to encode
+            rec = self._absorption_memory._records[0]
+            proj_key = rec.model_id
+            if proj_key in self._vision_absorber._projectors:
+                proj = self._vision_absorber._projectors[proj_key]
+                try:
+                    import numpy as _np  # noqa: PLC0415
+                    if hasattr(image, "__array__"):
+                        arr = _np.asarray(image, dtype=_np.float32).ravel()
+                    else:
+                        arr = _np.zeros(512, dtype=_np.float32)
+                    # Normalize
+                    norm = _np.linalg.norm(arr)
+                    if norm > 1e-9:
+                        arr = arr / norm
+                    query_hv = proj.encode_new(arr)
+                except Exception:
+                    query_hv = None
+
+            if query_hv is not None:
+                results = self._absorption_memory.query_by_hv(query_hv, top_k=5)
+                if results:
+                    nsck_label = results[0].label
+                    nsck_conf = results[0].confidence
+                    prov = list({r.model_id for r in results})
+
+        # Reference model result
+        ref_label = None
+        ref_conf = None
+        if reference_model is not None:
+            try:
+                if isinstance(reference_model, str):
+                    adapter = PretrainedModelAdapter.load(reference_model)
+                else:
+                    adapter = reference_model
+                import numpy as _np  # noqa: PLC0415
+                if hasattr(image, "__array__"):
+                    arr = _np.asarray(image, dtype=_np.float32)
+                    if arr.ndim == 1:
+                        arr = arr.reshape(1, -1)
+                else:
+                    arr = _np.zeros((1, 3, 224, 224), dtype=_np.float32)
+                preds = adapter.get_predictions(arr)
+                if preds:
+                    ref_label = preds[0].label
+                    ref_conf = preds[0].confidence
+            except Exception as e:
+                logger.warning("Reference model inference failed: %s", e)
+
+        # Create null HV if needed
+        if query_hv is None:
+            import python.core.vsa.hypervec_shim as hypervec_rs  # noqa: PLC0415
+            query_hv = hypervec_rs.HyperVector(0)
+
+        sem_mem = getattr(self._engine, "_semantic_memory", None)
+        causal = getattr(self._engine, "_causal_graph", None)
+        analogy = getattr(self._engine, "_analogy_engine", None)
+        gw = getattr(self._engine, "_global_workspace", None)
+
+        fusion = NSCKVisionFusion(
+            absorption_memory=self._absorption_memory,
+            domain_tagger=self._domain_tagger,
+            semantic_memory=sem_mem,
+            causal_graph=causal,
+            analogy_engine=analogy,
+            global_workspace=gw,
+        )
+
+        override_thresh = getattr(self.config, "vision_fusion_override_threshold", 0.95)
+        min_depth = getattr(self.config, "vision_causal_chain_min_depth", 1)
+
+        response = fusion.fuse(
+            query_hv=query_hv,
+            label=nsck_label,
+            nsck_confidence=nsck_conf,
+            reference_result=(ref_label, ref_conf) if ref_label else None,
+            domain=None,
+            override_threshold=override_thresh,
+            min_causal_depth=min_depth,
+        )
+
+        # Inject provenance and latency
+        import dataclasses as _dc  # noqa: PLC0415
+        latency = (_time.perf_counter() - t0) * 1000
+        response = _dc.replace(
+            response,
+            source_model_provenance=prov or response.source_model_provenance,
+            latency_ms=latency,
+        )
+        return response
+
+    def analyze_images(
+        self,
+        images: List[Any],
+        reference_model=None,
+        task_tag: str = "vision",
+    ) -> List[Any]:
+        """Analyze a batch of images."""
+        return [self.analyze_image(img, reference_model=reference_model, task_tag=task_tag) for img in images]
+
+    def get_absorption_stats(self) -> Dict[str, Any]:
+        """Get statistics about absorbed models."""
+        if self._vision_absorber is None:
+            return {"absorbed_models": 0, "total_concepts": 0, "domains": []}
+        stats = self._absorption_memory.get_stats() if self._absorption_memory else {}
+        domain_stats = {}
+        if self._domain_tagger:
+            for d in self._domain_tagger.all_domains():
+                domain_stats[d] = self._domain_tagger.get_domain_models(d)
+        stats["domain_breakdown"] = domain_stats
+        return stats

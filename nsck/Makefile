@@ -70,6 +70,12 @@ bench-papers:
 e2e:
 	NSCK_USE_RUST=1 $(PYTHON) eval/v7_end_to_end_eval.py
 
+bench-vision:
+	NSCK_USE_RUST=1 $(PYTHON) ../nsck_vision/benchmarks/run_all_benchmarks.py
+
+test-vision:
+	NSCK_USE_RUST=1 $(PYTEST) ../nsck_vision/tests/ -q --tb=short
+
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
 	find . -name "*.pyc" -delete 2>/dev/null; true
