@@ -1,8 +1,8 @@
 """
-Paper 8 Societal Benchmarks — reproduces Table 4.1 from paper8_societal_hvs.md.
+Paper 9 Societal Benchmarks — reproduces Table 4.1 from paper9_societal_hvs.md.
 
 Usage:
-    cd /path/to/repo && PYTHONPATH=nsck python research/experiments/paper8_societal_benchmarks.py
+    cd /path/to/repo && PYTHONPATH=nsck python research/experiments/paper9_societal_benchmarks.py
 """
 
 from __future__ import annotations
@@ -124,12 +124,12 @@ def run_benchmarks():
     print("-" * 55)
 
     # Save
-    out_dir = _REPO / "research" / "experiments"
+    out_dir = _REPO / "research" / "results"
     out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / "paper8_bench_results.json"
+    out_path = out_dir / "paper9_results.json"
     with open(out_path, "w") as f:
         json.dump({
-            "paper": "paper8_societal_hvs",
+            "paper": "paper9_societal_hvs",
             "table": "4.1",
             "rows": rows,
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),

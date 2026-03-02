@@ -91,6 +91,12 @@ class NSCKConfig:
     enable_spatial_reasoning: bool = False
     # Pragmatics: scalar implicature, Gricean maxims, indirect speech acts
     enable_pragmatics: bool = False
+    # Societal Knowledge World: LivingHyperVectors, neighborhoods, domains, TDA health
+    enable_societal_world: bool = False
+    # Bond threshold for societal world concept bonding (cosine-based score)
+    societal_bond_threshold: float = 0.30
+    # Break threshold for societal world bond removal
+    societal_break_threshold: float = 0.10
 
     # === V7 Feature Flags — dialogue quality, corpus training, noise filtering ===
     # Wire FluentNLG into DialogueManager (replaces template-based realize_sentence)
@@ -343,6 +349,15 @@ class NSCKConfig:
         cfg.vision_absorption_batch_size = 32
         cfg.vision_fusion_override_threshold = 0.95
         cfg.vision_causal_chain_min_depth = 1
+        return cfg
+
+    @classmethod
+    def societal(cls) -> "NSCKConfig":
+        """Societal config: enable the V5 Societal Knowledge World."""
+        cfg = cls()
+        cfg.enable_societal_world = True
+        cfg.societal_bond_threshold = 0.30
+        cfg.societal_break_threshold = 0.10
         return cfg
 
 

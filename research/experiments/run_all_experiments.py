@@ -28,6 +28,7 @@ SCRIPTS = [
     ("Paper 6 — Active Inference + GWT",   _exp_dir / "paper6_active_inference_benchmarks.py"),
     ("Paper 7 — Memory Benchmarks",        _exp_dir / "paper7_memory_benchmarks.py"),
     ("Paper 8 — Safety Benchmarks",        _exp_dir / "paper8_safety_benchmarks.py"),
+    ("Paper 9 — Societal HV Benchmarks",   _exp_dir / "paper9_societal_benchmarks.py"),
 ]
 
 RESULT_FILES = [

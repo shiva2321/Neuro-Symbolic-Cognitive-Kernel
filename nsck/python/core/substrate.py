@@ -118,6 +118,10 @@ class NSCKSubstrate:
         self._absorption_memory = None
         self._domain_tagger = None
 
+        # V5: Societal Knowledge World — lazily initialized on first call to
+        # init_societal_world() or get_societal_world().
+        self._societal_world = None
+
         # V16: Auto-seed if enabled
         if getattr(self.config, 'enable_seeding', False):
             self._auto_seed()
@@ -747,6 +751,38 @@ class NSCKSubstrate:
             episodic_memory=ep_mem,
             causal_graph=causal,
         )
+
+    def _ensure_societal_world(self) -> None:
+        """Lazily initialize the Societal Knowledge World."""
+        if self._societal_world is not None:
+            return
+        from python.core.societal.societal_world import SocietalKnowledgeWorld  # noqa: PLC0415
+        bond_threshold = getattr(self.config, "societal_bond_threshold", 0.30)
+        break_threshold = getattr(self.config, "societal_break_threshold", 0.10)
+        self._societal_world = SocietalKnowledgeWorld(
+            config=self.config,
+            bond_threshold=bond_threshold,
+            break_threshold=break_threshold,
+        )
+        logger.info(
+            "[SUBSTRATE] SocietalKnowledgeWorld initialized "
+            "(bond_threshold=%.2f, break_threshold=%.2f)",
+            bond_threshold, break_threshold,
+        )
+
+    def init_societal_world(self) -> "SocietalKnowledgeWorld":  # type: ignore[name-defined]
+        """Initialize and return the Societal Knowledge World.
+
+        Idempotent — returns the same world on subsequent calls.
+        Requires ``config.enable_societal_world = True`` (enforced by convention
+        but not hard-gated so callers can opt-in explicitly).
+        """
+        self._ensure_societal_world()
+        return self._societal_world
+
+    def get_societal_world(self) -> "Optional[SocietalKnowledgeWorld]":  # type: ignore[name-defined]
+        """Return the Societal Knowledge World if initialized, else None."""
+        return self._societal_world
 
     def absorb_vision_model(
         self,

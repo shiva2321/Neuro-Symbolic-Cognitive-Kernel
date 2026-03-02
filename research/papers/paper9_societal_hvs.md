@@ -1,4 +1,4 @@
-# Paper 8: Societal Hypervector Knowledge Representation in Neuro-Symbolic Cognitive Kernels
+# Paper 9: Societal Hypervector Knowledge Representation in Neuro-Symbolic Cognitive Kernels
 
 **Draft** — March 2026
 

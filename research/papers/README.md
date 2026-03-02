@@ -64,6 +64,13 @@ This directory contains eight research papers from the NSCK (Neuro-Symbolic Cogn
 - **Key Results:** TPR = 1.00 / FPR = 0.00, emotion HVs quasi-orthogonal (mean sim = 0.499), text emotion accuracy = 100% (16 sentences), Sally-Anne test passed, multi-agent ToM correct
 - **Target Venues:** AIES (AAAI/ACM AI Ethics and Society), SafeAI Workshop, Frontiers in Artificial Intelligence
 
+### Paper 9 — Societal Hypervector Knowledge Representation
+**"Societal Hypervectors: Emergent Knowledge Organization via Living HV Agents, Spectral Renormalization, and TDA Health Monitoring"**
+- **File:** `paper9_societal_hvs.md`
+- **Scope:** LivingHyperVector agents, ValenceEngine bond chemistry, KnowledgeNeighborhood/KnowledgeDomain organization, SpectralLaplacianRG coarse-graining, PercolationMonitor, ZipfValidator, SocietalHNSW navigation, TDA health monitoring, GWT-integrated routing
+- **Key Results:** 26/26 eval checks pass (100%), registration 0.16 ms/concept, query 0.92 ms, spectral RG 8.66 ms for 50 concepts
+- **Target Venues:** NeurIPS Workshop on Cognitive Computation, CogSci, ICLR Workshop on Geometrical and Topological Representation Learning
+
 ---
 
 ## Experiment & Results Files
@@ -84,6 +91,7 @@ Results JSON files are written to `research/results/`:
 - `paper6_results.json` — Active Inference + GWT benchmarks
 - `paper7_results.json` — Memory architecture benchmarks
 - `paper8_results.json` — Safety layer benchmarks
+- `paper9_results.json` — Societal HV benchmarks
 
 ---
 

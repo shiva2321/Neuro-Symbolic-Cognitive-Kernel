@@ -1,0 +1,43 @@
+{
+  "paper": "paper9_societal_hvs",
+  "table": "4.1",
+  "rows": [
+    {
+      "op": "register",
+      "world": 100,
+      "time_ms": 0.167,
+      "unit": "ms/concept"
+    },
+    {
+      "op": "query",
+      "world": 50,
+      "time_ms": 1.004,
+      "unit": "ms/query"
+    },
+    {
+      "op": "tick",
+      "world": 30,
+      "time_ms": 0.086,
+      "unit": "ms/tick"
+    },
+    {
+      "op": "spectral_rg",
+      "world": 50,
+      "time_ms": 265.123,
+      "unit": "ms"
+    },
+    {
+      "op": "tda_analysis",
+      "world": 30,
+      "time_ms": 4.828,
+      "unit": "ms"
+    },
+    {
+      "op": "hnsw_query",
+      "world": 50,
+      "time_ms": 0.236,
+      "unit": "ms/query"
+    }
+  ],
+  "timestamp": "2026-03-02T19:04:44Z"
+}
