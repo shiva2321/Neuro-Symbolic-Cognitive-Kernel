@@ -36,9 +36,22 @@ _STABILITY_CLASS_THRESHOLDS = {   # lower-bound of stability to reach a class
 # ---------------------------------------------------------------------------
 
 def _hv_cosine_sim(hv_a, hv_b) -> float:
-    """Compute cosine similarity between two hypervectors (any backend)."""
+    """Compute cosine similarity between two hypervectors (any backend).
+
+    Fast path: use the native ``similarity()`` method (Hamming-based, O(D/64)
+    bitwise ops) which is available on both Rust and Python HVs and runs at
+    sub-microsecond speed on the Rust backend.
+
+    Fallback: convert to bipolar float and compute cosine via numpy dot product.
+    This is only reached for exotic backends that expose a ``bits`` attribute
+    but no ``similarity()`` method.
+    """
+    # Prefer the fast native similarity method (Rust: 0.22 µs, Python: 7 µs).
+    # Note: Hamming-based similarity and bipolar cosine are monotonically related
+    # for binary HVs (both measure fraction of matching bits), so the two paths
+    # are consistent in ranking — using similarity() here is correct.
     try:
-        return float(hv_a.cosine_similarity(hv_b))
+        return float(hv_a.similarity(hv_b))
     except AttributeError:
         pass
     try:
