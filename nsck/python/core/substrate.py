@@ -21,6 +21,8 @@ from typing import Any, Callable, Dict, List, Optional, Set
 
 import numpy as np
 
+import python.core.vsa.hypervec_shim as _hypervec_shim  # noqa: E402
+
 from python.core.integration.config import NSCKConfig
 
 logger = logging.getLogger(__name__)
@@ -29,6 +31,11 @@ logger = logging.getLogger(__name__)
 def _stable_seed(obj: object) -> int:
     """Convert any object to a stable 32-bit seed for HyperVector construction."""
     return hash(str(obj)) % (2 ** 32)
+
+
+def _societal_action_concept_id(task_tag: str, action: str) -> str:
+    """Return the canonical societal-world concept ID for a task action."""
+    return f"action:{task_tag}:{action}"
 
 
 @dataclass
@@ -46,6 +53,8 @@ class SubstrateResult:
     uncertainty_bounds: Optional[tuple] = None
     encoding_stats: Optional[Dict[str, Any]] = None
     procedural_hit: bool = False
+    # V5: Societal context enrichment (populated when enable_societal_world=True)
+    societal_context: Optional[Dict[str, Any]] = None
 
 
 class NSCKSubstrate:
@@ -121,6 +130,8 @@ class NSCKSubstrate:
         # V5: Societal Knowledge World — lazily initialized on first call to
         # init_societal_world() or get_societal_world().
         self._societal_world = None
+        # Cached SocietalContextRouter — created once the world is initialized.
+        self._societal_router = None
 
         # V16: Auto-seed if enabled
         if getattr(self.config, 'enable_seeding', False):
@@ -314,6 +325,19 @@ class NSCKSubstrate:
         except Exception:
             pass
 
+        # V5: Societal context enrichment — when the societal world is active and
+        # we have an encoded HV for this input, route it through the world to
+        # surface the most relevant domain and neighbouring concepts.  This
+        # populates ``societal_context`` in the result and also runs one tick so
+        # the world's dynamics stay in sync with the cognitive stream.
+        societal_ctx: Optional[Dict[str, Any]] = None
+        if self._societal_router is not None and self._last_ingest_hv is not None:
+            try:
+                societal_ctx = self._societal_router.route(self._last_ingest_hv, top_k=5)
+                self._societal_world.run_societal_tick()
+            except Exception as _exc:
+                logger.debug("[SUBSTRATE] Societal enrichment skipped: %s", _exc)
+
         return SubstrateResult(
             chosen_action=cog_state.chosen_action,
             confidence=cog_state.confidence,
@@ -325,6 +349,7 @@ class NSCKSubstrate:
             kle_uncertainty=kle,
             uncertainty_bounds=ubounds,
             encoding_stats=enc_stats,
+            societal_context=societal_ctx,
         )
 
     def process_multimodal(
@@ -639,6 +664,22 @@ class NSCKSubstrate:
             self.conformal.calibrate([1.0 - reward], labels=[reward >= 0])
         except Exception:
             pass
+        # V5: Activate the action concept in the societal world so that
+        # frequently-rewarded actions gain stability over time.
+        if self._societal_world is not None:
+            try:
+                concept_id = _societal_action_concept_id(task_tag, action)
+                if concept_id not in self._societal_world.concepts:
+                    hv = _hypervec_shim.HyperVector(seed=hash(concept_id) % (2 ** 32))
+                    self._societal_world.register_concept(
+                        concept_id, hv, {"stability": 0.5, "provenance": {"method": "feedback"}}
+                    )
+                # Positive reward → boost activation; negative → suppress
+                activation_strength = max(0.0, float(reward))
+                if activation_strength > 0.0:
+                    self._societal_world.activate_concept(concept_id, activation_strength)
+            except Exception as _exc:
+                logger.debug("[SUBSTRATE] Societal feedback activation skipped: %s", _exc)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get comprehensive system statistics."""
@@ -769,6 +810,11 @@ class NSCKSubstrate:
             "(bond_threshold=%.2f, break_threshold=%.2f)",
             bond_threshold, break_threshold,
         )
+        # Build the cached context router once the world exists
+        from python.core.societal.routing.context_router import (  # noqa: PLC0415
+            SocietalContextRouter,
+        )
+        self._societal_router = SocietalContextRouter(self._societal_world)
 
     def init_societal_world(self) -> "SocietalKnowledgeWorld":  # type: ignore[name-defined]
         """Initialize and return the Societal Knowledge World.
