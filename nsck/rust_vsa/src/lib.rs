@@ -11,6 +11,7 @@ mod episodic;
 mod worker_pool;
 mod persistence;
 mod async_runtime;
+mod societal;
 
 const DIMENSION: usize = 10240;
 
@@ -451,6 +452,9 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     
     // Async runtime
     async_runtime::register_async_module(m)?;
+    
+    // Societal hypervector backend (V5)
+    societal::register_societal_module(m)?;
     
     Ok(())
 }
