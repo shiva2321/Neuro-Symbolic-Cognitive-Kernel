@@ -1,10 +1,10 @@
 # NSCK Research Papers
 
-This directory contains eight research papers from the NSCK (Neuro-Symbolic Cognitive Kernel) project. Each paper is self-contained and may be read or cited independently.
+This directory contains ten research papers from the NSCK (Neuro-Symbolic Cognitive Kernel) project. Each paper is self-contained and may be read or cited independently.
 
-**Suggested reading order:** Papers 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8
+**Suggested reading order:** Papers 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10
 
-**Current implementation status (February 2026):** 1,669 tests passing (Rust backend active — hypervec\_rs + snn\_rs), 5 skipped, 4 xfailed. 94+ core modules, ~36K LOC Python, ~4.3K LOC Rust.
+**Current implementation status (March 2026):** 1,700+ tests passing (Python backend; Rust backend: hypervec\_rs + snn\_rs), 94+ core modules, ~40K LOC Python, ~4.3K LOC Rust.
 
 ## Papers
 
@@ -63,6 +63,20 @@ This directory contains eight research papers from the NSCK (Neuro-Symbolic Cogn
 - **Scope:** Safety rule verification, confidence gating, Plutchik emotion HVs, Theory of Mind, end-to-end audit trail
 - **Key Results:** TPR = 1.00 / FPR = 0.00, emotion HVs quasi-orthogonal (mean sim = 0.499), text emotion accuracy = 100% (16 sentences), Sally-Anne test passed, multi-agent ToM correct
 - **Target Venues:** AIES (AAAI/ACM AI Ethics and Society), SafeAI Workshop, Frontiers in Artificial Intelligence
+
+### Paper 9 — Societal Hypervectors
+**"Societal Hypervector Knowledge Representation (SHVKR): Dynamic Concept Communities in Hyperdimensional Space"**
+- **File:** `paper9_societal_hvs.md`
+- **Scope:** LivingHyperVector, Bond lifecycle, SocietyManager (Leiden clustering, percolation), SocietalContextRouter
+- **Key Results:** Self-recall@1 = 100%, routing P50 = 0.65 ms, 235 unit+regression tests pass
+- **Target Venues:** CogSci, ICLR Workshop on Graph Neural Networks and Knowledge Graphs
+
+### Paper 10 — Societal-Guided Continual Learning
+**"Societal-Guided Elastic Weight Consolidation (SoCL): Continual Learning Without Catastrophic Forgetting via Societal Hypervectors"**
+- **File:** `paper10_societal_continual.md`
+- **Scope:** Centrality-boosted Fisher Information, SoCL algorithm, forgetting reduction
+- **Key Results:** SoCL achieves lowest forgetting across all conditions; EWC loss strictly higher after societal boost; 37 unit tests pass
+- **Target Venues:** NeurIPS Workshop on Continual Learning, AAAI Workshop on Lifelong Learning
 
 ---
 

@@ -373,6 +373,28 @@ class NSCKConfig:
         cfg.societal_min_similarity = 0.55
         return cfg
 
+    # === V27 Feature Flags — Societal-Guided Continual Learning (SoCL) ===
+    enable_societal_ewc: bool = False
+    societal_ewc_centrality_weight: float = 0.5
+    societal_ewc_degree_weight: float = 0.4
+    societal_ewc_activation_weight: float = 0.4
+    societal_ewc_cluster_weight: float = 0.2
+
+    @classmethod
+    def societal_ewc(cls) -> "NSCKConfig":
+        """SoCL config: societal SHVKR + EWC + societal-guided importance boosting."""
+        cfg = cls.societal()
+        cfg.enable_ewc = True
+        cfg.ewc_lambda = 1000.0
+        cfg.ewc_consolidate_interval = 200
+        cfg.ewc_importance_window = 50
+        cfg.enable_societal_ewc = True
+        cfg.societal_ewc_centrality_weight = 0.5
+        cfg.societal_ewc_degree_weight = 0.4
+        cfg.societal_ewc_activation_weight = 0.4
+        cfg.societal_ewc_cluster_weight = 0.2
+        return cfg
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()
