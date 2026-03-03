@@ -345,6 +345,34 @@ class NSCKConfig:
         cfg.vision_causal_chain_min_depth = 1
         return cfg
 
+    # === V26 Feature Flags — Societal Hypervector Knowledge Representation ===
+    enable_societal: bool = False
+    societal_bond_threshold: float = 0.65
+    societal_max_bonds: int = 8
+    societal_bond_decay: float = 0.01
+    societal_activation_decay: float = 0.05
+    societal_activation_spread: float = 0.4
+    societal_cluster_resolution: float = 1.0
+    societal_auto_cluster_interval: int = 10
+    societal_top_k: int = 5
+    societal_min_similarity: float = 0.55
+
+    @classmethod
+    def societal(cls) -> "NSCKConfig":
+        """Societal config: enable Societal Hypervector Knowledge Representation."""
+        cfg = cls()
+        cfg.enable_societal = True
+        cfg.societal_bond_threshold = 0.65
+        cfg.societal_max_bonds = 8
+        cfg.societal_bond_decay = 0.01
+        cfg.societal_activation_decay = 0.05
+        cfg.societal_activation_spread = 0.4
+        cfg.societal_cluster_resolution = 1.0
+        cfg.societal_auto_cluster_interval = 10
+        cfg.societal_top_k = 5
+        cfg.societal_min_similarity = 0.55
+        return cfg
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()
