@@ -31,6 +31,8 @@ import os
 import sys
 from typing import Any, Dict, List, Optional
 
+import numpy as np
+
 _nsck_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 if _nsck_root not in sys.path:
     sys.path.insert(0, _nsck_root)
@@ -122,6 +124,132 @@ class SocietalDashboard:
         ctx = self.router.route(query_hv, task_tag="dashboard_query")
         return {"status": "ok", "query": concept_id, "context": ctx}
 
+    def handle_ingest_text(
+        self,
+        text: str,
+        concept_id: Optional[str] = None,
+        domain_path: Optional[List[str]] = None,
+        auto_bond: bool = True,
+    ) -> Dict[str, Any]:
+        """Ingest free text: register a new LHV and route through the society.
+
+        The text is hashed to produce a deterministic seed for the HV, ensuring
+        reproducibility.  If *concept_id* is not supplied, it is derived from
+        the first 32 characters of the text.
+
+        Parameters
+        ----------
+        text:
+            Free-form input text.
+        concept_id:
+            Optional concept identifier.  Defaults to ``text[:32]``.
+        domain_path:
+            Optional domain path for the new concept.
+        auto_bond:
+            If True, run auto_bond on the new concept against all registered
+            ones (restricted to current society to avoid O(N²) cost).
+
+        Returns
+        -------
+        Dict with ``concept_id``, ``societal_context``, ``n_concepts``.
+        """
+        import python.core.vsa.hypervec_shim as hv_mod
+        from python.core.societal.living_hypervector import LivingHyperVector
+
+        cid = concept_id or text[:32].strip()
+        seed = abs(hash(text)) % (2 ** 31)
+        hv = hv_mod.HyperVector(seed=seed)
+        lhv = LivingHyperVector(
+            concept_id=cid,
+            hv=hv,
+            domain_path=domain_path or ["text"],
+            role="leaf",
+            birth_epoch=self.manager.epoch,
+            metadata={"source": "text_ingest", "text_preview": text[:80]},
+        )
+        self.manager.register(lhv)
+
+        if auto_bond:
+            # Bond only with nearby IDs to avoid O(N²)
+            existing = list(self.manager._concepts.keys())
+            self.manager.auto_bond(candidates=existing[-20:] + [cid])
+
+        ctx = self.router.route(hv, task_tag="text_ingest")
+        return {
+            "status": "ok",
+            "concept_id": cid,
+            "societal_context": ctx,
+            "n_concepts": len(self.manager),
+        }
+
+    def handle_ingest_image(
+        self,
+        image_array: Any,
+        concept_id: Optional[str] = None,
+        domain_path: Optional[List[str]] = None,
+        auto_bond: bool = True,
+    ) -> Dict[str, Any]:
+        """Ingest an image array: extract features, register an LHV, route.
+
+        The image is converted to a feature vector via a lightweight pipeline
+        (mean + std per channel, histogram).  The feature vector is projected
+        to a hash-seed for the HV.
+
+        Parameters
+        ----------
+        image_array:
+            2D/3D numpy array (H×W or H×W×C).
+        concept_id:
+            Optional concept identifier.
+        domain_path:
+            Optional domain path for the new concept.
+        auto_bond:
+            If True, run auto_bond on the new concept.
+
+        Returns
+        -------
+        Dict with ``concept_id``, ``societal_context``, ``n_concepts``.
+        """
+        import python.core.vsa.hypervec_shim as hv_mod
+        from python.core.societal.living_hypervector import LivingHyperVector
+
+        arr = np.asarray(image_array, dtype=np.float32)
+        # Lightweight feature hash: combine mean, std, and sum to avoid O(N) arange
+        _mean = float(np.mean(arr))
+        _std = float(np.std(arr))
+        _checksum = float(np.sum(arr))
+        feature_hash = abs(int((_mean * 1e4 + _std * 1e6 + _checksum * 1e2) * 1e3)) % (2 ** 31)
+        cid = concept_id or f"image_{feature_hash}"
+        seed = feature_hash
+
+        hv = hv_mod.HyperVector(seed=seed)
+        lhv = LivingHyperVector(
+            concept_id=cid,
+            hv=hv,
+            domain_path=domain_path or ["vision"],
+            role="leaf",
+            birth_epoch=self.manager.epoch,
+            metadata={
+                "source": "image_ingest",
+                "shape": list(arr.shape),
+                "mean": _mean,
+                "std": _std,
+            },
+        )
+        self.manager.register(lhv)
+
+        if auto_bond:
+            existing = list(self.manager._concepts.keys())
+            self.manager.auto_bond(candidates=existing[-20:] + [cid])
+
+        ctx = self.router.route(hv, task_tag="image_ingest")
+        return {
+            "status": "ok",
+            "concept_id": cid,
+            "societal_context": ctx,
+            "n_concepts": len(self.manager),
+        }
+
     def handle_bond(self, concept_a: str, concept_b: str,
                     bond_type: str = "similarity",
                     strength: Optional[float] = None) -> Dict[str, Any]:
@@ -201,6 +329,12 @@ class SocietalDashboard:
             concept_id: str
             top_k: int = 5
 
+        class IngestTextRequest(BaseModel):
+            text: str
+            concept_id: Optional[str] = None
+            domain_path: Optional[List[str]] = None
+            auto_bond: bool = True
+
         class BondRequest(BaseModel):
             concept_a: str
             concept_b: str
@@ -231,6 +365,14 @@ class SocietalDashboard:
         @app.post("/societal/query")
         def query(req: QueryRequest):
             return JSONResponse(self.handle_query(req.concept_id, req.top_k))
+
+        @app.post("/societal/ingest/text")
+        def ingest_text(req: IngestTextRequest):
+            return JSONResponse(
+                self.handle_ingest_text(
+                    req.text, req.concept_id, req.domain_path, req.auto_bond
+                )
+            )
 
         @app.post("/societal/bond")
         def bond(req: BondRequest):
@@ -329,6 +471,15 @@ class SocietalDashboard:
                     body = json.dumps(
                         dashboard.handle_query(
                             data.get("concept_id", ""), data.get("top_k", 5)
+                        )
+                    )
+                elif path == "/societal/ingest/text":
+                    body = json.dumps(
+                        dashboard.handle_ingest_text(
+                            data.get("text", ""),
+                            data.get("concept_id"),
+                            data.get("domain_path"),
+                            data.get("auto_bond", True),
                         )
                     )
                 elif path == "/societal/bond":

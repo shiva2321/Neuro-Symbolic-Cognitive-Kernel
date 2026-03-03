@@ -45,6 +45,8 @@ class TransplantPipeline:
         self._config = config
         # Cache of fitted projectors keyed by domain_name
         self._projectors: Dict[str, BaseProjector] = {}
+        # Cache of codebooks by domain name (used by societal_transplant)
+        self._codebooks: Dict[str, Any] = {}
 
         # Read thresholds from config with sensible defaults
         def _cfg(attr: str, default: float) -> float:
@@ -103,6 +105,7 @@ class TransplantPipeline:
         projector = self._make_projector(strategy, harvest.embedding_dim)
         codebook = projector.project(harvest.embeddings, harvest.vocab_mapping)
         self._projectors[domain_name] = projector
+        self._codebooks[domain_name] = codebook
 
         # 3. CALIBRATE (optional)
         cal_result: Optional[CalibratedResult] = None
@@ -284,9 +287,8 @@ class TransplantPipeline:
         if societal_manager is None:
             societal_manager = SocietyManager(bond_threshold=bond_threshold)
 
-        # Retrieve the projected codebook from the last projector
-        projector = self._projectors.get(domain_name)
-        codebook: Dict[str, Any] = getattr(projector, "_last_codebook", {}) or {}
+        # Retrieve the projected codebook from the cache
+        codebook: Dict[str, Any] = self._codebooks.get(domain_name, {})
         if not codebook:
             _log.warning(
                 "[SOCIETAL] No codebook found for domain %r; "

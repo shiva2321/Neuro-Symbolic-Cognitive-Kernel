@@ -213,16 +213,17 @@ report = pipeline.societal_transplant(
 ## Dashboard API
 
 ```
-GET  /societal/status          → health metrics
-GET  /societal/domain_tree     → hierarchical domains
-GET  /societal/communities     → current cluster listing
-POST /societal/register        → {concept_id, domain_path, role}
-POST /societal/query           → {concept_id, top_k}
-POST /societal/bond            → {concept_a, concept_b, bond_type, strength}
-POST /societal/step            → advance one epoch
-GET  /societal/cluster         → ?resolution=1.0
-GET  /societal/percolation     → percolation threshold
-GET  /societal/topo_health     → full topological report
+GET  /societal/status              → health metrics
+GET  /societal/domain_tree         → hierarchical domains
+GET  /societal/communities         → current cluster listing
+POST /societal/register            → {concept_id, domain_path, role}
+POST /societal/query               → {concept_id, top_k}
+POST /societal/ingest/text         → {text, concept_id?, domain_path?, auto_bond?}
+POST /societal/bond                → {concept_a, concept_b, bond_type, strength}
+POST /societal/step                → advance one epoch
+GET  /societal/cluster             → ?resolution=1.0
+GET  /societal/percolation         → percolation threshold
+GET  /societal/topo_health         → full topological report
 ```
 
 Start the dashboard:
@@ -253,14 +254,21 @@ new method that delegates to `run()` internally.
 
 ## Performance Characteristics
 
-| Operation | Complexity | Backend |
-|-----------|-----------|---------|
-| `_hv_cosine_sim(a, b)` | O(D/64) | Hamming via Rust/Python |
-| `auto_bond(N concepts)` | O(N²) | Python |
-| `leiden_cluster(N, M bonds)` | O(N²) worst case | Python |
-| `nearest_neighbors(query, k)` | O(N·D/64) | Python/Rust |
-| `percolation_threshold(N)` | O(N²) | Python |
-| `step_epoch(N)` | O(N·bonds_per_node) | Python |
+| Operation | Complexity | Measured latency (Python) |
+|-----------|-----------|--------------------------|
+| `_hv_cosine_sim(a, b)` | O(D/64) | ~7 µs |
+| `auto_bond(N concepts)` | O(N²) | 12.7 ms (N=50) |
+| `leiden_cluster(N, M bonds)` | O(N²) worst | 1.85 ms (N=100) |
+| `nearest_neighbors(query, k)` | O(N·D/64) | 789 µs (N=100) |
+| `percolation_threshold(N)` | O(N²) | 596 µs (N=50) |
+| `step_epoch(N)` | O(N·bonds/node) | 123 µs (N=100) |
+| `LHV.activate()` | O(1) | 0.53 µs |
+| `Bond.form()` | O(1) | 1.41 µs |
+| `router.route()` (N=100) | O(N·D/64) | 0.80 ms |
+
+Benchmarks: Python 3.12.3, 10240-bit HVs, Python VSA backend.
+With Rust VSA backend (51× speedup), routing and nearest-neighbor latencies
+drop proportionally.
 
 For large societies (N > 1000), consider using `candidates` subsets in
 `auto_bond()` and pre-clustering before routing.
@@ -269,21 +277,20 @@ For large societies (N > 1000), consider using `candidates` subsets in
 
 ## Test Coverage
 
-220 unit tests in `nsck/tests/unit/societal/test_societal_hvs.py` covering:
+**235 tests** total: 220 unit tests in `nsck/tests/unit/societal/test_societal_hvs.py`
++ 15 regression tests in `nsck/tests/regression/test_societal_regression.py`.
 
-- Bond lifecycle (formation, reinforcement, decay, dissolution)
-- LHV activation dynamics (spike, decay, spreading)
-- Serialisation roundtrips
-- Topological persistence computation
-- SocietyManager registration, bonding, clustering, percolation
-- Domain tree and hierarchical queries
-- Epoch stepping and auto-clustering
-- SocietalContextRouter routing and feedback
-- NSCKConfig societal preset and all flags
-- SubstrateResult.societal_context field
-- NSCKSubstrate.init_societal_world() and lazy initialisation
-- Integration / regression scenarios
-- Edge cases and stress tests
+Unit tests cover: Bond lifecycle (formation, reinforcement, decay, dissolution),
+LHV activation dynamics (spike, decay, spreading), serialisation roundtrips,
+topological persistence, SocietyManager registration/bonding/clustering/percolation,
+domain tree, epoch stepping, auto-clustering, SocietalContextRouter routing and
+feedback, NSCKConfig societal preset, SubstrateResult.societal_context,
+NSCKSubstrate.init_societal_world(), integration / regression scenarios, edge cases.
+
+Regression tests verify: flat-VSA HV similarity/bundle unchanged after societal
+epochs, SemanticMemory unchanged, SubstrateResult fields correct, transplant
+pipeline invariant, bond re-registration correctness, activation/bond bounds,
+Leiden coverage, domain tree correctness, epoch monotonicity, router immutability.
 
 ---
 

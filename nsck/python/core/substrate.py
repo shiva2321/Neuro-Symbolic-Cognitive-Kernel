@@ -319,11 +319,17 @@ class NSCKSubstrate:
         # V26: societal context routing
         societal_ctx: Optional[Dict[str, Any]] = None
         try:
-            router = self._ensure_societal_world() and self._societal_router
-            if router is not None and self._last_ingest_hv is not None:
-                societal_ctx = router.route(
-                    self._last_ingest_hv, task_tag=task_tag
-                )
+            _soc_mgr = self._ensure_societal_world()
+            _soc_router = self._societal_router
+            if _soc_mgr is not None and _soc_router is not None:
+                # Use the ingest HV if available; fall back to hash-seeded HV
+                import python.core.vsa.hypervec_shim as _hv_mod
+                _query_hv = self._last_ingest_hv
+                if _query_hv is None:
+                    _query_hv = _hv_mod.HyperVector(
+                        seed=abs(hash(str(input_data))) % (2 ** 31)
+                    )
+                societal_ctx = _soc_router.route(_query_hv, task_tag=task_tag)
         except Exception:
             pass
 
