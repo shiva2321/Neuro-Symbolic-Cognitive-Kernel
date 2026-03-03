@@ -1574,7 +1574,7 @@ class TestLivingHyperVectorAdditional:
     def test_to_dict_activation_rounded(self):
         lhv = LivingHyperVector("x", make_hv(), initial_activation=0.333333)
         d = lhv.to_dict()
-        assert len(str(d["activation"]).split(".")[-1]) <= 7
+        assert d["activation"] == pytest.approx(0.333333, abs=1e-6)
 
     def test_from_dict_missing_fields_defaults(self):
         d = {"concept_id": "minimal"}
