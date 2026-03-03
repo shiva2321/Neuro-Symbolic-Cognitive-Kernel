@@ -45,6 +45,8 @@ class TransplantPipeline:
         self._config = config
         # Cache of fitted projectors keyed by domain_name
         self._projectors: Dict[str, BaseProjector] = {}
+        # Cache of codebooks by domain name (used by societal_transplant)
+        self._codebooks: Dict[str, Any] = {}
 
         # Read thresholds from config with sensible defaults
         def _cfg(attr: str, default: float) -> float:
@@ -103,6 +105,7 @@ class TransplantPipeline:
         projector = self._make_projector(strategy, harvest.embedding_dim)
         codebook = projector.project(harvest.embeddings, harvest.vocab_mapping)
         self._projectors[domain_name] = projector
+        self._codebooks[domain_name] = codebook
 
         # 3. CALIBRATE (optional)
         cal_result: Optional[CalibratedResult] = None
@@ -225,3 +228,108 @@ class TransplantPipeline:
                     _log.debug("Failed to persist relation %r → %r: %s", tokens[i], tokens[j], exc)
 
         pack.save(path)
+
+    def societal_transplant(
+        self,
+        model: Any,
+        domain_name: str,
+        strategy: str = "svd_factored",
+        calibration_epochs: Optional[int] = None,
+        save_pack_path: Optional[str] = None,
+        cognitive_engine: Any = None,
+        societal_manager: Any = None,
+        bond_threshold: float = 0.65,
+        cluster_resolution: float = 1.0,
+    ) -> "TransplantReport":
+        """Transplant + inject concepts as LivingHyperVectors into a SocietyManager.
+
+        Extends :meth:`run` by additionally:
+
+        1. Wrapping each projected HV as a :class:`~python.core.societal.LivingHyperVector`
+           in the supplied *societal_manager*.
+        2. Running :meth:`~python.core.societal.SocietyManager.auto_bond` to
+           form bonds between similar concepts.
+        3. Running Leiden clustering at *cluster_resolution* to assign community
+           membership.
+
+        Parameters
+        ----------
+        societal_manager:
+            A :class:`~python.core.societal.SocietyManager` instance.  If
+            ``None``, a fresh one is created and returned via the report's
+            ``metadata`` dict (key ``"societal_manager"``).
+        bond_threshold:
+            Passed to ``SocietyManager.bond_threshold`` when creating a new
+            manager.
+        cluster_resolution:
+            Leiden γ parameter for community detection.
+
+        Returns
+        -------
+        TransplantReport
+            Same report as :meth:`run`, with societal metadata added to
+            ``report.metadata``.
+        """
+        from python.core.societal.society_manager import SocietyManager
+        from python.core.societal.living_hypervector import LivingHyperVector
+
+        # Run standard transplant pipeline first
+        report = self.run(
+            model=model,
+            domain_name=domain_name,
+            strategy=strategy,
+            calibration_epochs=calibration_epochs,
+            save_pack_path=save_pack_path,
+            cognitive_engine=cognitive_engine,
+        )
+
+        # Build / reuse SocietyManager
+        if societal_manager is None:
+            societal_manager = SocietyManager(bond_threshold=bond_threshold)
+
+        # Retrieve the projected codebook from the cache
+        codebook: Dict[str, Any] = self._codebooks.get(domain_name, {})
+        if not codebook:
+            _log.warning(
+                "[SOCIETAL] No codebook found for domain %r; "
+                "societal transplant skipped.", domain_name
+            )
+        else:
+            epoch = societal_manager.epoch
+            for token, hv in codebook.items():
+                lhv = LivingHyperVector(
+                    concept_id=token,
+                    hv=hv,
+                    domain_path=[domain_name],
+                    role="leaf",
+                    birth_epoch=epoch,
+                    metadata={"source_model": domain_name},
+                )
+                societal_manager.register(lhv)
+
+            # Form bonds between similar concepts
+            tokens_list = list(codebook.keys())
+            societal_manager.auto_bond(candidates=tokens_list, bond_type="similarity")
+
+            # Run Leiden clustering
+            cluster_result = societal_manager.leiden_cluster(cluster_resolution)
+            _log.info(
+                "[SOCIETAL] Leiden: %d communities, Q=%.4f for domain %r",
+                cluster_result.n_communities,
+                cluster_result.modularity,
+                domain_name,
+            )
+
+        # Attach societal info to report metadata
+        if not hasattr(report, "metadata") or report.metadata is None:
+            try:
+                import dataclasses as _dc
+                report = _dc.replace(
+                    report, metadata={"societal_manager": societal_manager}
+                )
+            except Exception:
+                pass
+        else:
+            report.metadata["societal_manager"] = societal_manager
+
+        return report

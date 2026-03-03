@@ -1903,6 +1903,35 @@ class CognitiveEngine:
         except Exception as _exc:
             logger.warning("EWC importance computation failed: %s", _exc)
 
+        # V27: Societal-Guided EWC boost
+        if getattr(self.config, "enable_societal_ewc", False):
+            _soc_mgr = getattr(self, "_societal_manager", None)
+            if _soc_mgr is not None:
+                try:
+                    from python.core.learning.societal_ewc import SocietalEWCCombiner
+                    _combiner = SocietalEWCCombiner(
+                        centrality_weight=getattr(
+                            self.config, "societal_ewc_centrality_weight", 0.5
+                        ),
+                        degree_weight=getattr(
+                            self.config, "societal_ewc_degree_weight", 0.4
+                        ),
+                        activation_weight=getattr(
+                            self.config, "societal_ewc_activation_weight", 0.4
+                        ),
+                        cluster_weight=getattr(
+                            self.config, "societal_ewc_cluster_weight", 0.2
+                        ),
+                    )
+                    _combiner.apply_societal_boost(
+                        self._continual_learner, task_tag, _soc_mgr
+                    )
+                    logger.debug(
+                        "[V27] SoCL boost applied for task %r", task_tag
+                    )
+                except Exception as _exc:
+                    logger.warning("SoCL boost failed: %s", _exc)
+
     def _detect_rule_drift(self, tasks: List[str]) -> None:
         """Mark rules as drifting when recent confidence drops below 50% of older confidence (V9)."""
         for task in tasks:

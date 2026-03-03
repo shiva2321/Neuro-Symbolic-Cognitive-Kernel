@@ -345,6 +345,56 @@ class NSCKConfig:
         cfg.vision_causal_chain_min_depth = 1
         return cfg
 
+    # === V26 Feature Flags — Societal Hypervector Knowledge Representation ===
+    enable_societal: bool = False
+    societal_bond_threshold: float = 0.65
+    societal_max_bonds: int = 8
+    societal_bond_decay: float = 0.01
+    societal_activation_decay: float = 0.05
+    societal_activation_spread: float = 0.4
+    societal_cluster_resolution: float = 1.0
+    societal_auto_cluster_interval: int = 10
+    societal_top_k: int = 5
+    societal_min_similarity: float = 0.55
+
+    @classmethod
+    def societal(cls) -> "NSCKConfig":
+        """Societal config: enable Societal Hypervector Knowledge Representation."""
+        cfg = cls()
+        cfg.enable_societal = True
+        cfg.societal_bond_threshold = 0.65
+        cfg.societal_max_bonds = 8
+        cfg.societal_bond_decay = 0.01
+        cfg.societal_activation_decay = 0.05
+        cfg.societal_activation_spread = 0.4
+        cfg.societal_cluster_resolution = 1.0
+        cfg.societal_auto_cluster_interval = 10
+        cfg.societal_top_k = 5
+        cfg.societal_min_similarity = 0.55
+        return cfg
+
+    # === V27 Feature Flags — Societal-Guided Continual Learning (SoCL) ===
+    enable_societal_ewc: bool = False
+    societal_ewc_centrality_weight: float = 0.5
+    societal_ewc_degree_weight: float = 0.4
+    societal_ewc_activation_weight: float = 0.4
+    societal_ewc_cluster_weight: float = 0.2
+
+    @classmethod
+    def societal_ewc(cls) -> "NSCKConfig":
+        """SoCL config: societal SHVKR + EWC + societal-guided importance boosting."""
+        cfg = cls.societal()
+        cfg.enable_ewc = True
+        cfg.ewc_lambda = 1000.0
+        cfg.ewc_consolidate_interval = 200
+        cfg.ewc_importance_window = 50
+        cfg.enable_societal_ewc = True
+        cfg.societal_ewc_centrality_weight = 0.5
+        cfg.societal_ewc_degree_weight = 0.4
+        cfg.societal_ewc_activation_weight = 0.4
+        cfg.societal_ewc_cluster_weight = 0.2
+        return cfg
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()

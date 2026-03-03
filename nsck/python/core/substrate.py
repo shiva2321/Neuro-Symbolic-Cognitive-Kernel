@@ -46,6 +46,8 @@ class SubstrateResult:
     uncertainty_bounds: Optional[tuple] = None
     encoding_stats: Optional[Dict[str, Any]] = None
     procedural_hit: bool = False
+    # V26 societal context
+    societal_context: Optional[Dict[str, Any]] = None
 
 
 class NSCKSubstrate:
@@ -121,6 +123,10 @@ class NSCKSubstrate:
         # V16: Auto-seed if enabled
         if getattr(self.config, 'enable_seeding', False):
             self._auto_seed()
+
+        # V26: Societal HyperVector router (lazy; created by init_societal_world)
+        self._societal_manager = None
+        self._societal_router = None
 
         # V4: Wire SNN perception to semantic memory for symbol grounding.
         # This populates the concept mapper from SemanticMemory HVs so that
@@ -310,6 +316,23 @@ class NSCKSubstrate:
         except Exception:
             pass
 
+        # V26: societal context routing
+        societal_ctx: Optional[Dict[str, Any]] = None
+        try:
+            _soc_mgr = self._ensure_societal_world()
+            _soc_router = self._societal_router
+            if _soc_mgr is not None and _soc_router is not None:
+                # Use the ingest HV if available; fall back to hash-seeded HV
+                import python.core.vsa.hypervec_shim as _hv_mod
+                _query_hv = self._last_ingest_hv
+                if _query_hv is None:
+                    _query_hv = _hv_mod.HyperVector(
+                        seed=abs(hash(str(input_data))) % (2 ** 31)
+                    )
+                societal_ctx = _soc_router.route(_query_hv, task_tag=task_tag)
+        except Exception:
+            pass
+
         return SubstrateResult(
             chosen_action=cog_state.chosen_action,
             confidence=cog_state.confidence,
@@ -321,6 +344,7 @@ class NSCKSubstrate:
             kle_uncertainty=kle,
             uncertainty_bounds=ubounds,
             encoding_stats=enc_stats,
+            societal_context=societal_ctx,
         )
 
     def process_multimodal(
@@ -633,6 +657,18 @@ class NSCKSubstrate:
         # Update conformal calibration
         try:
             self.conformal.calibrate([1.0 - reward], labels=[reward >= 0])
+        except Exception:
+            pass
+        # V26: auto-register action concept in societal world
+        try:
+            router = self._societal_router
+            if router is not None and self._last_ingest_hv is not None:
+                router.register_action(
+                    action=action,
+                    hv=self._last_ingest_hv,
+                    domain="actions",
+                    reward=reward,
+                )
         except Exception:
             pass
 
@@ -977,3 +1013,95 @@ class NSCKSubstrate:
                 domain_stats[d] = self._domain_tagger.get_domain_models(d)
         stats["domain_breakdown"] = domain_stats
         return stats
+
+    # ------------------------------------------------------------------
+    # V26: Societal Hypervector Knowledge Representation
+    # ------------------------------------------------------------------
+
+    def init_societal_world(
+        self,
+        concepts: Optional[List[Dict[str, Any]]] = None,
+    ) -> "SocietyManager":
+        """Initialise (or reinitialise) the societal knowledge graph.
+
+        Parameters
+        ----------
+        concepts:
+            Optional list of dicts with keys ``concept_id``, ``domain_path``,
+            and ``role``.  Each concept's HV is drawn from the substrate's
+            semantic memory (or freshly generated if absent).
+
+        Returns
+        -------
+        SocietyManager
+            The newly created manager, also stored as ``self._societal_manager``.
+        """
+        from python.core.societal.society_manager import SocietyManager
+        from python.core.societal.societal_context_router import SocietalContextRouter
+        from python.core.societal.living_hypervector import LivingHyperVector
+        import python.core.vsa.hypervec_shim as _hv_mod
+
+        mgr = SocietyManager(
+            bond_threshold=getattr(self.config, "societal_bond_threshold", 0.65),
+            max_bonds=getattr(self.config, "societal_max_bonds", 8),
+            bond_decay_rate=getattr(self.config, "societal_bond_decay", 0.01),
+            activation_decay_rate=getattr(self.config, "societal_activation_decay", 0.05),
+            activation_spread_factor=getattr(self.config, "societal_activation_spread", 0.4),
+            auto_cluster_interval=getattr(self.config, "societal_auto_cluster_interval", 10),
+        )
+
+        # Register concepts supplied by caller
+        for concept_data in (concepts or []):
+            cid = concept_data.get("concept_id", "")
+            if not cid:
+                continue
+            # Try to retrieve HV from semantic memory, else create a fresh one
+            hv = None
+            try:
+                hv = self._engine.semantic_memory.get_concept(cid)
+            except Exception:
+                pass
+            if hv is None:
+                hv = _hv_mod.HyperVector(seed=abs(hash(cid)) % (2 ** 31))
+
+            lhv = LivingHyperVector(
+                concept_id=cid,
+                hv=hv,
+                domain_path=concept_data.get("domain_path", []),
+                role=concept_data.get("role", "leaf"),
+                initial_activation=concept_data.get("initial_activation", 0.5),
+                birth_epoch=mgr.epoch,
+                metadata=concept_data.get("metadata", {}),
+            )
+            mgr.register(lhv)
+
+        self._societal_manager = mgr
+        self._societal_router = SocietalContextRouter(
+            manager=mgr,
+            top_k=getattr(self.config, "societal_top_k", 5),
+            activation_delta=0.3,
+            min_similarity=getattr(self.config, "societal_min_similarity", 0.55),
+            auto_register=True,
+        )
+        logger.info(
+            "[SUBSTRATE-V26] Societal world initialised with %d concepts", len(mgr)
+        )
+        return mgr
+
+    def _ensure_societal_world(self) -> Optional["SocietyManager"]:
+        """Return the societal manager, lazily creating it if needed."""
+        if self._societal_manager is None and getattr(
+            self.config, "enable_societal", False
+        ):
+            self.init_societal_world()
+        return self._societal_manager
+
+    @property
+    def societal_manager(self) -> Optional["SocietyManager"]:
+        """Access the societal manager (None if not initialised)."""
+        return self._societal_manager
+
+    @property
+    def societal_router(self) -> Optional["SocietalContextRouter"]:
+        """Access the societal context router (None if not initialised)."""
+        return self._societal_router
