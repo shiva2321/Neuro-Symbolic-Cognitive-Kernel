@@ -136,6 +136,28 @@ class FHRRVector:
         v.phasors = np.exp(1j * phases).astype(np.complex128)
         return v
 
+    def drift(self, target: "FHRRVector", rate: float) -> "FHRRVector":
+        """
+        Slowly drift this FHRRVector toward a target vector by a given rate.
+        Used to model semantic temporal evolution or phase shifts.
+        """
+        w = max(0.0, min(1.0, float(rate)))
+        # Vector interpolation on the unit circle (slerp approximation for phasors)
+        # Bundle them with specific weighting
+        a = self.phasors * (1.0 - w)
+        b = target.phasors * w
+        combined = a + b
+        
+        magnitudes = np.abs(combined)
+        magnitudes[magnitudes == 0] = 1.0
+        return FHRRVector.from_phasors(combined / magnitudes)
+        
+    def hybridize(self, context: "FHRRVector") -> "FHRRVector":
+        """
+        Polysemy hybridization (sp3, sp2, sp). 
+        Contextuate the vector by binding it temporarily to the context phasor.
+        """
+        return self.bind(context)
 
 class FHRRMemory:
     """Associative memory using FHRR phasors."""

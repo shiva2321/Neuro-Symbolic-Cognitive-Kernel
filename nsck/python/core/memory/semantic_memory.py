@@ -13,6 +13,7 @@ import os
 import heapq
 from typing import Dict, List, Any, Optional, Set, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
+from python.core.memory.societal_knowledge_world import SocietalKnowledgeWorld
 
 # V3: optional HNSW index (external hnswlib)
 try:
@@ -234,8 +235,10 @@ class SemanticMemory:
             self._hnsw_enabled = False
             if _HNSWLIB_AVAILABLE:
                 logger.info("[SEMANTIC] HNSW index enabled (hnswlib)")
-            else:
                 logger.info("[SEMANTIC] HNSW index enabled (pure-Python NSW fallback)")
+
+        # V5: Societal Knowledge World Orchestrator
+        self.societal_world = SocietalKnowledgeWorld(dim=getattr(config, 'hv_dimension', 10240) if config else 10240)
 
     def _init_hnsw(self, dim: int):
         """Lazily initialise the ANN index once the HV dimension is known."""
@@ -338,6 +341,10 @@ class SemanticMemory:
                         self._hnsw_index.add_item(bits)
             except Exception as e:
                 logger.debug("[SEMANTIC] ANN index add failed: %s", e)
+                
+        # V5: Inject into Societal World
+        self.societal_world.ingest_concept(concept_name, hv, source="semantic")
+        self.societal_world.tick_world()
     
     def get_concept(self, concept_name: str) -> Optional[hypervec_rs.HyperVector]:
         """Retrieve the hypervector for a given concept."""
@@ -379,6 +386,9 @@ class SemanticMemory:
 
         # Update or create edge
         self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
+        
+        # V5: Societal Valence Bonding (record co-activation)
+        self.societal_world.record_co_activation([concept1, concept2])
 
     def _apply_belief_revision(
         self, concept1: str, relation: str, concept2: str, timestamp: float

@@ -1,0 +1,26 @@
+[package]
+name = "rust_societal"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "societal_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+rand = "0.8"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Concurrency & parallelism
+rayon = "1.10"           
+parking_lot = "0.12"     
+dashmap = "6.0"          
+
+# Math
+nalgebra = "0.33"
+numpy = "0.21"
+crossbeam = "0.8.4"
+tokio = "1.50.0"
+rusqlite = "0.38.0"

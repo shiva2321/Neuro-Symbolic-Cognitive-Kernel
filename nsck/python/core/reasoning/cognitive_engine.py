@@ -45,6 +45,8 @@ from python.core.reasoning.causal_reasoning import CausalGraph, CausalReasoner, 
 from python.core.cognitive.self_model import SelfModel
 from python.core.cognitive.theory_of_mind import TheoryOfMind
 from python.core.cognitive.metacognition import SafetyGate
+from python.core.reasoning.societal_context_router import SocietalContextRouter
+from python.core.reasoning.narrative_engine import NarrativeEngine
 from python.core.integration.persistence import BrainStore
 from python.core.integration.brain_fusion import BrainFusion, TaskBrain
 from python.core.language.universal_input import UniversalInput
@@ -170,10 +172,19 @@ class CognitiveEngine:
         self.explainer = ExplanationGenerator()
         self.fusion = BrainFusion()
         self.math_reasoner = MathReasoner()
+        
+        # V5: Societal World Context
+        self.societal_world = self.semantic_memory.societal_world
+        
         self.active_inference = ActiveInferenceLearner(
             curiosity_module=self.curiosity,
             safety_threshold=0.7,
+            societal_world=self.societal_world
         )
+        
+        # Narrative Reasoning
+        self.societal_router = SocietalContextRouter(self.societal_world)
+        self.narrative_engine = NarrativeEngine(self.societal_world)
 
         # --- Language ---
         self.universal_input = UniversalInput()
@@ -740,6 +751,22 @@ class CognitiveEngine:
             )
             if planner_coalition:
                 coalitions.append(planner_coalition)
+                
+        # E2. [V5] SOCIETAL NARRATIVE coalition
+        if not fast_mode and not goto_action_determination:
+            if hasattr(self, 'narrative_engine') and situation_hv is not None:
+                # Goal HV - dummy target to invoke cross-domain routing
+                goal_hv = self.get_concept_hv("survival_goal") 
+                path = self.narrative_engine.generate_narrative_path(situation_hv, goal_hv)
+                if path and path[-1].get("stage") != "Failed":
+                    next_domain = path[1].get("domain_concept", "Unknown") if len(path) > 1 else path[0].get("domain_concept", "Unknown")
+                    coalitions.append(Coalition(
+                        source="NARRATIVE",
+                        content=f"Proceed via domain: {next_domain}",
+                        base_salience=0.6,
+                        relevance=0.4,
+                        sender_confidence=0.7,
+                    ))
 
         # Active inference (V8) — adjust coalition salience by free energy
         if self.config.enable_active_inference and situation_hv is not None:

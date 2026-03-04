@@ -759,6 +759,47 @@ class NSCKSubstrate:
             self._transplant_projectors[domain_name] = pipeline._projectors[domain_name]
 
         return report
+        
+    def societal_transplant(
+        self,
+        model: Any,
+        domain_name: str = "default",
+        strategy: Optional[str] = None,
+        calibration_epochs: Optional[int] = None,
+        save_pack: Optional[str] = None,
+        n_domains: int = 5,
+    ) -> Any:
+        """Transplant knowledge into Societal Knowledge World and bootstrap emergent domains."""
+        if not getattr(self.config, "enable_transplant", False):
+            raise RuntimeError(
+                "Transplant is disabled. Set NSCKConfig.enable_transplant=True."
+            )
+
+        from python.core.transplant.pipeline import TransplantPipeline
+
+        eff_strategy = strategy or getattr(
+            self.config, "transplant_strategy", "svd_factored"
+        )
+        eff_epochs = calibration_epochs if calibration_epochs is not None else int(
+            getattr(self.config, "transplant_calibration_epochs", 10)
+        )
+
+        pipeline = TransplantPipeline(config=self.config)
+        report = pipeline.societal_transplant(
+            model=model,
+            domain_name=domain_name,
+            strategy=eff_strategy,
+            calibration_epochs=eff_epochs,
+            save_pack_path=save_pack,
+            cognitive_engine=self._engine,
+            societal_world=getattr(self._engine.semantic_memory, "societal_world", None),
+            n_domains=n_domains,
+        )
+
+        if domain_name in pipeline._projectors:
+            self._transplant_projectors[domain_name] = pipeline._projectors[domain_name]
+
+        return report
 
     # ── NSCK-UPMA Vision Absorption API ──────────────────────────────────
 

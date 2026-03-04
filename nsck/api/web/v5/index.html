@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSCK Societal World V5 | Neuro-Symbolic Cognitive Kernel</title>
+    <meta name="description" content="V5 Dashboard for Emergent Knowledge Domains and Human-Society Modeling.">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=Outfit:wght@200;400;700&display=swap" rel="stylesheet">
+</head>
+<body class="dark-theme">
+    <div class="glass-orb orb-1"></div>
+    <div class="glass-orb orb-2"></div>
+    
+    <header class="main-header">
+        <div class="logo">
+            <span class="accent-text">NSCK</span> Societal World <span class="version-tag">V5</span>
+        </div>
+        <nav class="top-nav">
+            <div class="stat-item">
+                <span class="label">Epoch</span>
+                <span id="stat-epoch" class="value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">Population</span>
+                <span id="stat-population" class="value">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="label">Domains</span>
+                <span id="stat-domains" class="value">0</span>
+            </div>
+            <button id="btn-tick" class="premium-button">Advance Epoch</button>
+        </nav>
+    </header>
+
+    <main class="dashboard-grid">
+        <section class="visualizer-container glass-card">
+            <div class="card-header">
+                <h2>Knowledge Society <span class="subtitle">Hierarchical Emergence</span></h2>
+                <div class="vis-controls">
+                    <button id="view-mode" class="toggle-btn">Galaxy View</button>
+                    <button id="zoom-in" class="ctrl-btn">+</button>
+                    <button id="zoom-out" class="ctrl-btn">-</button>
+                </div>
+            </div>
+            <canvas id="societal-canvas"></canvas>
+            <div id="vis-overlay" class="vis-overlay">
+                <p id="selection-hint">Select a Domain to explore internal Neighborhoods</p>
+            </div>
+        </section>
+
+        <aside class="sidebar-right">
+            <section class="info-panel glass-card" id="detail-panel">
+                <div class="card-header">
+                    <h3 id="detail-title">World Overview</h3>
+                </div>
+                <div class="detail-content" id="detail-body">
+                    <p>System initialized. Waiting for concept ingestion...</p>
+                </div>
+            </section>
+
+            <section class="telemetry-panel glass-card">
+                <div class="card-header">
+                    <h3>Cognitive Traces</h3>
+                </div>
+                <div class="trace-log" id="trace-log">
+                    <div class="trace-entry system">System Ready.</div>
+                </div>
+            </section>
+        </aside>
+    </main>
+
+    <footer class="main-footer">
+        <div class="power-status">
+            <span class="pulse"></span> Kernel Online
+        </div>
+        <div class="copyright">
+            &copy; 2026 NSCK Advanced Agentic Systems
+        </div>
+    </footer>
+
+    <script src="societal_visualizer.js"></script>
+    <script src="dashboard.js"></script>
+</body>
+</html>

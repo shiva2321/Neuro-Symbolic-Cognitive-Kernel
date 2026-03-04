@@ -6,8 +6,8 @@ The **Neuro-Symbolic Cognitive Kernel (NSCK)** is a Python/Rust cognitive
 architecture that fuses Vector Symbolic Architectures (VSA), spiking neural
 networks, global workspace theory, and symbolic reasoning into a single
 substrate. Development began with a 10,240-bit binary hypervector core and has
-grown over thirteen versions into a 94-module, 232-class system spanning
-~36 K lines of Python and ~4.3 K lines of Rust.
+grown over fourteen versions into a 102-module, 245-class system spanning
+~40 K lines of Python and ~4.8 K lines of Rust.
 
 This document records what was added in each version and outlines future
 directions. Every entry below has been verified against the codebase.
@@ -35,6 +35,7 @@ directions. Every entry below has been verified against the codebase.
 | **V15** | Model Transplantation | TransplantPipeline, ModelHarvester, SVDFactoredProjector, STDPCalibrator, TransplantValidator | 1 375 |
 | **V16** | Security + Lifelong + Eval + Seeding | KnowledgePack gzip+JSON (no pickle), EWC, NSCK-ES evaluation suite, ConceptNetLoader/SemanticSeeder/BertSeeder | 1 420 |
 | **V17** | Enrichment Layer + Glass-Box | CausalEnricher, PerceptualEnricher, SemanticEnricher, GlassBoxTracer, CrossModalEnricher, 10 new config flags, vsa_capability_benchmark | 1 465 (1 607 with Rust) |
+| **V5 (Societal)** | Societal Knowledge World | Hierarchical "Human Society" model, Spectral RG coarse-graining, Hodge Laplacians (L0-L2), TDA Persistent Homology monitoring | 1 742 |
 
 ---
 
@@ -368,3 +369,28 @@ version is tagged.*
    around existing modules — no changes to existing APIs.
 2. **No neural dependencies**: All V17 enrichment is pure Python/numpy.
 3. **Glass-box by default**: The tracer is zero-cost when disabled (`enabled=False`).
+
+---
+
+## V5 — Societal Knowledge World (March 2026)
+
+**Status**: ✅ Complete
+
+### Deliverables
+
+| Module | Status |
+|--------|--------|
+| `SocietalKnowledgeWorld` | ✅ Implemented |
+| `Hierarchical Domain Model` | ✅ Implemented |
+| `SpectralLaplacianRG` | ✅ Implemented |
+| `HodgeLaplacian (L0-L2)` | ✅ Implemented |
+| `TDAHealthMonitor` | ✅ Implemented |
+| `PercolationMonitor` | ✅ Implemented |
+| `V5 Web Dashboard` | ✅ Implemented |
+| `SocietalHNSW` | ✅ Implemented |
+
+### Design Principles
+
+1. **Knowledge as a Society**: Concepts are "citizens" with agency, forming organic hierarchies (Town -> City -> State).
+2. **Topological Resilience**: Semantic health is monitored via persistent homology and power-law distributions.
+3. **Hierarchical Routing**: Reasoning uses the societal structure for both local and global inference.

@@ -38,6 +38,15 @@ try:
 except ImportError:
     pass
 
+_USE_SOCIETAL_RUST = False
+_societal_ext: types.ModuleType | None = None
+
+try:
+    import societal_rs as _societal_ext
+    _USE_SOCIETAL_RUST = True
+except ImportError:
+    pass
+
 if not _USE_RUST:
     if multiprocessing.current_process().name == "MainProcess":
         print(">> [VSA] Using Python Fallback (via shim)")
@@ -427,6 +436,26 @@ __all__ = [
     "get_rust_help",
     "get_backend_info",
 ]
+
+if _USE_SOCIETAL_RUST and _societal_ext is not None:
+    LivingHVStore = getattr(_societal_ext, "LivingHVStore", None)
+    SocietalHNSW = getattr(_societal_ext, "SocietalHNSW", None)
+    SpectralRG = getattr(_societal_ext, "SpectralRG", None)
+    PercolationDetector = getattr(_societal_ext, "PercolationDetector", None)
+    TDARipser = getattr(_societal_ext, "TDARipser", None)
+    __all__.extend([
+        "LivingHVStore",
+        "SocietalHNSW", 
+        "SpectralRG",
+        "PercolationDetector",
+        "TDARipser"
+    ])
+else:
+    LivingHVStore = None
+    SocietalHNSW = None
+    SpectralRG = None
+    PercolationDetector = None
+    TDARipser = None
 
 
 def get_backend_info() -> dict:

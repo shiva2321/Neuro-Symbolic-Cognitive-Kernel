@@ -33,9 +33,11 @@ class ActiveInferenceLearner:
         self,
         curiosity_module=None,
         safety_threshold: float = 0.7,
+        societal_world=None,
     ):
         self.curiosity = curiosity_module
         self.safety_threshold = safety_threshold
+        self.societal_world = societal_world
         self._world_model: Dict[str, Dict[str, Any]] = {}
         self._last_states: Dict[str, Any] = {}
 
@@ -84,7 +86,27 @@ class ActiveInferenceLearner:
 
     def free_energy(self, action: str, state_hv) -> float:
         """F(action) = prediction_error - epistemic_value. Lower = more preferred."""
-        return self.prediction_error(action, state_hv) - self.epistemic_value(action, state_hv)
+        base_fe = self.prediction_error(action, state_hv) - self.epistemic_value(action, state_hv)
+        
+        # V5: Societal Bias
+        # If the action connects to a highly stable "diamond" concept or has strong valence 
+        # bonds in the societal graph, it reduces uncertainty (lowers Free Energy).
+        if self.societal_world is not None:
+            # Check the action concept
+            if action in self.societal_world.registry:
+                lhv = self.societal_world.registry[action]
+                if lhv.stability_class == "diamond":
+                    base_fe -= 0.15 # Highly predictable
+                elif lhv.stability_class == "gas":
+                    base_fe += 0.10 # Unpredictable/volatile
+                    
+                # Check valence bonds with current state context
+                state_landmarks = self.societal_world.semantic_search(state_hv, k=3)
+                for lm_id, score in state_landmarks:
+                    if lm_id in lhv.current_bonds:
+                        base_fe -= (lhv.current_bonds[lm_id] * 0.2) # High bonding = predictable path
+                        
+        return float(base_fe)
 
     def should_veto(self, action: str, state_hv) -> bool:
         """Return True if free energy exceeds safety threshold."""

@@ -237,41 +237,34 @@ class TransplantPipeline:
         calibration_epochs: Optional[int] = None,
         save_pack_path: Optional[str] = None,
         cognitive_engine: Any = None,
-        societal_manager: Any = None,
-        bond_threshold: float = 0.65,
-        cluster_resolution: float = 1.0,
+        societal_world: Any = None,
+        n_domains: int = 5,
     ) -> "TransplantReport":
-        """Transplant + inject concepts as LivingHyperVectors into a SocietyManager.
+        """Transplant + inject concepts and bootstrap emergent domain cities.
 
         Extends :meth:`run` by additionally:
 
-        1. Wrapping each projected HV as a :class:`~python.core.societal.LivingHyperVector`
-           in the supplied *societal_manager*.
-        2. Running :meth:`~python.core.societal.SocietyManager.auto_bond` to
-           form bonds between similar concepts.
-        3. Running Leiden clustering at *cluster_resolution* to assign community
-           membership.
+        1. Extracting the dense embeddings directly.
+        2. Running :class:`~python.core.transplant.domain_bootstrapper.DomainBootstrapper`
+           to forcefully seed Knowledge Neighborhoods and Knowledge Domains using
+           K-Means/Spectral clustering.
+
 
         Parameters
         ----------
-        societal_manager:
-            A :class:`~python.core.societal.SocietyManager` instance.  If
-            ``None``, a fresh one is created and returned via the report's
-            ``metadata`` dict (key ``"societal_manager"``).
-        bond_threshold:
-            Passed to ``SocietyManager.bond_threshold`` when creating a new
-            manager.
-        cluster_resolution:
-            Leiden γ parameter for community detection.
+        societal_world:
+            A :class:`~python.core.memory.societal_knowledge_world.SocietalKnowledgeWorld` instance.
+            If ``None``, it tries to extract it from the cognitive engine.
+        n_domains:
+            Number of emergent domains to bootstrap via K-Means clustering.
 
         Returns
         -------
         TransplantReport
-            Same report as :meth:`run`, with societal metadata added to
-            ``report.metadata``.
+            Same report as :meth:`run`.
         """
-        from python.core.societal.society_manager import SocietyManager
-        from python.core.societal.living_hypervector import LivingHyperVector
+        from python.core.memory.societal_knowledge_world import SocietalKnowledgeWorld
+        from python.core.transplant.domain_bootstrapper import DomainBootstrapper
 
         # Run standard transplant pipeline first
         report = self.run(
@@ -283,53 +276,49 @@ class TransplantPipeline:
             cognitive_engine=cognitive_engine,
         )
 
-        # Build / reuse SocietyManager
-        if societal_manager is None:
-            societal_manager = SocietyManager(bond_threshold=bond_threshold)
+        # Extract or Require Societal World
+        if societal_world is None and cognitive_engine is not None:
+            if hasattr(cognitive_engine, "semantic_memory") and hasattr(cognitive_engine.semantic_memory, "societal_world"):
+                societal_world = cognitive_engine.semantic_memory.societal_world
+                
+        if societal_world is None:
+            _log.warning("[SOCIETAL] No SocietalKnowledgeWorld provided or found in CognitiveEngine. Skipping societal seeding.")
+            return report
 
-        # Retrieve the projected codebook from the cache
-        codebook: Dict[str, Any] = self._codebooks.get(domain_name, {})
-        if not codebook:
-            _log.warning(
-                "[SOCIETAL] No codebook found for domain %r; "
-                "societal transplant skipped.", domain_name
-            )
-        else:
-            epoch = societal_manager.epoch
-            for token, hv in codebook.items():
-                lhv = LivingHyperVector(
-                    concept_id=token,
-                    hv=hv,
-                    domain_path=[domain_name],
-                    role="leaf",
-                    birth_epoch=epoch,
-                    metadata={"source_model": domain_name},
-                )
-                societal_manager.register(lhv)
-
-            # Form bonds between similar concepts
-            tokens_list = list(codebook.keys())
-            societal_manager.auto_bond(candidates=tokens_list, bond_type="similarity")
-
-            # Run Leiden clustering
-            cluster_result = societal_manager.leiden_cluster(cluster_resolution)
-            _log.info(
-                "[SOCIETAL] Leiden: %d communities, Q=%.4f for domain %r",
-                cluster_result.n_communities,
-                cluster_result.modularity,
-                domain_name,
-            )
+        # Retrieve the harvested dense embeddings, not just the codebook
+        # We need the dense vectors for Domain Bootstrapping
+        try:
+            # We must re-harvest to get the dense embeddings because they aren't cached 
+            # as easily as codebooks, or we can use the Codebook if it's the raw dense one
+            # Actually, we can use the semantic memory's HVs if we want, but DomainBootstrapper expects dense codebook.
+            # Instead of re-harvesting, let's just extract the raw embeddings mapping.
+            harvester = ModelHarvester()
+            harvest = harvester.harvest(model)
+            
+            if harvest.model_type != "error":
+                bootstrapper = DomainBootstrapper(societal_world)
+                
+                # List of labels aligned with the dense embeddings
+                labels = [""] * len(harvest.vocab_mapping)
+                for lbl, idx in harvest.vocab_mapping.items():
+                    if idx < len(labels):
+                        labels[idx] = lbl
+                        
+                bootstrapper.bootstrap_from_codebook(harvest.embeddings, labels, n_domains=5)
+                
+        except Exception as e:
+            _log.error(f"Societal Transplant failed during bootstrapping: {e}")
 
         # Attach societal info to report metadata
         if not hasattr(report, "metadata") or report.metadata is None:
             try:
                 import dataclasses as _dc
                 report = _dc.replace(
-                    report, metadata={"societal_manager": societal_manager}
+                    report, metadata={"societal_world": societal_world}
                 )
             except Exception:
                 pass
         else:
-            report.metadata["societal_manager"] = societal_manager
+            report.metadata["societal_world"] = societal_world
 
         return report

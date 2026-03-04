@@ -1,8 +1,8 @@
 # Neuro-Symbolic Cognitive Kernel (NSCK)
 
-**V4 (V3–V18 Consolidated) · February 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
+**V5 (Societal Knowledge World) · March 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
 
-94+ modules · 232+ classes · ~36K LOC Python · ~4.3K LOC Rust · 1,669 tests passing
+102+ modules · 245+ classes · ~40K LOC Python · ~4.8K LOC Rust · 1,742 tests passing
 
 ---
 
@@ -42,7 +42,8 @@ achieve and where it falls short.
 │  3  REASONING          Causal(ΔP) · Rules · Planning(BFS)       │
 │                        Analogy · Spatial · Math · Counterfactual │
 ├──────────────────────────────────────────────────────────────────┤
-│  2  MEMORY             Semantic(KG+HNSW) · Episodic(Rust)       │
+│  2  MEMORY             Societal(Hierarchical City Model)         │
+│                        Semantic(KG+HNSW) · Episodic(Rust)       │
 │                        Procedural(V13) · CrossModal(V13)         │
 ├──────────────────────────────────────────────────────────────────┤
 │  1  PERCEPTION         10 Modality Adapters · SignalIngestor     │
@@ -54,8 +55,8 @@ achieve and where it falls short.
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-**Global Workspace coalitions:** RULES · MEMORY · EXPLORATION · Q_LEARNING · PLANNER · MATH · EXTERNAL
-**V13 additions:** KLE uncertainty, conformal prediction, pattern generalisation, cross-modal associative memory, signal ingestor, procedural skill cache.
+**Global Workspace coalitions:** RULES · MEMORY · EXPLORATION · Q_LEARNING · PLANNER · MATH · EXTERNAL · SOCIETAL
+**V5 additions:** Hierarchical "Human Society" model, Spectral RG coarse-graining, Hodge Laplacians (L0-L2), TDA Persistent Homology monitoring.
 
 ---
 
@@ -67,7 +68,7 @@ achieve and where it falls short.
 | **SNN** | LIF neurons, STDP learning, rate & temporal coding. Rust backend (`snn_rs`). |
 | **GWT** | Coalition competition, broadcast, mental rehearsal with danger veto, KLE uncertainty (V13). |
 | **Dual Process** | System 1 (fast pattern match) / System 2 (deliberate search). |
-| **Memory** | Semantic (knowledge graph + HNSW), Episodic (Rust-backed, 10 K capacity), Procedural (V13 skill cache), Cross-Modal Associative (V13). |
+| **Memory** | Societal (Hierarchical "Human Society" City Model), Semantic (knowledge graph + HNSW), Episodic (Rust-backed, 10 K capacity), Procedural (V13 skill cache), Cross-Modal Associative (V13). |
 | **Reasoning** | Causal (ΔP, MI confounder detection), rules (learning + neural scoring), planning (BFS), analogy (functoriality), spatial, math, belief revision, counterfactuals. |
 | **Language** | Left-corner parser, construction grammar, frame semantics, coreference, distributional semantics, pragmatics, NgramNLU (151 K sent/s), FluentNLG, dialogue manager. |
 | **Perception** | 10 modality adapters (text, dict, numeric, numeric sequence, SNN, multimodal, stream, image, audio, video), SignalIngestor (V13), UniversalHVEncoder (V13). |
@@ -176,6 +177,9 @@ Detailed docs live in [`nsck/docs/`](nsck/docs/):
 | [TESTING.md](nsck/docs/TESTING.md) | Test suite guide |
 | [NSCK_ROADMAP_AND_PLAN.md](nsck/docs/NSCK_ROADMAP_AND_PLAN.md) | Roadmap and future plans |
 | [TRANSPARENCY_GUARANTEE.md](nsck/docs/TRANSPARENCY_GUARANTEE.md) | Explainability commitments |
+| [societal/SOCIETAL_ARCHITECTURE.md](nsck/docs/societal/SOCIETAL_ARCHITECTURE.md) | V5 Hierarchical City Model |
+| [societal/SOCIETAL_MATH_PROOFS.md](nsck/docs/societal/SOCIETAL_MATH_PROOFS.md) | Spectral RG & Hodge Laplacians |
+| [societal/SOCIETAL_API_REFERENCE.md](nsck/docs/societal/SOCIETAL_API_REFERENCE.md) | V5 Dashboard API reference |
 
 ---
 
@@ -190,7 +194,8 @@ Companion papers are in [`research/papers/`](research/papers/):
 5. **Paper 5 — Model Transplantation** — Zero-shot projector-based knowledge transplantation
 6. **Paper 6 — Active Inference** — Free energy minimization for action selection (FEP)
 7. **Paper 7 — Memory Architecture** — Four-store memory system with Rust acceleration
-8. **Paper 8 — Safety** — Conformal prediction, veto gates, and transparency guarantees
+8. **Paper 8 — Societal Hypervectors** — Multi-scale Hierarchical Knowledge Representation
+9. **Paper 9 — Safety** — Conformal prediction, veto gates, and transparency guarantees
 
 ---
 
