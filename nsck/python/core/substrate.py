@@ -96,8 +96,13 @@ class NSCKSubstrate:
         from python.core.learning.conformal_wrapper import ConformalWrapper
         self.signal_ingestor = SignalIngestor()
         self.universal_encoder = UniversalHVEncoder()
-        self.cross_modal_memory = CrossModalAssociativeMemory()
-        self.procedural_memory = ProceduralMemory()
+        self.cross_modal_memory = getattr(self._engine, 'cross_modal_memory', None) or CrossModalAssociativeMemory()
+        self.procedural_memory = getattr(self._engine, 'procedural_memory', None) or ProceduralMemory()
+        # Share back to engine if engine used a different instance
+        if hasattr(self._engine, 'cross_modal_memory'):
+            self._engine.cross_modal_memory = self.cross_modal_memory
+        if hasattr(self._engine, 'procedural_memory'):
+            self._engine.procedural_memory = self.procedural_memory
         self.drift_detector = ConceptDriftDetector()
         self.conformal = ConformalWrapper(alpha=0.1)
         self._last_ingest_hv = None  # For procedural memory lookup
@@ -530,6 +535,14 @@ class NSCKSubstrate:
     def sleep(self, task_tag: Optional[str] = None) -> Dict[str, Any]:
         """Trigger offline consolidation and generalization."""
         self._engine.sleep(task_tag)
+        # V5: Drift detection — snapshot key concept HVs after consolidation
+        if self.drift_detector is not None and hasattr(self._engine, 'semantic_memory'):
+            try:
+                _sm = self._engine.semantic_memory
+                for _concept, _hv in list(getattr(_sm, 'concept_hvs', {}).items())[:50]:
+                    self.drift_detector.check(_concept, _hv)
+            except Exception:
+                pass
         return {"sleep_cycles": self._engine.stats.get("sleep_cycles", 0)}
 
     def remember(self, query: Any, task_tag: Optional[str] = None, top_k: int = 5) -> List[Dict]:
@@ -654,9 +667,16 @@ class NSCKSubstrate:
                 )
             except Exception:
                 pass
-        # Update conformal calibration
+        # Update conformal calibration — use actual engine confidence when available
         try:
-            self.conformal.calibrate([1.0 - reward], labels=[reward >= 0])
+            _engine_confidence = getattr(
+                getattr(self._engine, 'current_state', None),
+                'confidence', None
+            )
+            _calib_score = (1.0 - float(_engine_confidence)
+                            if _engine_confidence is not None
+                            else 1.0 - reward)
+            self.conformal.calibrate([_calib_score], labels=[reward >= 0])
         except Exception:
             pass
         # V26: auto-register action concept in societal world

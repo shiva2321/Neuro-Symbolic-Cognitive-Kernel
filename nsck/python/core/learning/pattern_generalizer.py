@@ -131,6 +131,12 @@ class CrossDomainTransferPipeline:
     def __init__(self, generalizer: Optional[PatternGeneralizer] = None) -> None:
         self.generalizer = generalizer or PatternGeneralizer()
         self._transfer_log: List[Dict[str, Any]] = []
+        # V5: Delegate rule-level transfer to TransferEngine
+        try:
+            from python.core.learning.cross_domain import TransferEngine
+            self._transfer_engine: Any = TransferEngine()
+        except Exception:
+            self._transfer_engine = None
 
     def register(
         self,
@@ -152,6 +158,8 @@ class CrossDomainTransferPipeline:
         """
         Find patterns from source_domain that match query, then check
         if they also match any patterns in target_domain.
+
+        Also delegates to TransferEngine for rule-level transfer results.
         """
         source_matches = self.generalizer.match(query_hv, domain=source_domain, top_k=top_k)
         results = []
@@ -171,6 +179,25 @@ class CrossDomainTransferPipeline:
                 }
                 results.append(result)
                 self._transfer_log.append(result)
+
+        # V5: Supplement with TransferEngine rule-level inferences
+        if self._transfer_engine is not None:
+            try:
+                rule_inferences = self._transfer_engine.transfer(source_domain, target_domain)
+                for inf in rule_inferences:
+                    result = {
+                        "source_pattern": f"{source_domain}:{inf.source_rule.source}",
+                        "source_sim": inf.confidence,
+                        "target_pattern": f"{target_domain}:{inf.target_source}",
+                        "target_sim": inf.confidence,
+                        "transfer_score": inf.confidence,
+                        "abstraction_level": 1,
+                        "rule_lifted": inf.provenance,
+                    }
+                    results.append(result)
+                    self._transfer_log.append(result)
+            except Exception:
+                pass
 
         results.sort(key=lambda x: x["transfer_score"], reverse=True)
         return results[:top_k]

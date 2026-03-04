@@ -177,10 +177,17 @@ class CognitiveEngine:
 
         # --- Language ---
         self.universal_input = UniversalInput()
-        # --- Language ---
-        self.universal_input = UniversalInput()
         self.language = LanguageModule(semantic_memory=self.semantic_memory, use_vsa=True)
         self.dialogue = DialogueManager(self, self.language, config=self.config)
+
+        # V5: VSANLUEngine — primary NLU (VSA-based, tried before NgramNLU)
+        self.vsa_nlu = None
+        try:
+            from python.core.language.vsa_nlu import VSANLUEngine
+            self.vsa_nlu = VSANLUEngine()
+            logger.info("VSANLUEngine (primary NLU) initialized")
+        except Exception as _exc:
+            logger.debug("VSANLUEngine init failed (NgramNLU fallback will be used): %s", _exc)
 
         # V11: NgramNLU integration
         self.ngram_nlu = None
@@ -285,6 +292,51 @@ class CognitiveEngine:
                 logger.info("ContinualLearner (EWC) initialized")
             except Exception as _exc:
                 logger.warning("ContinualLearner init failed: %s", _exc)
+
+        # --- V5: SpatialReasoner ---
+        self.spatial_reasoner = None
+        try:
+            from python.core.reasoning.spatial_reasoning import SpatialReasoner
+            self.spatial_reasoner = SpatialReasoner()
+            logger.info("SpatialReasoner initialized")
+        except Exception as _exc:
+            logger.warning("SpatialReasoner init failed: %s", _exc)
+
+        # --- V5: BeliefRevisionEngine ---
+        self.belief_revision = None
+        try:
+            from python.core.reasoning.belief_revision import BeliefScorer
+            self.belief_revision = BeliefScorer()
+            logger.info("BeliefRevision (BeliefScorer) initialized")
+        except Exception as _exc:
+            logger.warning("BeliefRevision init failed: %s", _exc)
+
+        # --- V5: ContextEngine ---
+        self.context_engine = None
+        try:
+            from python.core.reasoning.context_engine import ContextEngine
+            self.context_engine = ContextEngine(semantic_memory=self.semantic_memory)
+            logger.info("ContextEngine initialized")
+        except Exception as _exc:
+            logger.warning("ContextEngine init failed: %s", _exc)
+
+        # --- V5: EmotionSystem ---
+        self.emotion_system = None
+        try:
+            from python.core.cognitive.emotion_system import EmotionSystem
+            self.emotion_system = EmotionSystem()
+            logger.info("EmotionSystem initialized")
+        except Exception as _exc:
+            logger.warning("EmotionSystem init failed: %s", _exc)
+
+        # --- V5: MetaLearner ---
+        self.meta_learner = None
+        try:
+            from python.core.learning.meta_learning import MetaLearner
+            self.meta_learner = MetaLearner()
+            logger.info("MetaLearner initialized")
+        except Exception as _exc:
+            logger.warning("MetaLearner init failed: %s", _exc)
 
     # ------------------------------------------------------------------
     # Initialisation helpers
@@ -404,6 +456,17 @@ class CognitiveEngine:
             if task_tag not in self._ewc_importance_buffer:
                 self._ewc_importance_buffer[task_tag] = []
 
+        # V5: MetaLearner — select strategy for new task
+        if hasattr(self, 'meta_learner') and self.meta_learner is not None:
+            try:
+                strategy = self.meta_learner.select_strategy(task_tag)
+                logger.info(
+                    "Meta-learner selected strategy '%s' for task '%s'",
+                    strategy, task_tag,
+                )
+            except Exception as _exc:
+                logger.debug("MetaLearner strategy selection failed: %s", _exc)
+
     # ------------------------------------------------------------------
     # Core cognitive loop
     # ------------------------------------------------------------------
@@ -413,16 +476,19 @@ class CognitiveEngine:
         return hypervec_rs.HyperVector(hash(concept) % (2**32))
 
     def _get_state_key(self, state: Dict[str, Any], task_tag: str) -> str:
-        """Create a hashable key from state for Q-value lookup."""
-        # Only include relevant state features
-        if task_tag == "maze_navigation":
-            return f"{task_tag}:({state.get('position_x', 0)},{state.get('position_y', 0)})"
+        """Create a hashable key from state for Q-value lookup.
+
+        Uses position keys when available (position_x/position_y), otherwise
+        falls back to the first 5 sorted state values. Always prefixed with
+        the task_tag so keys are domain-scoped.
+        """
+        key_parts = [task_tag]
+        if "position_x" in state and "position_y" in state:
+            key_parts.append(f"({state['position_x']},{state['position_y']})")
         else:
-            # Generic state key (first 5 state values)
-            key_parts = [task_tag]
             for k, v in sorted(state.items())[:5]:
                 key_parts.append(f"{k}={v}")
-            return ":".join(key_parts)
+        return ":".join(key_parts)
     
     def _get_best_action_from_q(self, state_key: str, available_actions: List[str]) -> Optional[str]:
         """Get best action according to Q-values."""
@@ -438,8 +504,6 @@ class CognitiveEngine:
         
         # Otherwise choose best action
         best_action = max(q_vals, key=lambda x: x[1])[0]
-        return best_action
-
         return best_action
 
     def perceive_and_decide(
@@ -581,10 +645,32 @@ class CognitiveEngine:
         active_preds = list(percept.active_predicates)
         situation_hv = percept.situation_hv
 
-        # V11: NgramNLU enrichment for text inputs
-        if self.ngram_nlu is not None:
-            _text_input = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else ""
-            if isinstance(_text_input, str) and _text_input.strip():
+        # V5: ContextEngine — disambiguate text tokens before NLU processing
+        if self.context_engine is not None and isinstance(raw_state_dict.get("text"), str):
+            try:
+                from python.core.reasoning.context_engine import ContextFrame
+                _ctx_frame = ContextFrame(domain=task_tag, active_concepts=list(active_preds))
+                _text_tokens = raw_state_dict["text"].split()
+                for _word in _text_tokens[:20]:  # Limit to first 20 tokens
+                    self.context_engine.disambiguate(_word, _ctx_frame)
+            except Exception:
+                pass
+
+        # V5/V11: NLU enrichment — try VSANLUEngine first, NgramNLU as fallback
+        _text_input = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else ""
+        if isinstance(_text_input, str) and _text_input.strip():
+            _nlu_handled = False
+            # Primary: VSANLUEngine
+            if self.vsa_nlu is not None:
+                try:
+                    _intent_label, _intent_conf = self.vsa_nlu.classify(_text_input)
+                    if _intent_label:
+                        active_preds = list(active_preds) + [f"INTENT_{_intent_label.upper()}"]
+                        _nlu_handled = True
+                except Exception:
+                    pass
+            # Fallback: NgramNLU
+            if not _nlu_handled and self.ngram_nlu is not None:
                 try:
                     _nlu_result = self.ngram_nlu.process(_text_input)
                     _intent = _nlu_result.get("intent", {})
@@ -685,6 +771,24 @@ class CognitiveEngine:
                     relevance=0.1,
                     sender_confidence=min(0.9, 0.3 + visit_count * 0.1),
                 ))
+
+        # V5: SpatialReasoner — wire spatial predicates into coalition building
+        _SPATIAL_TERMS = {"near", "far", "above", "below", "left", "right", "adjacent", "between"}
+        if self.spatial_reasoner and any(
+            any(s in p for s in _SPATIAL_TERMS) for p in active_preds
+        ):
+            try:
+                spatial_result = self.spatial_reasoner.infer(active_preds, task_tag)
+                if spatial_result:
+                    coalitions.append(Coalition(
+                        source="SPATIAL",
+                        content=spatial_result.get("suggested_action", ""),
+                        base_salience=spatial_result.get("confidence", 0.5),
+                        relevance=0.7,
+                        sender_confidence=0.6,
+                    ))
+            except Exception:
+                pass
 
         # --- V3: Dual Process ---
         # When enabled, try System 1 (fast) coalitions first.
@@ -798,6 +902,20 @@ class CognitiveEngine:
             winner_name = "DEFAULT"
             trace["mode"] = "default"
             trace["winner"] = "DEFAULT"
+
+        # V5: BeliefRevision — trigger on low-confidence decisions
+        if (winner_coalition and winner_coalition.activation < 0.4
+                and self.belief_revision is not None):
+            try:
+                from python.core.reasoning.belief_revision import BeliefMetadata
+                _meta = BeliefMetadata(evidence_count=1, contradiction_count=0)
+                _should_revise, _reason = self.belief_revision.should_revise(
+                    _meta, new_evidence_supports=True
+                )
+                if _should_revise:
+                    trace["belief_revision"] = True
+            except Exception:
+                pass
 
         # 7. Generate explanation
         trace["confidence"] = confidence
@@ -1197,6 +1315,29 @@ class CognitiveEngine:
             _interval = getattr(self.config, 'ewc_consolidate_interval', 500)
             if self._ewc_update_count % _interval == 0:
                 self._compute_and_record_vsa_importance(task_tag)
+
+        # V5: EmotionSystem — update from reward and drive signals
+        if self.emotion_system is not None:
+            try:
+                _confidence = self.self_model.get_confidence(task_tag)
+                _novelty = 0.0
+                if self.current_state and self.current_state.situation_hv is not None:
+                    try:
+                        _novelty = self.curiosity.compute_novelty(
+                            self.current_state.situation_hv, task_tag
+                        )
+                    except Exception:
+                        pass
+                self.emotion_system.update_from_drives(
+                    drives={
+                        "reward": max(0.0, float(reward)),
+                        "confidence": float(_confidence),
+                        "novelty": float(_novelty),
+                    },
+                    reward=float(reward),
+                )
+            except Exception:
+                pass
 
         # V4: Auto-populate ProceduralMemory for positive-reward familiar states
         if (reward > 0.0 and self.current_state is not None and
@@ -1800,6 +1941,17 @@ class CognitiveEngine:
             if prototypes:
                 self.stats["prototypes_built"] += len(prototypes)
                 logger.info("[SLEEP] Built %d concept prototypes", len(prototypes))
+                # V5: L2-normalize continuous prototypes to prevent drift
+                for concept, prototype_hv in prototypes.items():
+                    if prototype_hv is not None and not hasattr(prototype_hv, 'bits'):
+                        try:
+                            import numpy as np
+                            norm = np.linalg.norm(prototype_hv)
+                            if norm > 1e-9:
+                                prototype_hv = prototype_hv / norm
+                                self.semantic_memory.concept_hvs[concept] = prototype_hv
+                        except Exception:
+                            pass
         except Exception as _exc:
             logger.debug("[SLEEP] Prototype building skipped: %s", _exc)
 
@@ -1844,6 +1996,17 @@ class CognitiveEngine:
                 self._compute_and_record_vsa_importance(_t)
                 self._continual_learner.consolidate_task(_t)
             self.stats["tasks_consolidated"] = self.stats.get("tasks_consolidated", 0) + len(_tasks)
+
+        # V5: ContinualLearner — explicit per-task consolidation
+        if hasattr(self, '_continual_learner') and self._continual_learner is not None:
+            _consolidate_tasks = [task_tag] if task_tag else list(
+                self.episodic_memory.recent.keys()
+            )
+            for _ct in _consolidate_tasks:
+                try:
+                    self._continual_learner.consolidate_task(_ct)
+                except Exception as e:
+                    logger.debug("Continual learning consolidation: %s", e)
 
         # V3: Homeostasis regulation after consolidation
         if self.config.enable_homeostasis and self.homeostasis is not None:

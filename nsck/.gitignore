@@ -2,6 +2,12 @@ python/data_mnist/
 __pycache__/
 *.pyc
 .DS_Store
+.venv/
+.idea/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
 
 # Rust extension build artifacts
 *.so

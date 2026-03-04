@@ -636,3 +636,58 @@ class SpatialReasoner:
                     f"  {e1} {rel} {e2} (distance={dist:.2f})"
                 )
         return "\n".join(lines)
+
+    def infer(
+        self,
+        active_predicates: List[str],
+        task_tag: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Infer a spatial action suggestion from active predicates.
+
+        Parameters
+        ----------
+        active_predicates : list of str
+            Currently active symbolic predicates (may contain spatial terms).
+        task_tag : str
+            The current task domain.
+
+        Returns
+        -------
+        dict or None
+            ``{"suggested_action": str, "confidence": float}`` if a spatial
+            inference can be made, else ``None``.
+        """
+        _SPATIAL_TERMS = {
+            "near": 0.7,
+            "far": 0.6,
+            "above": 0.8,
+            "below": 0.8,
+            "left": 0.75,
+            "right": 0.75,
+            "adjacent": 0.7,
+            "between": 0.65,
+        }
+        best_term: Optional[str] = None
+        best_conf: float = 0.0
+        for pred in active_predicates:
+            for term, conf in _SPATIAL_TERMS.items():
+                if term in pred and conf > best_conf:
+                    best_term = term
+                    best_conf = conf
+        if best_term is None:
+            return None
+        _action_map = {
+            "near": "APPROACH",
+            "far": "MOVE_TOWARD",
+            "above": "MOVE_DOWN",
+            "below": "MOVE_UP",
+            "left": "MOVE_RIGHT",
+            "right": "MOVE_LEFT",
+            "adjacent": "INTERACT",
+            "between": "NAVIGATE_THROUGH",
+        }
+        return {
+            "suggested_action": _action_map.get(best_term, "SPATIAL_NAVIGATE"),
+            "confidence": best_conf,
+            "spatial_term": best_term,
+        }
