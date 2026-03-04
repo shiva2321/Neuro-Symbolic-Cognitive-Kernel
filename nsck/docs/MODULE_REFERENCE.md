@@ -1,8 +1,9 @@
-# NSCK Module Reference — V4
+# NSCK Module Reference — V5
 
 Complete reference for every module in the NSCK codebase. ~96 core modules, ~232 classes across 13 subsystems. Every class and method listed here is taken directly from source code.
 
 > **V4 new modules** are marked *(V4 new)*. **V4 updated modules** are marked *(V4 updated)*.
+> **V5 wired modules** are marked *(V5 wired)* — these existed in V4 but are now connected into the main decision loop.
 
 > **Ground truth is always the source files** under `nsck/python/core/`, `nsck/api/`, and `nsck_ai_model/`.
 
@@ -506,17 +507,23 @@ The caller (`SemanticMemory.spread_activation`) falls through to the Python path
 
 ### `spatial_reasoning.py`
 
-**SpatialReasoner** — Spatial relation reasoning.
+**SpatialReasoner** — Spatial relation reasoning. *(V5 wired — `infer()` added, called in `decide()` coalition building)*
+
+| Method | Description |
+|--------|-------------|
+| `infer(predicates)` | Map active predicates to suggested actions via spatial term matching. New in V5. |
+| `reason(hv_a, hv_b, relation)` | Reason about spatial relation between two HVs. |
+| `get_spatial_predicates(state)` | Extract spatial predicates from state dict. |
 
 ### `belief_revision.py`
 
-**BeliefScorer** — `free_energy()`, `should_revise()`.
+**BeliefScorer** — `free_energy()`, `should_revise()`. *(V5 wired — called in `decide()` post-decision for low-confidence revision)*
 
 **BeliefRevisionEngine** — AGM-style belief revision.
 
 ### `context_engine.py`
 
-**ContextEngine** — Context tracking and disambiguation.
+**ContextEngine** — Context tracking and disambiguation. *(V5 wired — called in `decide()` text processing path)*
 
 | Method | Description |
 |--------|-------------|
@@ -658,7 +665,7 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 
 ### `continual_learning.py`
 
-**ContinualLearner** — Lifelong learning without catastrophic forgetting.
+**ContinualLearner** — Lifelong learning without catastrophic forgetting. *(V5 wired — explicit per-task `consolidate_task()` called in `sleep()`)*
 
 | Method | Description |
 |--------|-------------|
@@ -673,7 +680,7 @@ Supporting classes: `DomainConcept`, `DomainRelation`, `ConceptCorrespondence`, 
 
 ### `meta_learning.py`
 
-**MetaLearner** — Learning to learn.
+**MetaLearner** — Learning to learn. *(V5 wired — `select_strategy()` called in `register_task()`)*
 
 | Method | Description |
 |--------|-------------|
@@ -871,7 +878,7 @@ Legacy backup of compositional semantics module.
 
 ### `emotion_system.py`
 
-**EmotionSystem** — Affect-based drive modulation.
+**EmotionSystem** — Affect-based drive modulation. *(V5 wired — `update_from_drives()` called in `learn()` with reward and novelty signals)*
 
 | Method | Description |
 |--------|-------------|

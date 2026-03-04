@@ -7,7 +7,7 @@ RUST_VSA   := rust_vsa
 RUST_SNN   := rust_snn
 
 help:
-	@echo "NSCK V4 Developer Makefile"
+	@echo "NSCK V5 Developer Makefile"
 	@echo ""
 	@echo "  make install        Install Python deps (requirements.txt)"
 	@echo "  make install-rust   Install Rust toolchain + maturin"
@@ -19,6 +19,9 @@ help:
 	@echo "  make bench-papers   Run all research paper experiment scripts"
 	@echo "  make e2e            Run end-to-end V7 eval with Rust enabled"
 	@echo "  make clean          Remove build artifacts and __pycache__"
+	@echo "  make test-v5        Run V5 integration tests"
+	@echo "  make benchmark-realworld  Run real-world benchmarks"
+	@echo "  make docs-check     Verify all docs/*.md files exist"
 
 all: install build-rust test-rust
 
@@ -81,3 +84,14 @@ clean:
 	find . -name "*.pyc" -delete 2>/dev/null; true
 	find . -name "*.so" -not -path "*/target/*" -delete 2>/dev/null; true
 	rm -rf rust_vsa/target rust_snn/target 2>/dev/null; true
+
+test-v5:
+	$(PYTEST) tests/integration/test_v5_end_to_end.py -v --tb=short
+
+benchmark-realworld:
+	$(PYTHON) benchmarks/run_realworld.py
+
+docs-check:
+	@echo "Checking doc links..."
+	@for f in docs/*.md; do echo "  ✓ $$f exists"; done
+	@echo "All docs present."

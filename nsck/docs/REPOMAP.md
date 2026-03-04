@@ -1,4 +1,4 @@
-# NSCK V4 — Repository Navigation Map
+# NSCK V5 — Repository Navigation Map
 
 > **~96 core Python modules · ~232 classes · ~38K LOC Python · ~4.5K LOC Rust · 1443+ tests**
 
@@ -45,12 +45,19 @@ nsck/
 ├── tests/                        84+ files across unit/, integration/, core_architecture/,
 │   │                             experiments/, regression/, benchmarks/
 │   │                             V4 new: tests/integration/test_v4_full_system.py (6 classes)
+│   │                             V5 new: tests/integration/test_v5_end_to_end.py (6 classes)
 ├── benchmarks/                   Benchmark runner + domain benchmarks
+│   ├── realworld_harness.py      V5 new: Iris + text classification benchmark harness
+│   └── run_realworld.py          V5 new: CLI entry point for real-world benchmarks
 ├── eval/                         Evaluation harness and end-to-end evals
 ├── scripts/                      Utility scripts (verify_rust, generate_v11_report)
 ├── examples/                     Runnable demos (quickstart, custom_module, learn_from_text, demo_snn)
 ├── data/                         Built-in datasets
-├── docs/                         12+ documentation files
+├── docs/                         15+ documentation files
+│   ├── (V4 docs)
+│   ├── QUICKSTART.md             V5 new: 5-minute getting started guide
+│   ├── API_REFERENCE.md          V5 new: complete NSCKSubstrate API reference
+│   └── V5_CHANGELOG.md           V5 new: V5 changelog by work package
 ├── pyproject.toml                Project metadata and build config
 └── conftest.py                   Shared pytest fixtures
 ```
@@ -261,8 +268,11 @@ tests/                            84 files, ~19K LOC, 1437 tests
 ```bash
 NSCK_USE_RUST=1 pytest                    # run all 1443+ tests (Rust default-on)
 pytest tests/integration/test_v4_full_system.py -v  # V4 tests
+pytest tests/integration/test_v5_end_to_end.py -v   # V5 tests
 pytest tests/unit/reasoning/             # subsystem tests
 pytest tests/integration/               # pipeline tests
 uvicorn nsck.api.nsck_api:app            # start REST API
 python -m nsck.benchmarks.runner         # run benchmarks
+make test-v5                             # V5 integration tests
+make benchmark-realworld                 # real-world benchmarks
 ```

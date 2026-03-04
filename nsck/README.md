@@ -9,7 +9,7 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V4 (V3–V18 Consolidated)** — 1,669 tests passing (Rust backend active). Zero regressions vs. V3 baseline.
+**Current release: V5 (V3–V18 Consolidated + Module Wiring)** — 1,443+ tests passing (Rust backend active). All V4 modules now wired into the main decision loop.
 
 ---
 
@@ -1052,20 +1052,22 @@ V13 adds nine new modules and several enhancements to the substrate:
 
 | Document | Contents |
 |----------|----------|
+| [docs/QUICKSTART.md](docs/QUICKSTART.md) | **V5 new** — 5-minute getting started guide |
+| [docs/API_REFERENCE.md](docs/API_REFERENCE.md) | **V5 new** — Complete NSCKSubstrate API reference |
+| [docs/V5_CHANGELOG.md](docs/V5_CHANGELOG.md) | **V5 new** — V5 changelog by work package |
+| [docs/V5_VALIDATION_REPORT.md](docs/V5_VALIDATION_REPORT.md) | **V5 new** — V5 validation report and test results |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Full system architecture with Mermaid diagrams per subsystem |
 | [docs/FORMULAS.md](docs/FORMULAS.md) | Theory, math foundations, proofs, and design goals |
 | [docs/MODULE_REFERENCE.md](docs/MODULE_REFERENCE.md) | Every file, class, method, and parameter |
 | [docs/TESTING.md](docs/TESTING.md) | All test files: what they test, how, and why |
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Decision loop and data-flow walkthroughs |
+| [docs/WIRING_MAP.md](docs/WIRING_MAP.md) | Module wiring map (V4 + V5 connections) |
 | [docs/NSCK_ROADMAP_AND_PLAN.md](docs/NSCK_ROADMAP_AND_PLAN.md) | Implementation roadmap with research references |
-| [docs/NSCK_V9_SUBSTRATE.md](docs/NSCK_V9_SUBSTRATE.md) | V9 modality-agnostic substrate specification |
-| [docs/NSCK_V10_EXTENSIONS.md](docs/NSCK_V10_EXTENSIONS.md) | V10 extensions: FHRR, embedding bridge, neural scoring, safety |
 | [docs/V14_CHANGELOG.md](docs/V14_CHANGELOG.md) | V14 work packages, new APIs, migration guide |
 | [docs/V14_REPORT.md](docs/V14_REPORT.md) | V14 implementation report: test results, benchmarks, assessment |
 | [docs/V15_CHANGELOG.md](docs/V15_CHANGELOG.md) | V15 Model Transplantation Pipeline changelog |
 | [docs/TRANSPLANT_GUIDE.md](docs/TRANSPLANT_GUIDE.md) | V15 transplant quick-start, strategies, configuration |
 | [docs/TRANSPLANT_REPORT.md](docs/TRANSPLANT_REPORT.md) | V15 quality metrics and benchmark results |
-| [docs/V16_CHANGELOG.md](docs/V16_CHANGELOG.md) | V16 security, EWC, evaluation suite, semantic seeding |
 | [docs/EVAL_SUITE.md](docs/EVAL_SUITE.md) | NSCK-ES T1-T5 scoring specification and usage guide |
 | [docs/GOAL_TRACKER.md](docs/GOAL_TRACKER.md) | Living document: AGI vision vs implementation status |
 

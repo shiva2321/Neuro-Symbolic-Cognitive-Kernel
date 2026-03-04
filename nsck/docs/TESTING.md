@@ -311,3 +311,51 @@ are the only failures, re-running the job is the correct response.
 ---
 
 *Last updated for NSCK V4.*
+
+---
+
+## 8. V5 Integration Tests
+
+V5 adds a new integration test file that covers all newly wired modules.
+
+### Running V5 Tests
+
+```bash
+# Using make (recommended)
+cd nsck && make test-v5
+
+# Direct pytest
+python -m pytest nsck/tests/integration/test_v5_end_to_end.py -v --tb=short
+```
+
+### V5 Test File
+
+`tests/integration/test_v5_end_to_end.py` — 6 test classes covering all V5 wiring:
+
+| Class | Coverage |
+|-------|----------|
+| `TestTextDecisionLoop` | Text input → VSANLUEngine → ContextEngine → decide() |
+| `TestMultimodalFusion` | Multi-modal input fusion and decision |
+| `TestSleepConsolidation` | sleep() → prototypes built, drift detector triggered |
+| `TestCrossDomainTransfer` | Cross-domain transfer via analogy engine |
+| `TestProceduralFastPath` | ProceduralMemory LSH cache hit |
+| `TestFullLifecycle` | 100-cycle full lifecycle: process → feedback → sleep |
+
+### Expected Results
+
+```
+nsck/tests/integration/test_v5_end_to_end.py
+  6 passed in ~13s
+```
+
+### V4 + V5 Combined Run
+
+```bash
+# Run both V4 and V5 integration tests
+python -m pytest nsck/tests/integration/test_v4_full_system.py \
+                 nsck/tests/integration/test_v5_end_to_end.py -v
+```
+
+---
+
+*Last updated for NSCK V5.*

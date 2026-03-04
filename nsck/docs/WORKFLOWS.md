@@ -461,3 +461,65 @@ print(stats)  # {"concepts": 50000, "relations": 200000, "causal_links": 10000}
 ---
 
 *Document updated for NSCK V4, February 2026.*
+
+---
+
+## V5 Workflow Additions
+
+### V5 Sleep Workflow — Drift Check + EWC Consolidation
+
+In V5, the `sleep()` workflow includes two new steps:
+
+```
+sleep(task_tag)
+    │
+    ├── 1. PatternGeneralizer.generalize()
+    │       └── L2 prototype normalization (V5) — p̂ = p / ‖p‖₂
+    │           prevents prototype drift across consolidation cycles
+    │
+    ├── 2. ContinualLearner.consolidate_task(task_tag)  ← V5 new
+    │       └── EWC importance update for task parameters
+    │
+    └── 3. DriftDetector.check(concept, hv)             ← V5 new
+            └── snapshot top-50 concept HVs from SemanticMemory
+                flags concepts that drift > threshold
+```
+
+**V5 drift check code path (substrate.py):**
+
+```python
+def sleep(self, task_tag=None):
+    self._engine.sleep(task_tag)
+    if self.drift_detector is not None:
+        for concept, hv in list(self._engine.semantic_memory.concept_hvs.items())[:50]:
+            self.drift_detector.check(concept, hv)
+    return {"sleep_cycles": self._engine.stats.get("sleep_cycles", 0)}
+```
+
+---
+
+### V5 Learn Workflow — Emotion Modulation
+
+In V5, `learn()` calls `EmotionSystem.update_from_drives()` after the standard
+Q-learning update, allowing affect state to modulate future curiosity and
+exploration:
+
+```
+learn(state, action, reward, task_tag, outcome)
+    │
+    ├── Q-table update (reward signal)
+    ├── EpisodicMemory.store(situation_hv, action, reward, outcome)
+    ├── RuleLearner.observe(predicates, action, reward)
+    └── EmotionSystem.update_from_drives(     ← V5 new
+            drives={
+                "reward": reward,
+                "novelty": curiosity.compute_novelty(state_hv),
+            }
+        )
+        → Updates valence, arousal, drives
+        → get_mood() reflects reward history
+```
+
+---
+
+*Document updated for NSCK V5, March 2026.*

@@ -1179,3 +1179,39 @@ bucket key is 16-bit (n_bits=16, seed=0xDEAD), lookup is O(1) average.
 
 ### Hot Cache LRU
 `_hot_cache` stores top-K concept HVs by access frequency; cache hit avoids full dict lookup.
+
+---
+
+## V5 New Formulas
+
+### Prototype L2 Normalization
+After each `sleep()` cycle, every prototype HV `p` is normalized:
+
+```
+p̂ = p / ‖p‖₂
+```
+
+where `‖p‖₂ = sqrt(Σ_i p_i²)`. This prevents prototype drift — without normalization,
+repeated Hebbian updates cause prototypes to grow unbounded, reducing cosine similarity
+discrimination. L2 normalization pins each prototype to the unit hypersphere.
+
+**Implementation** (`pattern_generalizer.py`):
+```python
+norm = np.linalg.norm(proto)
+if norm > 0:
+    proto /= norm
+```
+
+### EWC Integration (V5 clarification)
+EWC is applied at two levels in V5:
+
+1. **Rule pruning** (V4): composite score = `EWC_importance × GWT_win_count`; high-EWC rules are protected from eviction.
+2. **Task consolidation** (V5 new): `ContinualLearner.consolidate_task(task_tag)` computes Fisher information `F_i` for the task's learned parameters and stores `θ*_i` checkpoint.
+
+Combined EWC loss over all previously learned tasks:
+
+```
+L_total = L_new_task + λ · Σ_{t=1}^{T} Σ_i F_i^{(t)} · (θ_i - θ*_i^{(t)})^2
+```
+
+where `λ` controls forgetting-plasticity tradeoff (default `λ = 0.4` in NSCK).

@@ -934,3 +934,61 @@ from python.core.language.semantic_bootstrap import SemanticBootstrapper
 cb = SemanticBootstrapper.build_codebook(strategy="auto")
 sim = cb.similarity("brain", "memory")   # → semantically meaningful
 ```
+
+---
+
+## 16. V5 Architecture Additions
+
+> **V5 (March 2026)** — Complete module wiring consolidation.
+
+### V5 Wiring Summary
+
+All modules that existed in V4 but were not called are now wired into the
+main decision loop. V5 makes no structural changes to the seven-layer
+architecture; it activates existing layers.
+
+### V5 Full Decision Loop — Mermaid Diagram
+
+```mermaid
+graph TD
+    INPUT["Input (any type)"] --> PROC["ProceduralMemory\nLSH fast-path"]
+    PROC -->|"hit ≥ 0.72"| FAST_OUT["SubstrateResult\n(procedural_hit=True)"]
+    PROC -->|"miss"| ADAPT["Adapters (10)\n→ PerceptPacket"]
+    ADAPT --> GWT["GlobalWorkspace\nCoalition Competition"]
+
+    GWT --> SPATIAL["SpatialReasoner.infer()\n(V5 wired)"]
+    GWT --> CTX["ContextEngine.disambiguate()\n(V5 wired — text)"]
+    GWT --> CAUSAL["CausalRuleAuditor"]
+    GWT --> IMAGINE["imagine_rollout()\n(V4 multi-step)"]
+
+    SPATIAL --> COAL["Coalition HV"]
+    CTX --> COAL
+    CAUSAL --> COAL
+    IMAGINE --> COAL
+
+    COAL --> SELECT["Action Selection\n(Q-table + rules)"]
+    SELECT --> BELIEF["BeliefScorer.should_revise()\n(V5 wired)"]
+    BELIEF -->|"revise"| REVISION["BeliefRevisionEngine.revise()"]
+    BELIEF -->|"accept"| META["Metacognition safety gate"]
+    REVISION --> META
+    META --> OUT["SubstrateResult"]
+
+    OUT --> LEARN["learn()\nEWC + EmotionSystem\n(V5 wired)"]
+    LEARN --> SLEEP["sleep()\nPrototype + ContinualLearner\n+ DriftDetector (V5)"]
+```
+
+### V5 Module Activation Map
+
+| Layer | Module | V4 Status | V5 Status |
+|-------|--------|-----------|-----------|
+| Layer 3 — Reasoning | `SpatialReasoner` | Initialized, not called | ✅ Wired into `decide()` |
+| Layer 3 — Reasoning | `BeliefScorer` | Initialized, not called | ✅ Wired into `decide()` |
+| Layer 3 — Reasoning | `ContextEngine` | Initialized, not called | ✅ Wired into `decide()` |
+| Layer 6 — Executive | `EmotionSystem` | Initialized, not called | ✅ Wired into `learn()` |
+| Layer 4 — Learning | `MetaLearner` | Initialized, not called | ✅ Wired into `register_task()` |
+| Layer 4 — Learning | `ContinualLearner` | Used in EWC rules only | ✅ `consolidate_task()` in `sleep()` |
+| Layer 2 — Memory | `DriftDetector` | Instantiated, not called | ✅ Wired into `substrate.sleep()` |
+
+---
+
+*Document updated for NSCK V5, March 2026.*

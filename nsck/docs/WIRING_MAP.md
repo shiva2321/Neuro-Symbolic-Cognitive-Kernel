@@ -149,3 +149,90 @@ NSCKConfig
 ---
 
 *Updated for NSCK V4, February 2026.*
+
+---
+
+## V5 Module Wiring — New Connections
+
+The following modules were initialized but not called in V4. In V5, each is
+wired into the main decision loop.
+
+### V5 Wiring Summary
+
+| Module | Wired Into | Signal |
+|--------|-----------|--------|
+| `SpatialReasoner` | `decide()` coalition building | Spatial predicates → suggested actions |
+| `BeliefScorer` (BeliefRevision) | `decide()` post-decision | Low-confidence → belief revision trigger |
+| `ContextEngine` | `decide()` text processing | Word disambiguation for text states |
+| `EmotionSystem` | `learn()` | Reward + novelty → valence/arousal update |
+| `MetaLearner` | `register_task()` | Strategy selection for new tasks |
+| `ContinualLearner` | `sleep()` | Per-task EWC consolidation |
+
+### V5 Module Dependency Update
+
+```
+NSCKConfig
+    └── NSCKSubstrate
+            ├── SemanticMemory (hot cache V4) [Rust shim]
+            ├── EpisodicMemory
+            ├── ProceduralMemory (LSH O(1) V4)
+            ├── DriftDetector (V5 — wired in sleep())
+            ├── CognitiveEngine
+            │       ├── CausalRuleAuditor
+            │       ├── imagine_rollout() (V4)
+            │       ├── EWC rule pruning (V4)
+            │       ├── VSANLUEngine (V4, primary NLU)
+            │       ├── SpatialReasoner (V5 wired — decide())
+            │       ├── BeliefScorer (V5 wired — decide())
+            │       ├── ContextEngine (V5 wired — decide())
+            │       ├── EmotionSystem (V5 wired — learn())
+            │       ├── MetaLearner (V5 wired — register_task())
+            │       └── ContinualLearner (V5 wired — sleep())
+            ├── KnowledgeSeeder (V4)
+            └── ConformalWrapper (V5 — engine confidence used)
+```
+
+### V5 `decide()` Flow
+
+```mermaid
+graph TD
+    INPUT["Input (PerceptPacket)"] --> PROC["ProceduralMemory fast-path"]
+    PROC -->|"hit (sim ≥ 0.72)"| FAST["Return cached action"]
+    PROC -->|"miss"| GWT["GWT Broadcast → coalition HV"]
+    GWT --> SPATIAL["SpatialReasoner.infer(predicates)\n(V5 wired)"]
+    GWT --> CTX["ContextEngine.disambiguate()\n(V5 wired — text states)"]
+    SPATIAL --> COAL["Coalition building"]
+    CTX --> COAL
+    COAL --> CAUSAL["CausalRuleAuditor"]
+    CAUSAL --> ACTION["Select action"]
+    ACTION --> BELIEF["BeliefScorer.should_revise()\n(V5 wired — low confidence)"]
+    BELIEF -->|"revise"| REVISION["BeliefRevisionEngine.revise()"]
+    BELIEF -->|"accept"| OUT["DecisionState output"]
+    REVISION --> OUT
+```
+
+### V5 `learn()` Emotion Modulation
+
+```
+learn(state, action, reward, task_tag, outcome)
+    │
+    ├── Q-learning update
+    ├── EpisodicMemory.store()
+    ├── RuleLearner.observe()
+    └── EmotionSystem.update_from_drives(    ← V5 new
+            drives={
+                "reward": reward,
+                "novelty": curiosity.compute_novelty(hv),
+            }
+        )
+```
+
+### V5 `sleep()` Consolidation
+
+```
+sleep(task_tag)
+    │
+    ├── PatternGeneralizer.generalize()     (prototype building + L2 norm V5)
+    ├── ContinualLearner.consolidate_task() ← V5 wired
+    └── DriftDetector.check()               ← V5 wired (top-50 concept HVs)
+```

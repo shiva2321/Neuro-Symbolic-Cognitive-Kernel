@@ -76,3 +76,40 @@ NSCK_USE_RUST=1 python nsck/tests/benchmarks/full_architecture_benchmark.py
 # V4-specific benchmarks
 NSCK_USE_RUST=1 python -m pytest nsck/tests/benchmarks/test_v17_benchmarks.py -v
 ```
+
+---
+
+## V5 Real-World Benchmark Harness
+
+V5 adds a real-world benchmark harness that evaluates NSCK on standard ML datasets.
+
+### Files
+
+| File | Purpose |
+|------|---------|
+| `benchmarks/realworld_harness.py` | Iris classification + text category classification benchmarks |
+| `benchmarks/run_realworld.py` | CLI entry point |
+
+### Running
+
+```bash
+# Using make
+cd nsck && make benchmark-realworld
+
+# Direct
+python nsck/benchmarks/run_realworld.py
+```
+
+### Benchmarks Included
+
+| Benchmark | Dataset | Metric |
+|-----------|---------|--------|
+| Iris Classification | Iris (150 samples, 4 features) | Accuracy |
+| Text Classification | Synthetic 3-category text | Accuracy |
+
+### Notes
+
+- NSCK is an **online learner** — it learns one sample at a time with no batch training.
+- Benchmark accuracy is moderate because NSCK has no pre-trained embeddings.
+- For higher accuracy evaluations, use `eval/pretrained_transplant_chat_eval.py` which absorbs LSA/PCA-based embeddings from pre-trained models.
+- The harness runs in ~5 seconds on a commodity CPU.
