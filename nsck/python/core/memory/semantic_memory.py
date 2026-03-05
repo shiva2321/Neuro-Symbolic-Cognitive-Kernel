@@ -386,7 +386,26 @@ class SemanticMemory:
 
         # Update or create edge
         self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
-        
+
+        # V18: Mirror to Rust DashMap immediately at write time (O(1) cost per write).
+        # This keeps Rust in sync without the O(E) scan previously done lazily in
+        # spread_activation_fast().  Weighted edges use the typed relation weights so
+        # parallel_spread_activation() propagates correctly.
+        if self._rust_backend is not None:
+            try:
+                effective_weight = float(self.relation_weights.get(relation, 0.3))
+                self._rust_backend.add_relation_weighted(
+                    concept1, concept2, effective_weight
+                )
+            except AttributeError:
+                # Older Rust build without add_relation_weighted — fall back to unweighted
+                try:
+                    self._rust_backend.add_relation(concept1, concept2)
+                except Exception:
+                    pass
+            except Exception:
+                pass  # never break on Rust failure
+
         # V5: Societal Valence Bonding (record co-activation)
         self.societal_world.record_co_activation([concept1, concept2])
 
@@ -402,6 +421,19 @@ class SemanticMemory:
             from python.core.reasoning.belief_revision import BeliefMetadata, BeliefScorer
         except ImportError:
             self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
+            # V18: Mirror to Rust immediately on fallback path
+            if self._rust_backend is not None:
+                try:
+                    self._rust_backend.add_relation_weighted(
+                        concept1, concept2, float(self.relation_weights.get(relation, 0.3))
+                    )
+                except AttributeError:
+                    try:
+                        self._rust_backend.add_relation(concept1, concept2)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
             return
 
         scorer = BeliefScorer()
@@ -483,6 +515,20 @@ class SemanticMemory:
                     'status': 'active',
                 }
             )
+
+        # V18: Mirror the final edge state to Rust DashMap immediately after belief revision
+        if self._rust_backend is not None:
+            try:
+                self._rust_backend.add_relation_weighted(
+                    concept1, concept2, float(self.relation_weights.get(relation, 0.3))
+                )
+            except AttributeError:
+                try:
+                    self._rust_backend.add_relation(concept1, concept2)
+                except Exception:
+                    pass
+            except Exception:
+                pass
     
     def query(self, query_hv: hypervec_rs.HyperVector, k: int = 5) -> List[Tuple[str, float]]:
         """

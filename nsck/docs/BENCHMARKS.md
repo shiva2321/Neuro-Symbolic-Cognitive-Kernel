@@ -56,6 +56,24 @@ new_activation = hypervec_rs.spreading_activation_step(
 
 **Complexity:** O(E) where E = number of edges in frontier
 
+## V18 Spreading Activation — Before/After
+
+V18 changes the spreading activation hot path to use `SemanticMemoryConcurrent.parallel_spread_activation()` (all steps inside Rust, Rayon parallel) instead of rebuilding the full Python edge list on every call.
+
+| Scale (nodes) | Python (ms) | Rust V18 (ms) | Speedup |
+|---|---|---|---|
+| 100 | ~0.1 | ~0.05 | ~2× |
+| 1 000 | ~2.5 | ~0.3 | ~8× |
+| 10 000 | ~23.6 | ~1.5 | ~16× |
+| 50 000 | ~120 | ~8 | ~15× |
+
+*Expected figures — actual numbers depend on hardware. Run `eval/bench_spread_activation.py` for live results.*
+
+The key improvements:
+1. **Write-time mirror (Change 1):** `add_concept` / `add_relation` push to the Rust DashMap immediately — no more O(N) scan of nodes-not-yet-synced on every `spread_activation` call.
+2. **Rayon parallel all-steps (Change 2):** `parallel_spread_activation` runs all spreading steps inside Rust with Rayon parallelism, returning once. Previously required crossing the FFI boundary 3× per call with the full edge list.
+3. **Weighted edges (Change 3):** `add_relation_weighted` stores typed relation weights in the DashMap `HashMap<String, f32>`, so `parallel_spread_activation` propagates `act * w * decay` instead of `act * decay / num_neighbors`.
+
 ## Rust vs Python Backend Selection
 
 ```python
@@ -75,4 +93,7 @@ NSCK_USE_RUST=1 python nsck/tests/benchmarks/full_architecture_benchmark.py
 
 # V4-specific benchmarks
 NSCK_USE_RUST=1 python -m pytest nsck/tests/benchmarks/test_v17_benchmarks.py -v
+
+# V18 spread activation Rust vs Python
+python nsck/eval/bench_spread_activation.py
 ```

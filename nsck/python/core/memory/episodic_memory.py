@@ -266,6 +266,22 @@ class EpisodicMemory:
                         self.lsh_index[task_tag][t][lsh] = []
                     self.lsh_index[task_tag][t][lsh].append(ep.timestamp)
 
+    def _rebuild_lsh_index(self):
+        """Full LSH index rebuild across all tasks — called during sleep consolidation.
+
+        V18: Clears all LSH tables and rebuilds them from only the episodes currently
+        in the in-memory deques.  This removes stale bucket entries left by implicit
+        evictions (deque maxlen overflow) that were never explicitly cleaned up.
+        Stale entries caused false-positive recalls — the system would "remember"
+        episodes it was supposed to have forgotten.  This is a full rebuild; call
+        ``_rebuild_lsh(task_tag)`` for a single-task targeted rebuild.
+        """
+        for task_tag in list(self.recent.keys()):
+            try:
+                self._rebuild_lsh(task_tag)
+            except Exception:
+                pass  # LSH cleanup failure must never crash the system
+
     def _consolidate(self, task_tag: str):
         """Compress old episodes and move to storage."""
         if not self.store:

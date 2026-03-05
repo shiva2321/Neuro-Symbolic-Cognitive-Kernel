@@ -1888,6 +1888,17 @@ class CognitiveEngine:
             if hasattr(self.semantic_memory, 'evaporate_stigmergy'):
                 self.semantic_memory.evaporate_stigmergy()
 
+        # V18: Rebuild LSH index after consolidation to flush stale bucket entries
+        # left by implicit deque evictions.  Stale entries cause false-positive recalls
+        # (episodes that were evicted still match queries), so a full rebuild here
+        # ensures recall accuracy after every sleep cycle.
+        if hasattr(self.episodic_memory, '_rebuild_lsh_index'):
+            try:
+                self.episodic_memory._rebuild_lsh_index()
+                logger.debug("[SLEEP] LSH index rebuilt after consolidation")
+            except Exception as _exc:
+                logger.debug("[SLEEP] LSH rebuild skipped: %s", _exc)
+
         # V9: Step 5 — Drift detection and rule pruning
         self._detect_rule_drift(tasks)
         if self.homeostasis is not None:

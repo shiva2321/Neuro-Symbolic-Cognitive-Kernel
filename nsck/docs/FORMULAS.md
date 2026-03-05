@@ -241,19 +241,37 @@ where $\tau_{\text{generic}} = 0.62$.
 
 ## 4. Spreading Activation
 
-*Source: `memory/semantic_memory.py`*
+*Source: `memory/semantic_memory.py`, `memory/semantic_memory_shim.py`, `rust_vsa/src/semantic.rs`*
 
 Given start concepts $S = \{s_1, \ldots, s_k\}$ with initial activation $a_{s_i} = 1.0$:
 
-$$a_j^{(t+1)} = a_j^{(t)} + \sum_{(i,j) \in E} a_i^{(t)} \cdot \gamma \cdot w_{\text{rel}(i,j)}$$
+$$a_j^{(t+1)} = a_j^{(t)} + \sum_{(i,j) \in E} a_i^{(t)} \cdot w(\text{rel}(i,j)) \cdot \gamma$$
 
 where:
-- $\gamma = 0.7$ (global decay factor)
-- $w_{\text{is\_a}} = 0.9$, $w_{\text{has\_property}} = 0.7$, $w_{\text{causes}} = 0.6$, $w_{\text{part\_of}} = 0.5$, $w_{\text{similar\_to}} = 0.4$
+- $\gamma$ = global decay factor (default 0.7)
+- $w(\text{rel})$ = typed relation weight (see table below)
 
-**Convergence:** After $T = 3$ (default) steps: $a^{(T)} \leq (0.7 \cdot 0.9)^3 = 0.63^3 \approx 0.25$.
+**V18 note:** The formula now correctly uses per-edge weights $w(\text{rel}(i,j))$ rather than
+dividing activation equally among all neighbors ($\gamma / \text{deg}(i)$).  This matches
+the NSCK research papers and ensures taxonomic links carry proportionally more activation
+than weak associative links.
 
-**Complexity:** Frontier cap of top-200 active nodes → $O(200 \cdot \bar{d} \cdot T)$ per call.
+| Relation | Weight $w$ |
+|---|---|
+| `is_a` | 0.9 |
+| `has_property` | 0.7 |
+| `causes` / `leads_to` / `results_in` | 0.6 |
+| `capable_of` | 0.6 |
+| `implies` | 0.55 |
+| `part_of` / `conditional_on` / `depends_on` | 0.5 |
+| `similar_to` | 0.4 |
+| `semantically_related` | 0.35 |
+
+**Convergence:** After $T = 3$ (default) steps with $\gamma = 0.7$ and $w_{\max} = 0.9$: maximum activation $\leq (0.7 \cdot 0.9)^3 = 0.63^3 \approx 0.25$.
+
+**Complexity (Python fallback):** Frontier cap of top-200 active nodes → $O(200 \cdot \bar{d} \cdot T)$ per call.
+
+**Complexity (Rust path, V18):** `SemanticMemoryConcurrent.parallel_spread_activation()` runs all $T$ steps with Rayon parallelism inside Rust; returns once.  Expected latency at 10 K nodes: ~0.5–2 ms vs ~23 ms for the Python edge-list path.
 
 ---
 

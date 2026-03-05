@@ -1,7 +1,7 @@
 /// Concurrent semantic memory with parallel spreading activation
 ///
 /// This module provides thread-safe semantic memory operations:
-/// - Parallel spreading activation
+/// - Parallel spreading activation with weighted edges
 /// - Concurrent concept graph operations
 /// - Thread-safe relation management
 
@@ -19,12 +19,16 @@ use crate::HyperVector;
 pub struct SemanticMemoryConcurrent {
     /// Concept name -> HyperVector mapping (concurrent access)
     concepts: Arc<DashMap<String, HyperVector>>,
-    
-    /// Graph structure: concept -> set of neighbors (concurrent access)
-    /// Each entry represents outgoing edges from a concept
-    graph: Arc<DashMap<String, HashSet<String>>>,
-    
-    /// Reverse graph for incoming edges
+
+    /// Graph structure: concept -> {neighbor -> weight} (concurrent access)
+    /// Each entry represents weighted outgoing edges from a concept.
+    /// V18: Changed from HashSet<String> to HashMap<String, f32> to store edge weights.
+    /// This allows parallel_spread_activation to use per-edge weights that match
+    /// the typed relation weights (is_a=0.9, has_property=0.7, etc.) instead of
+    /// dividing activation equally among all neighbors (which ignored the weights).
+    graph: Arc<DashMap<String, HashMap<String, f32>>>,
+
+    /// Reverse graph for incoming edges (topology only — weights not needed for reverse pass)
     reverse_graph: Arc<DashMap<String, HashSet<String>>>,
 }
 
@@ -42,8 +46,8 @@ impl SemanticMemoryConcurrent {
     /// Add a concept with its hypervector (thread-safe)
     pub fn add_concept(&self, name: String, hv: HyperVector) {
         self.concepts.insert(name.clone(), hv);
-        // Initialize empty neighbor sets if not present
-        self.graph.entry(name.clone()).or_insert_with(HashSet::new);
+        // Initialize empty neighbor maps if not present
+        self.graph.entry(name.clone()).or_insert_with(HashMap::new);
         self.reverse_graph.entry(name).or_insert_with(HashSet::new);
     }
 
@@ -52,21 +56,27 @@ impl SemanticMemoryConcurrent {
         self.concepts.get(name).map(|entry| entry.value().clone())
     }
 
-    /// Add a directed edge from source to target (thread-safe)
-    fn add_relation(&self, source: String, target: String) {
-        // Add to forward graph
+    /// Add a weighted directed edge from source to target (thread-safe).
+    ///
+    /// V18: Exposed to Python so SemanticMemory.add_relation() can mirror typed
+    /// relation weights (is_a=0.9, has_property=0.7, etc.) into the Rust DashMap.
+    /// The weight is used directly in parallel_spread_activation() so that activation
+    /// spreads proportionally to semantic relation strength rather than being divided
+    /// equally among neighbors.
+    pub fn add_relation_weighted(&self, source: String, target: String, weight: f32) {
+        // Add to forward graph with weight
         self.graph
             .entry(source.clone())
             .and_modify(|neighbors| {
-                neighbors.insert(target.clone());
+                neighbors.insert(target.clone(), weight);
             })
             .or_insert_with(|| {
-                let mut set = HashSet::new();
-                set.insert(target.clone());
-                set
+                let mut map = HashMap::new();
+                map.insert(target.clone(), weight);
+                map
             });
 
-        // Add to reverse graph
+        // Add to reverse graph (topology only — no weight needed for reverse direction)
         self.reverse_graph
             .entry(target.clone())
             .and_modify(|neighbors| {
@@ -79,11 +89,18 @@ impl SemanticMemoryConcurrent {
             });
     }
 
-    /// Get neighbors of a concept (outgoing edges)
-    fn get_neighbors(&self, concept: &str) -> Vec<String> {
+    /// Add a directed edge from source to target with default weight 1.0 (thread-safe).
+    ///
+    /// Backward-compatible alias for ``add_relation_weighted(source, target, 1.0)``.
+    fn add_relation(&self, source: String, target: String) {
+        self.add_relation_weighted(source, target, 1.0);
+    }
+
+    /// Get neighbors of a concept (outgoing edges) as (name, weight) pairs
+    fn get_neighbors(&self, concept: &str) -> Vec<(String, f32)> {
         self.graph
             .get(concept)
-            .map(|entry| entry.value().iter().cloned().collect())
+            .map(|entry| entry.value().iter().map(|(k, &v)| (k.clone(), v)).collect())
             .unwrap_or_default()
     }
 
@@ -105,8 +122,16 @@ impl SemanticMemoryConcurrent {
         self.graph.iter().map(|entry| entry.value().len()).sum()
     }
 
-    /// Parallel spreading activation algorithm
-    /// 
+    /// Parallel spreading activation algorithm with weighted edges.
+    ///
+    /// V18: Uses per-edge weights from the DashMap graph so that typed relation
+    /// weights (is_a=0.9, has_property=0.7, etc.) are respected during spreading.
+    /// The activation formula is:
+    ///
+    ///   a_j^(t+1) = a_j^(t) + Σ_{(i,j)∈E} a_i^(t) · w(relation(i,j)) · γ
+    ///
+    /// where w(relation) is the per-edge weight stored by add_relation_weighted().
+    ///
     /// Args:
     ///     start_concepts: Initial concepts to activate (with value 1.0)
     ///     steps: Number of spreading steps
@@ -144,30 +169,28 @@ impl SemanticMemoryConcurrent {
                 .filter(|(_, act)| *act >= min_activation)
                 .flat_map(|(concept, act)| {
                     let mut spreads = Vec::new();
-                    
-                    // Get neighbors (outgoing edges)
+
+                    // Get neighbors with weights (outgoing edges)
                     if let Some(neighbors_entry) = self.graph.get(concept) {
                         let neighbors = neighbors_entry.value();
-                        let num_neighbors = neighbors.len();
-                        
-                        if num_neighbors > 0 {
-                            let spread_val = (act * decay) / num_neighbors as f64;
-                            
-                            for neighbor in neighbors.iter() {
-                                spreads.push((neighbor.clone(), spread_val));
-                            }
+
+                        // V18: use per-edge weight — spread_val = act * weight * decay
+                        // Previously: spread_val = act * decay / num_neighbors (equal split, ignored weights)
+                        for (neighbor, &weight) in neighbors.iter() {
+                            let spread_val = act * (weight as f64) * decay;
+                            spreads.push((neighbor.clone(), spread_val));
                         }
                     }
 
-                    // Optionally spread backwards (incoming edges)
+                    // Optionally spread backwards (incoming edges, half weight)
                     if bidirectional {
                         if let Some(incoming_entry) = self.reverse_graph.get(concept) {
                             let incoming = incoming_entry.value();
                             let num_incoming = incoming.len();
-                            
+
                             if num_incoming > 0 {
                                 let spread_val = (act * decay * 0.5) / num_incoming as f64;
-                                
+
                                 for neighbor in incoming.iter() {
                                     spreads.push((neighbor.clone(), spread_val));
                                 }
@@ -246,7 +269,7 @@ impl SemanticMemoryConcurrent {
     }
 
     /// Combined search: semantic similarity + spreading activation
-    /// 
+    ///
     /// First finds semantically similar concepts, then spreads activation from them
     #[pyo3(signature = (query_hv, k = 10, spread_steps = 2, spread_decay = 0.7))]
     fn hybrid_search(
@@ -306,7 +329,7 @@ impl SemanticMemoryConcurrent {
         let mut stats = HashMap::new();
         stats.insert("concepts".to_string(), self.concept_count());
         stats.insert("relations".to_string(), self.relation_count());
-        
+
         // Calculate average degree
         let total_degree: usize = self.graph.iter().map(|e| e.value().len()).sum();
         let avg_degree = if self.concept_count() > 0 {
@@ -315,7 +338,7 @@ impl SemanticMemoryConcurrent {
             0
         };
         stats.insert("avg_degree".to_string(), avg_degree);
-        
+
         stats
     }
 }
@@ -333,7 +356,7 @@ mod tests {
     #[test]
     fn test_concurrent_concept_addition() {
         let mem = SemanticMemoryConcurrent::new();
-        
+
         // Concurrent concept additions
         let handles: Vec<_> = (0..10)
             .map(|i| {
@@ -358,14 +381,14 @@ mod tests {
     #[test]
     fn test_parallel_spreading_activation() {
         let mem = SemanticMemoryConcurrent::new();
-        
+
         // Create a simple graph: A -> B -> C -> D
         for i in 0..4 {
             let name = format!("concept_{}", i);
             let hv = HyperVector::new(Some(i));
             mem.add_concept(name, hv);
         }
-        
+
         mem.add_relation("concept_0".to_string(), "concept_1".to_string());
         mem.add_relation("concept_1".to_string(), "concept_2".to_string());
         mem.add_relation("concept_2".to_string(), "concept_3".to_string());
@@ -384,10 +407,10 @@ mod tests {
         assert!(activation.contains_key("concept_1"));
         assert!(activation.contains_key("concept_2"));
         assert!(activation.contains_key("concept_3"));
-        
+
         // Check that concept_0 has activation (starting point)
         assert!(activation["concept_0"] > 0.9);
-        
+
         // Check that later concepts have progressively lower activation
         // (due to decay and distance from source)
         assert!(activation["concept_1"] > activation["concept_2"]);
@@ -395,9 +418,35 @@ mod tests {
     }
 
     #[test]
+    fn test_weighted_edges_respected() {
+        let mem = SemanticMemoryConcurrent::new();
+
+        // hub -> high_weight_target (weight 0.9) and hub -> low_weight_target (weight 0.3)
+        mem.add_concept("hub".to_string(), HyperVector::new(Some(0)));
+        mem.add_concept("high_weight_target".to_string(), HyperVector::new(Some(1)));
+        mem.add_concept("low_weight_target".to_string(), HyperVector::new(Some(2)));
+
+        mem.add_relation_weighted("hub".to_string(), "high_weight_target".to_string(), 0.9);
+        mem.add_relation_weighted("hub".to_string(), "low_weight_target".to_string(), 0.3);
+
+        let activation = mem.parallel_spread_activation(
+            vec!["hub".to_string()],
+            1,
+            1.0, // decay=1.0 to isolate weight effect
+            0.01,
+            false,
+        );
+
+        // high-weight neighbor must receive 3× more activation than low-weight neighbor
+        let high_act = activation.get("high_weight_target").copied().unwrap_or(0.0);
+        let low_act = activation.get("low_weight_target").copied().unwrap_or(0.0);
+        assert!(high_act > low_act, "high_weight_target ({}) should have more activation than low_weight_target ({})", high_act, low_act);
+    }
+
+    #[test]
     fn test_parallel_semantic_search() {
         let mem = SemanticMemoryConcurrent::new();
-        
+
         // Add concepts
         for i in 0..100 {
             let name = format!("concept_{}", i);
@@ -419,12 +468,12 @@ mod tests {
     #[test]
     fn test_bidirectional_spreading() {
         let mem = SemanticMemoryConcurrent::new();
-        
+
         // Create a graph with bidirectional potential: A -> B, C -> B
         mem.add_concept("A".to_string(), HyperVector::new(Some(1)));
         mem.add_concept("B".to_string(), HyperVector::new(Some(2)));
         mem.add_concept("C".to_string(), HyperVector::new(Some(3)));
-        
+
         mem.add_relation("A".to_string(), "B".to_string());
         mem.add_relation("C".to_string(), "B".to_string());
 
@@ -441,4 +490,21 @@ mod tests {
         assert!(activation.contains_key("A"));
         assert!(activation.contains_key("C"));
     }
+
+    #[test]
+    fn test_add_relation_weighted_python_callable() {
+        // Verify add_relation_weighted correctly stores weights
+        let mem = SemanticMemoryConcurrent::new();
+        mem.add_concept("A".to_string(), HyperVector::new(Some(1)));
+        mem.add_concept("B".to_string(), HyperVector::new(Some(2)));
+
+        mem.add_relation_weighted("A".to_string(), "B".to_string(), 0.75);
+
+        let neighbors = mem.get_neighbors("A");
+        assert_eq!(neighbors.len(), 1);
+        let (name, weight) = &neighbors[0];
+        assert_eq!(name, "B");
+        assert!((weight - 0.75).abs() < 1e-6, "Expected weight 0.75, got {}", weight);
+    }
 }
+
