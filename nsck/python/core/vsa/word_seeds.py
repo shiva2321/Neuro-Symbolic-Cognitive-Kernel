@@ -73,7 +73,10 @@ def _ensure_glove_loaded() -> None:
     # Build fixed projection matrix regardless of whether GloVe exists —
     # it is also used as a deterministic RNG for the hash fallback path so
     # callers that query the matrix don't need to re-check file availability.
-    rng = np.random.RandomState(42)  # fixed seed — must not change across versions
+    rng = np.random.RandomState(42)  # fixed seed — must not change across versions.
+    # IMPORTANT: changing this seed would invalidate all previously computed GloVe-based
+    # HVs and break determinism across sessions/restarts.  The seed is part of the
+    # public "HV identity contract" for any word stored in semantic memory.
     _PROJECTION_MATRIX = rng.randn(_HV_DIM, _GLOVE_DIM).astype(np.float32)
 
     glove_path = os.path.abspath(_GLOVE_PATH)
@@ -134,7 +137,8 @@ def word_to_seed_bits(word: str) -> np.ndarray:
 
     # Hash fallback: same behaviour as the original ``HyperVector(hash(word) % 2^32)``
     # seed, ensuring backward compatibility for out-of-vocabulary words.
-    seed = hash(word) % (2 ** 31)  # PCG64/numpy expects non-negative int
+    # Uses Mersenne Twister (MT19937) via numpy.random.RandomState.
+    seed = hash(word) % (2 ** 31)  # RandomState expects a non-negative int
     rng = np.random.RandomState(seed)
     return (rng.random(_HV_DIM) > 0.5).astype(np.uint8)
 

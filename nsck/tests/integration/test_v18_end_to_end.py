@@ -205,7 +205,10 @@ class TestGloveSynonymRecall:
         assert (b1 == b2).all(), "word_to_seed_bits must be deterministic"
 
     @pytest.mark.skipif(
-        True,  # Only run when GloVe is actually present
+        True,  # Intentionally disabled by default — this test requires GloVe embeddings
+        # which are not committed to the repo (~170 MB).  To enable:
+        # 1. Run: bash nsck/scripts/download_embeddings.sh
+        # 2. Change the skipif condition to: not glove_available()
         reason="Requires GloVe embeddings (run scripts/download_embeddings.sh first)",
     )
     def test_glove_synonym_similarity(self):
@@ -378,12 +381,15 @@ class TestRustParallelSpreadActivation:
             mem_rs.spread_activation(["c0", "c1"], steps=2, decay=0.7)
         rs_ms = (time.perf_counter() - t0) / 3 * 1000
 
-        # Rust should be faster (with some tolerance for CI variance)
-        speedup = py_ms / rs_ms if rs_ms > 0 else float("inf")
-        # Accept if Rust is at least 1x as fast (within noise margin on small graphs)
-        assert speedup >= 0.5, (
-            f"Rust ({rs_ms:.2f}ms) slower than Python ({py_ms:.2f}ms) by {1/speedup:.1f}x "
-            f"— something is wrong with the Rust path"
+        # Rust should be faster (with some tolerance for CI variance).
+        # At 1K nodes the Rust speedup may be modest (~2-8×) due to startup overhead;
+        # the threshold is set to 0.5 to detect regressions (Rust ≥ 0.5× Python speed)
+        # rather than to confirm a specific speedup ratio.
+        # A ratio < 0.5 means Rust is >2× slower than Python — indicates a real bug.
+        rust_not_catastrophically_slow = py_ms / rs_ms if rs_ms > 0 else float("inf")
+        assert rust_not_catastrophically_slow >= 0.5, (
+            f"Rust ({rs_ms:.2f}ms) is more than 2× slower than Python ({py_ms:.2f}ms) "
+            f"— something is wrong with the Rust spreading activation path"
         )
 
 

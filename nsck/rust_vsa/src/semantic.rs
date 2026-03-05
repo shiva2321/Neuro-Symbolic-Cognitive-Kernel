@@ -438,9 +438,15 @@ mod tests {
         );
 
         // high-weight neighbor must receive 3× more activation than low-weight neighbor
+        // Formula: spread_val = act * weight * decay = 1.0 * w * 1.0 = w
+        // So high_act should be 0.9 and low_act should be 0.3 (ratio = 3.0)
         let high_act = activation.get("high_weight_target").copied().unwrap_or(0.0);
         let low_act = activation.get("low_weight_target").copied().unwrap_or(0.0);
         assert!(high_act > low_act, "high_weight_target ({}) should have more activation than low_weight_target ({})", high_act, low_act);
+
+        // Verify approximate 3× ratio: 0.9 / 0.3 = 3.0
+        let ratio = high_act / low_act;
+        assert!((ratio - 3.0).abs() < 0.1, "Expected ~3× ratio (0.9/0.3), got {:.3}", ratio);
     }
 
     #[test]
