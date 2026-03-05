@@ -142,6 +142,18 @@ class NSCKSubstrate:
             except Exception as _exc:
                 logger.debug("[SUBSTRATE] SNN grounding skipped: %s", _exc)
 
+        # V29: Auto-persistent cross-session memory.
+        # When enable_auto_persist=True the substrate loads saved semantic memory on
+        # init and registers a shutdown hook to auto-save on process exit.
+        if getattr(self.config, 'enable_auto_persist', False):
+            _path = getattr(self.config, 'auto_persist_path', 'nsck_semantic_memory.json.gz')
+            self._auto_persist_path: Optional[str] = _path
+            self._load_semantic_memory(_path)
+            import atexit
+            atexit.register(self._save_semantic_memory, _path)
+        else:
+            self._auto_persist_path = None
+
     def _init_rich_adapters(self) -> None:
         """Initialize rich perception adapters based on perception_mode."""
         mode = getattr(self.config, "perception_mode", "pure")
@@ -220,6 +232,76 @@ class NSCKSubstrate:
             seeder.post_seed_enrich(self)
         except Exception as exc:
             _log.warning("_auto_seed failed: %s", exc)
+
+    # ------------------------------------------------------------------
+    # V29: Cross-session memory persistence
+    # ------------------------------------------------------------------
+
+    def _save_semantic_memory(self, path: str) -> None:
+        """Save semantic memory to *path* (gzip+JSON).  Called on shutdown."""
+        try:
+            self._engine.semantic_memory.save(path)
+            logger.info("[SUBSTRATE] Semantic memory saved to %s", path)
+        except Exception as exc:
+            logger.warning("[SUBSTRATE] Auto-save failed: %s", exc)
+
+    def _load_semantic_memory(self, path: str) -> None:
+        """Load semantic memory from *path* if it exists.  Called on init."""
+        import os
+        if os.path.exists(path):
+            try:
+                self._engine.semantic_memory.load(path)
+                logger.info("[SUBSTRATE] Semantic memory restored from %s", path)
+            except Exception as exc:
+                logger.warning("[SUBSTRATE] Auto-load failed: %s", exc)
+        else:
+            logger.info("[SUBSTRATE] No existing memory at %s; starting fresh", path)
+
+    def save_memory(self, path: Optional[str] = None) -> str:
+        """
+        Explicitly save semantic memory to *path* (or ``auto_persist_path``).
+
+        Returns the path where memory was saved.
+
+        Example::
+
+            substrate = NSCKSubstrate(NSCKConfig.persistent("my_brain.json.gz"))
+            substrate.process("Neurons communicate via synapses.", "neuro")
+            substrate.save_memory()  # saves to "my_brain.json.gz"
+        """
+        dest = path or self._auto_persist_path or "nsck_semantic_memory.json.gz"
+        self._save_semantic_memory(dest)
+        return dest
+
+    def load_memory(self, path: Optional[str] = None) -> None:
+        """
+        Explicitly load semantic memory from *path* (or ``auto_persist_path``).
+
+        Example::
+
+            substrate = NSCKSubstrate()
+            substrate.load_memory("my_brain.json.gz")
+        """
+        src = path or self._auto_persist_path or "nsck_semantic_memory.json.gz"
+        self._load_semantic_memory(src)
+
+    def shutdown(self) -> None:
+        """
+        Gracefully shut down the substrate.
+
+        When ``enable_auto_persist=True`` the semantic memory is saved before
+        shutdown.  Call this instead of letting the process exit silently to
+        guarantee the memory flush completes before the process terminates.
+
+        Example::
+
+            substrate = NSCKSubstrate(NSCKConfig.persistent())
+            # ... use substrate ...
+            substrate.shutdown()  # saves memory, then cleans up
+        """
+        if self._auto_persist_path:
+            self._save_semantic_memory(self._auto_persist_path)
+        logger.info("[SUBSTRATE] Shutdown complete.")
 
 
     def process(

@@ -81,9 +81,11 @@ class SocietalKnowledgeWorld:
         """
         self.epoch_ticker += 1
         
-        # 1. Decay and Bonding
-        for lhv in self.registry.values():
-            self.valence_engine.remove_stale_bonds(lhv, self.epoch_ticker)
+        # 1. Decay and Bonding — use Rust batch decay when societal_rs is available
+        # (remove_stale_bonds_all: O(N_bonds) single pass with Rayon parallelism)
+        self.valence_engine.remove_stale_bonds_all(
+            list(self.registry.values()), self.epoch_ticker
+        )
             
         while self._pending_co_activations:
             u, v = self._pending_co_activations.pop(0)
@@ -198,3 +200,83 @@ class SocietalKnowledgeWorld:
     def semantic_search(self, query: HyperVector, k: int = 10) -> List[Tuple[str, float]]:
         """Search utilizing the HNSW spatial routing."""
         return self.hnsw.search(query, k=k, ef=50)
+
+    def get_domain_centroids(self) -> List[Tuple[str, HyperVector, str]]:
+        """
+        Return a list of ``(domain_id, global_centroid_hv, hierarchy_level)``
+        for all domains that have formed and have a global centroid.
+        """
+        result = []
+        for dom_id, domain in self.domains.items():
+            if domain.global_centroid is not None:
+                result.append((dom_id, domain.global_centroid, domain.hierarchy_level))
+        return result
+
+    def query_city_guided(
+        self, query: HyperVector, k: int = 10
+    ) -> List[Tuple[str, float]]:
+        """
+        City-guided (two-stage) concept retrieval.
+
+        Stage 1 — Domain routing: find the closest knowledge domain (City/Town/…)
+        by comparing *query* against each domain's global centroid HV.
+
+        Stage 2 — Intra-domain search: within the winning domain, rank all
+        member concepts by direct HV similarity to *query*.
+
+        Falls back to flat ``semantic_search`` when no domains have formed yet.
+
+        Returns a list of ``(concept_id, similarity)`` sorted descending.
+        """
+        centroids = self.get_domain_centroids()
+        if not centroids:
+            # No cities formed yet — fall through to flat search
+            return self.semantic_search(query, k=k)
+
+        # Stage 1: find best-matching domain centroid
+        best_dom_id, best_sim = None, -1.0
+        for dom_id, centroid_hv, _ in centroids:
+            try:
+                sim = float(query.similarity(centroid_hv))
+            except Exception:
+                sim = 0.0
+            if sim > best_sim:
+                best_sim = sim
+                best_dom_id = dom_id
+
+        if best_dom_id is None:
+            return self.semantic_search(query, k=k)
+
+        # Stage 2: rank members of the winning domain
+        domain = self.domains[best_dom_id]
+        members: List[str] = []
+        for nh in domain.neighborhoods.values():
+            members.extend(nh.members)
+        # De-duplicate
+        members = list(dict.fromkeys(members))
+
+        candidate_scores: List[Tuple[str, float]] = []
+        for member_id in members:
+            lhv = self.registry.get(member_id)
+            if lhv is None:
+                continue
+            try:
+                sim = float(query.similarity(lhv.hv))
+            except Exception:
+                sim = 0.0
+            candidate_scores.append((member_id, sim))
+
+        candidate_scores.sort(key=lambda x: x[1], reverse=True)
+        top_k = candidate_scores[:k]
+
+        # If the domain had fewer than k members, augment with flat search
+        if len(top_k) < k:
+            flat = self.semantic_search(query, k=k)
+            seen = {c for c, _ in top_k}
+            for concept, sim in flat:
+                if concept not in seen:
+                    top_k.append((concept, sim))
+                    if len(top_k) >= k:
+                        break
+
+        return top_k

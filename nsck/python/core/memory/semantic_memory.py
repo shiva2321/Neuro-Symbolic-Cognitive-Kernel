@@ -15,6 +15,63 @@ from typing import Dict, List, Any, Optional, Set, Tuple
 import python.core.vsa.hypervec_shim as hypervec_rs
 from python.core.memory.societal_knowledge_world import SocietalKnowledgeWorld
 
+
+# ---------------------------------------------------------------------------
+# _TrackedDiGraph — NetworkX DiGraph that auto-mirrors every edge to the
+# Rust DashMap so that spread_activation always uses the fast parallel path.
+# ---------------------------------------------------------------------------
+
+class _TrackedDiGraph(nx.DiGraph):
+    """
+    A thin NetworkX DiGraph subclass that intercepts ``add_edge`` and
+    immediately mirrors each new edge to the Rust ``SemanticMemoryConcurrent``
+    DashMap.  This replaces the fragile ``_rust_synced_edge_count`` counter
+    (which could be fooled by duplicate adds or direct ``concept_graph.add_edge``
+    calls that bypassed ``add_relation``).
+
+    Any call to ``add_edge`` — whether via ``SemanticMemory.add_relation``,
+    the belief-revision path, or direct graph manipulation — is intercepted
+    here, so the Rust backend is always in sync.
+    """
+
+    def __init__(self, rust_backend=None, relation_weights: Optional[Dict[str, float]] = None):
+        super().__init__()
+        # The Rust SemanticMemoryConcurrent instance (may be None when Rust is not available).
+        self._rust_backend = rust_backend
+        # Relation weights are used to derive a numeric edge weight for the DashMap.
+        self._relation_weights: Dict[str, float] = relation_weights or {}
+
+    def _mirror_to_rust(self, u: str, v: str, attr: dict) -> None:
+        """Mirror a single edge to the Rust DashMap (best-effort; never raises)."""
+        if self._rust_backend is None:
+            return
+        try:
+            relation = attr.get("relation", "")
+            weight = float(self._relation_weights.get(relation, attr.get("weight", 0.3)))
+            try:
+                self._rust_backend.add_relation_weighted(u, v, weight)
+            except AttributeError:
+                self._rust_backend.add_relation(u, v)
+        except Exception:
+            pass  # Never let Rust mirroring break graph operations
+
+    def add_edge(self, u_of_edge, v_of_edge, **attr):
+        """Override: call super(), then mirror to Rust."""
+        super().add_edge(u_of_edge, v_of_edge, **attr)
+        self._mirror_to_rust(u_of_edge, v_of_edge, attr)
+
+    def add_edges_from(self, ebunch_to_add, **attr):
+        """Override: iterate and mirror each edge."""
+        for e in ebunch_to_add:
+            if len(e) == 3:
+                u, v, data = e
+            elif len(e) == 2:
+                u, v, data = e[0], e[1], {}
+            else:
+                continue
+            merged = {**attr, **data}
+            self.add_edge(u, v, **merged)
+
 # V3: optional HNSW index (external hnswlib)
 try:
     import hnswlib as _hnswlib
@@ -201,20 +258,27 @@ class SemanticMemory:
                 print("Falling back to Python implementation.")
         else:
             print("SemanticMemory Initialized with Python backend.")
-        
-        # Graph database of concepts (always maintained for graph operations)
-        self.concept_graph = nx.DiGraph()
+
+        # Configurable relation weights for spreading activation
+        # (must be built BEFORE concept_graph so _TrackedDiGraph can reference them)
+        self.relation_weights: Dict[str, float] = dict(self.DEFAULT_RELATION_WEIGHTS)
+        if relation_weights:
+            self.relation_weights.update(relation_weights)
+
+        # Graph database of concepts.
+        # _TrackedDiGraph intercepts every add_edge() and mirrors it to the Rust
+        # DashMap atomically — this replaces the fragile _rust_synced_edge_count
+        # counter that was the source of two distinct correctness bugs.
+        self.concept_graph = _TrackedDiGraph(
+            rust_backend=self._rust_backend,
+            relation_weights=self.relation_weights,
+        )
         
         # Concept -> HyperVector mapping (Python fallback)
         self.concept_hvs: Dict[str, hypervec_rs.HyperVector] = {}
         
         # Relation types (extensible — new types registered on first use)
         self.relations = list(self.DEFAULT_RELATION_WEIGHTS.keys())
-        
-        # Configurable relation weights for spreading activation
-        self.relation_weights: Dict[str, float] = dict(self.DEFAULT_RELATION_WEIGHTS)
-        if relation_weights:
-            self.relation_weights.update(relation_weights)
 
         # V3: Stigmergy — edge-level pheromone strengths
         self._stigmergy: Dict[Tuple[str, str], float] = {}
@@ -239,11 +303,6 @@ class SemanticMemory:
 
         # V5: Societal Knowledge World Orchestrator
         self.societal_world = SocietalKnowledgeWorld(dim=getattr(config, 'hv_dimension', 10240) if config else 10240)
-        # V18: Track number of edges mirrored into the Rust DashMap.  When
-        # concept_graph has more edges (e.g. via direct add_edge() calls that
-        # bypass add_relation()), spread_activation falls back to the Python
-        # edge-list path to stay correct.
-        self._rust_synced_edge_count: int = 0
 
     def _init_hnsw(self, dim: int):
         """Lazily initialise the ANN index once the HV dimension is known."""
@@ -406,37 +465,9 @@ class SemanticMemory:
                 # [Belief Revision] Reject outdated info
                 return
 
-        # Detect whether this is a brand-new edge (not yet in NetworkX).
-        # We only count brand-new edges toward _rust_synced_edge_count so that
-        # repeated updates to the same edge don't inflate the counter and mask
-        # unsynchronised edges that were added directly via concept_graph.add_edge().
-        _edge_is_new = not self.concept_graph.has_edge(concept1, concept2)
-
-        # Update or create edge
+        # _TrackedDiGraph.add_edge() atomically mirrors to the Rust DashMap, so
+        # no separate mirroring step is needed here.
         self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
-
-        # V18: Mirror to Rust DashMap immediately at write time (O(1) cost per write).
-        # This keeps Rust in sync without the O(E) scan previously done lazily in
-        # spread_activation_fast().  Weighted edges use the typed relation weights so
-        # parallel_spread_activation() propagates correctly.
-        if self._rust_backend is not None:
-            try:
-                effective_weight = float(self.relation_weights.get(relation, 0.3))
-                self._rust_backend.add_relation_weighted(
-                    concept1, concept2, effective_weight
-                )
-                if _edge_is_new:
-                    self._rust_synced_edge_count += 1
-            except AttributeError:
-                # Older Rust build without add_relation_weighted — fall back to unweighted
-                try:
-                    self._rust_backend.add_relation(concept1, concept2)
-                    if _edge_is_new:
-                        self._rust_synced_edge_count += 1
-                except Exception:
-                    pass
-            except Exception:
-                pass  # never break on Rust failure
 
         # V5: Societal Valence Bonding (record co-activation)
         self.societal_world.record_co_activation([concept1, concept2])
@@ -452,20 +483,8 @@ class SemanticMemory:
         try:
             from python.core.reasoning.belief_revision import BeliefMetadata, BeliefScorer
         except ImportError:
+            # _TrackedDiGraph.add_edge() mirrors to Rust automatically.
             self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
-            # V18: Mirror to Rust immediately on fallback path
-            if self._rust_backend is not None:
-                try:
-                    self._rust_backend.add_relation_weighted(
-                        concept1, concept2, float(self.relation_weights.get(relation, 0.3))
-                    )
-                except AttributeError:
-                    try:
-                        self._rust_backend.add_relation(concept1, concept2)
-                    except Exception:
-                        pass
-                except Exception:
-                    pass
             return
 
         scorer = BeliefScorer()
@@ -607,6 +626,30 @@ class SemanticMemory:
         similarities.sort(key=lambda x: x[1], reverse=True)
         return similarities[:k]
 
+    def query_city_guided(
+        self, query_hv: hypervec_rs.HyperVector, k: int = 5
+    ) -> List[Tuple[str, float]]:
+        """
+        Two-stage Knowledge City–guided concept retrieval.
+
+        Stage 1: find the closest knowledge domain (City/Town/…) by comparing
+        *query_hv* against each domain's global centroid HyperVector.
+
+        Stage 2: within that domain, rank member concepts by direct similarity
+        to *query_hv*.
+
+        Falls back to flat ``query()`` when no domains have formed yet (i.e.
+        before enough ``tick_world`` calls have accumulated enough bonds).
+
+        Use this instead of ``query()`` when you want retrieval that respects
+        the emergent domain structure of the societal knowledge world.
+
+        Example::
+
+            concepts = semantic_memory.query_city_guided(query_hv, k=10)
+        """
+        return self.societal_world.query_city_guided(query_hv, k=k)
+
     
     def spread_activation(self, start_concepts: List[str], steps: int = 3, decay: float = 0.7) -> Dict[str, float]:
         """
@@ -621,23 +664,17 @@ class SemanticMemory:
         
         Returns activation levels for nodes.
         """
-        # Try Rust-accelerated path first.
-        # Only use Rust parallel_spread_activation when the Rust DashMap is fully
-        # in sync with the NetworkX graph.  Direct concept_graph.add_edge() calls
-        # (e.g. cross-domain bridge edges added in tests) bypass add_relation() so
-        # they are not mirrored — detect this and fall back to the Python edge-list
-        # path which reads concept_graph directly.
-        _graph_edge_count = self.concept_graph.number_of_edges()
-        _rust_fully_synced = (
-            self._rust_backend is not None
-            and self._rust_synced_edge_count >= _graph_edge_count
-        )
+        # Use Rust-accelerated parallel_spread_activation when the backend is
+        # available.  _TrackedDiGraph guarantees every add_edge() (including
+        # direct concept_graph.add_edge() calls from tests and external code) is
+        # mirrored to the Rust DashMap atomically, so no edge-count comparison or
+        # fallback detection is needed.
         try:
             from python.core.memory.semantic_memory_shim import spread_activation_fast
             result = spread_activation_fast(
                 self.concept_graph, start_concepts, self.relation_weights,
                 self._stigmergy, steps, decay,
-                rust_backend=self._rust_backend if _rust_fully_synced else None,
+                rust_backend=self._rust_backend,
             )
             if result is not None:
                 return result
@@ -931,8 +968,15 @@ class SemanticMemory:
         try:
             with gzip.open(filepath, "rt", encoding="utf-8") as f:
                 data = json.load(f)
+            # Internal node attrs written by add_node() must NOT be re-passed to
+            # add_concept() which also writes them via **properties → add_node().
+            _INTERNAL_NODE_ATTRS = frozenset(
+                {"access_count", "last_accessed", "importance_score"}
+            )
             for name, cd in data.get("concepts", {}).items():
-                props = cd.get("properties", {})
+                raw_props = cd.get("properties", {})
+                # Strip internal keys to avoid "multiple values for keyword argument"
+                props = {k: v for k, v in raw_props.items() if k not in _INTERNAL_NODE_ATTRS}
                 if name not in self.concept_hvs:
                     self.add_concept(name, props)
                 else:

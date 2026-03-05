@@ -395,6 +395,35 @@ class NSCKConfig:
         cfg.societal_ewc_cluster_weight = 0.2
         return cfg
 
+    # === V29 Feature Flags — Sentence-Transformer Concept Embeddings ===
+    # When True, TextKnowledgeLearner uses EmbeddingVSABridge + sentence-transformers
+    # to generate semantically-meaningful concept HVs instead of hash-based random ones.
+    # This significantly improves VSA similarity search quality.
+    enable_embedding_bridge: bool = False
+    embedding_bridge_model: str = "all-MiniLM-L6-v2"  # 22MB local model, 384-dim embeddings
+
+    @classmethod
+    def embedded(cls) -> "NSCKConfig":
+        """Embedded config: sentence-transformer concept embeddings + all research flags."""
+        cfg = cls.research()
+        cfg.enable_embedding_bridge = True
+        cfg.embedding_bridge_model = "all-MiniLM-L6-v2"
+        return cfg
+
+    # === V29 Feature Flags — Auto-Persistent Cross-Session Memory ===
+    # When True, NSCKSubstrate auto-loads semantic memory on init and saves on shutdown.
+    # Uses SemanticMemory.save()/load() (gzip+JSON) at the configured path.
+    enable_auto_persist: bool = False
+    auto_persist_path: str = "nsck_semantic_memory.json.gz"
+
+    @classmethod
+    def persistent(cls, path: str = "nsck_semantic_memory.json.gz") -> "NSCKConfig":
+        """Persistent config: auto-save/load semantic memory across sessions."""
+        cfg = cls()
+        cfg.enable_auto_persist = True
+        cfg.auto_persist_path = path
+        return cfg
+
 
 # Global default config (can be overridden)
 DEFAULT_CONFIG = NSCKConfig()
