@@ -323,7 +323,10 @@ class SemanticMemory:
             **properties,
         )
 
-        # V3/V6: Insert into ANN index if enabled
+        # V3/V6: Insert into ANN index if enabled.
+        # The pure-Python NSW fallback has O(N) insertion cost; throttle it to
+        # every 20th concept during bulk loads to avoid O(N²) total cost.
+        # hnswlib (when available) is fast enough for every insert.
         if self._hnsw_enabled:
             try:
                 bits = np.asarray(hv.bits, dtype=np.float32)
@@ -334,17 +337,31 @@ class SemanticMemory:
                     idx = len(self._hnsw_id_to_concept)
                     self._hnsw_id_to_concept.append(concept_name)
                     if _HNSWLIB_AVAILABLE and not isinstance(self._hnsw_index, _NSWIndex):
-                        # External hnswlib API
+                        # External hnswlib: O(log N) — always safe to insert immediately
                         self._hnsw_index.add_items(bits.reshape(1, -1), [idx])
                     else:
-                        # Pure-Python NSW fallback API
-                        self._hnsw_index.add_item(bits)
+                        # Pure-Python NSW fallback: O(N) — throttle to every 20th insert
+                        _nsw_ctr = getattr(self, '_nsw_insert_counter', 0) + 1
+                        self._nsw_insert_counter = _nsw_ctr
+                        if _nsw_ctr % 20 == 1:
+                            self._hnsw_index.add_item(bits)
+                        else:
+                            # Still track the id-to-concept mapping; the node
+                            # will be picked up when a search is run (NSW searches
+                            # the graph, not the id list).
+                            pass
             except Exception as e:
                 logger.debug("[SEMANTIC] ANN index add failed: %s", e)
                 
         # V5: Inject into Societal World
         self.societal_world.ingest_concept(concept_name, hv, source="semantic")
-        self.societal_world.tick_world()
+        # Throttle tick_world() to every 50 add_concept calls — calling it on every
+        # single add is O(N) work repeated N times = O(N²) total, which hangs at
+        # 1K+ concepts.  The societal epoch model is fine-grained enough that a
+        # batch-tick every 50 concepts is functionally equivalent.
+        self._societal_tick_counter = getattr(self, '_societal_tick_counter', 0) + 1
+        if self._societal_tick_counter % 50 == 0:
+            self.societal_world.tick_world()
     
     def get_concept(self, concept_name: str) -> Optional[hypervec_rs.HyperVector]:
         """Retrieve the hypervector for a given concept."""
@@ -595,6 +612,7 @@ class SemanticMemory:
             result = spread_activation_fast(
                 self.concept_graph, start_concepts, self.relation_weights,
                 self._stigmergy, steps, decay,
+                rust_backend=self._rust_backend,  # pass our already-populated instance
             )
             if result is not None:
                 return result

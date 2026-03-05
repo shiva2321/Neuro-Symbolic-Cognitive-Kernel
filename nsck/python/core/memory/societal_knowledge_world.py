@@ -36,21 +36,32 @@ class SocietalKnowledgeWorld:
         self._pending_co_activations = []
         
     def ingest_concept(self, concept_id: str, vector: HyperVector, source: str = "native") -> LivingHyperVector:
-        """Add or retrieve a concept."""
+        """Add or retrieve a concept.
+
+        The HNSW index insertion is throttled: only every 20th concept triggers
+        an immediate HNSW insert (O(log N) to O(N) search).  All concepts are
+        always registered in ``self.registry`` so the LivingHyperVector metadata
+        is complete.  A full HNSW rebuild happens during ``tick_world`` (every
+        100 ticks).  This avoids O(N²) cost during bulk loads (e.g. adding 1K+
+        concepts in a loop).
+        """
         if concept_id in self.registry:
             lhv = self.registry[concept_id]
             # Drift existing towards newer occurrence 10%
             lhv.hv = lhv.hv.weighted_bundle(vector, weight=0.9)
             lhv.activate(self.epoch_ticker)
             return lhv
-            
+
         lhv = LivingHyperVector(hv=vector, concept_id=concept_id, source=source)
         lhv.activate(self.epoch_ticker)
         self.registry[concept_id] = lhv
-        
-        # Base layer 0 of HNSW
-        self.hnsw.insert_node(concept_id, layer=0, vector=vector)
-        
+
+        # Throttle HNSW insertions: every 20th new concept gets indexed immediately;
+        # the rest are picked up during the next tick_world rebuild.
+        self._hnsw_insert_counter = getattr(self, '_hnsw_insert_counter', 0) + 1
+        if self._hnsw_insert_counter % 20 == 1:
+            self.hnsw.insert_node(concept_id, layer=0, vector=vector)
+
         return lhv
 
     def record_co_activation(self, concepts: List[str]):

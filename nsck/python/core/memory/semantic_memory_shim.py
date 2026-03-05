@@ -55,6 +55,7 @@ def spread_activation_fast(
     stigmergy: Dict,
     steps: int = 3,
     decay: float = 0.7,
+    rust_backend: Optional[Any] = None,
 ) -> Optional[Dict[str, float]]:
     """
     Try Rust-accelerated spreading activation.
@@ -64,13 +65,22 @@ def spread_activation_fast(
     is kept in sync by ``SemanticMemory.add_concept()`` / ``add_relation()`` at write
     time, so no incremental sync is required here.
 
+    ``rust_backend`` should be the **caller's own** ``SemanticMemoryConcurrent`` instance
+    (i.e. ``SemanticMemory._rust_backend``).  Passing it explicitly avoids the
+    previous bug where the shim used its own module-level instance (always empty)
+    instead of the instance that already has all concepts/edges mirrored at write
+    time.  When ``rust_backend`` is None the shim falls back to its module-level
+    instance (legacy behaviour, kept for callers that don't pass the argument).
+
     Falls back to the edge-list Python path when Rust is unavailable or when
     stigmergy boosts are active (stigmergy modifies per-edge weights dynamically
     and is not yet modelled in the Rust parallel path).
 
     Returns None on failure; the caller falls through to the pure-Python implementation.
     """
-    rust = _get_rust_instance()
+    # Prefer the caller-supplied backend (already populated); fall back to the
+    # module-level singleton only when no backend is provided.
+    rust = rust_backend if rust_backend is not None else _get_rust_instance()
     if rust is None:
         return None
 
@@ -80,8 +90,15 @@ def spread_activation_fast(
 
     try:
         # V18 primary path: parallel_spread_activation (all steps inside Rust, no edge list).
-        # The Rust DashMap is already populated from write-time mirrors in add_concept/add_relation.
-        if not _stigmergy_boost and hasattr(rust, 'parallel_spread_activation'):
+        # ONLY use this path when a populated rust_backend was explicitly provided by the
+        # caller (i.e. SemanticMemory._rust_backend which was kept in sync at write time).
+        # The module-level _rust_instance singleton is always empty — never use it for
+        # parallel_spread_activation because it will return only start concepts.
+        if (
+            not _stigmergy_boost
+            and rust_backend is not None          # caller-provided, already populated
+            and hasattr(rust, 'parallel_spread_activation')
+        ):
             valid_starts = [c for c in start_concepts if c in concept_graph]
             if valid_starts:
                 try:
