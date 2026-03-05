@@ -239,6 +239,11 @@ class SemanticMemory:
 
         # V5: Societal Knowledge World Orchestrator
         self.societal_world = SocietalKnowledgeWorld(dim=getattr(config, 'hv_dimension', 10240) if config else 10240)
+        # V18: Track number of edges mirrored into the Rust DashMap.  When
+        # concept_graph has more edges (e.g. via direct add_edge() calls that
+        # bypass add_relation()), spread_activation falls back to the Python
+        # edge-list path to stay correct.
+        self._rust_synced_edge_count: int = 0
 
     def _init_hnsw(self, dim: int):
         """Lazily initialise the ANN index once the HV dimension is known."""
@@ -401,6 +406,12 @@ class SemanticMemory:
                 # [Belief Revision] Reject outdated info
                 return
 
+        # Detect whether this is a brand-new edge (not yet in NetworkX).
+        # We only count brand-new edges toward _rust_synced_edge_count so that
+        # repeated updates to the same edge don't inflate the counter and mask
+        # unsynchronised edges that were added directly via concept_graph.add_edge().
+        _edge_is_new = not self.concept_graph.has_edge(concept1, concept2)
+
         # Update or create edge
         self.concept_graph.add_edge(concept1, concept2, relation=relation, timestamp=timestamp)
 
@@ -414,10 +425,14 @@ class SemanticMemory:
                 self._rust_backend.add_relation_weighted(
                     concept1, concept2, effective_weight
                 )
+                if _edge_is_new:
+                    self._rust_synced_edge_count += 1
             except AttributeError:
                 # Older Rust build without add_relation_weighted — fall back to unweighted
                 try:
                     self._rust_backend.add_relation(concept1, concept2)
+                    if _edge_is_new:
+                        self._rust_synced_edge_count += 1
                 except Exception:
                     pass
             except Exception:
@@ -606,13 +621,23 @@ class SemanticMemory:
         
         Returns activation levels for nodes.
         """
-        # Try Rust-accelerated path first
+        # Try Rust-accelerated path first.
+        # Only use Rust parallel_spread_activation when the Rust DashMap is fully
+        # in sync with the NetworkX graph.  Direct concept_graph.add_edge() calls
+        # (e.g. cross-domain bridge edges added in tests) bypass add_relation() so
+        # they are not mirrored — detect this and fall back to the Python edge-list
+        # path which reads concept_graph directly.
+        _graph_edge_count = self.concept_graph.number_of_edges()
+        _rust_fully_synced = (
+            self._rust_backend is not None
+            and self._rust_synced_edge_count >= _graph_edge_count
+        )
         try:
             from python.core.memory.semantic_memory_shim import spread_activation_fast
             result = spread_activation_fast(
                 self.concept_graph, start_concepts, self.relation_weights,
                 self._stigmergy, steps, decay,
-                rust_backend=self._rust_backend,  # pass our already-populated instance
+                rust_backend=self._rust_backend if _rust_fully_synced else None,
             )
             if result is not None:
                 return result

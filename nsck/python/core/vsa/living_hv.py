@@ -48,6 +48,9 @@ class LivingHyperVector:
     # --- SOURCE PROVENANCE ---
     source: str = field(default="native")
     transplant_domain: Optional[str] = field(default=None)
+    # Raw (unnormalised) scores — kept so that each call to update_domain_affinity
+    # normalises from the original values rather than from already-normalised ones.
+    _raw_domain_scores: Dict[str, float] = field(default_factory=dict)
 
     def activate(self, epoch: int):
         self.last_activated_epoch = epoch
@@ -55,13 +58,17 @@ class LivingHyperVector:
         self.activation_history.append(epoch)
 
     def update_domain_affinity(self, domain_name: str, score: float):
-        self.domain_affinities[domain_name] = score
-        # Normalize
-        total = sum(self.domain_affinities.values())
+        # Store the raw score first, then re-normalise all domains from raw values.
+        # This prevents double-normalisation when multiple domains are updated
+        # sequentially (e.g. physics=0.8 then chemistry=0.2 should give 0.8/0.8).
+        self._raw_domain_scores[domain_name] = score
+        total = sum(self._raw_domain_scores.values())
         if total > 0:
-            for k in self.domain_affinities:
-                self.domain_affinities[k] /= total
-        
+            for k, v in self._raw_domain_scores.items():
+                self.domain_affinities[k] = v / total
+        else:
+            self.domain_affinities[domain_name] = score
+
         # update primary domain
         if self.domain_affinities:
             self.primary_domain = max(self.domain_affinities.items(), key=lambda x: x[1])[0]
