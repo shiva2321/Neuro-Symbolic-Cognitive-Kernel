@@ -406,7 +406,9 @@ class NSCKSubstrate:
             modalities = ["unknown"]
 
         prev_decision_count = self._engine._decision_counter
+        _t0_process = time.perf_counter()
         cog_state = self._engine.decide(state, task_tag)
+        _process_ms = (time.perf_counter() - _t0_process) * 1000.0
         generalization_triggered = (
             self._engine._decision_counter % self.config.generalization_interval == 0
             and self._engine._decision_counter > prev_decision_count
@@ -456,7 +458,7 @@ class NSCKSubstrate:
         except Exception:
             pass
 
-        # V30: Build ThoughtTrace when transparency is enabled
+        # V31: Build ThoughtTrace when transparency is enabled
         thought_trace = None
         rust_used = any(self._rust_status.values())
         if getattr(self.config, 'enable_transparency', False):
@@ -466,6 +468,26 @@ class NSCKSubstrate:
                 # Inject societal context into trace for the ThoughtTrace stage
                 if societal_ctx:
                     _raw_trace["societal_context_stage"] = dict(societal_ctx)
+                # V31: Back-fill encoding stage with substrate-level timing + modality
+                _enc_stage = _raw_trace.get("encoding", {})
+                _enc_stage["encoding_time_ms"] = round(_process_ms, 3)
+                _enc_stage["total_process_ms"] = round(_process_ms, 3)
+                if modalities:
+                    _enc_stage["modality"] = modalities[0]
+                if enc_stats:
+                    _enc_stage.update({
+                        k: v for k, v in enc_stats.items()
+                        if k not in _enc_stage
+                    })
+                # V31: Back-fill transplant projector info
+                _trans = getattr(self, '_transplant_projectors', {})
+                if _trans and "transplant_domains" not in _enc_stage:
+                    _enc_stage["transplant_domains"] = list(_trans.keys())
+                    _enc_stage["projector_used"] = next(iter(_trans.keys()))
+                _raw_trace["encoding"] = _enc_stage
+                # V31: KLE into global_workspace stage if present
+                if kle is not None and "global_workspace" in _raw_trace:
+                    _raw_trace["global_workspace"]["kle_uncertainty"] = round(float(kle), 6)
                 thought_trace = ThoughtTrace.from_cognitive_trace(
                     query_id=f"q_{self._engine.stats.get('decisions', 0)}",
                     input_text=str(input_data)[:200],
@@ -473,7 +495,7 @@ class NSCKSubstrate:
                     trace=_raw_trace,
                     final_action=cog_state.chosen_action,
                     confidence=cog_state.confidence,
-                    total_duration_ms=0.0,
+                    total_duration_ms=_process_ms,
                     rust_used=rust_used,
                 )
             except Exception as _tt_exc:
