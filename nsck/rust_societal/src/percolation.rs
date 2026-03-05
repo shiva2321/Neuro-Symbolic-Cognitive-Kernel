@@ -63,27 +63,34 @@ impl PercolationDetector {
     }
 
     /// Check if the similarity graph has percolated (formed a giant component representing a dominant Knowledge City)
-    /// Returns a tuple of (bool_percolated, max_component_size, total_isolated_components)
-    pub fn check_transition(&self, num_nodes: usize, edges: Vec<(usize, usize, f64)>) -> PyResult<(bool, usize, usize)> {
+    /// Returns a tuple of (bool_percolated, max_component_size, comp_sizes, node_to_root)
+    /// - comp_sizes: dict mapping root_index → component_size
+    /// - node_to_root: list mapping each node index → its root component index
+    pub fn check_transition(&self, num_nodes: usize, edges: Vec<(usize, usize, f64)>) -> PyResult<(bool, usize, std::collections::HashMap<usize, usize>, Vec<usize>)> {
         let mut uf = UnionFind::new(num_nodes);
-        
-        let mut edges_added = 0;
+
         for (u, v, weight) in edges {
-            if weight > self.threshold {
-                if uf.union(u, v) {
-                    edges_added += 1;
-                }
+            if weight > self.threshold && u < num_nodes && v < num_nodes {
+                uf.union(u, v);
             }
         }
 
         let max_size = uf.max_component_size();
-        let total_components = uf.sets;
 
-        // percolation threshold is traditionally tested as O(ln N) or when half of the graph is connected.
-        // For semantic networks we assume percolation when max size > sqrt(num_nodes) * ln(num_nodes) or arbitrary tuned ratio bounds.
-        // Here we'll consider it percolated if max_size >= num_nodes / 2 for city emergence.
+        // Build node_to_root: for each node, find its canonical root
+        let mut node_to_root = vec![0usize; num_nodes];
+        for i in 0..num_nodes {
+            node_to_root[i] = uf.find(i);
+        }
+
+        // Build comp_sizes: root_index → count of nodes in that component
+        let mut comp_sizes: std::collections::HashMap<usize, usize> = std::collections::HashMap::new();
+        for &root in &node_to_root {
+            *comp_sizes.entry(root).or_insert(0) += 1;
+        }
+
         let percolated = max_size >= (num_nodes / 2) && num_nodes > 1;
 
-        Ok((percolated, max_size, total_components))
+        Ok((percolated, max_size, comp_sizes, node_to_root))
     }
 }

@@ -13,5 +13,6 @@ fn societal_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<societal_hnsw::SocietalHNSW>()?;
     m.add_class::<percolation::PercolationDetector>()?;
     m.add_class::<tda_ripser::TDARipser>()?;
+    m.add_function(wrap_pyfunction!(living_hv_store::decay_bonds_batch, m)?)?;
     Ok(())
 }

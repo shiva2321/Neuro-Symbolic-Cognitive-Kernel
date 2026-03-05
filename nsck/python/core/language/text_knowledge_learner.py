@@ -120,6 +120,7 @@ class TextKnowledgeLearner:
         language_module: Optional[Any] = None, # [AGI] Phase 4: NLU Parser
         causal_graph: Optional[CausalGraph] = None,
         config=None,
+        embedding_bridge=None,
     ):
         self._config = config
         # Core cognitive modules
@@ -151,6 +152,26 @@ class TextKnowledgeLearner:
 
         # O(1) fact-duplicate index: (subject, relation, object) → index in learned_facts
         self._fact_index: Dict[Tuple[str, str, str], int] = {}
+
+        # V29: Sentence-transformer EmbeddingVSABridge for semantic concept HVs.
+        # When set, each concept is encoded via bridge.encode_text(concept) so that
+        # semantically similar concepts cluster together in HV space.
+        # Priority: explicit kwarg > config flag > None (fall back to hash HV).
+        self._embedding_bridge = embedding_bridge
+        if self._embedding_bridge is None and config is not None:
+            if getattr(config, 'enable_embedding_bridge', False):
+                try:
+                    from python.core.vsa.vsa_embedding_bridge import EmbeddingVSABridge
+                    model_name = getattr(config, 'embedding_bridge_model', 'all-MiniLM-L6-v2')
+                    bridge = EmbeddingVSABridge(dim_in=384, hv_dim=10240)
+                    ok = bridge.try_load_sentence_transformer(model_name)
+                    if ok:
+                        self._embedding_bridge = bridge
+                        print(f"[TextLearner] Sentence-transformer bridge loaded: {model_name}")
+                    else:
+                        print(f"[TextLearner] sentence-transformers unavailable; using hash HVs")
+                except Exception as e:
+                    print(f"[TextLearner] EmbeddingVSABridge unavailable: {e}")
 
         # V3: optional language modules (lazy-loaded when flags are set)
         self._construction_matcher = None
@@ -191,7 +212,8 @@ class TextKnowledgeLearner:
                 except Exception as e:
                     print(f"[TextLearner] Distributional semantics unavailable: {e}")
         
-        print("[TextLearner] Initialized with VSA-based cognitive architecture + semantic folding")
+        bridge_status = f"sentence-transformer ({getattr(config, 'embedding_bridge_model', 'all-MiniLM-L6-v2')})" if self._embedding_bridge and self._embedding_bridge._st_model else "hash HV"
+        print(f"[TextLearner] Initialized with VSA-based cognitive architecture + semantic folding [concept HVs: {bridge_status}]")
     
     def learn_from_text_file(self, filepath: str, max_sentences: Optional[int] = None) -> LearningSession:
         """
@@ -254,6 +276,31 @@ class TextKnowledgeLearner:
 
     # Alias for backward compatibility
     learn_text = learn_from_text
+
+    @classmethod
+    def with_embedding_bridge(
+        cls,
+        model_name: str = "all-MiniLM-L6-v2",
+        semantic_memory=None,
+        **kwargs,
+    ) -> "TextKnowledgeLearner":
+        """
+        Factory: return a TextKnowledgeLearner with a sentence-transformer bridge
+        pre-loaded.  Concept HVs will be semantically-meaningful (similar words
+        cluster in HV space) rather than hash-random.
+
+        Example::
+
+            tkl = TextKnowledgeLearner.with_embedding_bridge()
+            tkl.learn_from_text("The hippocampus consolidates memory.")
+        """
+        from python.core.vsa.vsa_embedding_bridge import EmbeddingVSABridge
+        bridge = EmbeddingVSABridge(dim_in=384, hv_dim=10240)
+        ok = bridge.try_load_sentence_transformer(model_name)
+        if not ok:
+            print(f"[TextLearner] WARNING: could not load '{model_name}'; falling back to hash HVs")
+            bridge = None
+        return cls(semantic_memory=semantic_memory, embedding_bridge=bridge, **kwargs)
     
     def _learn_from_text(
         self,
@@ -354,10 +401,17 @@ class TextKnowledgeLearner:
         # Store concepts in semantic memory
         for concept in concepts:
             if concept not in self.semantic.concept_hvs:
-                # Use distributional HV when available — gives better semantic
-                # similarity than a raw hash (words in similar contexts cluster)
+                # HV source priority (best semantic quality first):
+                # 1. EmbeddingVSABridge + sentence-transformer (V29) — semantically-meaningful
+                # 2. Distributional codebook (co-occurrence based)
+                # 3. Raw hash HV (random; baseline)
                 concept_hv = None
-                if self._distrib_codebook is not None:
+                if self._embedding_bridge is not None:
+                    try:
+                        concept_hv = self._embedding_bridge.encode_text(concept)
+                    except Exception:
+                        concept_hv = None
+                if concept_hv is None and self._distrib_codebook is not None:
                     concept_hv = self._distrib_codebook.get_hv(concept.lower())
                 if concept_hv is None:
                     concept_hv = hypervec_rs.HyperVector(hash(concept) % (2**32))

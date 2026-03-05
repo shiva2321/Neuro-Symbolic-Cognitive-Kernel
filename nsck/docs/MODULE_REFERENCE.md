@@ -250,11 +250,11 @@ Bridge between SNN spike patterns and VSA hypervectors.
 
 | Method | Description |
 |--------|-------------|
-| `add_concept(label, hv)` | Store a concept. |
+| `add_concept(label, hv)` | Store a concept. **V18:** immediately mirrors to Rust DashMap at write time (O(1)), eliminating the lazy O(E) sync previously done in `spread_activation`. |
 | `get_concept(label)` | Retrieve a concept HV. |
-| `add_relation(src, rel, tgt)` | Add a typed edge. |
+| `add_relation(src, rel, tgt)` | Add a typed edge. **V18:** immediately mirrors to Rust DashMap via `add_relation_weighted(src, tgt, w(rel))` so weighted edges are visible to `parallel_spread_activation` without explicit sync. |
 | `query(hv, top_k)` | Nearest-neighbour concept lookup. |
-| `spread_activation(start, steps)` | Propagate activation through graph. |
+| `spread_activation(start, steps)` | Propagate activation through graph. **V18 fast path:** calls `SemanticMemoryConcurrent.parallel_spread_activation()` (Rayon parallel, all steps inside Rust). Falls back to Python when Rust unavailable or when stigmergy is active. |
 | `mark_path(nodes)` | Stigmergic path marking. |
 | `evaporate_stigmergy()` | Decay stigmergy traces. |
 | `get_stigmergy(node)` | Read stigmergy value. |
@@ -265,6 +265,18 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `decay_concepts()` | Time-based concept decay. |
 | `prune_below(threshold)` | Remove low-activation concepts. |
 | `save(path)` / `load(path)` | Persist / restore memory. |
+
+**SemanticMemoryConcurrent** (Rust, `rust_vsa/src/semantic.rs`) — Thread-safe DashMap-backed concept graph for parallel spreading activation.
+
+| Method | Description |
+|--------|-------------|
+| `add_concept(name, hv)` | Insert concept + HV into DashMap. |
+| `add_relation(src, tgt)` | Insert unweighted edge (weight=1.0). Backward-compatible alias. |
+| `add_relation_weighted(src, tgt, weight)` | **V18 new.** Insert weighted edge. Weight is the typed relation weight (e.g. 0.9 for `is_a`). Called by `SemanticMemory.add_relation()` on every write. |
+| `parallel_spread_activation(starts, steps, decay, min_activation, bidirectional)` | **V18 primary fast path.** Runs all spreading steps in Rayon. Uses per-edge weights: `spread = act * w * decay`. Returns `Dict[str, float]`. |
+| `parallel_semantic_search(query_hv, k)` | Parallel cosine search over all concepts. |
+| `get_neighbors(concept)` | Get `[(name, weight)]` neighbor list. |
+| `concept_count()` / `relation_count()` | Graph size statistics. |
 
 ### `episodic_memory.py`
 
@@ -281,6 +293,8 @@ Bridge between SNN spike patterns and VSA hypervectors.
 | `recall_by_outcome(outcome)` | Filter by outcome label. |
 | `recall_by_reward(min_reward)` | Filter by reward threshold. |
 | `get_statistics()` | Episode store statistics. |
+| `_rebuild_lsh(task_tag)` | Rebuild LSH index for one task from current deque contents. |
+| `_rebuild_lsh_index()` | **V18 new.** Full LSH index rebuild across all tasks. Clears stale bucket entries left by implicit deque evictions. Called automatically by `sleep()` in `cognitive_engine.py`. |
 
 ### `procedural_memory.py` *(V4 updated)*
 

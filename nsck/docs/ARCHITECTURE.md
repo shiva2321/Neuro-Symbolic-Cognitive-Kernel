@@ -857,8 +857,20 @@ These depend on which backend is active and how the system is configured.
 | Characteristic | Python-only path | With Rust backends (`NSCK_USE_RUST=1`, default) |
 |---|---|---|
 | **Semantic memory scale** | Practical ceiling ≈ 10 000 concepts (NetworkX graph + linear similarity scan) | `SemanticMemoryConcurrent` (Rust DashMap + Rayon parallel search) scales to 100 K+ concepts; `for_scale(n)` enables HNSW automatically at ≥ 10 000 |
-| **Spreading activation throughput** | ~83 ops/s at 1 000 nodes / 5 000 edges | ~1 250 ops/s (15× faster); relation weights and stigmergy are computed by the shim and included in the per-edge weight passed to Rust |
+| **Spreading activation throughput** | ~83 ops/s at 1 000 nodes / 5 000 edges | **V18:** `parallel_spread_activation` (all steps Rayon-parallel, weighted edges) — ~1 000 ops/s at 1K nodes, ~667 ops/s at 10K nodes (~16× faster). Rust DashMap is kept in sync at write time (no lazy O(N) scan per call). |
 | **Parallel similarity search** | Linear scan — O(N·D) | Rust `parallel_semantic_search` via Rayon — O(N·D/cores) with HNSW ANN shortcut |
+
+**V18 SemanticMemory write-time sync diagram:**
+
+```
+add_concept() / add_relation()
+    ├── NetworkX DiGraph (graph queries, persistence, Python fallback)
+    └── SemanticMemoryConcurrent DashMap (Rust, immediate O(1) mirror, spread_activation fast path)
+              └── add_relation_weighted(src, tgt, w(rel))   ← typed relation weight stored
+```
+
+Previously, Rust sync happened lazily inside `spread_activation_fast()` (O(N) scan per call).
+V18 pushes the sync to write time, so `spread_activation()` always finds a current DashMap.
 
 ---
 

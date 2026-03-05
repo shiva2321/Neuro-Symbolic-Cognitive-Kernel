@@ -36,21 +36,32 @@ class SocietalKnowledgeWorld:
         self._pending_co_activations = []
         
     def ingest_concept(self, concept_id: str, vector: HyperVector, source: str = "native") -> LivingHyperVector:
-        """Add or retrieve a concept."""
+        """Add or retrieve a concept.
+
+        The HNSW index insertion is throttled: only every 20th concept triggers
+        an immediate HNSW insert (O(log N) to O(N) search).  All concepts are
+        always registered in ``self.registry`` so the LivingHyperVector metadata
+        is complete.  A full HNSW rebuild happens during ``tick_world`` (every
+        100 ticks).  This avoids O(N²) cost during bulk loads (e.g. adding 1K+
+        concepts in a loop).
+        """
         if concept_id in self.registry:
             lhv = self.registry[concept_id]
             # Drift existing towards newer occurrence 10%
             lhv.hv = lhv.hv.weighted_bundle(vector, weight=0.9)
             lhv.activate(self.epoch_ticker)
             return lhv
-            
+
         lhv = LivingHyperVector(hv=vector, concept_id=concept_id, source=source)
         lhv.activate(self.epoch_ticker)
         self.registry[concept_id] = lhv
-        
-        # Base layer 0 of HNSW
-        self.hnsw.insert_node(concept_id, layer=0, vector=vector)
-        
+
+        # Throttle HNSW insertions: every 20th new concept gets indexed immediately;
+        # the rest are picked up during the next tick_world rebuild.
+        self._hnsw_insert_counter = getattr(self, '_hnsw_insert_counter', 0) + 1
+        if self._hnsw_insert_counter % 20 == 1:
+            self.hnsw.insert_node(concept_id, layer=0, vector=vector)
+
         return lhv
 
     def record_co_activation(self, concepts: List[str]):
@@ -70,9 +81,11 @@ class SocietalKnowledgeWorld:
         """
         self.epoch_ticker += 1
         
-        # 1. Decay and Bonding
-        for lhv in self.registry.values():
-            self.valence_engine.remove_stale_bonds(lhv, self.epoch_ticker)
+        # 1. Decay and Bonding — use Rust batch decay when societal_rs is available
+        # (remove_stale_bonds_all: O(N_bonds) single pass with Rayon parallelism)
+        self.valence_engine.remove_stale_bonds_all(
+            list(self.registry.values()), self.epoch_ticker
+        )
             
         while self._pending_co_activations:
             u, v = self._pending_co_activations.pop(0)
@@ -187,3 +200,83 @@ class SocietalKnowledgeWorld:
     def semantic_search(self, query: HyperVector, k: int = 10) -> List[Tuple[str, float]]:
         """Search utilizing the HNSW spatial routing."""
         return self.hnsw.search(query, k=k, ef=50)
+
+    def get_domain_centroids(self) -> List[Tuple[str, HyperVector, str]]:
+        """
+        Return a list of ``(domain_id, global_centroid_hv, hierarchy_level)``
+        for all domains that have formed and have a global centroid.
+        """
+        result = []
+        for dom_id, domain in self.domains.items():
+            if domain.global_centroid is not None:
+                result.append((dom_id, domain.global_centroid, domain.hierarchy_level))
+        return result
+
+    def query_city_guided(
+        self, query: HyperVector, k: int = 10
+    ) -> List[Tuple[str, float]]:
+        """
+        City-guided (two-stage) concept retrieval.
+
+        Stage 1 — Domain routing: find the closest knowledge domain (City/Town/…)
+        by comparing *query* against each domain's global centroid HV.
+
+        Stage 2 — Intra-domain search: within the winning domain, rank all
+        member concepts by direct HV similarity to *query*.
+
+        Falls back to flat ``semantic_search`` when no domains have formed yet.
+
+        Returns a list of ``(concept_id, similarity)`` sorted descending.
+        """
+        centroids = self.get_domain_centroids()
+        if not centroids:
+            # No cities formed yet — fall through to flat search
+            return self.semantic_search(query, k=k)
+
+        # Stage 1: find best-matching domain centroid
+        best_dom_id, best_sim = None, -1.0
+        for dom_id, centroid_hv, _ in centroids:
+            try:
+                sim = float(query.similarity(centroid_hv))
+            except Exception:
+                sim = 0.0
+            if sim > best_sim:
+                best_sim = sim
+                best_dom_id = dom_id
+
+        if best_dom_id is None:
+            return self.semantic_search(query, k=k)
+
+        # Stage 2: rank members of the winning domain
+        domain = self.domains[best_dom_id]
+        members: List[str] = []
+        for nh in domain.neighborhoods.values():
+            members.extend(nh.members)
+        # De-duplicate
+        members = list(dict.fromkeys(members))
+
+        candidate_scores: List[Tuple[str, float]] = []
+        for member_id in members:
+            lhv = self.registry.get(member_id)
+            if lhv is None:
+                continue
+            try:
+                sim = float(query.similarity(lhv.hv))
+            except Exception:
+                sim = 0.0
+            candidate_scores.append((member_id, sim))
+
+        candidate_scores.sort(key=lambda x: x[1], reverse=True)
+        top_k = candidate_scores[:k]
+
+        # If the domain had fewer than k members, augment with flat search
+        if len(top_k) < k:
+            flat = self.semantic_search(query, k=k)
+            seen = {c for c, _ in top_k}
+            for concept, sim in flat:
+                if concept not in seen:
+                    top_k.append((concept, sim))
+                    if len(top_k) >= k:
+                        break
+
+        return top_k

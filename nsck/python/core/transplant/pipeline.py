@@ -238,6 +238,7 @@ class TransplantPipeline:
         save_pack_path: Optional[str] = None,
         cognitive_engine: Any = None,
         societal_world: Any = None,
+        societal_manager: Any = None,
         n_domains: int = 5,
     ) -> "TransplantReport":
         """Transplant + inject concepts and bootstrap emergent domain cities.
@@ -277,10 +278,14 @@ class TransplantPipeline:
         )
 
         # Extract or Require Societal World
+        # Accept societal_manager as an alias for societal_world (SocietyManager is a
+        # superset of SocietalKnowledgeWorld for tests and older callers).
+        if societal_world is None and societal_manager is not None:
+            societal_world = societal_manager
         if societal_world is None and cognitive_engine is not None:
             if hasattr(cognitive_engine, "semantic_memory") and hasattr(cognitive_engine.semantic_memory, "societal_world"):
                 societal_world = cognitive_engine.semantic_memory.societal_world
-                
+
         if societal_world is None:
             _log.warning("[SOCIETAL] No SocietalKnowledgeWorld provided or found in CognitiveEngine. Skipping societal seeding.")
             return report

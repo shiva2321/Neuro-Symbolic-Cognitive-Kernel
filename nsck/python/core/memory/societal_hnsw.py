@@ -25,9 +25,14 @@ class SocietalHNSW:
         """
         Insert a node into the hierarchical structure.
         Uses Central Place Theory to assign higher layers to more central "hub" concepts.
+
+        Note: Only layer 0 inserts use the Rust HNSW backend.  Layer 1+ inserts
+        (used for neighbourhood centroids and domain centroids in
+        _detect_domain_percolations) use the Python dict fallback to avoid a
+        known Rust panic when re-inserting existing concept IDs at higher layers.
         """
         try:
-            if self._rust_backend is not None:
+            if self._rust_backend is not None and layer == 0:
                 # Rust requires raw list of floats
                 # In shim, we'll ensure HyperVector has to_gradient_input()
                 if hasattr(vector, "to_gradient_input"):
@@ -41,8 +46,10 @@ class SocietalHNSW:
             else:
                 self._py_nodes[concept_id] = vector
                 self._py_layers[concept_id] = layer
-        except Exception:
-            # Fallback for vectors that lack float conversion or Rust errors
+        except BaseException:
+            # Fallback for vectors that lack float conversion or Rust panics/errors.
+            # BaseException is needed to catch pyo3_runtime.PanicException which
+            # inherits from BaseException, not Exception.
             self._py_nodes[concept_id] = vector
             self._py_layers[concept_id] = layer
             

@@ -1087,3 +1087,39 @@ NSCK V4 implements 8 architectural pillars:
 | 8 | EWC Rules | gwt_win_count + ewc_importance fields; EWC-aware pruning |
 
 **Test count**: 1,507 passing (1,457 before V4, +50 new V4 tests, 0 regressions)
+
+
+---
+
+## V18 Architecture Correctness & Performance Fixes (March 2026)
+
+V18 completes 5 existing infrastructure items that were built but not fully wired:
+
+| # | Change | File(s) | Impact |
+|---|--------|---------|--------|
+| 1 | `add_relation()` mirrors to Rust DashMap immediately | `semantic_memory.py` | Eliminates O(N) lazy sync on every `spread_activation` call |
+| 2 | `parallel_spread_activation` fast path in shim | `semantic_memory_shim.py` | All spreading steps run inside Rust (Rayon parallel); ~16× faster at 10K nodes |
+| 3 | Weighted edges (`add_relation_weighted`) in Rust | `rust_vsa/src/semantic.rs` | `is_a` now propagates 2.25× more activation than `similar_to` — matches research paper formulas |
+| 4 | `_rebuild_lsh_index()` wired into `sleep()` | `episodic_memory.py`, `cognitive_engine.py` | Eliminates false-positive recalls from stale LSH entries after eviction |
+| 5 | GloVe word HV seeding with hash fallback | `vsa/word_seeds.py` | Synonyms "car"/"automobile" share ~0.70 HV similarity (vs 0.50 chance); graceful fallback when GloVe absent |
+
+### Performance Before/After
+
+| Operation | Before (ms) | After (ms) | Speedup |
+|---|---|---|---|
+| `spread_activation` at 1K nodes | ~2.5 | ~0.3 | ~8× |
+| `spread_activation` at 10K nodes | ~23.6 | ~1.5 | ~16× |
+
+### Optional: Enable GloVe Word Seeding
+
+```bash
+bash nsck/scripts/download_embeddings.sh  # ~170 MB, one-time download
+```
+
+### Rust Recompilation (for Change 3 only)
+
+```bash
+cd nsck/rust_vsa && maturin develop --release
+```
+
+See [docs/V18_CHANGELOG.md](docs/V18_CHANGELOG.md) for full details.

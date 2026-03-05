@@ -9,3 +9,8 @@ __pycache__/
 *.cpython-*.so
 *.cpython-*.pyd
 target/
+
+# V18: Word embedding files (large — download separately via scripts/download_embeddings.sh)
+data/embeddings/*.txt
+data/embeddings/*.bin
+data/embeddings/*.zip
