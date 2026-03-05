@@ -557,6 +557,55 @@ class CausalGraph:
                 self.context_links[link.context].discard(link)
             print(f"[CAUSAL] Pruned redundant link: {link.cause} -> {link.effect}")
 
+    # ------------------------------------------------------------------
+    # Serialisation — Bug 5.1 fix (V30): preserve causal links across saves/loads
+    # ------------------------------------------------------------------
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialise the full causal graph (all links + evidence) to a dict.
+
+        The serialised form preserves every CausalLink attribute so that a
+        round-trip through ``from_dict`` produces an identical graph.
+        """
+        links_data = []
+        for link in self.all_links:
+            links_data.append({
+                "cause": link.cause,
+                "effect": link.effect,
+                "relation": link.relation.value,
+                "strength": link.strength,
+                "context": link.context,
+                "evidence_count": link.evidence_count,
+            })
+        return {
+            "total_links": len(links_data),
+            "links": links_data,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "CausalGraph":
+        """Restore a CausalGraph that was serialised with ``to_dict()``.
+
+        Silently skips entries with unrecognised relation values so that
+        forward-compatibility is preserved.
+        """
+        graph = cls()
+        for entry in data.get("links", []):
+            try:
+                relation = CausalRelation(entry["relation"])
+                link = CausalLink(
+                    cause=entry["cause"],
+                    effect=entry["effect"],
+                    relation=relation,
+                    strength=float(entry.get("strength", 1.0)),
+                    context=entry.get("context"),
+                    evidence_count=int(entry.get("evidence_count", 0)),
+                )
+                graph.add_link(link)
+            except (KeyError, ValueError):
+                continue
+        return graph
+
 
 class CausalReasoner:
     """

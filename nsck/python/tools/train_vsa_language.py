@@ -4,9 +4,9 @@ import os
 import time
 from typing import Dict
 
-# Path hack
-# script is in: d:\Node_network\nsck\python\tools
-# we need d:\Node_network\nsck in sys.path to import 'python' package
+# Path setup: resolve project root relative to this script
+# script is in: <project_root>/nsck/python/tools
+# we need <project_root>/nsck in sys.path to import 'python' package
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if project_root not in sys.path:
     sys.path.append(project_root)

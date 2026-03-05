@@ -830,6 +830,32 @@ class CognitiveEngine:
         trace["confidence"] = confidence
         explanation = self.explainer.explain_action(action, raw_state_dict, task_tag, trace)
 
+        # 7b. V30: Trigger CounterfactualReasoner for hypothetical queries (Bug 5.3 fix)
+        _text_input = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else ""
+        _HYPOTHETICAL_PATTERNS = (
+            "if ", " if ", "what if", " would ", " unless ", " suppose ",
+            "had been", "had not", "hadn't", "would have",
+        )
+        if isinstance(_text_input, str) and any(p in _text_input.lower() for p in _HYPOTHETICAL_PATTERNS):
+            try:
+                _reasoner = self.causal_reasoners.get(task_tag)
+                if _reasoner is not None:
+                    _cf_result = _reasoner.counterfactual(
+                        action, "alternative_action", raw_state_dict, task_tag
+                    )
+                    trace["counterfactual"] = {
+                        "triggered": True,
+                        "query": _text_input[:120],
+                        "original_outcome": _cf_result.original_outcome,
+                        "counterfactual_outcome": _cf_result.counterfactual_outcome,
+                        "confidence": _cf_result.confidence,
+                    }
+            except Exception as _cf_exc:
+                trace["counterfactual"] = {"triggered": True, "error": str(_cf_exc)}
+        else:
+            if "counterfactual" not in trace:
+                trace["counterfactual"] = {"triggered": False}
+
         # 8. Update curiosity
         self.curiosity.record_visit(situation_hv, task_tag)
 

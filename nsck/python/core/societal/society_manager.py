@@ -723,6 +723,78 @@ class SocietyManager:
         """Current logical epoch."""
         return self._epoch
 
+    def snapshot(self) -> "SocietalSnapshot":
+        """Return a full observational snapshot of the current society state (V30).
+
+        Returns
+        -------
+        SocietalSnapshot
+            A fully populated snapshot dataclass.
+        """
+        from python.core.societal.snapshots import SocietalSnapshot
+
+        n = len(self._concepts)
+
+        all_bonds = [
+            bond
+            for lhv in self._concepts.values()
+            for bond in lhv._bonds.values()
+        ]
+        n_bonds = len(all_bonds) // 2  # undirected
+        avg_bond_strength = (
+            float(sum(b.strength for b in all_bonds) / len(all_bonds))
+            if all_bonds else 0.0
+        )
+        avg_activation = (
+            float(sum(lhv.activation for lhv in self._concepts.values()) / n)
+            if n > 0 else 0.0
+        )
+
+        # Communities from last clustering pass (resolution=1.0)
+        cluster_result = self._cluster_cache.get(1.0)
+        n_communities = cluster_result.n_communities if cluster_result is not None else 0
+
+        perc_threshold = self._percolation_threshold if self._percolation_threshold is not None else 1.0
+
+        giant = self._largest_component_size(0.0)
+
+        top_activated = sorted(
+            [(cid, lhv.activation) for cid, lhv in self._concepts.items()],
+            key=lambda x: x[1], reverse=True
+        )[:10]
+
+        top_bonded = sorted(
+            [(cid, len(lhv._bonds)) for cid, lhv in self._concepts.items()],
+            key=lambda x: x[1], reverse=True
+        )[:10]
+
+        domain_tree_summary = {}
+        try:
+            dtree = self.domain_tree()
+            domain_tree_summary = {
+                k: len(v) if isinstance(v, list) else sum(
+                    len(sub) if isinstance(sub, list) else 1
+                    for sub in v.values()
+                ) if isinstance(v, dict) else 1
+                for k, v in dtree.items()
+            }
+        except Exception:
+            pass
+
+        return SocietalSnapshot(
+            epoch=self._epoch,
+            n_concepts=n,
+            n_bonds=n_bonds,
+            avg_bond_strength=round(avg_bond_strength, 4),
+            avg_activation=round(avg_activation, 4),
+            n_communities=n_communities,
+            percolation_threshold=round(perc_threshold, 4),
+            giant_component_size=giant,
+            top_activated=top_activated,
+            top_bonded=top_bonded,
+            domain_tree_summary=domain_tree_summary,
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """Serialise the full society state (excluding raw HV bits)."""
         return {

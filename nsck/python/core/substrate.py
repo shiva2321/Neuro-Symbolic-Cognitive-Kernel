@@ -48,6 +48,9 @@ class SubstrateResult:
     procedural_hit: bool = False
     # V26 societal context
     societal_context: Optional[Dict[str, Any]] = None
+    # V30 transparency + Rust status
+    thought_trace: Optional[Any] = None  # ThoughtTrace (imported lazily to avoid circular)
+    rust_used: bool = False
 
 
 class NSCKSubstrate:
@@ -153,6 +156,44 @@ class NSCKSubstrate:
             atexit.register(self._save_semantic_memory, _path)
         else:
             self._auto_persist_path = None
+
+        # V30: Verify Rust backends and cache status
+        self._rust_status: Dict[str, bool] = self._verify_rust_backends()
+
+    def _hv_from_bits_or_fallback(self, hv_bits, fallback_seed: int = 0):
+        """Create a HyperVector from projected bits, falling back to a seeded one."""
+        import python.core.vsa.hypervec_shim as _hv
+        if hasattr(_hv.HyperVector, "from_bits"):
+            try:
+                return _hv.HyperVector.from_bits(hv_bits)
+            except Exception:
+                pass
+        return _hv.HyperVector(seed=fallback_seed % (2 ** 32))
+
+    def _verify_rust_backends(self) -> Dict[str, bool]:
+        """Check which Rust backends are loaded and log their status (V30)."""
+        status: Dict[str, bool] = {
+            "hypervec_rs": False,
+            "snn_rs": False,
+            "societal_rs": False,
+        }
+        try:
+            import hypervec_rs as _hvr  # noqa: F401
+            status["hypervec_rs"] = True
+        except ImportError:
+            logger.warning("[SUBSTRATE] hypervec_rs not available — falling back to Python VSA")
+        try:
+            import snn_rs as _sr  # noqa: F401
+            status["snn_rs"] = True
+        except ImportError:
+            logger.debug("[SUBSTRATE] snn_rs not available — falling back to Python SNN")
+        try:
+            import societal_rs as _socr  # noqa: F401
+            status["societal_rs"] = True
+        except ImportError:
+            logger.debug("[SUBSTRATE] societal_rs not available — falling back to Python societal")
+        logger.info("[SUBSTRATE] Rust backends: %s", status)
+        return status
 
     def _init_rich_adapters(self) -> None:
         """Initialize rich perception adapters based on perception_mode."""
@@ -415,6 +456,29 @@ class NSCKSubstrate:
         except Exception:
             pass
 
+        # V30: Build ThoughtTrace when transparency is enabled
+        thought_trace = None
+        rust_used = any(self._rust_status.values())
+        if getattr(self.config, 'enable_transparency', False):
+            try:
+                from python.core.transparency.thought_trace import ThoughtTrace
+                _raw_trace = dict(cog_state.trace or {})
+                # Inject societal context into trace for the ThoughtTrace stage
+                if societal_ctx:
+                    _raw_trace["societal_context_stage"] = dict(societal_ctx)
+                thought_trace = ThoughtTrace.from_cognitive_trace(
+                    query_id=f"q_{self._engine.stats.get('decisions', 0)}",
+                    input_text=str(input_data)[:200],
+                    input_modality=modalities[0] if modalities else "unknown",
+                    trace=_raw_trace,
+                    final_action=cog_state.chosen_action,
+                    confidence=cog_state.confidence,
+                    total_duration_ms=0.0,
+                    rust_used=rust_used,
+                )
+            except Exception as _tt_exc:
+                logger.debug("[SUBSTRATE] ThoughtTrace build failed: %s", _tt_exc)
+
         return SubstrateResult(
             chosen_action=cog_state.chosen_action,
             confidence=cog_state.confidence,
@@ -427,6 +491,8 @@ class NSCKSubstrate:
             uncertainty_bounds=ubounds,
             encoding_stats=enc_stats,
             societal_context=societal_ctx,
+            thought_trace=thought_trace,
+            rust_used=rust_used,
         )
 
     def process_multimodal(
@@ -529,6 +595,24 @@ class NSCKSubstrate:
 
         try:
             if isinstance(data, str):
+                # V30: Use transplanted projector for text if available
+                transplant_proj = self._transplant_projectors.get("language")
+                if transplant_proj is not None:
+                    try:
+                        hv_bits = transplant_proj.project(data)
+                        shv = self._hv_from_bits_or_fallback(hv_bits, hash(data) % (2**32))
+                        state = {"text": data}
+                        from python.core.perception.grounding_verifier import GroundingVerifier
+                        preds = GroundingVerifier().get_active_predicates(state, context=task_tag)
+                        return PerceptPacket.make(
+                            modality="text",
+                            situation_hv=shv,
+                            active_predicates=frozenset(preds),
+                            raw_state=state,
+                        )
+                    except Exception:
+                        pass  # fall through to default text encoding
+
                 state = {"text": data}
                 adapter = self._engine.adapters.get(task_tag)
                 if adapter:
@@ -546,6 +630,21 @@ class NSCKSubstrate:
             elif modality == "image" or (
                 isinstance(data, np.ndarray) and data.ndim >= 2
             ):
+                # V30: Use transplanted projector for vision if available
+                transplant_proj = self._transplant_projectors.get("vision")
+                if transplant_proj is not None:
+                    try:
+                        hv_bits = transplant_proj.project(data)
+                        shv = self._hv_from_bits_or_fallback(hv_bits, 0)
+                        return PerceptPacket.make(
+                            modality="image",
+                            situation_hv=shv,
+                            active_predicates=frozenset(),
+                            raw_state={"image_shape": list(data.shape) if hasattr(data, "shape") else []},
+                        )
+                    except Exception:
+                        pass  # fall through to default image encoding
+
                 from python.core.adapters.image_adapter import ImageAdapter
                 return ImageAdapter().encode(data, task_tag)
             elif modality == "audio":
