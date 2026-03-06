@@ -20,10 +20,9 @@ import numpy as np
 from typing import Optional
 
 # Ensure project root is in path so 'python.core...' works
-# We need 'd:\Node_network\nsck' to be in sys.path
-# Script is at: d:\Node_network\nsck\python\nsck_studio.py
-# Dirname: d:\Node_network\nsck\python
-# .. : d:\Node_network\nsck
+# Script is at: <project_root>/nsck/python/nsck_studio.py
+# Dirname: <project_root>/nsck/python
+# .. : <project_root>/nsck
 root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if root_path not in sys.path:
     sys.path.append(root_path)

@@ -399,7 +399,8 @@ class NSCKConfig:
     # When True, TextKnowledgeLearner uses EmbeddingVSABridge + sentence-transformers
     # to generate semantically-meaningful concept HVs instead of hash-based random ones.
     # This significantly improves VSA similarity search quality.
-    enable_embedding_bridge: bool = False
+    # V30: default True — graceful fallback to hash-HV if sentence-transformers not installed.
+    enable_embedding_bridge: bool = True
     embedding_bridge_model: str = "all-MiniLM-L6-v2"  # 22MB local model, 384-dim embeddings
 
     @classmethod
@@ -413,7 +414,8 @@ class NSCKConfig:
     # === V29 Feature Flags — Auto-Persistent Cross-Session Memory ===
     # When True, NSCKSubstrate auto-loads semantic memory on init and saves on shutdown.
     # Uses SemanticMemory.save()/load() (gzip+JSON) at the configured path.
-    enable_auto_persist: bool = False
+    # V30: default True — graceful no-op if path is missing or unwritable.
+    enable_auto_persist: bool = True
     auto_persist_path: str = "nsck_semantic_memory.json.gz"
 
     @classmethod
@@ -422,6 +424,29 @@ class NSCKConfig:
         cfg = cls()
         cfg.enable_auto_persist = True
         cfg.auto_persist_path = path
+        return cfg
+
+    # === V30 Feature Flags — Rust Backends + Transparency ===
+    # When True, Rust backends (hypervec_rs, snn_rs, societal_rs) are preferred.
+    use_rust_backend: bool = True
+    enable_rust_snn: bool = True
+    # When True, NSCKSubstrate.process() attaches a ThoughtTrace to every result.
+    enable_transparency: bool = False
+
+    @classmethod
+    def v30(cls) -> "NSCKConfig":
+        """V30 production config: all V29 + transplant + societal + Rust + auto-persist."""
+        cfg = cls.research()
+        cfg.enable_transplant = True
+        cfg.enable_societal = True
+        cfg.enable_societal_ewc = True
+        cfg.enable_embedding_bridge = True
+        cfg.enable_auto_persist = True
+        cfg.use_rust_backend = True
+        cfg.enable_rust_snn = True
+        cfg.enable_transparency = True
+        cfg.transplant_strategy = "svd_factored"
+        cfg.transplant_calibration_epochs = 5
         return cfg
 
 

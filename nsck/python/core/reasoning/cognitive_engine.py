@@ -734,6 +734,8 @@ class CognitiveEngine:
         if not goto_action_determination:
             winner_coalition = None  # will be set below
 
+        planner_coalition = None  # V31: ensure always defined for trace enrichment
+
         # D. [Gap 2] MEMORY coalition — episodic recall for case-based reasoning
         # Skip in fast_mode or when System 1 succeeded
         if not fast_mode and not goto_action_determination:
@@ -792,6 +794,338 @@ class CognitiveEngine:
         if system_1_confidence is not None:
             trace["system_1_confidence"] = system_1_confidence
 
+        # ── V31: Enrich trace with all 11 cognitive-stage dicts ──────────────
+        # encoding stage — pull from percept packet + transplant projector context
+        _enc_data: Dict[str, Any] = {
+            "modality": "text",
+            "hv_dimension": 10240,
+            "projector_used": "hash",
+            "encoding_time_ms": 0.0,
+        }
+        try:
+            _ep_mod = getattr(percept, "modality", "text")
+            _enc_data["modality"] = _ep_mod
+            _enc_data["adapter_name"] = getattr(percept, "adapter_name", "inline")
+            if hasattr(situation_hv, "__class__"):
+                _enc_data["hv_class"] = type(situation_hv).__name__
+                _enc_data["hv_dimension"] = 10240
+        except Exception:
+            pass
+        # Detect any transplant projector used for this encoding
+        _trans_proj = getattr(self, '_transplant_projectors', {})
+        if _trans_proj:
+            _enc_data["projector_used"] = next(iter(_trans_proj.keys()))
+            _enc_data["transplant_domains"] = list(_trans_proj.keys())
+        trace["encoding"] = _enc_data
+
+        # emotion stage — lightweight lexicon-based classifier
+        _emo_label = "neutral"
+        _emo_valence = 0.0
+        _emo_arousal = 0.0
+        try:
+            _txt_for_emo = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else str(raw_state_dict)
+            _txt_lower = _txt_for_emo.lower()
+            _POS_WORDS = {"good", "great", "excellent", "happy", "love", "wonderful",
+                          "amazing", "fantastic", "positive", "beautiful", "joy", "glad",
+                          "benefit", "help", "useful", "effective", "success", "win",
+                          "discover", "learn", "understand", "know", "insight", "clear"}
+            _NEG_WORDS = {"bad", "terrible", "awful", "hate", "horrible", "negative",
+                          "problem", "fail", "error", "wrong", "danger", "risk", "harm",
+                          "die", "death", "destroy", "collapse", "war", "disease"}
+            _HI_AROUSAL = {"urgent", "emergency", "critical", "immediately", "now",
+                           "danger", "attack", "run", "fight", "crisis", "important",
+                           "excited", "amazing", "terrifying", "shocking", "fire"}
+            _tokens_emo = set(_txt_lower.split())
+            pos_count = len(_tokens_emo & _POS_WORDS)
+            neg_count = len(_tokens_emo & _NEG_WORDS)
+            hi_arousal = len(_tokens_emo & _HI_AROUSAL)
+            if pos_count > neg_count:
+                _emo_label, _emo_valence = "positive", min(1.0, pos_count * 0.25)
+            elif neg_count > pos_count:
+                _emo_label, _emo_valence = "negative", -min(1.0, neg_count * 0.25)
+            elif "?" in _txt_for_emo:
+                _emo_label, _emo_valence = "curious", 0.1
+            _emo_arousal = min(1.0, hi_arousal * 0.3)
+            # Question words raise curiosity
+            if any(w in _txt_lower for w in ("what", "why", "how", "when", "where", "who")):
+                if _emo_label == "neutral":
+                    _emo_label = "curious"
+                    _emo_valence = 0.05
+            # Counterfactual / hypothetical → anticipatory
+            if any(p in _txt_lower for p in ("what if", "if ", "would ", "suppose")):
+                if _emo_label in ("neutral", "curious"):
+                    _emo_label = "anticipatory"
+                    _emo_valence = 0.1
+        except Exception:
+            pass
+        trace["emotion"] = {
+            "label": _emo_label,
+            "valence": round(_emo_valence, 4),
+            "arousal": round(_emo_arousal, 4),
+        }
+
+        # concept_extraction stage — use language module VSA parser
+        _concepts: list = []
+        _svo_triples: list = []
+        _entities: list = []
+        _intent_str = "unknown"
+        _frames: dict = {}
+        _parse_confidence = 0.0
+        try:
+            _txt_nlu = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else ""
+            if _txt_nlu.strip():
+                # understand() returns richer NLU output (intent, entities, SVO,
+                # semantic frames, clauses) than the deprecated parse() method.
+                _parse_result = self.language.understand(_txt_nlu)
+                _structured = _parse_result.get("structured_output", {})
+                _intent_str = _structured.get("intent", "unknown")
+                _entities = _structured.get("entities", [])
+                _relation = _structured.get("relation", "")
+                _deps = _structured.get("deps", {})
+                _frames = _structured.get("frames", {})
+                # Build SVO from deps
+                _subject = _deps.get("subject") or _frames.get("agent", "")
+                _verb = _deps.get("verb", "") or _intent_str
+                _object = _deps.get("object") or _frames.get("patient", "")
+                if _subject and _verb:
+                    _svo_triples = [{"S": _subject, "V": _verb, "O": _object}]
+                # Build comprehensive concept list:
+                # (1) entities, (2) semantic frame slots, (3) clause content tokens,
+                # (4) relation parts, (5) fallback: all tokens >4 chars not stopwords
+                _seen = set()
+                def _add_concept(c):
+                    if c and isinstance(c, str) and len(c) > 2 and c not in _seen:
+                        _seen.add(c)
+                        _concepts.append(c)
+                for _e in _entities:
+                    _add_concept(_e)
+                for _slot in ("agent", "action", "patient", "instrument", "location",
+                               "theme", "source", "destination", "cause"):
+                    _add_concept(_frames.get(_slot))
+                # Relation parts
+                if _relation and "→" in _relation:
+                    for _rp in _relation.split("→"):
+                        _add_concept(_rp.strip())
+                # Clause tokens — add content words (len>3, not stopwords)
+                _SW = {"this", "that", "what", "with", "have", "does", "from",
+                       "they", "will", "been", "were", "their", "when", "where",
+                       "which", "some", "such", "into", "than", "then", "also",
+                       "each", "more", "most", "much", "very", "just", "only",
+                       "about", "there", "would", "could", "should", "would",
+                       "work", "make", "used", "uses", "made", "made"}
+                for _cl in _structured.get("clauses", []):
+                    for _tok in _cl.get("tokens", []):
+                        if len(_tok) > 4 and _tok.lower() not in _SW:
+                            _add_concept(_tok.lower())
+                _parse_confidence = 0.7 if _intent_str != "unknown" else 0.4
+        except Exception as _nlu_exc:
+            pass
+
+        # V31: Auto-register extracted concepts into SemanticMemory so
+        # future queries can find them (keyword-hash based HVs)
+        try:
+            if _concepts and situation_hv is not None:
+                import python.core.vsa.hypervec_shim as _hv_shim
+                for _cname in _concepts[:20]:  # cap to avoid slowdown
+                    if _cname not in self.semantic_memory.concept_hvs:
+                        _seed = abs(hash(_cname)) % (2 ** 31)
+                        _c_hv = _hv_shim.HyperVector(_seed)
+                        self.semantic_memory.add_concept(_cname, {"source": "auto_nlu"})
+                        self.semantic_memory.concept_hvs[_cname] = _c_hv
+        except Exception:
+            pass
+
+        trace["concept_extraction"] = {
+            "concepts": _concepts,
+            "entities": _entities,
+            "svo_triples": _svo_triples,
+            "intent": _intent_str,
+            "frames": _frames,
+            "n_concepts": len(_concepts),
+            "parse_confidence": _parse_confidence,
+            "duration_ms": 0.0,
+        }
+
+        # semantic_search stage — query SemanticMemory with the situation HV
+        _sem_top_matches: list = []
+        _sem_total_concepts = 0
+        try:
+            if situation_hv is not None:
+                _sem_results = self.semantic_memory.query(situation_hv, k=10)
+                _sem_top_matches = [
+                    (str(cid), round(float(sim), 4))
+                    for cid, sim in _sem_results
+                    if isinstance(sim, (int, float)) and float(sim) > 0.0
+                ][:10]
+            _sem_total_concepts = len(getattr(self.semantic_memory, 'concept_hvs', {}))
+        except Exception:
+            pass
+        trace["semantic_search"] = {
+            "top_matches": _sem_top_matches,
+            "n_results": len(_sem_top_matches),
+            "n_total_concepts": _sem_total_concepts,
+            "best_similarity": _sem_top_matches[0][1] if _sem_top_matches else 0.0,
+            "duration_ms": 0.0,
+        }
+
+        # episodic_recall stage — recall similar episodes
+        _ep_recalled: list = []
+        _ep_best_sim = 0.0
+        try:
+            if situation_hv is not None:
+                _ep_results = self.episodic_memory.recall_similar(situation_hv, task_tag, k=5)
+                for _ep in _ep_results:
+                    try:
+                        _ep_sim = float(situation_hv.similarity(_ep.situation_hv))
+                    except Exception:
+                        _ep_sim = 0.0
+                    _ep_recalled.append({
+                        "action": str(_ep.action),
+                        "reward": round(float(_ep.reward), 4),
+                        "similarity": round(_ep_sim, 4),
+                    })
+                    _ep_best_sim = max(_ep_best_sim, _ep_sim)
+        except Exception:
+            pass
+        trace["episodic_recall"] = {
+            "n_episodes_recalled": len(_ep_recalled),
+            "best_similarity": round(_ep_best_sim, 4),
+            "recalled": _ep_recalled,
+            "duration_ms": 0.0,
+        }
+
+        # causal_inference stage — count rules fired + causal chains
+        _rules_fired = len(applicable) if applicable else 0
+        _causal_chains: list = []
+        try:
+            _cg = getattr(self.causal_reasoners.get(task_tag), 'causal_graph', None)
+            if _cg is not None and _concepts:
+                for _cname in _concepts[:3]:
+                    _edges = list(getattr(_cg, 'graph', {}).get(_cname, {}).items())
+                    if _edges:
+                        _causal_chains.append({
+                            "cause": _cname,
+                            "effects": [
+                                {"effect": str(e), "weight": round(float(w), 3)}
+                                for e, w in _edges[:3]
+                            ],
+                        })
+        except Exception:
+            pass
+        trace["causal_inference"] = {
+            "rules_fired": _rules_fired,
+            "applicable_rules": [r.consequence for r, _ in (applicable or [])[:3]],
+            "forward_chains": _causal_chains,
+            "causal_graph_nodes": 0,
+            "duration_ms": 0.0,
+        }
+        try:
+            _cg_any = next(iter(self.causal_reasoners.values()), None)
+            if _cg_any and hasattr(_cg_any, 'causal_graph'):
+                trace["causal_inference"]["causal_graph_nodes"] = len(
+                    getattr(_cg_any.causal_graph, 'graph', {})
+                )
+        except Exception:
+            pass
+
+        # planning stage — derive steps from language parse + planner
+        _plan_triggered = False
+        _plan_steps: list = []
+        try:
+            if self._plan_goal and planner_coalition is not None:
+                _plan_triggered = True
+                _plan_steps = getattr(self._active_plan, 'actions', []) or []
+                _plan_steps = [str(s) for s in _plan_steps]
+            elif _intent_str in ("command", "question") and _concepts:
+                # Soft plan from intent + entities when no explicit planner goal
+                _plan_triggered = False
+                if _intent_str == "command" and _concepts:
+                    _plan_steps = [f"understand_{_concepts[0]}", "retrieve_relevant_knowledge",
+                                   f"formulate_response_for_{_intent_str}"]
+        except Exception:
+            pass
+        trace["planning"] = {
+            "triggered": _plan_triggered,
+            "plan_steps": _plan_steps,
+            "goal": str(self._plan_goal) if getattr(self, '_plan_goal', None) else None,
+            "planner_active": self._plan_goal is not None,
+            "duration_ms": 0.0,
+        }
+
+        # self_model stage — calibration and novelty
+        _calibration_error = 0.0
+        _novelty = 0.0
+        _novel_concepts: list = []
+        try:
+            _task_conf = self.self_model.get_confidence(task_tag)
+            _calibration_error = abs(confidence - _task_conf)
+            # Novelty: how many new concepts were extracted vs already in memory
+            _known = set(getattr(self.semantic_memory, 'concept_hvs', {}).keys())
+            _novel_concepts = [c for c in _concepts if c not in _known]
+            _novelty = len(_novel_concepts) / max(len(_concepts), 1) if _concepts else 0.0
+        except Exception:
+            pass
+        trace["self_model"] = {
+            "calibration_error": round(_calibration_error, 4),
+            "novelty_score": round(_novelty, 4),
+            "task_confidence": round(confidence, 4),
+            "n_novel_concepts": len(_novel_concepts),
+            "duration_ms": 0.0,
+        }
+
+        # global_workspace stage — competition result
+        _kle = 0.0
+        try:
+            _kle = float(self.global_workspace.get_kle_uncertainty())
+        except Exception:
+            pass
+        trace["global_workspace"] = {
+            "winning_coalition": winner_coalition.source if winner_coalition else "DEFAULT",
+            "winning_action": winner_coalition.content if winner_coalition else "",
+            "winning_activation": round(float(winner_coalition.activation), 4) if winner_coalition else 0.0,
+            "n_coalitions": len(coalitions),
+            "coalition_sources": [c.source for c in coalitions],
+            "kle_uncertainty": round(_kle, 6),
+            "system_used": system_used or "unknown",
+            "duration_ms": 0.0,
+        }
+
+        # response_generation stage — strategy selection
+        _resp_strategy = "retrieval"
+        _source_sentences: list = []
+        _resp_confidence = confidence
+        try:
+            if _plan_triggered and _plan_steps:
+                _resp_strategy = "plan_execution"
+                _source_sentences = _plan_steps[:3]
+            elif _ep_recalled:
+                _resp_strategy = "episodic_cue"
+                _source_sentences = [ep["action"] for ep in _ep_recalled[:2]]
+            elif _sem_top_matches:
+                _resp_strategy = "semantic_retrieval"
+                _source_sentences = [m[0] for m in _sem_top_matches[:3]]
+            elif winner_coalition and winner_coalition.source == "RULES":
+                _resp_strategy = "rule_based"
+                _source_sentences = [winner_coalition.content]
+            elif winner_coalition and winner_coalition.source == "MATH":
+                _resp_strategy = "mathematical"
+                _source_sentences = [winner_coalition.content]
+            # Augment with NLU-derived response hint
+            if _intent_str not in ("unknown", "") and not _source_sentences:
+                _resp_strategy = f"nlu_{_intent_str}"
+                _source_sentences = _concepts[:2]
+        except Exception:
+            pass
+        trace["response_generation"] = {
+            "strategy": _resp_strategy,
+            "source_sentences": _source_sentences,
+            "final_action": winner_coalition.content if winner_coalition else "",
+            "confidence": round(_resp_confidence, 4),
+            "intent": _intent_str,
+            "duration_ms": 0.0,
+        }
+        # ── End V31 trace enrichment ──────────────────────────────────────────
+
         if winner_coalition:
             action = winner_coalition.content
             # Normalize action name against allowed actions (strip or add ACTION_ prefix)
@@ -829,6 +1163,32 @@ class CognitiveEngine:
         # 7. Generate explanation
         trace["confidence"] = confidence
         explanation = self.explainer.explain_action(action, raw_state_dict, task_tag, trace)
+
+        # 7b. V30: Trigger CounterfactualReasoner for hypothetical queries (Bug 5.3 fix)
+        _text_input = raw_state_dict.get("text", "") if isinstance(raw_state_dict, dict) else ""
+        _HYPOTHETICAL_PATTERNS = (
+            "if ", " if ", "what if", " would ", " unless ", " suppose ",
+            "had been", "had not", "hadn't", "would have",
+        )
+        if isinstance(_text_input, str) and any(p in _text_input.lower() for p in _HYPOTHETICAL_PATTERNS):
+            try:
+                _reasoner = self.causal_reasoners.get(task_tag)
+                if _reasoner is not None:
+                    _cf_result = _reasoner.counterfactual(
+                        action, "alternative_action", raw_state_dict, task_tag
+                    )
+                    trace["counterfactual"] = {
+                        "triggered": True,
+                        "query": _text_input[:120],
+                        "original_outcome": _cf_result.original_outcome,
+                        "counterfactual_outcome": _cf_result.counterfactual_outcome,
+                        "confidence": _cf_result.confidence,
+                    }
+            except Exception as _cf_exc:
+                trace["counterfactual"] = {"triggered": True, "error": str(_cf_exc)}
+        else:
+            if "counterfactual" not in trace:
+                trace["counterfactual"] = {"triggered": False}
 
         # 8. Update curiosity
         self.curiosity.record_visit(situation_hv, task_tag)

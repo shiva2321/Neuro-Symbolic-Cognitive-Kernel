@@ -38,3 +38,4 @@ nsck/__init__.py
 nsck/*.so
 !nsck/hypervec_rs*.so
 !nsck/snn_rs*.so
+nsck_semantic_memory.json.gz
