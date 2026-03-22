@@ -1,8 +1,8 @@
-# NSCK Module Reference — V4
+# NSCK Module Reference — V5
 
-Complete reference for every module in the NSCK codebase. ~96 core modules, ~232 classes across 13 subsystems. Every class and method listed here is taken directly from source code.
+Complete reference for every module in the NSCK codebase. ~151 core modules, ~309 classes across 13 subsystems. Every class and method listed here is taken directly from source code.
 
-> **V4 new modules** are marked *(V4 new)*. **V4 updated modules** are marked *(V4 updated)*.
+> Modules added in each release are noted by version.
 
 > **Ground truth is always the source files** under `nsck/python/core/`, `nsck/api/`, and `nsck_ai_model/`.
 
@@ -27,6 +27,9 @@ Complete reference for every module in the NSCK codebase. ~96 core modules, ~232
 - [Bootstrap](#bootstrap-v4-new)
 - [Seeding](#seeding)
 - [Transplant](#transplant-v15)
+- [Societal](#societal)
+- [Transparency](#transparency)
+- [Vision](#vision)
 
 ---
 
@@ -1482,4 +1485,49 @@ Integration logic (when `report.passed`):
 
 ---
 
-*End of NSCK Module Reference — V4*
+## Societal
+
+`python/core/societal/` — Hierarchical "Human Society" knowledge model (V5).
+
+Key modules: `societal_knowledge_world.py`, `living_hypervector.py`, `societal_hnsw.py`, `societal_ewc.py`, `spectral_laplacian_rg.py`, `percolation_monitor.py`
+
+**SocietalKnowledgeWorld** — Top-level hierarchical memory substrate.
+- `add_concept(name, hv, layer)` — Add a concept at a societal layer (Town/City/State/Country/Continent)
+- `query(hv, layer, k)` — Query nearest concepts at a given layer
+- `coarse_grain(target_layer)` — Spectral RG coarse-graining step
+
+**LivingHyperVector** — Active state tracking for concepts.
+- Fields: `energy`, `stability`, `social_valence`
+- `update_state(feedback)` — Update energy/stability from interaction feedback
+
+**SocietalEWC** — Elastic Weight Consolidation adapted for societal layers.
+
+**SpectralLaplacianRG** — Spectral renormalization group coarse-graining.
+
+**PercolationMonitor** — Monitors cluster density for autonomous domain emergence.
+
+---
+
+## Transparency
+
+`python/core/transparency/` — Decision trace and explainability (V5 enriched).
+
+Key module: `thought_trace.py`
+
+**ThoughtTrace** — Structured record of a decision's reasoning chain.
+- Every decision produced by `CognitiveEngine.decide()` yields a `ThoughtTrace`
+- Contains: coalition votes, active predicates, GWT winner, safety gate verdict, confidence
+
+---
+
+## Vision
+
+`python/core/vision/` — Vision processing pipeline (V22 HD vision).
+
+Key module: `vision_processor.py` (or similar)
+
+Provides high-dimensional vision encoding: image patches → hypervectors via FPE codebook. Integrates with the 65-dimensional ImageAdapter for VSA-compatible visual representations.
+
+---
+
+*End of NSCK Module Reference — V5*

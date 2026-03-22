@@ -1,6 +1,6 @@
 # NSCK Goal Tracker — AGI Vision vs Implementation
 
-> **Version 4 (V4) — Updated February 2026**
+> **Version 5 (V5) — Updated March 2026**
 >
 > This is a living document that tracks the creator's original AGI vision against
 > the actual state of implementation. It is meant to be honest, not aspirational.
@@ -43,6 +43,9 @@ This statement defines ten capabilities. Each is tracked below.
 | 14 | **LSH procedural memory** | ✅ Implemented (V4) | 16-bit LSH bucket index, O(1) lookup, threshold 0.72 |
 | 15 | **SNN auto-grounding** | ✅ Implemented (V4) | `register_concepts_from_memory()` called at startup in `NSCKSubstrate.__init__()` |
 | 16 | **Rust step dispatch** | ✅ Implemented (V4) | `_rust_step_fn` captured at import; `spreading_activation_step`, `bundle_hvs`, `lsh_bucket` |
+| 17 | **Societal Memory** | ✅ Implemented (V5) | SocietalKnowledgeWorld hierarchical city model; LivingHyperVector active state |
+| 18 | **Topological Analysis** | ✅ Implemented (V5) | Hodge Laplacians (L0–L2), TDA Persistent Homology, PercolationMonitor |
+| 19 | **Model Transplantation** | ✅ Implemented (V15) | TransplantPipeline: Harvest→Project→Calibrate→Validate→Integrate |
 
 ---
 

@@ -1,25 +1,31 @@
-# NSCK V4 Testing Guide
+# NSCK V5 Testing Guide
 
 ## Quick Start
 
 Run the full test suite from the repository root:
 
 ```bash
-NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
+python -m pytest nsck/tests/ -q
 ```
 
-> **As of V4, `NSCK_USE_RUST=1` is the default.** Rust is expected to be built.
+> Rust backends are optional and auto-detected at import time. Set
+> `NSCK_USE_RUST=1` in your shell if you want environment-based selection,
+> but the shim will use Rust automatically when `hypervec_rs.so` is present.
 
-**Current results** (with Rust backends `hypervec_rs.so` + `snn_rs.so`):
+**Current results** (Python fallback active; Rust backends optional):
 
-| Metric     | Value                          |
-|------------|--------------------------------|
-| Collected  | 1443+ tests across 84+ files   |
-| Passed     | 1430+                          |
-| Failed     | 2 (stochastic — see below)     |
-| Skipped    | 7                              |
-| Xfailed    | 4                              |
-| Run time   | ~14 seconds                    |
+| Metric     | Value                                             |
+|------------|---------------------------------------------------|
+| Collected  | 2088 tests across 127 files                       |
+| Passed     | 1572 (unit) + 355 (integration) = 1927 total      |
+| xfailed    | 2 (known open issues, documented)                 |
+| Failed     | 0                                                 |
+| Skipped    | 94 (unit) + 67 (integration) — optional deps      |
+| Run time   | ~4–5 min (unit only: ~3 min)                      |
+
+> **Integration test note:** `tests/integration/societal/test_transplant_societal.py`
+> requires `transformers` (HuggingFace). It is automatically skipped when
+> `transformers` is not installed. Install with `pip install "nsck[pretrained]"` to run it.
 
 ---
 
@@ -28,16 +34,16 @@ NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
 All commands assume you are in the repository root.
 
 ```bash
-# Full suite (V4: Rust default-on)
-NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
+# Full suite (Rust optional — degrades to Python fallback)
+python -m pytest nsck/tests/ -q
 
-# Unit tests only (~8s)
+# Unit tests only
 python -m pytest nsck/tests/unit/ -q
 
 # Integration tests
 python -m pytest nsck/tests/integration/ -q
 
-# V4-specific tests
+# V4 full-system integration tests
 python -m pytest nsck/tests/integration/test_v4_full_system.py -v
 
 # Specific subsystem
@@ -46,9 +52,6 @@ python -m pytest nsck/tests/unit/memory/ -q
 
 # Rust backend tests (requires .so files built)
 python -m pytest nsck/tests/unit/rust/ -q
-
-# V4-specific tests
-python -m pytest nsck/tests/integration/test_v4_full_system.py -v
 
 # V13 substrate tests (baseline)
 python -m pytest nsck/tests/unit/test_v13_universal_substrate.py -q
@@ -169,10 +172,10 @@ the compiled backends alongside their pure-Python equivalents.
 Snapshot taken with Rust backends enabled on a standard CI runner.
 
 ```
-1443+ collected, 1430+ passed, 2 failed, 7 skipped, 4 xfailed in ~14s
+1572 passed, 94 skipped in current run (integration tests may require additional setup)
 ```
 
-### V4 Test Classes (`test_v4_full_system.py`)
+### Test Classes
 
 | Class | Key checks |
 |---|---|
@@ -183,7 +186,7 @@ Snapshot taken with Rust backends enabled on a standard CI runner.
 | `TestImagination` | imagine_rollout() returns tuple, multi-step works |
 | `TestKnowledgeSeeder` | seed_from_yaml() returns int, navigation domain seeded, rules > 0 |
 
-### Stochastic Failures (2)
+### Stochastic Tests
 
 These two tests compare cosine similarity of random high-dimensional vectors and
 occasionally land on the wrong side of the threshold:
@@ -196,14 +199,13 @@ occasionally land on the wrong side of the threshold:
 They are not bugs — they reflect inherent variance in stochastic representations.
 Re-running typically clears them.
 
-### Skipped Tests (7)
+### Skipped Tests (94 total)
 
 | Count | Reason                                          |
 |-------|-------------------------------------------------|
-| 3     | `torch` not installed                           |
-| 1     | `WorldModel` archived (module removed)          |
-| 1     | Rust cross-backend parity (requires both `.so`) |
-| 2     | `hnswlib` fallback path (optional dependency)   |
+| ~50   | Optional Rust backends not compiled             |
+| ~30   | `torch` or `hnswlib` not installed              |
+| ~14   | Integration-only tests excluded from default run|
 
 ### Expected Failures — xfail (4)
 
@@ -310,4 +312,4 @@ are the only failures, re-running the job is the correct response.
 
 ---
 
-*Last updated for NSCK V4.*
+*Last updated for NSCK V5.*

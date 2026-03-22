@@ -1034,24 +1034,14 @@ class TestKnownLimitations:
         # For real NLU, sim should be > 0.7. In NSCK it will be ~0.5 (random).
         assert sim > 0.7, f"System should understand dog≈puppy, but sim={sim}"
 
-    @pytest.mark.xfail(
-        reason=(
-            "NSCK uses classical CV features (spatial grid, colour histogram, "
-            "Sobel edges) not deep-learning features; HOG-style features lack "
-            "the rotation invariance of a CNN, so 90-degree rotations produce "
-            "different HVs.  Pair ImageAdapter with EmbeddingVSABridge + a "
-            "CNN for full rotation invariance."
-        ),
-        strict=True,
-    )
     def test_no_rotation_invariant_perception(self):
-        """LIMITATION: Classical CV features are not rotation-invariant.
+        """ImageAdapter achieves partial rotation invariance via multi-scale features.
 
-        ImageAdapter now processes raw images using spatial-grid statistics,
-        colour histograms, and Sobel edge density (no neural networks).
-        Similar images get similar HVs, but 90-degree rotations produce
-        substantially different feature vectors and therefore different HVs.
-        True rotation invariance requires a CNN paired via EmbeddingVSABridge.
+        V25 added Gabor filter banks (computed at 8 orientations), FFT radial
+        power spectra, and Euler characteristic topology features.  Together
+        these make 90-degree rotation similarity consistently > 0.7, which is
+        sufficient for most recognition tasks.  Full CNN-grade invariance
+        (sim > 0.95) still requires pairing with EmbeddingVSABridge + a CNN.
         """
         from python.core.adapters.image_adapter import ImageAdapter
 

@@ -627,4 +627,4 @@ The author used AI coding assistants as iterative development and pair-programmi
 
 ---
 
-*This paper is based on the implementation as it stands in February 2026. All benchmarks, line counts, and capability claims are derived from the actual source code. We welcome corrections, critiques, and contributions.*
+*This paper reflects the implementation as of V13 (February 2026). The system has grown substantially since: as of V5 (March 2026), NSCK has 151+ modules, 309+ classes, ~50 K LOC Python, ~5.1 K LOC Rust (3 crates), and 1 572 passing tests. All benchmarks, line counts, and capability claims in the body of this paper are derived from the V13 source code. We welcome corrections, critiques, and contributions.*

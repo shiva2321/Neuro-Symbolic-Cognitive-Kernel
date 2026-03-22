@@ -1,15 +1,15 @@
-# NSCK V4 — Repository Navigation Map
+# NSCK V5 — Repository Navigation Map
 
-> **~96 core Python modules · ~232 classes · ~38K LOC Python · ~4.5K LOC Rust · 1443+ tests**
+> **~151 core Python modules · ~309 classes · ~50K LOC Python · ~5.1K LOC Rust · 1572 unit + 355 integration passing**
 
 | Metric | Value |
 |--------|-------|
-| Core Python modules | ~96 (in `python/core/`, excl. `__init__.py` and tests) |
-| Classes | ~232 |
-| Python core LOC | ~38,000 |
-| Rust LOC | ~4,500 |
-| Test files / LOC | 84+ / ~19,000+ |
-| Tests | 1443+ (1430+ pass, 2 stochastic, 7 skipped, 4 xfailed) |
+| Core Python modules | 151 (in `python/core/`, excl. `__init__.py` and tests) |
+| Classes | ~309 |
+| Python core LOC | ~50,642 |
+| Rust LOC | ~5,149 |
+| Test files / LOC | 127 files |
+| Tests | 1572 unit + 355 integration passing |
 
 ---
 
@@ -17,7 +17,7 @@
 
 ```
 nsck/
-├── python/core/                  94 modules, ~36K LOC
+├── python/core/                  151 modules, ~50K LOC
 │   ├── adapters/      (10 files) Input normalization and multimodal fusion
 │   ├── cognitive/      (5 files) Higher-order cognition and safety
 │   ├── integration/    (5 files) Config, persistence, fusion, explanation
@@ -30,8 +30,12 @@ nsck/
 │   ├── multimodal/     (2 files) Cross-modal processing and image generation
 │   ├── perception/     (8 files) SNN, symbol grounding, VSA-SNN bridge
 │   ├── reasoning/     (14 files) Central engine, GWT, causal, planning
+│   ├── societal/               Hierarchical city model (V5 new)
 │   ├── training/       (3 files) VSA/SNN training and benchmarks
+│   ├── transplant/             Model transplantation pipeline (V15)
+│   ├── transparency/           Decision trace and explainability (V5)
 │   ├── types/          (2 files) PerceptPacket, ModalityAdapter protocols
+│   ├── vision/                 Vision processing pipeline (V22)
 │   ├── vsa/            (7 files) HyperVector ops (Python + Rust shim)
 │   └── substrate.py              Public API entry point
 │   (bootstrap/ V4 new)
@@ -41,16 +45,16 @@ nsck/
 │           └── scheduling.yaml   Scheduling domain kit
 ├── rust_vsa/                     Rust VSA accelerator (PyO3) → hypervec_rs.so (4.3 MB)
 ├── rust_snn/                     Rust SNN accelerator (PyO3) → snn_rs.so (1.1 MB)
+├── rust_societal/                Rust societal HV accelerator (PyO3) → societal_rs.so
 ├── api/                          FastAPI REST: /decide, /learn, /sleep, /status
-├── tests/                        84+ files across unit/, integration/, core_architecture/,
+├── tests/                        127 files across unit/, integration/, core_architecture/,
 │   │                             experiments/, regression/, benchmarks/
-│   │                             V4 new: tests/integration/test_v4_full_system.py (6 classes)
 ├── benchmarks/                   Benchmark runner + domain benchmarks
 ├── eval/                         Evaluation harness and end-to-end evals
 ├── scripts/                      Utility scripts (verify_rust, generate_v11_report)
 ├── examples/                     Runnable demos (quickstart, custom_module, learn_from_text, demo_snn)
 ├── data/                         Built-in datasets
-├── docs/                         12+ documentation files
+├── docs/                         Documentation files
 ├── pyproject.toml                Project metadata and build config
 └── conftest.py                   Shared pytest fixtures
 ```
@@ -209,12 +213,13 @@ graph LR
     subgraph Python
         SHIM["hypervec_shim.py"]
         SSHIM["snn_shim.py"]
-        MOD["94 core modules"]
+        MOD["151 core modules"]
     end
 
     subgraph Compiled["Compiled Extensions"]
         VSA_SO["hypervec_rs.so (4.3 MB)"]
         SNN_SO["snn_rs.so (1.1 MB)"]
+        SOC_SO["societal_rs.so"]
     end
 
     subgraph rust_vsa["rust_vsa/ (~3K LOC)"]
@@ -237,7 +242,7 @@ graph LR
 ## Test Organization
 
 ```
-tests/                            84 files, ~19K LOC, 1437 tests
+tests/                            127 files, 2088 test functions
 ├── unit/                         Fine-grained module tests
 ├── integration/                  Cross-subsystem pipeline tests
 ├── core_architecture/            Architecture invariant checks
@@ -248,21 +253,19 @@ tests/                            84 files, ~19K LOC, 1437 tests
 
 | Result | Count |
 |--------|-------|
-| Pass (with Rust) | 1430+ |
-| Stochastic | 2 |
-| Skipped | 7 |
-| xfailed | 4 |
-| **Total** | **1443+** |
+| Passed | 1572 (unit) + 355 (integration) |
+| Skipped | 94 |
+| Failed | 0 |
+| **Total collected** | **2088** |
 
 ---
 
 ## Quick Reference
 
 ```bash
-NSCK_USE_RUST=1 pytest                    # run all 1443+ tests (Rust default-on)
-pytest tests/integration/test_v4_full_system.py -v  # V4 tests
-pytest tests/unit/reasoning/             # subsystem tests
-pytest tests/integration/               # pipeline tests
-uvicorn nsck.api.nsck_api:app            # start REST API
-python -m nsck.benchmarks.runner         # run benchmarks
+pytest                            # run all tests
+pytest tests/unit/reasoning/      # subsystem tests
+pytest tests/integration/         # pipeline tests
+uvicorn nsck.api.nsck_api:app     # start REST API
+python -m nsck.benchmarks.runner  # run benchmarks
 ```

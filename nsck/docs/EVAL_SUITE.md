@@ -204,7 +204,7 @@ assert ok, "NSCK-ES regression detected!"
 | 1.0 | V16 | Initial release — 5 tasks, composite formula |
 | 1.1 | V4 | Rust default-on; V4 Rust benchmark section added |
 
-See `nsck/docs/V4_CHANGELOG.md` for full V4 changes.
+See `nsck/docs/CHANGELOG.md` for full version history.
 
 ---
 

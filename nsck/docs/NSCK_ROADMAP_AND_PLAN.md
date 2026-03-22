@@ -35,7 +35,12 @@ directions. Every entry below has been verified against the codebase.
 | **V15** | Model Transplantation | TransplantPipeline, ModelHarvester, SVDFactoredProjector, STDPCalibrator, TransplantValidator | 1 375 |
 | **V16** | Security + Lifelong + Eval + Seeding | KnowledgePack gzip+JSON (no pickle), EWC, NSCK-ES evaluation suite, ConceptNetLoader/SemanticSeeder/BertSeeder | 1 420 |
 | **V17** | Enrichment Layer + Glass-Box | CausalEnricher, PerceptualEnricher, SemanticEnricher, GlassBoxTracer, CrossModalEnricher, 10 new config flags, vsa_capability_benchmark | 1 465 (1 607 with Rust) |
-| **V5 (Societal)** | Societal Knowledge World | Hierarchical "Human Society" model, Spectral RG coarse-graining, Hodge Laplacians (L0-L2), TDA Persistent Homology monitoring | 1 742 |
+| **V18** | Concurrent Memory | SemanticMemoryConcurrent (Rayon parallel spreading activation), write-time Rust DashMap mirror, weighted edges, LSH stale-index fix, GloVe word HV seeding | 1 607 |
+| **V19–V21** | HD Vision + Real-World Eval | NSCKHDVisionClassifier (10 240-bit binary HV, PCA-64), realworld_e2e_benchmark.py (Rust 51.7× avg), NSCK-ES=1.000, Iris 70% | ~1 715 |
+| **V22–V25** | Image Feature Expansion | 644-dim feature extractor (Gabor+FFT+Euler+HOG), rotation augmentation (0/90/180/270°), level-coding TF-IDF (58.8% accuracy), PCA-128 | ~1 800 |
+| **V26–V28** | Societal HV Representation | LivingHyperVector, Bond, SocietyManager, SocietalContextRouter, societal_rs Rust crate, societal_transplant(), update_domain_affinity() normalisation fix | ~1 900 |
+| **V29–V31** | ThoughtTrace Enrichment + Transplant | All 11 ThoughtTrace stages populated live in decide(), language.understand() for NLU, auto-register concepts, TF-IDF transplant (366 concepts, 98.6% SVM) | 1 918 |
+| **V5 (current)** | Societal Knowledge World — public release | Consolidated V18–V31 features; 151+ modules, 309+ classes, ~50K LOC Python, ~5.1K LOC Rust, 3 Rust crates | 1 572 passed, 94 skipped |
 
 ---
 
@@ -257,16 +262,18 @@ additional multi-modal capabilities:
 
 ---
 
-## Current State Summary
+## Current State Summary (V5 — March 2026)
 
 | Metric | Value |
 |--------|-------|
-| Core modules | 99 |
-| Classes | 242 |
-| Python LOC | ~37 500 |
-| Rust LOC | ~4 300 |
-| Total tests | 1 465 (Python) / 1 607 (with Rust) |
-| Rust speed-up | 3–50× over pure Python (V17 verified) |
+| Core modules | 151+ |
+| Classes | ~309 |
+| Python LOC | ~50 642 |
+| Rust LOC | ~5 149 (3 crates: rust_vsa, rust_snn, rust_societal) |
+| Test files | 127 |
+| Total test functions | 2 088 |
+| Tests passing | 1 572 passed, 94 skipped |
+| Rust speed-up | 5–85× over pure Python (when built) |
 
 The architecture is fully self-contained: no external neural-network weights
 are required at runtime. All learning happens inside the HV space via
@@ -383,7 +390,7 @@ version is tagged.*
 | Change 4: LSH stale-index fix + `_rebuild_lsh_index()` | `episodic_memory.py`, `cognitive_engine.py` | ✅ Complete |
 | Change 5: GloVe word HV seeding with hash fallback | `vsa/word_seeds.py`, `data/embeddings/` | ✅ Complete |
 | Integration tests (20 tests, 11 pass on Python) | `tests/integration/test_v18_end_to_end.py` | ✅ Complete |
-| V18 Changelog | `docs/V18_CHANGELOG.md` | ✅ Complete |
+| V18 Changelog | `docs/CHANGELOG.md` | ✅ Complete |
 
 ### Key Metrics
 
@@ -400,25 +407,37 @@ version is tagged.*
 
 ---
 
-## V5 — Societal Knowledge World (March 2026)
+## V5 (Public Release) — Societal Knowledge World (March 2026)
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — *current stable release*
+
+This is the public release label for the consolidated V18–V31 development
+sprint. It ships 151+ modules, 309+ classes, ~50 K LOC Python, ~5.1 K LOC
+Rust (3 crates), and 1 572 tests passing.
 
 ### Deliverables
 
 | Module | Status |
 |--------|--------|
 | `SocietalKnowledgeWorld` | ✅ Implemented |
-| `Hierarchical Domain Model` | ✅ Implemented |
+| `LivingHyperVector` + `Bond` + `SocietyManager` | ✅ Implemented |
+| `Hierarchical Domain Model` (Town→City→State→Country→Continent) | ✅ Implemented |
 | `SpectralLaplacianRG` | ✅ Implemented |
 | `HodgeLaplacian (L0-L2)` | ✅ Implemented |
 | `TDAHealthMonitor` | ✅ Implemented |
 | `PercolationMonitor` | ✅ Implemented |
-| `V5 Web Dashboard` | ✅ Implemented |
+| `SocietalContextRouter` wired into NSCKSubstrate | ✅ Implemented |
+| `SocietalEWCCombiner` (SoCL) | ✅ Implemented |
+| `ThoughtTrace` — all 11 stages populated live in `decide()` | ✅ Implemented |
+| `NSCKHDVisionClassifier` — 644-dim features, PCA-128 | ✅ Implemented |
+| `TransplantPipeline.societal_transplant()` | ✅ Implemented |
+| `rust_societal` crate | ✅ Implemented |
+| Societal FastAPI dashboard (`api/societal_dashboard.py`) | ✅ Implemented |
 | `SocietalHNSW` | ✅ Implemented |
 
 ### Design Principles
 
-1. **Knowledge as a Society**: Concepts are "citizens" with agency, forming organic hierarchies (Town -> City -> State).
+1. **Knowledge as a Society**: Concepts are "citizens" with agency, forming organic hierarchies (Town → City → State → Country → Continent).
 2. **Topological Resilience**: Semantic health is monitored via persistent homology and power-law distributions.
 3. **Hierarchical Routing**: Reasoning uses the societal structure for both local and global inference.
+4. **Transparent Decisions**: Every `decide()` call populates all 11 ThoughtTrace stages for full glass-box traceability.

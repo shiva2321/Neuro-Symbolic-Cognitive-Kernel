@@ -43,8 +43,8 @@ design philosophy:
 - **Cognitive** — the whole architecture follows *Global Workspace Theory*
   (GWT), the cognitive-science model for consciousness that says different
   specialist modules compete to broadcast their result globally.
-- **Kernel** — it is a small, embeddable core (~40 000 lines of Python,
-  ~4 300 lines of Rust), not a finished application.
+- **Kernel** — it is a small, embeddable core (~50 000 lines of Python,
+  ~5 100 lines of Rust), not a finished application.
 
 The **bridge** between the neural and symbolic layers is
 **Vector Symbolic Architecture (VSA)**: every concept, rule, and memory is
@@ -566,9 +566,9 @@ All measured on CPU (no GPU), Python 3.12, NumPy 1.26.
 
 | Operation | Latency |
 |-----------|---------|
-| XOR | 1.35 µs |
-| Bundle | 57.81 µs |
-| Similarity | 7.20 µs |
+| XOR | ~2.1 µs |
+| Bundle | ~64.5 µs |
+| Similarity | ~10.7 µs |
 
 ### Cognitive engine (decision loop):
 

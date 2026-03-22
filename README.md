@@ -2,7 +2,7 @@
 
 **V5 (Societal Knowledge World) · March 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
 
-102+ modules · 245+ classes · ~40K LOC Python · ~4.8K LOC Rust · 1,742 tests passing
+151+ modules · 309+ classes · ~50K LOC Python · ~5.1K LOC Rust · 1,572 unit + 355 integration tests passing
 
 ---
 
@@ -93,6 +93,7 @@ pip install -r requirements.txt
 pip install maturin
 cd nsck/rust_vsa && maturin develop --release && cd ../..
 cd nsck/rust_snn && maturin develop --release && cd ../..
+cd nsck/rust_societal && maturin develop --release && cd ../..
 
 # 4. Verify Rust is active
 NSCK_USE_RUST=1 python nsck/scripts/verify_rust.py
@@ -127,18 +128,22 @@ sub.sleep("navigation")
 
 ---
 
-## Performance (Rust enabled, x86-64)
+## Performance
 
-| Benchmark | Throughput | Latency |
-|-----------|-----------|---------|
-| VSA bind | 4 109 142 ops/s | 0.24 μs/op |
-| VSA similarity | 3 793 104 ops/s | 0.26 μs/op |
-| VSA bundle | 1 354 342 ops/s | 0.74 μs/op |
-| Memory query (1 K concepts) | — | 0.56 ms |
+> **Note:** The numbers below are for the **Python fallback** (no compiled Rust), which is the default in most environments. Rust backends accelerate 5–85× when compiled (optional).
+
+| Operation | Python Fallback | Notes |
+|-----------|----------------|-------|
+| VSA bind (XOR, 10240-bit) | ~2.1 µs (Python fallback) | NumPy |
+| VSA similarity | ~10.7 µs (Python fallback) | NumPy |
+| VSA bundle (pair) | ~64.5 µs (Python fallback) | NumPy |
+| Memory query (1 K concepts) | — | varies |
 | Decision loop | — | p50 = 0.13 ms, p99 = 0.20 ms |
 | NLU (NgramNLU) | 151 019 sent/s | — |
 | Causal ΔP | 2 070 973 ops/s | — |
 | SNN LIF step | — | 0.017 ms |
+
+Rust backends accelerate 5–85× when compiled (optional).
 
 ---
 
@@ -150,8 +155,9 @@ Neuro-Symbolic-Cognitive-Kernel/
 │   ├── python/core/        # Core kernel (perception, memory, reasoning, …)
 │   ├── rust_vsa/            # Rust VSA accelerator (PyO3/maturin)
 │   ├── rust_snn/            # Rust SNN accelerator (PyO3/maturin)
+│   ├── rust_societal/       # Rust societal HV accelerator (PyO3/maturin)
 │   ├── api/                 # FastAPI REST interface
-│   ├── tests/               # 1,669 tests
+│   ├── tests/               # 127 test files, 2088 test functions
 │   ├── docs/                # Architecture, formulas, roadmap, references
 │   ├── scripts/             # Utility scripts
 │   └── data/                # Built-in datasets
@@ -177,9 +183,9 @@ Detailed docs live in [`nsck/docs/`](nsck/docs/):
 | [TESTING.md](nsck/docs/TESTING.md) | Test suite guide |
 | [NSCK_ROADMAP_AND_PLAN.md](nsck/docs/NSCK_ROADMAP_AND_PLAN.md) | Roadmap and future plans |
 | [TRANSPARENCY_GUARANTEE.md](nsck/docs/TRANSPARENCY_GUARANTEE.md) | Explainability commitments |
-| [societal/SOCIETAL_ARCHITECTURE.md](nsck/docs/societal/SOCIETAL_ARCHITECTURE.md) | V5 Hierarchical City Model |
-| [societal/SOCIETAL_MATH_PROOFS.md](nsck/docs/societal/SOCIETAL_MATH_PROOFS.md) | Spectral RG & Hodge Laplacians |
-| [societal/SOCIETAL_API_REFERENCE.md](nsck/docs/societal/SOCIETAL_API_REFERENCE.md) | V5 Dashboard API reference |
+| [societal/SOCIETAL_ARCHITECTURE.md](docs/societal/SOCIETAL_ARCHITECTURE.md) | V5 Hierarchical City Model |
+| [societal/SOCIETAL_MATH_PROOFS.md](docs/societal/SOCIETAL_MATH_PROOFS.md) | Spectral RG & Hodge Laplacians |
+| [societal/SOCIETAL_API_REFERENCE.md](docs/societal/SOCIETAL_API_REFERENCE.md) | V5 Dashboard API reference |
 
 ---
 

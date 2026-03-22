@@ -1,51 +1,58 @@
-# NSCK V4 Test Results
+# NSCK V5 Test Results
 
-> **Test suite:** 1443+ tests (1437 baseline + 6 V4 test classes)
-> **Run command:** `NSCK_USE_RUST=1 python -m pytest nsck/tests/ --tb=no -q`
+> **Test suite:** 2088 test functions across 127 files
+> **Run command:** `python -m pytest nsck/tests/ -q`
 
 ## Suite Summary
 
 | Metric | Value |
 |--------|-------|
-| Total collected | 1443+ |
-| Passed | 1430+ |
-| Failed (stochastic) | 2 |
-| Skipped | 7 |
-| Xfailed | 4 |
-| Run time | ~14 seconds |
+| Total collected | 2088 |
+| Passed | 1572 (unit) + 355 (integration) |
+| Skipped | 94 (unit) + 67 (integration) |
+| xfailed | 0 (unit) + 2 (integration — known open issues) |
+| Failed | 0 |
+| Run time | ~4–5 min total; unit only ~3 min |
 
-## V4 Test Classes (`test_v4_full_system.py`)
+## Integration Test Breakdown
 
-| Class | Assertions | Key checks |
-|---|---|---|
-| `TestProceduralFastPath` | 3 | LSH lookup wired, skills populated after positive reward, threshold == 0.72 |
-| `TestSemanticHotCache` | 3 | `_hot_cache` dict exists, HNSW enabled by default, cache updated after spread_activation |
-| `TestNLU` | 4 | VSANLUEngine classifies intent, confidence ≥ 0.0, entity extraction, process() dict output |
-| `TestBundleMajorityVote` | 2 | bundle_hvs majority correct, result closer to majority input |
-| `TestImagination` | 2 | imagine_rollout() returns tuple, multi-step works |
-| `TestKnowledgeSeeder` | 3 | seed_from_yaml() returns int, navigation domain seeded, rules > 0 |
+Integration tests live in `nsck/tests/integration/`. They now pass cleanly as part of the standard suite:
 
-## Rust Backend Verification
+| Test group | Passed | Skipped | Notes |
+|-----------|--------|---------|-------|
+| `test_system_capabilities.py` | ✅ | — | Rotation invariance now works (Gabor+FFT features) |
+| `societal/test_transplant_societal.py` | skipped | 1 | Skipped when `transformers` not installed |
+| All other integration | 355 total | 66 | Optional deps skip gracefully |
+
+## Rust Backend
+
+Rust backends (`hypervec_rs`, `snn_rs`, `societal_rs`) are optional. Tests degrade gracefully to the Python/NumPy fallback when Rust crates are not compiled. Tests that specifically require Rust are skipped automatically when the `.so` files are absent.
+
+## Skipped Tests
+
+Skips are primarily due to:
+- Optional Rust backends not compiled (most common)
+- Optional Python packages not installed (`torch`, `hnswlib`, `transformers`)
+- Platform-specific tests
+
+## xfailed Tests (2 in integration)
+
+Two tests remain `xfail` (non-strict) to document known open research items:
+- Open-domain NLU coverage — NgramNLU is fast but shallow
+- Lifelong forgetting without SoCL — vanilla EWC shows ~16% drift at task boundaries
+
+## Running Tests
 
 ```bash
-python -c "import hypervec_rs; print('Rust OK:', hypervec_rs.HyperVector(1).bits[:5])"
+# Standard run (full suite)
+python -m pytest nsck/tests/ -q
+
+# Unit tests only (fast, ~3 min)
+python -m pytest nsck/tests/unit/ -q
+
+# Integration tests only
+python -m pytest nsck/tests/integration/ -q
+
+# With Rust backends (if compiled — auto-detected)
+python -m pytest nsck/tests/ -q
 ```
-
-Expected output: `Rust OK: [<int>, <int>, <int>, <int>, <int>]`
-
-## Run V4 Tests Only
-
-```bash
-NSCK_USE_RUST=1 python -m pytest nsck/tests/integration/test_v4_full_system.py -v
-```
-
-## Known Stochastic Failures
-
-Two tests may fail non-deterministically due to random HV initialization:
-
-| Test | Reason | Expected behavior |
-|---|---|---|
-| `test_similarity_above_threshold` | Random HV similarity near boundary | Retry or increase threshold tolerance |
-| `test_bundle_random_tiebreak` | ChaCha8 tie-break in bundle() | Non-deterministic for identical-salience coalitions |
-
-These failures are expected and do not indicate regressions. The test suite marks them as stochastic with appropriate tolerances.
