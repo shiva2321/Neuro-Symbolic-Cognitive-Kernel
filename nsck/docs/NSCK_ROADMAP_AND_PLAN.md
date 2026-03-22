@@ -383,7 +383,7 @@ version is tagged.*
 | Change 4: LSH stale-index fix + `_rebuild_lsh_index()` | `episodic_memory.py`, `cognitive_engine.py` | ✅ Complete |
 | Change 5: GloVe word HV seeding with hash fallback | `vsa/word_seeds.py`, `data/embeddings/` | ✅ Complete |
 | Integration tests (20 tests, 11 pass on Python) | `tests/integration/test_v18_end_to_end.py` | ✅ Complete |
-| V18 Changelog | `docs/V18_CHANGELOG.md` | ✅ Complete |
+| V18 Changelog | `docs/CHANGELOG.md` | ✅ Complete |
 
 ### Key Metrics
 

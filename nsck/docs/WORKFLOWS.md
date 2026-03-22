@@ -117,7 +117,7 @@ Offline learning invoked periodically (e.g. after N episodes).
 
 ---
 
-## Workflow 4: Knowledge Seeding (V4)
+## Workflow 4: Knowledge Seeding
 
 Declarative domain bootstrapping from YAML domain kits.
 
@@ -149,7 +149,7 @@ Declarative domain bootstrapping from YAML domain kits.
 
 ---
 
-## Workflow 5: Spreading Activation with Rust (V4)
+## Workflow 5: Spreading Activation with Rust
 
 The Rust `spreading_activation_step` free-function is the hot path for
 `SemanticMemory.spread_activation()`.
@@ -176,7 +176,7 @@ The Rust `spreading_activation_step` free-function is the hot path for
 
 ---
 
-## Workflow 6: Procedural Fast-Path (V4 Enhanced)
+## Workflow 6: Procedural Fast-Path
 
 LSH bucket check enables O(1) average candidate lookup.
 

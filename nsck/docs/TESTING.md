@@ -27,16 +27,16 @@ NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
 All commands assume you are in the repository root.
 
 ```bash
-# Full suite (V4: Rust default-on)
-NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
+# Full suite (Rust optional — degrades to Python fallback)
+python -m pytest nsck/tests/ -q
 
-# Unit tests only (~8s)
+# Unit tests only
 python -m pytest nsck/tests/unit/ -q
 
 # Integration tests
 python -m pytest nsck/tests/integration/ -q
 
-# V4-specific tests
+# V4 full-system integration tests
 python -m pytest nsck/tests/integration/test_v4_full_system.py -v
 
 # Specific subsystem
@@ -45,9 +45,6 @@ python -m pytest nsck/tests/unit/memory/ -q
 
 # Rust backend tests (requires .so files built)
 python -m pytest nsck/tests/unit/rust/ -q
-
-# V4-specific tests
-python -m pytest nsck/tests/integration/test_v4_full_system.py -v
 
 # V13 substrate tests (baseline)
 python -m pytest nsck/tests/unit/test_v13_universal_substrate.py -q
