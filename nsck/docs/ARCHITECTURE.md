@@ -1,6 +1,6 @@
-# NSCK Architecture — V4 (Neuro-Symbolic Cognitive Kernel)
+# NSCK Architecture — V5 (Neuro-Symbolic Cognitive Kernel)
 
-> **Version 4 (V4) — February 2026**
+> **Version 5 (V5) — March 2026**
 >
 > This document is the definitive reference for NSCK's internal design.
 > It covers the seven-layer architecture, data-flow pipeline,
@@ -66,9 +66,9 @@ Layer 6 — Executive      Metacognition · SelfModel · TheoryOfMind · Safety
 Layer 5 — Language        Parser · ConstructionGrammar · VSANLUEngine · NLG · Dialogue
 Layer 4 — Learning        Hebbian · Q-Learning · RuleInduction · ActiveInference · Curiosity · Conformal
 Layer 3 — Reasoning       Causal · Rules · Planning · Analogy · Spatial · Math · Beliefs · imagine_rollout()
-Layer 2 — Memory          Semantic (KG + HNSW + hot cache) · Episodic (Rust) · Procedural (LSH O(1))
+Layer 2 — Memory          Societal(HierarchicalCityModel) · Semantic (KG + HNSW + hot cache) · Episodic (Rust) · Procedural (LSH O(1))
 Layer 1 — Perception      10 Adapters · SignalIngestor · UniversalHVEncoder · SNN (auto-grounded V4)
-Layer 0 — Substrate       VSA Engine (10 240-bit HVs) · GWT · Dual-Process · Rust backends (default-on V4)
+Layer 0 — Substrate       VSA Engine (10 240-bit HVs) · GWT · Dual-Process · Rust backends (rust_vsa, rust_snn, rust_societal)
 ```
 
 ### Layer 0 — Substrate
@@ -102,11 +102,14 @@ Layer 0 — Substrate       VSA Engine (10 240-bit HVs) · GWT · Dual-Process �
 
 | Store | File | Backend |
 |---|---|---|
-| `SemanticMemory` | `core/memory/semantic_memory.py` | NetworkX KG + HNSW (default-on V4) + `_hot_cache` LRU 256 |
+| `SocietalKnowledgeWorld` | `core/societal/societal_knowledge_world.py` | Hierarchical city model (V5) |
+| `SemanticMemory` | `core/memory/semantic_memory.py` | NetworkX KG + HNSW + `_hot_cache` LRU 256 |
 | `EpisodicMemory` | `core/memory/episodic_memory.py` | Python + `EpisodicMemoryConcurrent` (Rust) |
 | `ProceduralMemory` | `core/memory/procedural_memory.py` | LSH 16-bit bucket index (V4), threshold 0.72 |
 | `CrossModalAssociativeMemory` | `core/memory/cross_modal_associative_memory.py` | HV bind across modalities |
 | `ConceptDriftDetector` | `core/memory/concept_drift_detector.py` | Tracks semantic drift |
+
+> **V5 modules:** `societal/`, `transplant/`, `transparency/`, `vision/` directories exist under `python/core/`.
 
 ### Layer 3 — Reasoning
 
@@ -396,10 +399,11 @@ class PerceptPacket:
 
 | Extension | File | Size | Default |
 |---|---|---|---|
-| `hypervec_rs.so` | `rust_vsa/` | 4.3 MB | **On** (V4) |
-| `snn_rs.so` | `rust_snn/` | 1.1 MB | **On** (V4) |
+| `hypervec_rs.so` | `rust_vsa/` | 4.3 MB | Optional |
+| `snn_rs.so` | `rust_snn/` | 1.1 MB | Optional |
+| `societal_rs.so` | `rust_societal/` | — | Optional (V5) |
 
-As of V4, `NSCK_USE_RUST=1` is the default. If the `.so` files are missing,
+Rust backends are optional. If the `.so` files are missing,
 pure-Python fallbacks activate transparently.
 
 ### Dispatch Logic
@@ -884,7 +888,7 @@ V18 pushes the sync to write time, so `spread_activation()` always finds a curre
 
 ---
 
-*Document generated for NSCK V4, February 2026.*
+*Document generated for NSCK V5, March 2026.*
 
 ---
 

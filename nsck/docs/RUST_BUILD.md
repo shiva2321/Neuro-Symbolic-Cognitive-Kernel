@@ -17,7 +17,7 @@ significant speedups for VSA and SNN operations.
 
 ---
 
-## Quick Build (Verified — February 2026)
+## Quick Build (Verified — March 2026)
 
 ```bash
 # From repo root
@@ -95,7 +95,7 @@ cp /tmp/hv/hypervec_rs/*.so ../hypervec_rs.so
 - **`lsh_bucket`** *(V4 new)* — LSH bucket key for ProceduralMemory O(1) lookup
 - **`spreading_activation_step`** *(V4 new)* — one step of graph spreading activation hot path
 
-> **As of V4, `NSCK_USE_RUST=1` is the default. Rust is expected to be built.**
+Rust backends are optional. Python fallback is active when Rust is not compiled.
 
 Verify Rust is active:
 ```python
@@ -118,7 +118,21 @@ cp /tmp/snn/snn_rs/*.so ../snn_rs.so
 - `ConceptMapper` — SNN → HV concept mapping
 - `RateCoder` — rate-coded spike encoder
 
-### 5. Verify
+### 5. Build `societal_rs` (V5 — optional)
+
+```bash
+cd nsck/rust_societal
+maturin build --release
+unzip -o target/wheels/societal_rs-*.whl "societal_rs/societal_rs*" -d /tmp/soc
+cp /tmp/soc/societal_rs/*.so ../societal_rs.so
+```
+
+`societal_rs` provides:
+- Spreading activation across societal hierarchy layers
+- Hodge Laplacian computation (L0, L1, L2)
+- Percolation monitoring via cluster density analysis
+
+### 6. Verify
 
 ```python
 import sys
@@ -236,8 +250,8 @@ cd nsck/rust_snn && cargo check --lib
 
 - `nsck/docs/RUST_API_REFERENCE.md` — full Rust extension API reference
 - `nsck/docs/ARCHITECTURE.md` — system architecture overview
-- `nsck/docs/V4_RELEASE_REPORT.md` — V4 implementation report
+- `nsck/docs/CHANGELOG.md` — full version history
 
 ---
 
-*Updated for NSCK V4, February 2026. Verified on rustc 1.75+ / Python 3.9+ / x86-64 Linux.*
+*Updated for NSCK V5, March 2026. Verified on rustc 1.75+ / Python 3.9+ / x86-64 Linux.*

@@ -1,13 +1,13 @@
-# Workflows — NSCK V4
+# Workflows — NSCK V5
 
 NSCK (Neuro-Symbolic Cognitive Kernel) is a neuro-symbolic cognitive architecture
 that combines VSA hypervectors, rule learning, and global workspace theory.
-Below are the step-by-step data flows for every key workflow in V4.
+Below are the step-by-step data flows for every key workflow in V5.
 Classes are referenced by their actual module paths under `nsck/python/core/`.
 
 ---
 
-## Workflow 1: Decision Loop (V4)
+## Workflow 1: Decision Loop (V5)
 
 The primary inference path from raw input to `SubstrateResult`.
 
@@ -53,7 +53,7 @@ The primary inference path from raw input to `SubstrateResult`.
 
 ---
 
-## Workflow 2: Learning (V4 — auto-cache on positive reward)
+## Workflow 2: Learning (V5 — auto-cache on positive reward)
 
 ```
   ┌──────────────────────────────────────────────────────────┐
@@ -85,7 +85,7 @@ The primary inference path from raw input to `SubstrateResult`.
 
 ---
 
-## Workflow 3: Sleep Consolidation (V4 — EWC task consolidation)
+## Workflow 3: Sleep Consolidation (V5 — EWC task consolidation)
 
 Offline learning invoked periodically (e.g. after N episodes).
 
@@ -117,7 +117,7 @@ Offline learning invoked periodically (e.g. after N episodes).
 
 ---
 
-## Workflow 4: Knowledge Seeding — NEW V4
+## Workflow 4: Knowledge Seeding (V4)
 
 Declarative domain bootstrapping from YAML domain kits.
 
@@ -149,7 +149,7 @@ Declarative domain bootstrapping from YAML domain kits.
 
 ---
 
-## Workflow 5: Spreading Activation with Rust — NEW V4
+## Workflow 5: Spreading Activation with Rust (V4)
 
 The Rust `spreading_activation_step` free-function is the hot path for
 `SemanticMemory.spread_activation()`.
@@ -176,7 +176,7 @@ The Rust `spreading_activation_step` free-function is the hot path for
 
 ---
 
-## Workflow 6: Procedural Fast-Path — V4 Enhanced
+## Workflow 6: Procedural Fast-Path (V4 Enhanced)
 
 LSH bucket check enables O(1) average candidate lookup.
 
@@ -235,7 +235,7 @@ Served by `NSCKApiServer` (`nsck/python/core/api/nsck_api.py`).
 
 ---
 
-*Document updated for NSCK V4, February 2026.*
+*Document updated for NSCK V5, March 2026.*
 
 ## Workflow 8: Model Transplantation (V15)
 
@@ -460,4 +460,4 @@ print(stats)  # {"concepts": 50000, "relations": 200000, "causal_links": 10000}
 
 ---
 
-*Document updated for NSCK V4, February 2026.*
+*Document updated for NSCK V5, March 2026.*
