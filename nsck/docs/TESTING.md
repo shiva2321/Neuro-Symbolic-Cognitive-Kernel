@@ -5,20 +5,27 @@
 Run the full test suite from the repository root:
 
 ```bash
-NSCK_USE_RUST=1 python -m pytest nsck/tests/ -q
+python -m pytest nsck/tests/ -q
 ```
 
-> Rust backends are optional. Tests degrade gracefully to Python fallback when Rust is not compiled.
+> Rust backends are optional and auto-detected at import time. Set
+> `NSCK_USE_RUST=1` in your shell if you want environment-based selection,
+> but the shim will use Rust automatically when `hypervec_rs.so` is present.
 
 **Current results** (Python fallback active; Rust backends optional):
 
-| Metric     | Value                          |
-|------------|--------------------------------|
-| Collected  | 2088 tests across 127 files    |
-| Passed     | 1572                           |
-| Failed     | 0                              |
-| Skipped    | 94                             |
-| Run time   | varies                         |
+| Metric     | Value                                             |
+|------------|---------------------------------------------------|
+| Collected  | 2088 tests across 127 files                       |
+| Passed     | 1572 (unit) + 355 (integration) = 1927 total      |
+| xfailed    | 2 (known open issues, documented)                 |
+| Failed     | 0                                                 |
+| Skipped    | 94 (unit) + 67 (integration) — optional deps      |
+| Run time   | ~4–5 min (unit only: ~3 min)                      |
+
+> **Integration test note:** `tests/integration/societal/test_transplant_societal.py`
+> requires `transformers` (HuggingFace). It is automatically skipped when
+> `transformers` is not installed. Install with `pip install "nsck[pretrained]"` to run it.
 
 ---
 

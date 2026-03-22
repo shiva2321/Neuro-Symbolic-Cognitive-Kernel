@@ -15,7 +15,13 @@ Package structure::
             cognitive/    # Metacognition, self-model, theory of mind
             learning/     # Curiosity-driven exploration
             integration/  # Config, persistence, explanation, brain fusion
+            societal/     # Societal Hypervector Knowledge Representation
+            transparency/ # ThoughtTrace + glass-box tracing
+            transplant/   # Pre-trained model absorption pipeline
+            vision/       # HD vision classifier
 """
+
+__version__ = "0.5.0"
 
 # Install hypervec_rs compat (adds missing methods to the compiled class)
 try:

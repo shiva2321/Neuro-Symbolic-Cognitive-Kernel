@@ -2,7 +2,7 @@
 
 **V5 (Societal Knowledge World) · March 2026** &nbsp;|&nbsp; Python 3.11+ &nbsp;|&nbsp; Rust accelerators &nbsp;|&nbsp; MIT License
 
-151+ modules · 309+ classes · ~50K LOC Python · ~5.1K LOC Rust · 1,572 passed, 94 skipped
+151+ modules · 309+ classes · ~50K LOC Python · ~5.1K LOC Rust · 1,572 unit + 355 integration tests passing
 
 ---
 

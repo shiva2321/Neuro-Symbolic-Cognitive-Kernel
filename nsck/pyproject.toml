@@ -4,15 +4,24 @@ build-backend = "hatchling.build"
 
 [project]
 name = "nsck-demo"
-version = "0.2.0"
-description = "Neural-Symbolic Cognitive Kernel: VSA + GWT cognitive architecture"
+version = "0.5.0"
+description = "Neuro-Symbolic Cognitive Kernel (NSCK) V5: glass-box cognitive architecture combining VSA, SNN, GWT, and Societal Hypervector Knowledge Representation"
 requires-python = ">=3.11"
 license = {text = "MIT"}
 readme = "README.md"
 authors = [
     {name = "shiva2321", email = "shiva2321@users.noreply.github.com"},
 ]
-keywords = ["neuro-symbolic", "cognitive-architecture", "hyperdimensional-computing", "vsa", "spiking-neural-network"]
+keywords = [
+    "neuro-symbolic",
+    "cognitive-architecture",
+    "hyperdimensional-computing",
+    "vsa",
+    "spiking-neural-network",
+    "global-workspace-theory",
+    "societal-knowledge",
+    "transparent-ai",
+]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
@@ -21,6 +30,7 @@ classifiers = [
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Cognitive Science",
 ]
 
 dependencies = [
@@ -38,15 +48,16 @@ dependencies = [
 snn = ["snntorch>=0.9.0"]
 test = ["pytest>=7.0.0", "pytest-benchmark>=4.0.0"]
 viz = ["flask>=2.3.0", "flask-socketio>=5.3.0"]
+# Optional: heavy pre-trained model support (for transplant tests)
+pretrained = ["transformers>=4.30.0"]
 
 [project.urls]
 Homepage = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel"
 Source = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel"
 Issues = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel/issues"
+Changelog = "https://github.com/shiva2321/Neuro-Symbolic-Cognitive-Kernel/blob/main/nsck/docs/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
-# Source package lives in python/; shipped as top-level `python` module.
-# Note: rename python/ → nsck/ to fix the shadowing before the first public release.
 packages = ["python"]
 
 [tool.hatch.build.targets.sdist]

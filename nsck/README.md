@@ -9,7 +9,7 @@ human-readable explanation of *why* it was chosen. Every decision traces back to
 specific rules, causal links, and episodic memories — no gradient tensors, no
 hidden layers.
 
-**Current release: V5 (March 2026)** — 1,572 passed, 94 skipped (Rust backends optional; Python fallback active by default).
+**Current release: V5 (March 2026)** — 1,572 unit + 355 integration tests passing (Rust backends optional).
 
 ---
 

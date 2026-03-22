@@ -1,6 +1,6 @@
 # NSCK V5 — Repository Navigation Map
 
-> **~151 core Python modules · ~309 classes · ~50K LOC Python · ~5.1K LOC Rust · 1572 passed, 94 skipped**
+> **~151 core Python modules · ~309 classes · ~50K LOC Python · ~5.1K LOC Rust · 1572 unit + 355 integration passing**
 
 | Metric | Value |
 |--------|-------|
@@ -9,7 +9,7 @@
 | Python core LOC | ~50,642 |
 | Rust LOC | ~5,149 |
 | Test files / LOC | 127 files |
-| Tests | 1572 passed, 94 skipped |
+| Tests | 1572 unit + 355 integration passing |
 
 ---
 
@@ -253,7 +253,7 @@ tests/                            127 files, 2088 test functions
 
 | Result | Count |
 |--------|-------|
-| Passed | 1572 |
+| Passed | 1572 (unit) + 355 (integration) |
 | Skipped | 94 |
 | Failed | 0 |
 | **Total collected** | **2088** |

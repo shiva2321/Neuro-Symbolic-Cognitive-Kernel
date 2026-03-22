@@ -1,7 +1,12 @@
 import pytest
-import torch
 import numpy as np
-from transformers import AutoModel, AutoTokenizer
+
+# transformers + torch are optional heavy dependencies; skip if not installed.
+torch = pytest.importorskip("torch")
+transformers = pytest.importorskip("transformers")
+AutoModel = transformers.AutoModel
+AutoTokenizer = transformers.AutoTokenizer
+
 from python.core.integration.config import NSCKConfig
 from python.core.memory.societal_knowledge_world import SocietalKnowledgeWorld
 from python.core.transplant.domain_bootstrapper import DomainBootstrapper
