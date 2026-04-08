@@ -11,6 +11,9 @@ mod episodic;
 mod worker_pool;
 mod persistence;
 mod async_runtime;
+mod rhc;
+mod lars;
+mod dendritic;
 
 const DIMENSION: usize = 10240;
 
@@ -451,6 +454,15 @@ fn hypervec_rs(_py: Python, m: &PyModule) -> PyResult<()> {
     
     // Async runtime
     async_runtime::register_async_module(m)?;
+    
+    // RHC Phasors
+    rhc::register_rhc_module(m)?;
+    
+    // LARS Symbolic Attention
+    lars::register_lars_module(m)?;
+
+    // Dendritic Sub-tree Logic
+    dendritic::register_dendritic_module(m)?;
     
     Ok(())
 }

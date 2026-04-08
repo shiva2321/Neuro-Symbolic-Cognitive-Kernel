@@ -13,8 +13,10 @@ instructor>=1.0.0
 # Local LLM inference
 llama-cpp-python>=0.2.50
 
-# Semantic embeddings
+# Semantic embeddings and pretrained models
 sentence-transformers>=2.2.0
+transformers>=4.40.0
+torch>=2.2.0
 
 # Testing
 pytest>=7.0.0
@@ -30,3 +32,7 @@ rich>=13.0.0
 
 # System monitoring
 psutil>=5.9.0
+
+# Paper/report generation
+matplotlib>=3.8.0
+fpdf2>=2.7.0

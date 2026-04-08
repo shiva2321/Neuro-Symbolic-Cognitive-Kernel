@@ -57,8 +57,13 @@ def _unpack_bits(hv) -> np.ndarray:
     try:
         bits = hv.bits
         if isinstance(bits, np.ndarray):
+            # Check if this is an RHC Phasor
+            if bits.dtype == np.complex64 or bits.dtype == np.complex128:
+                return bits
             return bits.astype(np.int8)
         # Rust: bits may already be an ndarray from the shim property
+        if hasattr(bits, "dtype") and (bits.dtype == np.complex64 or bits.dtype == np.complex128):
+            return bits
         return np.asarray(bits, dtype=np.int8)
     except Exception:
         # Last resort: __getstate__ path for Rust u64 words
@@ -141,6 +146,8 @@ class LivingHyperVector:
         Logical clock value at creation.
     metadata:
         Arbitrary extra key-value pairs (source, confidence, etc.).
+    is_rhc:
+        Boolean indicating if this hv uses the Residue Hyperdimensional system.
     """
 
     __slots__ = (
@@ -155,6 +162,7 @@ class LivingHyperVector:
         "metadata",
         "_cluster_id",
         "_topo_persistence",
+        "is_rhc",
     )
 
     def __init__(
@@ -178,6 +186,11 @@ class LivingHyperVector:
         self.metadata: Dict[str, Any] = dict(metadata or {})
         self._cluster_id: Optional[int] = None
         self._topo_persistence: float = 0.0  # persistent-homology lifetime
+        
+        # Check if the HV represents continuous phasor values
+        self.is_rhc: bool = False
+        if hasattr(self.hv, "phases") or str(type(self.hv)).find("PhasorHyperVector") != -1:
+            self.is_rhc = True
 
     # ------------------------------------------------------------------
     # Bond management
