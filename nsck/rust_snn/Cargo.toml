@@ -9,8 +9,8 @@ name = "snn_rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-pyo3       = { version = "0.21", features = ["extension-module"] }
-rand       = "0.8"
+pyo3       = { version = "0.24", features = ["extension-module"] }
+rand       = "0.9"
 rand_chacha = "0.3"
 rayon      = "1.10"   # data-parallel neuron updates (mirrors rust_vsa)
 parking_lot = "0.12"  # faster Mutex than std (mirrors rust_vsa)
